@@ -412,7 +412,7 @@ export default function EmployeeRoom() {
               alt={`${selectedOfficeInfo.name} Office Top Down View`}
               onError={(event) => {
                 event.currentTarget.onerror = null;
-                event.currentTarget.src = "/images/room.png";
+                event.currentTarget.src = `${BASE_URL}images/room.png`;
               }}
               className="h-full w-full object-cover brightness-90 contrast-105"
             />
