@@ -70,6 +70,8 @@ const formatWorkTime = (value: string) =>
     timeZone: "Asia/Tokyo",
   }).format(new Date(value));
 
+const BASE_URL = import.meta.env.BASE_URL
+
 const offices: Record<OfficeId, Office> = {
   themis: {
     id: "themis",
@@ -77,19 +79,20 @@ const offices: Record<OfficeId, Office> = {
     shortName: "THEMIS OFFICE",
     address: "大阪府松原市北新町2-5-13",
     logo: "T",
-    image: "/images/room1.png",
+    image: `${BASE_URL}images/room1.png`,
     accent: "indigo",
   },
+
   law: {
     id: "law",
     name: "中華総合法律事務所",
     shortName: "LAW OFFICE",
     address: "大阪府松原市天美東1-80-22",
     logo: "法",
-    image: "/images/room1.png",
+    image: `${BASE_URL}images/room1.png`,
     accent: "blue",
   },
-};
+}
 
 export default function EmployeeRoom() {
   const [fullName, setFullName] = useState("");
