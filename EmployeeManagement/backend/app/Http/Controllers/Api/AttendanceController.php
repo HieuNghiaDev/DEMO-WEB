@@ -7,7 +7,9 @@ use App\Models\Attendance;
 use App\Services\AttendanceExcelService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 class AttendanceController extends Controller
 {
@@ -60,7 +62,7 @@ class AttendanceController extends Controller
             return response()->json([
                 'message' => 'すでに勤務を開始しています。',
                 'attendance' => $existingAttendance,
-            ], 409);
+            ]);
         }
 
         $now = now();
@@ -72,7 +74,7 @@ class AttendanceController extends Controller
             'status' => 'working',
         ]);
 
-        $this->attendanceExcelService->sync($attendance);
+        $this->syncExcelSafely($attendance);
 
         return response()->json([
             'message' => '勤務を開始しました。',
@@ -148,11 +150,23 @@ class AttendanceController extends Controller
         $attendance->save();
 
         $attendance = $attendance->fresh();
-        $this->attendanceExcelService->sync($attendance);
+        $this->syncExcelSafely($attendance);
 
         return response()->json([
             'message' => $message,
             'attendance' => $attendance,
         ]);
+    }
+
+    private function syncExcelSafely(Attendance $attendance): void
+    {
+        try {
+            $this->attendanceExcelService->sync($attendance);
+        } catch (Throwable $exception) {
+            Log::warning('Attendance Excel sync failed.', [
+                'attendance_id' => $attendance->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
     }
 }
