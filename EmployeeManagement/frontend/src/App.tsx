@@ -15,7 +15,6 @@ import ApprovalRoom from './pages/ApprovalRoom'
 
 function App() {
   return (
-    <BrowserRouter>
       <Routes>
         <Route element={<MainLayout />}>
           <Route path="/" element={<EmployeeRoom />} />
@@ -48,7 +47,6 @@ function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </BrowserRouter>
   )
 }
 
