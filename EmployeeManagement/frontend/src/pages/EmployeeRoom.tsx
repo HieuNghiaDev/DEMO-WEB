@@ -497,7 +497,7 @@ export default function EmployeeRoom() {
                   />
 
                   <img
-                    src="/images/boy.png"
+                    src={`${import.meta.env.BASE_URL}images/boy.png`}
                     alt={attendance.employee_name}
                     className="h-auto w-12 select-none drop-shadow-[0_5px_5px_rgba(15,23,42,0.45)] sm:w-16 lg:w-20"
                     draggable={false}
