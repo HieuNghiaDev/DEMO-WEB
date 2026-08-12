@@ -3,14 +3,15 @@
 return [
     'paths' => [
         'api/*',
-        'sanctum/csrf-cookie',
     ],
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
-        env('FRONTEND_URL', 'http://localhost:5173'),
-    ],
+    'allowed_origins' => array_values(array_unique(array_filter([
+        env('FRONTEND_URL'),
+        'http://localhost:5173',
+        'https://hieunghiadev.github.io',
+    ]))),
 
     'allowed_origins_patterns' => [],
 
@@ -20,5 +21,5 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => true,
+    'supports_credentials' => false,
 ];

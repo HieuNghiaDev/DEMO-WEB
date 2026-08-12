@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -31,16 +32,16 @@ class AuthController extends Controller
             ],
         ]);
 
-        $authenticated = Auth::attempt(
-            [
-                'login_id' => $validated['login_id'],
-                'password' => $validated['password'],
-                'is_active' => true,
-            ],
-            $validated['remember'] ?? false
-        );
+        $user = User::query()
+            ->with([
+                'employee.office',
+                'employee.department',
+            ])
+            ->where('login_id', $validated['login_id'])
+            ->where('is_active', true)
+            ->first();
 
-        if (! $authenticated) {
+        if ($user === null || ! Hash::check($validated['password'], $user->password)) {
             throw ValidationException::withMessages([
                 'login_id' => [
                     '社員コードまたはパスワードが正しくありません。',
@@ -48,23 +49,11 @@ class AuthController extends Controller
             ]);
         }
 
-        $request->session()->regenerate();
-
-        $user = $request->user()->load([
-            'employee.office',
-            'employee.department',
-        ]);
-
         // Kiểm tra hồ sơ nhân viên còn hoạt động hay không.
         if (
             $user->employee === null ||
             $user->employee->status !== 'active'
         ) {
-            Auth::guard('web')->logout();
-
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
-
             return response()->json([
                 'message' => 'この従業員アカウントは利用できません。',
             ], 403);
@@ -74,9 +63,18 @@ class AuthController extends Controller
             'last_login_at' => now(),
         ])->save();
 
+        $expiresAt = ($validated['remember'] ?? false)
+            ? now()->addDays(30)
+            : now()->addHours(12);
+
+        $token = $user
+            ->createToken('employee-web', ['*'], $expiresAt)
+            ->plainTextToken;
+
         return response()->json([
             'message' => 'ログインしました。',
             'user' => $user,
+            'token' => $token,
         ]);
     }
 
@@ -100,10 +98,7 @@ class AuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
-        Auth::guard('web')->logout();
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        $request->user()->currentAccessToken()?->delete();
 
         return response()->json([
             'message' => 'ログアウトしました。',

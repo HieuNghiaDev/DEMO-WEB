@@ -7,7 +7,11 @@ import {
   type ReactNode,
 } from "react";
 
-import api, { getCsrfCookie } from "../services/api";
+import api, {
+  clearAuthToken,
+  hasAuthToken,
+  storeAuthToken,
+} from "../services/api";
 
 export type AuthOffice = {
   id: number;
@@ -47,6 +51,10 @@ type UserResponse = {
   user: AuthUser;
 };
 
+type LoginResponse = UserResponse & {
+  token: string;
+};
+
 type AuthContextValue = {
   user: AuthUser | null;
   isLoading: boolean;
@@ -66,10 +74,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshUser = useCallback(async () => {
+    if (!hasAuthToken()) {
+      setUser(null);
+      return;
+    }
+
     try {
       const response = await api.get<UserResponse>("/me");
       setUser(response.data.user);
     } catch {
+      clearAuthToken();
       setUser(null);
     }
   }, []);
@@ -87,16 +101,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [refreshUser]);
 
   const login = async (credentials: LoginCredentials) => {
-    await getCsrfCookie();
-
-    const response = await api.post<UserResponse>("/login", credentials);
+    const response = await api.post<LoginResponse>("/login", credentials);
+    storeAuthToken(response.data.token, credentials.remember);
     setUser(response.data.user);
   };
 
   const logout = async () => {
     try {
-      await api.post("/logout");
+      if (hasAuthToken()) {
+        await api.post("/logout");
+      }
     } finally {
+      clearAuthToken();
       setUser(null);
     }
   };
