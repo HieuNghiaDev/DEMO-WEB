@@ -1,52 +1,48 @@
 import {
+  BrowserRouter,
   Navigate,
   Route,
   Routes,
-} from 'react-router-dom'
+} from "react-router-dom";
 
-import MainLayout from './layouts/MainLayout'
-import EmployeeRoom from './pages/EmployeeRoom'
-import OrganizationDesign from './pages/OrganizationDesign'
-import BusinessQuest from './pages/BusinessQuest'
-import ManualWorkshop from './pages/ManualWorkshop'
-import AIEmployees from './pages/AI'
-import ApprovalRoom from './pages/ApprovalRoom'
+import ProtectedRoute from "./components/auth/ProtectedRoute";
+import MainLayout from "./layouts/MainLayout";
+import { AuthProvider } from "./contexts/AuthContext";
+
+import Login from "./pages/Login";
+import EmployeeRoom from "./pages/EmployeeRoom";
+import OrganizationDesign from "./pages/OrganizationDesign";
+import BusinessQuest from "./pages/BusinessQuest";
+import ManualWorkshop from "./pages/ManualWorkshop";
+import AIEmployees from "./pages/AI";
+import ApprovalRoom from "./pages/ApprovalRoom";
 
 function App() {
   return (
-      <Routes>
-        <Route element={<MainLayout />}>
-          <Route path="/" element={<EmployeeRoom />} />
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
 
-          <Route
-            path="/organization"
-            element={<OrganizationDesign />}
-          />
+          <Route element={<ProtectedRoute />}>
+            <Route element={<MainLayout />}>
+              <Route path="/" element={<EmployeeRoom />} />
+              <Route
+                path="/organization"
+                element={<OrganizationDesign />}
+              />
+              <Route path="/quests" element={<BusinessQuest />} />
+              <Route path="/manual" element={<ManualWorkshop />} />
+              <Route path="/ai" element={<AIEmployees />} />
+              <Route path="/approvals" element={<ApprovalRoom />} />
+            </Route>
+          </Route>
 
-          <Route
-            path="/quests"
-            element={<BusinessQuest />}
-          />
-
-          <Route
-            path="/manual"
-            element={<ManualWorkshop />}
-          />
-
-          <Route
-            path="/ai"
-            element={<AIEmployees />}
-          />
-
-          <Route
-            path="/approvals"
-            element={<ApprovalRoom />}
-          />
-        </Route>
-
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-  )
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  );
 }
 
-export default App
+export default App;

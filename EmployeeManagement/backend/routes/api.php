@@ -1,8 +1,28 @@
 <?php
 
 use App\Http\Controllers\Api\AttendanceController;
+use App\Http\Controllers\Api\AuthController;
 use Illuminate\Support\Facades\Route;
 
+// Authentication: không nằm trong prefix attendances
+Route::post('/login', [
+    AuthController::class,
+    'login',
+])->middleware('throttle:5,1');
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/me', [
+        AuthController::class,
+        'me',
+    ]);
+
+    Route::post('/logout', [
+        AuthController::class,
+        'logout',
+    ]);
+});
+
+// Attendance
 Route::prefix('attendances')->group(function () {
     Route::get('/active', [
         AttendanceController::class,

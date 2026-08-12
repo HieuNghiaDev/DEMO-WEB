@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
+use App\Models\Employee;
 use App\Services\AttendanceExcelService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,8 +16,7 @@ class AttendanceController extends Controller
 {
     public function __construct(
         private readonly AttendanceExcelService $attendanceExcelService
-    ) {
-    }
+    ) {}
 
     /**
      * Danh sách nhân viên đang làm việc hoặc đang nghỉ.
@@ -31,6 +31,10 @@ class AttendanceController extends Controller
             ])
             ->orderBy('clock_in')
             ->get();
+
+        $attendances->each(
+            fn (Attendance $attendance) => $this->attachEmployeeProfile($attendance)
+        );
 
         return response()->json([
             'count' => $attendances->count(),
@@ -51,6 +55,11 @@ class AttendanceController extends Controller
             ],
         ]);
 
+        $employee = Employee::query()
+            ->where('full_name', $validated['employee_name'])
+            ->where('status', 'active')
+            ->first();
+
         // Kiểm tra người này có phiên làm việc chưa kết thúc hay không.
         $existingAttendance = Attendance::query()
             ->where('employee_name', $validated['employee_name'])
@@ -59,15 +68,21 @@ class AttendanceController extends Controller
             ->first();
 
         if ($existingAttendance) {
+            if ($existingAttendance->employee_id === null && $employee !== null) {
+                $existingAttendance->employee()->associate($employee);
+                $existingAttendance->save();
+            }
+
             return response()->json([
                 'message' => 'すでに勤務を開始しています。',
-                'attendance' => $existingAttendance,
+                'attendance' => $this->attachEmployeeProfile($existingAttendance),
             ]);
         }
 
         $now = now();
 
         $attendance = Attendance::create([
+            'employee_id' => $employee?->id,
             'employee_name' => $validated['employee_name'],
             'work_date' => $now->toDateString(),
             'clock_in' => $now,
@@ -78,7 +93,7 @@ class AttendanceController extends Controller
 
         return response()->json([
             'message' => '勤務を開始しました。',
-            'attendance' => $attendance,
+            'attendance' => $this->attachEmployeeProfile($attendance),
         ], 201);
     }
 
@@ -154,8 +169,32 @@ class AttendanceController extends Controller
 
         return response()->json([
             'message' => $message,
-            'attendance' => $attendance,
+            'attendance' => $this->attachEmployeeProfile($attendance),
         ]);
+    }
+
+    private function attachEmployeeProfile(Attendance $attendance): Attendance
+    {
+        $attendance->loadMissing([
+            'employee:id,employee_code,full_name,full_name_kana,gender,avatar_path',
+        ]);
+
+        if ($attendance->employee === null) {
+            $employee = Employee::query()
+                ->where('full_name', $attendance->employee_name)
+                ->first([
+                    'id',
+                    'employee_code',
+                    'full_name',
+                    'full_name_kana',
+                    'gender',
+                    'avatar_path',
+                ]);
+
+            $attendance->setRelation('employee', $employee);
+        }
+
+        return $attendance;
     }
 
     private function syncExcelSafely(Attendance $attendance): void

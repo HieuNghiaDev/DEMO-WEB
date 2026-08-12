@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import api from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
 import {
   Sparkles,
   Plus,
@@ -34,6 +35,14 @@ type Attendance = {
   break_end: string | null;
   clock_out: string | null;
   status: WorkStatus;
+  employee: {
+    id: number;
+    employee_code: string;
+    full_name: string;
+    full_name_kana: string | null;
+    gender: string | null;
+    avatar_path: string | null;
+  } | null;
 };
 
 type AttendanceResponse = {
@@ -46,12 +55,14 @@ type ActiveAttendancesResponse = {
   attendances: Attendance[];
 };
 
-const workingPositions = [
-  { left: "16%", top: "35%" },
-  { left: "31%", top: "35%" },
-  { left: "16%", top: "63%" },
-  { left: "31%", top: "63%" },
-  { left: "23%", top: "49%" },
+const femaleDeskPositions = [
+  { left: "15%", top: "30%" },
+  { left: "30%", top: "30%" },
+];
+
+const maleDeskPositions = [
+  { left: "15%", top: "50%" },
+  { left: "30%", top: "50%" },
 ];
 
 const breakPositions = [
@@ -59,8 +70,21 @@ const breakPositions = [
   { left: "84%", top: "35%" },
   { left: "68%", top: "63%" },
   { left: "82%", top: "63%" },
-  { left: "76%", top: "49%" },
 ];
+
+const employeeDeskSlots: Record<string, number> = {
+  TM001: 0,
+  TM002: 1,
+  TM003: 0,
+  TM004: 1,
+};
+
+const employeeBreakSlots: Record<string, number> = {
+  TM001: 0,
+  TM002: 1,
+  TM003: 2,
+  TM004: 3,
+};
 
 const formatWorkTime = (value: string) =>
   new Intl.DateTimeFormat("ja-JP", {
@@ -71,6 +95,39 @@ const formatWorkTime = (value: string) =>
   }).format(new Date(value));
 
 const BASE_URL = import.meta.env.BASE_URL
+
+const getEmployeeAvatar = (attendance: Attendance) => {
+  const fallbackAvatar =
+    attendance.employee?.gender === "female"
+      ? "/images/girl.png"
+      : "/images/boy.png";
+  const avatarPath = attendance.employee?.avatar_path || fallbackAvatar;
+
+  return `${BASE_URL}${avatarPath.replace(/^\/+/, "")}`;
+};
+
+const getEmployeePosition = (attendance: Attendance) => {
+  const employeeCode = attendance.employee?.employee_code;
+
+  if (attendance.status === "break") {
+    const fallbackBreakSlot =
+      (attendance.employee?.id ?? attendance.id) % breakPositions.length;
+    const breakSlot = employeeCode
+      ? employeeBreakSlots[employeeCode] ?? fallbackBreakSlot
+      : fallbackBreakSlot;
+
+    return breakPositions[breakSlot];
+  }
+
+  const isFemale = attendance.employee?.gender === "female";
+  const positions = isFemale ? femaleDeskPositions : maleDeskPositions;
+  const fallbackSlot = (attendance.employee?.id ?? attendance.id) % 2;
+  const slot = employeeCode
+    ? employeeDeskSlots[employeeCode] ?? fallbackSlot
+    : fallbackSlot;
+
+  return positions[slot];
+};
 
 const offices: Record<OfficeId, Office> = {
   themis: {
@@ -95,7 +152,14 @@ const offices: Record<OfficeId, Office> = {
 }
 
 export default function EmployeeRoom() {
-  const [fullName, setFullName] = useState("");
+  const { user } = useAuth();
+
+  const employeeName =
+    user?.employee?.full_name?.trim() ||
+    user?.name?.trim() ||
+    user?.login_id ||
+    "";
+
   const [isWorkStarted, setIsWorkStarted] = useState(false);
   const [workStatus, setWorkStatus] = useState<WorkStatus>("working");
   const [pendingStatus, setPendingStatus] = useState<WorkStatus | null>(null);
@@ -155,8 +219,31 @@ export default function EmployeeRoom() {
     };
   }, [loadActiveAttendances]);
 
+  // Khôi phục trạng thái chấm công của người đang đăng nhập sau khi tải lại trang.
+  useEffect(() => {
+    if (!employeeName) return;
+
+    const ownAttendance = activeAttendances.find(
+      (attendance) =>
+        attendance.employee_name === employeeName &&
+        attendance.clock_out === null,
+    );
+
+    if (!ownAttendance) return;
+
+    const restoreId = window.setTimeout(() => {
+      setAttendanceId(ownAttendance.id);
+      setWorkStatus(ownAttendance.status);
+      setIsWorkStarted(true);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(restoreId);
+    };
+  }, [activeAttendances, employeeName]);
+
   const handleStartWork = async () => {
-    if (!fullName.trim() || isSubmitting) return;
+    if (!employeeName || isSubmitting) return;
 
     try {
       setIsSubmitting(true);
@@ -165,7 +252,7 @@ export default function EmployeeRoom() {
       const response = await api.post<AttendanceResponse>(
         "/attendances/start",
         {
-          employee_name: fullName.trim(),
+          employee_name: employeeName,
         },
       );
 
@@ -239,7 +326,6 @@ export default function EmployeeRoom() {
         setIsWorkStarted(false);
         setAttendanceId(null);
         setSelectedAttendanceId(null);
-        setFullName("");
       }
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -432,24 +518,19 @@ export default function EmployeeRoom() {
               </div>
             </div>
 
-            {visibleAttendances.map((attendance, index) => {
-              const sameStatusIndex = visibleAttendances
-                .slice(0, index)
-                .filter((item) => item.status === attendance.status).length;
-
-              const positions =
-                attendance.status === "break"
-                  ? breakPositions
-                  : workingPositions;
-
-              const position = positions[sameStatusIndex % positions.length];
+            {visibleAttendances.map((attendance) => {
+              const vietnameseName =
+                attendance.employee?.full_name?.trim() ||
+                attendance.employee_name;
+              const kanaName = attendance.employee?.full_name_kana?.trim();
+              const position = getEmployeePosition(attendance);
               const isSelected = selectedAttendanceId === attendance.id;
 
               return (
                 <button
                   key={attendance.id}
                   type="button"
-                  aria-label={`${attendance.employee_name}の勤務情報を表示`}
+                  aria-label={`${vietnameseName}の勤務情報を表示`}
                   onClick={(event) => {
                     event.stopPropagation();
                     setSelectedAttendanceId(isSelected ? null : attendance.id);
@@ -460,11 +541,19 @@ export default function EmployeeRoom() {
                   }`}
                 >
                   {isSelected && (
-                    <div className="absolute bottom-full left-1/2 mb-2 w-48 -translate-x-1/2 rounded-2xl border border-gray-100 bg-white p-3 text-left shadow-2xl sm:w-52">
+                    <div className="absolute bottom-full left-1/2 mb-2 w-52 -translate-x-1/2 rounded-xl border border-gray-100 bg-white p-2.5 text-left shadow-xl sm:w-56">
                       <div className="mb-2 flex items-center justify-between gap-2">
-                        <span className="truncate text-xs font-bold text-gray-800">
-                          {attendance.employee_name}
-                        </span>
+                        <div className="min-w-0">
+                          <span className="block truncate text-sm font-bold text-gray-800">
+                            {kanaName || vietnameseName}
+                          </span>
+
+                          {kanaName && (
+                            <span className="mt-0.5 block truncate text-[11px] font-medium text-gray-400">
+                              {vietnameseName}
+                            </span>
+                          )}
+                        </div>
 
                         <span
                           className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${
@@ -497,14 +586,14 @@ export default function EmployeeRoom() {
                   />
 
                   <img
-                    src={`${import.meta.env.BASE_URL}images/boy.png`}
-                    alt={attendance.employee_name}
+                    src={getEmployeeAvatar(attendance)}
+                    alt={vietnameseName}
                     className="h-auto w-12 select-none drop-shadow-[0_5px_5px_rgba(15,23,42,0.45)] sm:w-16 lg:w-20"
                     draggable={false}
                   />
 
                   <span className="absolute left-1/2 top-full mt-1 max-w-24 -translate-x-1/2 truncate rounded-full bg-slate-950/75 px-2 py-0.5 text-[9px] font-semibold text-white backdrop-blur-sm sm:text-[10px]">
-                    {attendance.employee_name}
+                    {vietnameseName}
                   </span>
                 </button>
               );
@@ -524,40 +613,26 @@ export default function EmployeeRoom() {
               </h3>
 
               <p className="mt-1 text-xs text-gray-400">
-                氏名を入力して勤務を開始してください
+                ログイン中の社員情報で勤務を登録します
               </p>
             </div>
 
-            {/* Name Input */}
+            {/* Logged-in Employee */}
             <div className="flex flex-col gap-3 sm:flex-row">
               <div className="flex-1">
-                <label
-                  htmlFor="employee-name"
-                  className="mb-1.5 block text-xs font-semibold text-gray-600"
-                >
+                <span className="mb-1.5 block text-xs font-semibold text-gray-600">
                   氏名
-                </label>
+                </span>
 
-                <input
-                  id="employee-name"
-                  type="text"
-                  value={fullName}
-                  disabled={isWorkStarted || isSubmitting}
-                  onChange={(event) => setFullName(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      handleStartWork();
-                    }
-                  }}
-                  placeholder="氏名を入力してください"
-                  className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-800 outline-none transition placeholder:text-gray-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:bg-gray-100"
-                />
+                <div className="flex h-11 w-full items-center rounded-xl border border-indigo-100 bg-indigo-50/70 px-4 text-sm font-bold text-gray-800">
+                  {employeeName || "社員情報を取得できません"}
+                </div>
               </div>
 
               <button
                 type="button"
                 onClick={handleStartWork}
-                disabled={!fullName.trim() || isWorkStarted || isSubmitting}
+                disabled={!employeeName || isWorkStarted || isSubmitting}
                 className="flex h-11 items-center justify-center gap-2 self-end rounded-xl bg-[#635BFF] px-5 text-sm font-bold text-white shadow-md shadow-indigo-500/20 transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none"
               >
                 <Play size={17} />
@@ -581,7 +656,9 @@ export default function EmployeeRoom() {
                   <div>
                     <span className="text-xs text-gray-400">勤務者</span>
 
-                    <p className="font-bold text-gray-800">{fullName}さん</p>
+                    <p className="font-bold text-gray-800">
+                      {employeeName}さん
+                    </p>
                   </div>
 
                   <span className="w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">
