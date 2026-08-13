@@ -24,6 +24,7 @@ type ThemeContextValue = {
 };
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
+let themeTransitionTimer: number | undefined;
 
 type ThemeProviderProps = {
   children: ReactNode;
@@ -52,6 +53,17 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
   const setTheme = (nextTheme: ThemeMode) => {
     window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    document.documentElement.classList.add("theme-switching");
+    applyTheme(nextTheme);
+
+    if (themeTransitionTimer) {
+      window.clearTimeout(themeTransitionTimer);
+    }
+
+    themeTransitionTimer = window.setTimeout(() => {
+      document.documentElement.classList.remove("theme-switching");
+    }, 1380);
+
     setThemeState(nextTheme);
   };
 

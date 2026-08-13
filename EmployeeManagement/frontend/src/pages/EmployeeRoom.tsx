@@ -755,21 +755,21 @@ export default function EmployeeRoom() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f6fa] p-4 sm:p-6">
+    <div className="min-h-screen bg-[#f5f6fa] px-3 pb-4 pt-20 sm:p-6">
       {/* 1. Header Top Area */}
-      <div className="mb-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <div className="text-xs font-medium text-indigo-500">
+      <div className="mb-3 flex flex-col justify-between gap-3 sm:mb-4 sm:flex-row sm:items-center sm:gap-4">
+        <div className="min-w-0">
+          <div className="truncate text-[10px] font-semibold text-indigo-500 sm:text-xs sm:font-medium">
             THEMIS株式会社 × 中華総合法律事務所
           </div>
 
-          <h1 className="text-2xl font-bold text-gray-800">
+          <h1 className="mt-1 text-xl font-bold leading-tight text-gray-800 sm:mt-0 sm:text-2xl">
             合同事務所・社員ルーム
           </h1>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="relative z-50">
+        <div className="flex w-full items-center gap-2 sm:w-auto sm:gap-3">
+          <div className="relative z-30">
             <button
               type="button"
               aria-label="通知を表示"
@@ -795,7 +795,7 @@ export default function EmployeeRoom() {
             </button>
 
             {isNotificationPanelOpen && (
-              <div className="absolute right-0 top-12 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl shadow-slate-900/15">
+              <div className="fixed inset-x-3 top-20 w-auto overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl shadow-slate-900/15 sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[min(24rem,calc(100vw-2rem))]">
                 <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3.5">
                   <div>
                     <h2 className="font-bold text-gray-800">通知</h2>
@@ -806,15 +806,26 @@ export default function EmployeeRoom() {
                     </p>
                   </div>
 
-                  {unreadNotificationCount > 0 && (
+                  <div className="flex items-center gap-1">
+                    {unreadNotificationCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={markAllNotificationsAsRead}
+                        className="rounded-lg px-2 py-1.5 text-[11px] font-semibold text-indigo-600 transition hover:bg-indigo-50 sm:px-2.5 sm:text-xs"
+                      >
+                        すべて既読
+                      </button>
+                    )}
+
                     <button
                       type="button"
-                      onClick={markAllNotificationsAsRead}
-                      className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50"
+                      aria-label="通知パネルを閉じる"
+                      onClick={() => setIsNotificationPanelOpen(false)}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
                     >
-                      すべて既読
+                      <X size={17} />
                     </button>
-                  )}
+                  </div>
                 </div>
 
                 <div className="max-h-[26rem] overflow-y-auto">
@@ -894,21 +905,21 @@ export default function EmployeeRoom() {
             />
           )}
 
-          <button className="flex items-center gap-2 rounded-xl bg-[#635BFF] px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-600">
+          <button className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-[#635BFF] px-3 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 transition hover:bg-indigo-600 active:scale-[0.98] sm:flex-none sm:px-4">
             <Plus size={18} />
-            事務所が増築
+            <span className="truncate">事務所が増築</span>
           </button>
         </div>
       </div>
 
       {/* 2. Companies Banner Card */}
-      <div className="mb-4 flex flex-col justify-between gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm lg:flex-row lg:items-center">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+      <div className="mb-3 flex flex-col justify-between gap-3 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm sm:mb-4 sm:gap-4 sm:p-4 lg:flex-row lg:items-center">
+        <div className="flex min-w-0 flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4">
           <button
             type="button"
             onClick={() => handleOfficeChange("themis")}
             aria-pressed={selectedOffice === "themis"}
-            className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition ${
+            className={`flex w-full min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition sm:w-auto sm:py-2 ${
               selectedOffice === "themis"
                 ? "border-indigo-200 bg-indigo-50 shadow-sm ring-2 ring-indigo-100"
                 : "border-transparent hover:border-gray-200 hover:bg-gray-50"
@@ -918,18 +929,18 @@ export default function EmployeeRoom() {
               T
             </div>
 
-            <div>
-              <div className="flex items-center gap-2 text-sm font-bold text-gray-800">
-                THEMIS株式会社
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center justify-between gap-2 text-sm font-bold text-gray-800 sm:justify-start">
+                <span className="truncate">THEMIS株式会社</span>
 
                 {selectedOffice === "themis" && (
-                  <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[9px] font-bold text-white">
+                  <span className="shrink-0 rounded-full bg-indigo-600 px-2 py-0.5 text-[9px] font-bold text-white">
                     表示中
                   </span>
                 )}
               </div>
 
-              <div className="text-[11px] text-gray-400">
+              <div className="truncate text-[11px] text-gray-400">
                 大阪府松原市北新町2-5-13
               </div>
             </div>
@@ -943,7 +954,7 @@ export default function EmployeeRoom() {
             type="button"
             onClick={() => handleOfficeChange("law")}
             aria-pressed={selectedOffice === "law"}
-            className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition ${
+            className={`flex w-full min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition sm:w-auto sm:py-2 ${
               selectedOffice === "law"
                 ? "border-blue-200 bg-blue-50 shadow-sm ring-2 ring-blue-100"
                 : "border-transparent hover:border-gray-200 hover:bg-gray-50"
@@ -953,38 +964,38 @@ export default function EmployeeRoom() {
               法
             </div>
 
-            <div>
-              <div className="flex items-center gap-2 text-sm font-bold text-gray-800">
-                中華総合法律事務所
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center justify-between gap-2 text-sm font-bold text-gray-800 sm:justify-start">
+                <span className="truncate">中華総合法律事務所</span>
 
                 {selectedOffice === "law" && (
-                  <span className="rounded-full bg-blue-900 px-2 py-0.5 text-[9px] font-bold text-white">
+                  <span className="shrink-0 rounded-full bg-blue-900 px-2 py-0.5 text-[9px] font-bold text-white">
                     表示中
                   </span>
                 )}
               </div>
 
-              <div className="text-[11px] text-gray-400">
+              <div className="truncate text-[11px] text-gray-400">
                 大阪府松原市天美東1-80-22
               </div>
             </div>
           </button>
         </div>
 
-        <span className="w-fit rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+        <span className="w-fit self-end rounded-full bg-gray-100 px-3 py-1 text-[11px] font-medium text-gray-600 sm:text-xs lg:self-auto">
           2法人・1チーム
         </span>
       </div>
 
       {/* 3. Notification Banner */}
-      <div className="mb-6 flex flex-col justify-between gap-3 rounded-2xl border border-indigo-100/80 bg-indigo-50/70 px-4 py-3 text-xs text-indigo-900 sm:flex-row sm:items-center">
-        <div className="flex items-center gap-2">
-          <Sparkles size={16} className="shrink-0 text-indigo-600" />
+      <div className="mb-5 flex flex-col justify-between gap-2.5 rounded-2xl border border-indigo-100/80 bg-indigo-50/70 px-3.5 py-3 text-xs text-indigo-900 sm:mb-6 sm:flex-row sm:items-center sm:gap-3 sm:px-4">
+        <div className="flex min-w-0 items-start gap-2 sm:items-center">
+          <Sparkles size={16} className="mt-0.5 shrink-0 text-indigo-600 sm:mt-0" />
 
-          <span>AIサブマネージャーが改善候補を3件見つけました</span>
+          <span className="leading-relaxed">AIサブマネージャーが改善候補を3件見つけました</span>
         </div>
 
-        <button className="w-fit font-semibold text-indigo-600 hover:underline">
+        <button className="w-fit self-end rounded-lg bg-indigo-100/70 px-3 py-1.5 font-semibold text-indigo-600 transition hover:bg-indigo-100 sm:self-auto sm:bg-transparent sm:px-0 sm:py-0 sm:hover:bg-transparent sm:hover:underline">
           確認する
         </button>
       </div>

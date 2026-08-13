@@ -202,6 +202,146 @@ html.dark {
   color-scheme: dark;
 }
 
+html.theme-switching .themis-app,
+html.theme-switching .themis-app * {
+  transition-property: background-color, border-color, color, box-shadow, opacity, transform;
+  transition-duration: 900ms;
+  transition-timing-function: cubic-bezier(0.22, 0.7, 0.26, 1);
+}
+
+html.theme-switching::after {
+  position: fixed;
+  z-index: 9999;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background: radial-gradient(circle at 7rem calc(100% - 9rem), rgb(255 255 255 / 0.18), transparent 46%);
+  animation: themis-theme-wash 1280ms ease-out both;
+}
+
+html.dark.theme-switching::after {
+  background: radial-gradient(circle at 7rem calc(100% - 9rem), rgb(99 102 241 / 0.2), transparent 50%);
+}
+
+.theme-mode-pill-knob {
+  left: 0.125rem;
+  transition-duration: 1250ms;
+  transition-timing-function: cubic-bezier(0.65, 0, 0.22, 1);
+}
+
+.theme-mode-pill-knob::before {
+  position: absolute;
+  top: 0.28rem;
+  left: 0.4rem;
+  width: 1rem;
+  height: 0.36rem;
+  border-radius: 999px;
+  content: "";
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.9), rgb(255 255 255 / 0));
+  filter: blur(0.5px);
+}
+
+.theme-mode-label {
+  transition-duration: 1250ms;
+  transition-timing-function: cubic-bezier(0.65, 0, 0.22, 1);
+}
+
+.theme-mode-pill-light .theme-mode-pill-knob {
+  left: calc(100% - 2.125rem);
+}
+
+.theme-mode-pill-flash {
+  opacity: 0;
+  background: radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.55), transparent 55%);
+}
+
+html.theme-switching .theme-mode-pill-flash {
+  animation: themis-toggle-flash 1250ms ease-out both;
+}
+
+html.theme-switching .theme-mode-pill-knob {
+  transition-duration: 1250ms;
+  transition-timing-function: cubic-bezier(0.65, 0, 0.22, 1);
+  animation: themis-toggle-pop 1250ms cubic-bezier(0.22, 1.2, 0.36, 1) both;
+}
+
+html.theme-switching .theme-mode-icon {
+  animation: themis-toggle-icon 1250ms ease-out both;
+}
+
+@keyframes themis-toggle-flash {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+
+  42% {
+    opacity: 0.34;
+    transform: scale(1);
+  }
+}
+
+@keyframes themis-toggle-pop {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+
+  45% {
+    transform: scale(0.82) rotate(-10deg);
+  }
+
+  76% {
+    transform: scale(1.08) rotate(7deg);
+  }
+
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes themis-toggle-icon {
+  0% {
+    filter: drop-shadow(0 0 0 transparent);
+    transform: rotate(0deg);
+  }
+
+  55% {
+    filter: drop-shadow(0 0 5px rgb(129 140 248 / 0.75));
+    transform: rotate(24deg);
+  }
+
+  100% {
+    filter: drop-shadow(0 0 0 transparent);
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes themis-theme-wash {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+
+  38% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-switching .theme-mode-icon,
+  html.theme-switching .theme-mode-pill-flash,
+  html.theme-switching .theme-mode-pill-knob,
+  html.theme-switching::after {
+    animation: none;
+  }
+}
+
 @keyframes themis-loading-progress {
   0% {
     transform: translateX(-115%);

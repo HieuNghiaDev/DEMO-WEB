@@ -183,13 +183,61 @@ export default function Sidebar() {
           </button>
         </div>
 
-        {/* Workspace */}
-        <div className="mb-6 flex items-center gap-2.5 rounded-xl border border-gray-800 bg-[#161b30]/60 px-3.5 py-2.5 text-xs text-gray-300">
-          <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-emerald-400" />
+        {/* Workspace + theme */}
+        <div className="mb-6 flex items-center gap-2">
+          <div className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-xl border border-gray-800 bg-[#161b30]/60 px-2.5 text-[10px] text-gray-300">
+            <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-emerald-400" />
 
-          <span className="truncate font-medium">
-            合同ワークスペース
-          </span>
+            <span className="truncate font-medium">
+              合同ワークスペース
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className={`theme-mode-pill group relative block h-9 w-28 shrink-0 overflow-hidden rounded-full border transition duration-300 hover:-translate-y-px hover:scale-[1.02] active:translate-y-0 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${
+              isDark
+                ? 'border-[#151923] bg-gradient-to-b from-[#424754] via-[#333844] to-[#242934] shadow-[inset_0_3px_3px_rgba(255,255,255,0.09),inset_0_-3px_5px_rgba(2,6,23,0.28),0_2px_0_rgba(255,255,255,0.08),0_7px_16px_rgba(2,6,23,0.3)] hover:border-indigo-300/30'
+                : 'theme-mode-pill-light border-slate-400/60 bg-gradient-to-b from-white via-[#f0f2f5] to-[#d8dce1] shadow-[inset_0_3px_4px_rgba(255,255,255,1),inset_0_-3px_5px_rgba(100,116,139,0.16),0_2px_0_rgba(255,255,255,0.55),0_7px_16px_rgba(2,6,23,0.19)] hover:border-white'
+            }`}
+            aria-label={isDark ? 'ライトモードに切り替える' : 'ダークモードに切り替える'}
+            title={isDark ? 'ライトモード' : 'ダークモード'}
+          >
+            <span
+              className={`theme-mode-label pointer-events-none absolute top-1/2 -translate-y-1/2 text-left text-[8px] font-black leading-[0.6rem] tracking-[0.04em] transition-all ${
+                isDark
+                  ? 'left-[2.8rem] text-slate-200'
+                  : 'left-2.5 text-slate-600'
+              }`}
+            >
+              {isDark ? (
+                <>
+                  DARK<br />MODE
+                </>
+              ) : (
+                <>
+                  LIGHT<br />MODE
+                </>
+              )}
+            </span>
+
+            <span className="pointer-events-none absolute inset-[2px] rounded-full border-t border-white/25 opacity-70" />
+            <span className="theme-mode-pill-flash pointer-events-none absolute inset-0 rounded-full" />
+
+            <span
+              className="theme-mode-pill-knob absolute top-0.5 flex h-8 w-8 items-center justify-center rounded-full border-2 border-slate-300/90 bg-gradient-to-br from-white via-slate-100 to-slate-300 text-slate-400 shadow-[inset_0_3px_4px_rgba(255,255,255,1),inset_0_-3px_5px_rgba(100,116,139,0.2),0_3px_4px_rgba(2,6,23,0.24),0_5px_9px_rgba(2,6,23,0.28)] transition-all group-hover:shadow-[inset_0_3px_4px_rgba(255,255,255,1),inset_0_-3px_5px_rgba(100,116,139,0.22),0_4px_5px_rgba(2,6,23,0.26),0_7px_12px_rgba(2,6,23,0.34)]"
+              aria-hidden="true"
+            >
+              <span className="theme-mode-icon relative z-10 flex items-center justify-center">
+                {isDark ? (
+                  <Moon size={18} strokeWidth={1.7} />
+                ) : (
+                  <Sun size={18} strokeWidth={1.7} />
+                )}
+              </span>
+            </span>
+          </button>
         </div>
 
         {/* Navigation */}
@@ -236,42 +284,6 @@ export default function Sidebar() {
 
         {/* Người đang đăng nhập */}
         <div className="mt-4 border-t border-white/10 pt-4">
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="mb-3 flex w-full items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.045] px-3 py-2.5 text-left transition hover:border-indigo-300/15 hover:bg-white/[0.08]"
-            aria-label={isDark ? 'ライトモードに切り替える' : 'ダークモードに切り替える'}
-            title={isDark ? 'ライトモード' : 'ダークモード'}
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300">
-              {isDark ? <Moon size={17} /> : <Sun size={17} />}
-            </span>
-
-            <span className="min-w-0 flex-1">
-              <span className="block text-[11px] font-bold text-white">
-                表示モード
-              </span>
-              <span className="mt-0.5 block text-[10px] text-gray-500">
-                {isDark ? 'ダーク' : 'ライト'}
-              </span>
-            </span>
-
-            <span
-              className={`relative h-6 w-11 shrink-0 rounded-full border transition ${
-                isDark
-                  ? 'border-indigo-400/40 bg-indigo-500/75'
-                  : 'border-white/10 bg-white/10'
-              }`}
-              aria-hidden="true"
-            >
-              <span
-                className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow-md transition-transform ${
-                  isDark ? 'translate-x-[1.35rem]' : 'translate-x-1'
-                }`}
-              />
-            </span>
-          </button>
-
           <div className="mb-3 flex items-center gap-3 rounded-xl bg-white/5 px-3 py-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-500/20 text-sm font-bold text-indigo-300">
               {employeeName
