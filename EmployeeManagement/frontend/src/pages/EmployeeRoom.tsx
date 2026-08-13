@@ -766,7 +766,7 @@ export default function EmployeeRoom() {
         </div>
 
         <div className="flex w-full items-center gap-2 sm:w-auto sm:gap-3">
-          <div className="relative z-30">
+          <div className="relative z-50">
             <button
               type="button"
               aria-label="通知を表示"
@@ -792,7 +792,7 @@ export default function EmployeeRoom() {
             </button>
 
             {isNotificationPanelOpen && (
-              <div className="fixed inset-x-3 top-20 w-auto overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl shadow-slate-900/15 sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[min(24rem,calc(100vw-2rem))]">
+              <div className="fixed inset-x-3 top-20 z-50 w-auto overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl shadow-slate-900/15 sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[min(24rem,calc(100vw-2rem))]">
                 <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3.5">
                   <div>
                     <h2 className="font-bold text-gray-800">通知</h2>
