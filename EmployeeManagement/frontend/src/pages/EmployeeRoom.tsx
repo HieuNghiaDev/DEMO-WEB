@@ -605,9 +605,6 @@ export default function EmployeeRoom() {
 
       const response = await api.post<AttendanceResponse>(
         "/attendances/start",
-        {
-          employee_name: employeeName,
-        },
       );
 
       const newAttendance = response.data.attendance;

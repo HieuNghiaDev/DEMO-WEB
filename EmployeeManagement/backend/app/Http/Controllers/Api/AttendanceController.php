@@ -20,8 +20,10 @@ class AttendanceController extends Controller
     ) {}
 
     /** Danh sách nhân viên đang hoạt động trong ngày. */
-    public function active(): JsonResponse
+    public function active(Request $request): JsonResponse
     {
+        $this->authenticatedEmployee($request);
+
         $attendances = Attendance::query()
             ->whereNull('clock_out')
             ->whereIn('status', [
@@ -45,27 +47,28 @@ class AttendanceController extends Controller
     /** Bắt đầu làm việc. */
     public function start(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'employee_name' => [
-                'required',
-                'string',
-                'max:255',
-            ],
-        ]);
-
-        $employee = Employee::query()
-            ->where('full_name', $validated['employee_name'])
-            ->where('status', 'active')
-            ->first();
+        $employee = $this->authenticatedEmployee($request);
 
         $existingAttendance = Attendance::query()
-            ->where('employee_name', $validated['employee_name'])
+            ->where(function ($query) use ($employee) {
+                $query
+                    ->where('employee_id', $employee->id)
+                    ->orWhere(function ($legacyQuery) use ($employee) {
+                        $legacyQuery
+                            ->whereNull('employee_id')
+                            ->where('employee_name', $employee->full_name);
+                    });
+            })
             ->whereNull('clock_out')
             ->latest('id')
             ->first();
 
         if ($existingAttendance) {
-            if ($existingAttendance->employee_id === null && $employee !== null) {
+            if ($existingAttendance->employee_id === null) {
+                if (! $this->canClaimLegacyAttendance($existingAttendance, $employee)) {
+                    abort(403, 'この勤務記録の所有者を安全に確認できません。');
+                }
+
                 $existingAttendance->employee()->associate($employee);
                 $existingAttendance->save();
             }
@@ -79,8 +82,8 @@ class AttendanceController extends Controller
         $now = now();
 
         $attendance = Attendance::create([
-            'employee_id' => $employee?->id,
-            'employee_name' => $validated['employee_name'],
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->full_name,
             'work_date' => $now->toDateString(),
             'clock_in' => $now,
             'status' => 'working',
@@ -99,6 +102,20 @@ class AttendanceController extends Controller
         Request $request,
         Attendance $attendance
     ): JsonResponse {
+        $employee = $this->authenticatedEmployee($request);
+
+        if (
+            $attendance->employee_id === null &&
+            $this->canClaimLegacyAttendance($attendance, $employee)
+        ) {
+            $attendance->employee()->associate($employee);
+            $attendance->save();
+        }
+
+        if ((int) $attendance->employee_id !== $employee->id) {
+            abort(403, '他の社員の勤務記録は変更できません。');
+        }
+
         $validated = $request->validate([
             'status' => [
                 'required',
@@ -262,6 +279,34 @@ class AttendanceController extends Controller
         }
 
         return $attendance;
+    }
+
+    private function authenticatedEmployee(Request $request): Employee
+    {
+        $employee = $request->user()?->employee;
+
+        if ($employee === null || $employee->status !== 'active') {
+            abort(403, 'このアカウントには有効な社員情報がありません。');
+        }
+
+        return $employee;
+    }
+
+    private function canClaimLegacyAttendance(
+        Attendance $attendance,
+        Employee $employee
+    ): bool {
+        if (
+            $attendance->employee_id !== null ||
+            $attendance->employee_name !== $employee->full_name
+        ) {
+            return false;
+        }
+
+        return Employee::query()
+            ->where('full_name', $employee->full_name)
+            ->where('status', 'active')
+            ->count() === 1;
     }
 
     private function syncExcelSafely(Attendance $attendance): void

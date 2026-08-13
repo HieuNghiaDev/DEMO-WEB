@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\Office;
 use App\Models\User;
@@ -11,6 +12,27 @@ use Tests\TestCase;
 class AuthTokenTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_attendance_api_rejects_unauthenticated_requests(): void
+    {
+        $attendance = Attendance::create([
+            'employee_name' => 'LE HIEU NGHIA',
+            'work_date' => '2026-08-12',
+            'clock_in' => '2026-08-12 09:00:00',
+            'status' => 'working',
+        ]);
+
+        $this->getJson('/api/attendances/active')
+            ->assertUnauthorized();
+
+        $this->postJson('/api/attendances/start', [
+            'employee_name' => 'LE HIEU NGHIA',
+        ])->assertUnauthorized();
+
+        $this->patchJson("/api/attendances/{$attendance->id}/status", [
+            'status' => 'offline',
+        ])->assertUnauthorized();
+    }
 
     public function test_employee_can_login_use_the_api_and_logout_with_a_token(): void
     {

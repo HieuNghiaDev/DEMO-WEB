@@ -5,7 +5,12 @@ return [
         'api/*',
     ],
 
-    'allowed_methods' => ['*'],
+    'allowed_methods' => [
+        'GET',
+        'POST',
+        'PATCH',
+        'OPTIONS',
+    ],
 
     'allowed_origins' => array_values(array_unique(array_filter([
         env('FRONTEND_URL'),
@@ -15,11 +20,16 @@ return [
 
     'allowed_origins_patterns' => [],
 
-    'allowed_headers' => ['*'],
+    'allowed_headers' => [
+        'Accept',
+        'Authorization',
+        'Content-Type',
+        'Origin',
+    ],
 
     'exposed_headers' => [],
 
-    'max_age' => 0,
+    'max_age' => 600,
 
     'supports_credentials' => false,
 ];

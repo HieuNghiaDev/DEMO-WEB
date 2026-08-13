@@ -2,15 +2,47 @@
 
 namespace Tests\Feature;
 
-use App\Services\AttendanceExcelService;
 use App\Models\Attendance;
+use App\Models\Employee;
+use App\Models\Office;
+use App\Models\User;
+use App\Services\AttendanceExcelService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class AttendanceOutsideStatusTest extends TestCase
 {
     use RefreshDatabase;
+
+    private Employee $employee;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $office = Office::create([
+            'office_code' => 'THEMIS',
+            'name' => 'THEMIS株式会社',
+            'status' => 'active',
+        ]);
+
+        $this->employee = Employee::create([
+            'employee_code' => 'TM001',
+            'full_name' => 'LE HIEU NGHIA',
+            'gender' => 'male',
+            'hire_date' => '2026-08-12',
+            'office_id' => $office->id,
+            'status' => 'active',
+        ]);
+
+        $user = User::factory()->create([
+            'employee_id' => $this->employee->id,
+        ]);
+
+        Sanctum::actingAs($user);
+    }
 
     public function test_outside_schedule_is_recorded_and_closed_when_employee_returns(): void
     {
@@ -20,6 +52,7 @@ class AttendanceOutsideStatusTest extends TestCase
         Carbon::setTestNow('2026-08-12 10:00:00');
 
         $attendance = Attendance::create([
+            'employee_id' => $this->employee->id,
             'employee_name' => 'LE HIEU NGHIA',
             'work_date' => '2026-08-12',
             'clock_in' => '2026-08-12 09:00:00',
@@ -71,6 +104,7 @@ class AttendanceOutsideStatusTest extends TestCase
         Carbon::setTestNow('2026-08-12 10:00:45');
 
         $attendance = Attendance::create([
+            'employee_id' => $this->employee->id,
             'employee_name' => 'LE HIEU NGHIA',
             'work_date' => '2026-08-12',
             'clock_in' => '2026-08-12 10:00:30',

@@ -10,7 +10,10 @@ Route::post('/login', [
     'login',
 ])->middleware('throttle:5,1');
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware([
+    'auth:sanctum',
+    'throttle:60,1',
+])->group(function () {
     Route::get('/me', [
         AuthController::class,
         'me',
@@ -20,22 +23,22 @@ Route::middleware('auth:sanctum')->group(function () {
         AuthController::class,
         'logout',
     ]);
-});
 
-// Attendance
-Route::prefix('attendances')->group(function () {
-    Route::get('/active', [
-        AttendanceController::class,
-        'active',
-    ]);
+    // Attendance: only authenticated employees can read or update attendance data.
+    Route::prefix('attendances')->group(function () {
+        Route::get('/active', [
+            AttendanceController::class,
+            'active',
+        ]);
 
-    Route::post('/start', [
-        AttendanceController::class,
-        'start',
-    ]);
+        Route::post('/start', [
+            AttendanceController::class,
+            'start',
+        ]);
 
-    Route::patch('/{attendance}/status', [
-        AttendanceController::class,
-        'updateStatus',
-    ]);
+        Route::patch('/{attendance}/status', [
+            AttendanceController::class,
+            'updateStatus',
+        ]);
+    });
 });

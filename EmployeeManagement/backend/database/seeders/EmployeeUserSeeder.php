@@ -32,26 +32,30 @@ class EmployeeUserSeeder extends Seeder
                 'department_id' => null,
                 'position_title' => '社員',
                 'employment_type' => 'full_time',
-                'work_email' => 'nghia@themis.local',
+                'work_email' => 'nghialezsm@gmail.com',
                 'phone' => null,
                 'avatar_path' => '/images/boy.png',
                 'status' => 'active',
             ]
         );
 
-        User::firstOrCreate(
-            [
-                'login_id' => 'TM001',
-            ],
-            [
-                'employee_id' => $employee->id,
-                'name' => $employee->full_name,
-                'email' => 'nghia@themis.local',
-                'password' => Hash::make('Themis@123456'),
-                'role' => 'employee',
-                'is_active' => true,
-                'must_change_password' => true,
-            ]
-        );
+        $user = User::firstOrNew([
+            'login_id' => 'TM001',
+        ]);
+
+        $user->fill([
+            'employee_id' => $employee->id,
+            'name' => $employee->full_name,
+            'email' => 'nghialezsm@gmail.com',
+            'role' => 'employee',
+            'is_active' => true,
+        ]);
+
+        if (! $user->exists) {
+            $user->password = Hash::make('Themis@123456');
+            $user->must_change_password = true;
+        }
+
+        $user->save();
     }
 }

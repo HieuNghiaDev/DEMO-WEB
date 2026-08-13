@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\Office;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class AttendanceProfileTest extends TestCase
@@ -20,7 +22,7 @@ class AttendanceProfileTest extends TestCase
             'status' => 'active',
         ]);
 
-        Employee::create([
+        $employee = Employee::create([
             'employee_code' => 'TM003',
             'full_name' => 'NGUYEN THI MAI',
             'full_name_kana' => 'グエン・ティ・マイ',
@@ -31,7 +33,12 @@ class AttendanceProfileTest extends TestCase
             'status' => 'active',
         ]);
 
+        Sanctum::actingAs(User::factory()->create([
+            'employee_id' => $employee->id,
+        ]));
+
         Attendance::create([
+            'employee_id' => $employee->id,
             'employee_name' => 'NGUYEN THI MAI',
             'work_date' => '2026-08-12',
             'clock_in' => '2026-08-12 09:59:00',
