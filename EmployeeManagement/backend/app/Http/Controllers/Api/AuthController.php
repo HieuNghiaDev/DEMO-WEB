@@ -17,10 +17,10 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'login_id' => [
+            'email' => [
                 'required',
-                'string',
-                'max:50',
+                'email',
+                'max:255',
             ],
             'password' => [
                 'required',
@@ -37,14 +37,14 @@ class AuthController extends Controller
                 'employee.office',
                 'employee.department',
             ])
-            ->where('login_id', $validated['login_id'])
+            ->where('email', strtolower($validated['email']))
             ->where('is_active', true)
             ->first();
 
         if ($user === null || ! Hash::check($validated['password'], $user->password)) {
             throw ValidationException::withMessages([
-                'login_id' => [
-                    '社員コードまたはパスワードが正しくありません。',
+                'email' => [
+                    'メールアドレスまたはパスワードが正しくありません。',
                 ],
             ]);
         }

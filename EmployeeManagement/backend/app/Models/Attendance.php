@@ -14,6 +14,9 @@ class Attendance extends Model
         'clock_in',
         'break_start',
         'break_end',
+        'outside_start',
+        'outside_expected_end',
+        'outside_end',
         'clock_out',
         'status',
     ];
@@ -25,6 +28,9 @@ class Attendance extends Model
             'clock_in' => 'datetime',
             'break_start' => 'datetime',
             'break_end' => 'datetime',
+            'outside_start' => 'datetime',
+            'outside_expected_end' => 'datetime',
+            'outside_end' => 'datetime',
             'clock_out' => 'datetime',
         ];
     }

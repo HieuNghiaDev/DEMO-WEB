@@ -11,9 +11,15 @@ import {
   Coffee,
   Power,
   CircleHelp,
+  MapPin,
+  Clock3,
+  CheckCircle2,
+  AlertTriangle,
+  Info,
+  X,
 } from "lucide-react";
 
-type WorkStatus = "working" | "break" | "offline";
+type WorkStatus = "working" | "break" | "outside" | "offline";
 type OfficeId = "themis" | "law";
 
 type Office = {
@@ -33,6 +39,9 @@ type Attendance = {
   clock_in: string;
   break_start: string | null;
   break_end: string | null;
+  outside_start: string | null;
+  outside_expected_end: string | null;
+  outside_end: string | null;
   clock_out: string | null;
   status: WorkStatus;
   employee: {
@@ -55,6 +64,23 @@ type ActiveAttendancesResponse = {
   attendances: Attendance[];
 };
 
+type NotificationKind = "success" | "info" | "warning" | "error";
+
+type UserNotification = {
+  id: string;
+  sourceKey: string;
+  title: string;
+  message: string;
+  kind: NotificationKind;
+  createdAt: string;
+  isRead: boolean;
+};
+
+type NewNotification = Pick<
+  UserNotification,
+  "sourceKey" | "title" | "message" | "kind"
+>;
+
 const femaleDeskPositions = [
   { left: "15%", top: "30%" },
   { left: "30%", top: "30%" },
@@ -66,10 +92,17 @@ const maleDeskPositions = [
 ];
 
 const breakPositions = [
-  { left: "70%", top: "35%" },
-  { left: "84%", top: "35%" },
-  { left: "68%", top: "63%" },
-  { left: "82%", top: "63%" },
+  { left: "51%", top: "56%" },
+  { left: "62%", top: "56%" },
+  { left: "51%", top: "70%" },
+  { left: "62%", top: "70%" },
+];
+
+const outsidePositions = [
+  { left: "79%", top: "40%" },
+  { left: "88%", top: "40%" },
+  { left: "79%", top: "57%" },
+  { left: "88%", top: "57%" },
 ];
 
 const employeeDeskSlots: Record<string, number> = {
@@ -86,6 +119,13 @@ const employeeBreakSlots: Record<string, number> = {
   TM004: 3,
 };
 
+const employeeOutsideSlots: Record<string, number> = {
+  TM001: 0,
+  TM002: 1,
+  TM003: 2,
+  TM004: 3,
+};
+
 const formatWorkTime = (value: string) =>
   new Intl.DateTimeFormat("ja-JP", {
     hour: "2-digit",
@@ -93,6 +133,115 @@ const formatWorkTime = (value: string) =>
     hour12: false,
     timeZone: "Asia/Tokyo",
   }).format(new Date(value));
+
+const getJapanTimeInput = (minutesFromNow = 0) => {
+  const date = new Date(Date.now() + minutesFromNow * 60_000);
+
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Tokyo",
+  }).format(date);
+};
+
+const formatNotificationTime = (value: string) =>
+  new Intl.DateTimeFormat("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Tokyo",
+  }).format(new Date(value));
+
+const formatExpectedTime = (value: string) =>
+  new Intl.DateTimeFormat("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Tokyo",
+  }).format(new Date(value));
+
+type JapaneseTimePart = "hour" | "minute";
+
+const timeHours = Array.from({ length: 24 }, (_, index) => index);
+const timeMinutes = Array.from({ length: 60 }, (_, index) => index);
+
+const getJapaneseTimeParts = (value: string) => {
+  const [rawHour = "0", rawMinute = "0"] = value.split(":");
+  return {
+    hour: Number(rawHour),
+    minute: Number(rawMinute),
+  };
+};
+
+const updateJapaneseTime = (
+  value: string,
+  part: JapaneseTimePart,
+  nextValue: string,
+) => {
+  const current = getJapaneseTimeParts(value || "00:00");
+  const hour = part === "hour" ? Number(nextValue) : current.hour;
+  const minute = part === "minute" ? Number(nextValue) : current.minute;
+
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+};
+
+type JapaneseTimePickerProps = {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+};
+
+function JapaneseTimePicker({
+  label,
+  value,
+  onChange,
+}: JapaneseTimePickerProps) {
+  const time = getJapaneseTimeParts(value || "00:00");
+  const selectClassName =
+    "h-11 min-w-0 rounded-xl border border-blue-200 bg-white px-2 text-center text-sm font-bold text-gray-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100";
+
+  const handleChange = (part: JapaneseTimePart, nextValue: string) => {
+    onChange(updateJapaneseTime(value, part, nextValue));
+  };
+
+  return (
+    <fieldset>
+      <legend className="text-xs font-semibold text-gray-600">{label}</legend>
+
+      <div className="mt-1.5 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+        <select
+          aria-label={`${label} 時`}
+          value={time.hour}
+          onChange={(event) => handleChange("hour", event.target.value)}
+          className={selectClassName}
+        >
+          {timeHours.map((hour) => (
+            <option key={hour} value={hour}>
+              {String(hour).padStart(2, "0")}
+            </option>
+          ))}
+        </select>
+
+        <span className="text-sm font-bold text-gray-400">:</span>
+
+        <select
+          aria-label={`${label} 分`}
+          value={time.minute}
+          onChange={(event) => handleChange("minute", event.target.value)}
+          className={selectClassName}
+        >
+          {timeMinutes.map((minute) => (
+            <option key={minute} value={minute}>
+              {String(minute).padStart(2, "0")}
+            </option>
+          ))}
+        </select>
+      </div>
+    </fieldset>
+  );
+}
 
 const BASE_URL = import.meta.env.BASE_URL
 
@@ -119,6 +268,16 @@ const getEmployeePosition = (attendance: Attendance) => {
     return breakPositions[breakSlot];
   }
 
+  if (attendance.status === "outside") {
+    const fallbackOutsideSlot =
+      (attendance.employee?.id ?? attendance.id) % outsidePositions.length;
+    const outsideSlot = employeeCode
+      ? employeeOutsideSlots[employeeCode] ?? fallbackOutsideSlot
+      : fallbackOutsideSlot;
+
+    return outsidePositions[outsideSlot];
+  }
+
   const isFemale = attendance.employee?.gender === "female";
   const positions = isFemale ? femaleDeskPositions : maleDeskPositions;
   const fallbackSlot = (attendance.employee?.id ?? attendance.id) % 2;
@@ -136,7 +295,7 @@ const offices: Record<OfficeId, Office> = {
     shortName: "THEMIS OFFICE",
     address: "大阪府松原市北新町2-5-13",
     logo: "T",
-    image: `${BASE_URL}images/room1.png`,
+    image: `${BASE_URL}images/room.png`,
     accent: "indigo",
   },
 
@@ -146,7 +305,7 @@ const offices: Record<OfficeId, Office> = {
     shortName: "LAW OFFICE",
     address: "大阪府松原市天美東1-80-22",
     logo: "法",
-    image: `${BASE_URL}images/room1.png`,
+    image: `${BASE_URL}images/room.png`,
     accent: "blue",
   },
 }
@@ -159,10 +318,17 @@ export default function EmployeeRoom() {
     user?.name?.trim() ||
     user?.login_id ||
     "";
+  const notificationStorageKey = user
+    ? `themis_notifications_${user.id}`
+    : "";
 
   const [isWorkStarted, setIsWorkStarted] = useState(false);
   const [workStatus, setWorkStatus] = useState<WorkStatus>("working");
   const [pendingStatus, setPendingStatus] = useState<WorkStatus | null>(null);
+  const [isStartConfirmationOpen, setIsStartConfirmationOpen] =
+    useState(false);
+  const [outsideStartTime, setOutsideStartTime] = useState("");
+  const [outsideExpectedEndTime, setOutsideExpectedEndTime] = useState("");
 
   const [attendanceId, setAttendanceId] = useState<number | null>(null);
 
@@ -174,14 +340,106 @@ export default function EmployeeRoom() {
     number | null
   >(null);
   const [selectedOffice, setSelectedOffice] = useState<OfficeId>("themis");
+  const [notifications, setNotifications] = useState<UserNotification[]>(
+    () => {
+      if (!notificationStorageKey) return [];
+
+      try {
+        const storedNotifications = JSON.parse(
+          window.localStorage.getItem(notificationStorageKey) ?? "[]",
+        ) as UserNotification[];
+
+        return Array.isArray(storedNotifications) ? storedNotifications : [];
+      } catch {
+        return [];
+      }
+    },
+  );
+  const [isNotificationPanelOpen, setIsNotificationPanelOpen] =
+    useState(false);
+  const [toastNotification, setToastNotification] =
+    useState<UserNotification | null>(null);
+
+  const unreadNotificationCount = notifications.filter(
+    (notification) => !notification.isRead,
+  ).length;
 
   const statusLabels: Record<WorkStatus, string> = {
     working: "勤務中",
     break: "休憩中",
+    outside: "外出中",
     offline: "オフライン",
   };
 
   const selectedOfficeInfo = offices[selectedOffice];
+
+  const saveNotifications = useCallback(
+    (nextNotifications: UserNotification[]) => {
+      if (!notificationStorageKey) return;
+
+      window.localStorage.setItem(
+        notificationStorageKey,
+        JSON.stringify(nextNotifications),
+      );
+    },
+    [notificationStorageKey],
+  );
+
+  const pushNotification = useCallback(
+    (newNotification: NewNotification) => {
+      if (!notificationStorageKey) return;
+
+      setNotifications((current) => {
+        if (
+          current.some(
+            (notification) =>
+              notification.sourceKey === newNotification.sourceKey,
+          )
+        ) {
+          return current;
+        }
+
+        const notification: UserNotification = {
+          ...newNotification,
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: new Date().toISOString(),
+          isRead: false,
+        };
+        const nextNotifications = [notification, ...current].slice(0, 50);
+
+        saveNotifications(nextNotifications);
+        setToastNotification(notification);
+
+        return nextNotifications;
+      });
+    },
+    [notificationStorageKey, saveNotifications],
+  );
+
+  const markNotificationAsRead = (notificationId: string) => {
+    setNotifications((current) => {
+      const nextNotifications = current.map((notification) =>
+        notification.id === notificationId
+          ? { ...notification, isRead: true }
+          : notification,
+      );
+
+      saveNotifications(nextNotifications);
+      return nextNotifications;
+    });
+  };
+
+  const markAllNotificationsAsRead = () => {
+    setNotifications((current) => {
+      const nextNotifications = current.map((notification) => ({
+        ...notification,
+        isRead: true,
+      }));
+
+      saveNotifications(nextNotifications);
+      return nextNotifications;
+    });
+  };
 
   // Chưa có company_id nên dữ liệu chấm công hiện tại tạm thuộc THEMIS.
   const visibleAttendances =
@@ -203,6 +461,46 @@ export default function EmployeeRoom() {
       // Giữ nguyên giao diện nếu việc làm mới bản đồ tạm thời thất bại.
     }
   }, []);
+
+  useEffect(() => {
+    if (!user || !notificationStorageKey) return;
+
+    const rawLoginNotification = window.sessionStorage.getItem(
+      "themis_login_notification",
+    );
+
+    if (!rawLoginNotification) return;
+
+    window.sessionStorage.removeItem("themis_login_notification");
+
+    try {
+      const loginNotification = JSON.parse(rawLoginNotification) as {
+        createdAt?: string;
+      };
+      const createdAt = loginNotification.createdAt ?? new Date().toISOString();
+
+      window.setTimeout(() => {
+        pushNotification({
+          sourceKey: `login-${createdAt}`,
+          title: "ログインしました",
+          message: `${employeeName}さん、おかえりなさい。`,
+          kind: "success",
+        });
+      }, 0);
+    } catch {
+      // Dữ liệu đánh dấu đăng nhập không hợp lệ thì chỉ bỏ qua thông báo.
+    }
+  }, [employeeName, notificationStorageKey, pushNotification, user]);
+
+  useEffect(() => {
+    if (!toastNotification) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setToastNotification(null);
+    }, 5000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [toastNotification]);
 
   useEffect(() => {
     const initialLoadId = window.setTimeout(() => {
@@ -242,6 +540,62 @@ export default function EmployeeRoom() {
     };
   }, [activeAttendances, employeeName]);
 
+  useEffect(() => {
+    const checkOutsideDeadline = () => {
+      const ownAttendance = activeAttendances.find(
+        (attendance) =>
+          attendance.employee_name === employeeName &&
+          attendance.status === "outside" &&
+          attendance.outside_expected_end,
+      );
+
+      if (!ownAttendance?.outside_expected_end) return;
+
+      const expectedEnd = new Date(ownAttendance.outside_expected_end);
+      const remainingMinutes = Math.ceil(
+        (expectedEnd.getTime() - Date.now()) / 60_000,
+      );
+      const expectedTimeLabel = formatExpectedTime(
+        ownAttendance.outside_expected_end,
+      );
+      const reminderKey = `${ownAttendance.id}-${ownAttendance.outside_expected_end}`;
+
+      if (remainingMinutes <= 0) {
+        pushNotification({
+          sourceKey: `outside-overdue-${reminderKey}`,
+          title: "帰社予定時刻を過ぎています",
+          message: `帰社予定は${expectedTimeLabel}でした。状況を確認してください。`,
+          kind: "error",
+        });
+      } else if (remainingMinutes <= 10) {
+        pushNotification({
+          sourceKey: `outside-10-${reminderKey}`,
+          title: "帰社予定まであと10分",
+          message: `${expectedTimeLabel}までに社外業務を完了する予定です。`,
+          kind: "warning",
+        });
+      } else if (remainingMinutes <= 30) {
+        pushNotification({
+          sourceKey: `outside-30-${reminderKey}`,
+          title: "帰社予定まであと30分",
+          message: `${expectedTimeLabel}までに社外業務を完了する予定です。`,
+          kind: "info",
+        });
+      }
+    };
+
+    checkOutsideDeadline();
+    const intervalId = window.setInterval(checkOutsideDeadline, 15000);
+
+    return () => window.clearInterval(intervalId);
+  }, [activeAttendances, employeeName, pushNotification]);
+
+  const handleStartRequest = () => {
+    if (!employeeName || isWorkStarted || isSubmitting) return;
+
+    setIsStartConfirmationOpen(true);
+  };
+
   const handleStartWork = async () => {
     if (!employeeName || isSubmitting) return;
 
@@ -261,11 +615,18 @@ export default function EmployeeRoom() {
       setAttendanceId(newAttendance.id);
       setWorkStatus(newAttendance.status);
       setIsWorkStarted(true);
+      setIsStartConfirmationOpen(false);
       setSelectedOffice("themis");
       setActiveAttendances((current) => [
         ...current.filter((item) => item.id !== newAttendance.id),
         newAttendance,
       ]);
+      pushNotification({
+        sourceKey: `attendance-start-${newAttendance.id}`,
+        title: "勤務を開始しました",
+        message: "現在時刻を出勤時刻として登録しました。",
+        kind: "success",
+      });
     } catch (error) {
       if (axios.isAxiosError(error)) {
         setErrorMessage(
@@ -280,6 +641,11 @@ export default function EmployeeRoom() {
   };
 
   const handleStatusRequest = (status: WorkStatus) => {
+    if (status === "outside") {
+      setOutsideStartTime(getJapanTimeInput());
+      setOutsideExpectedEndTime(getJapanTimeInput(60));
+    }
+
     setPendingStatus(status);
   };
 
@@ -296,6 +662,12 @@ export default function EmployeeRoom() {
         `/attendances/${attendanceId}/status`,
         {
           status: pendingStatus,
+          ...(pendingStatus === "outside"
+            ? {
+                outside_start: outsideStartTime,
+                outside_expected_end: outsideExpectedEndTime,
+              }
+            : {}),
         },
       );
 
@@ -321,6 +693,44 @@ export default function EmployeeRoom() {
           item.id === updatedAttendance.id ? updatedAttendance : item,
         );
       });
+
+      if (
+        updatedAttendance.status === "outside" &&
+        updatedAttendance.outside_expected_end
+      ) {
+        pushNotification({
+          sourceKey: `outside-start-${updatedAttendance.id}-${updatedAttendance.outside_expected_end}`,
+          title: "外出予定を登録しました",
+          message: `帰社予定は${formatExpectedTime(updatedAttendance.outside_expected_end)}です。30分前と10分前にお知らせします。`,
+          kind: "info",
+        });
+      } else {
+        const statusNotification = {
+          working: {
+            title: "勤務中に変更しました",
+            message: "社内業務を再開しました。",
+            kind: "success" as const,
+          },
+          break: {
+            title: "休憩を開始しました",
+            message: "休憩開始時刻を記録しました。",
+            kind: "info" as const,
+          },
+          offline: {
+            title: "勤務を終了しました",
+            message: "本日の退勤時刻を記録しました。お疲れさまでした。",
+            kind: "success" as const,
+          },
+          outside: null,
+        }[updatedAttendance.status];
+
+        if (statusNotification) {
+          pushNotification({
+            sourceKey: `status-${updatedAttendance.id}-${updatedAttendance.status}-${Date.now()}`,
+            ...statusNotification,
+          });
+        }
+      }
 
       if (pendingStatus === "offline") {
         setIsWorkStarted(false);
@@ -359,13 +769,130 @@ export default function EmployeeRoom() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-white text-gray-600 shadow-sm hover:bg-gray-50">
-            <Bell size={20} />
+          <div className="relative z-50">
+            <button
+              type="button"
+              aria-label="通知を表示"
+              aria-expanded={isNotificationPanelOpen}
+              onClick={() =>
+                setIsNotificationPanelOpen((current) => !current)
+              }
+              className={`relative flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm transition hover:bg-gray-50 ${
+                isNotificationPanelOpen
+                  ? "text-indigo-600 ring-2 ring-indigo-100"
+                  : "text-gray-600"
+              }`}
+            >
+              <Bell size={20} />
 
-            <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-bold text-white">
-              3
-            </span>
-          </button>
+              {unreadNotificationCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-[#f5f6fa]">
+                  {unreadNotificationCount > 99
+                    ? "99+"
+                    : unreadNotificationCount}
+                </span>
+              )}
+            </button>
+
+            {isNotificationPanelOpen && (
+              <div className="absolute right-0 top-12 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl shadow-slate-900/15">
+                <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3.5">
+                  <div>
+                    <h2 className="font-bold text-gray-800">通知</h2>
+                    <p className="text-[11px] text-gray-400">
+                      {unreadNotificationCount > 0
+                        ? `未読 ${unreadNotificationCount}件`
+                        : "新しい通知はありません"}
+                    </p>
+                  </div>
+
+                  {unreadNotificationCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={markAllNotificationsAsRead}
+                      className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50"
+                    >
+                      すべて既読
+                    </button>
+                  )}
+                </div>
+
+                <div className="max-h-[26rem] overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="px-6 py-10 text-center">
+                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100 text-gray-400">
+                        <Bell size={21} />
+                      </div>
+                      <p className="mt-3 text-sm font-semibold text-gray-500">
+                        通知はまだありません
+                      </p>
+                      <p className="mt-1 text-xs text-gray-400">
+                        勤怠状況や外出予定をお知らせします
+                      </p>
+                    </div>
+                  ) : (
+                    notifications.map((notification) => (
+                      <button
+                        key={notification.id}
+                        type="button"
+                        onClick={() => markNotificationAsRead(notification.id)}
+                        className={`flex w-full gap-3 border-b border-gray-50 px-4 py-3 text-left transition last:border-b-0 hover:bg-gray-50 ${
+                          notification.isRead ? "bg-white" : "bg-indigo-50/45"
+                        }`}
+                      >
+                        <span
+                          className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                            notification.kind === "success"
+                              ? "bg-emerald-100 text-emerald-600"
+                              : notification.kind === "warning"
+                                ? "bg-amber-100 text-amber-600"
+                                : notification.kind === "error"
+                                  ? "bg-red-100 text-red-600"
+                                  : "bg-blue-100 text-blue-600"
+                          }`}
+                        >
+                          {notification.kind === "success" ? (
+                            <CheckCircle2 size={18} />
+                          ) : notification.kind === "warning" ||
+                            notification.kind === "error" ? (
+                            <AlertTriangle size={18} />
+                          ) : (
+                            <Info size={18} />
+                          )}
+                        </span>
+
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-start justify-between gap-2">
+                            <span className="text-sm font-bold text-gray-800">
+                              {notification.title}
+                            </span>
+                            {!notification.isRead && (
+                              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
+                            )}
+                          </span>
+                          <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">
+                            {notification.message}
+                          </span>
+                          <span className="mt-1.5 block text-[10px] text-gray-400">
+                            {formatNotificationTime(notification.createdAt)}
+                          </span>
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {isNotificationPanelOpen && (
+            <button
+              type="button"
+              aria-label="通知を閉じる"
+              onClick={() => setIsNotificationPanelOpen(false)}
+              className="fixed inset-0 z-40 cursor-default"
+            />
+          )}
 
           <button className="flex items-center gap-2 rounded-xl bg-[#635BFF] px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-600">
             <Plus size={18} />
@@ -489,7 +1016,7 @@ export default function EmployeeRoom() {
 
           {/* Map Container */}
           <div
-            className="relative overflow-hidden rounded-xl border border-gray-200"
+            className="relative aspect-[16/9] min-h-[220px] w-full overflow-hidden rounded-xl border border-gray-200 bg-slate-900 sm:min-h-0"
             onClick={() => setSelectedAttendanceId(null)}
           >
             <img
@@ -500,10 +1027,10 @@ export default function EmployeeRoom() {
                 event.currentTarget.onerror = null;
                 event.currentTarget.src = `${BASE_URL}images/room.png`;
               }}
-              className="h-full w-full object-cover brightness-90 contrast-105"
+              className="absolute inset-0 h-full w-full object-cover brightness-90 contrast-105"
             />
 
-            <div
+            {/* <div
               className={`pointer-events-none absolute left-3 top-3 z-10 rounded-xl border px-3 py-2 shadow-lg backdrop-blur-md ${
                 selectedOfficeInfo.accent === "blue"
                   ? "border-blue-200/70 bg-blue-950/75 text-white"
@@ -516,7 +1043,7 @@ export default function EmployeeRoom() {
               <div className="mt-0.5 text-xs font-bold">
                 {selectedOfficeInfo.name}
               </div>
-            </div>
+            </div> */}
 
             {visibleAttendances.map((attendance) => {
               const vietnameseName =
@@ -559,7 +1086,9 @@ export default function EmployeeRoom() {
                           className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${
                             attendance.status === "break"
                               ? "bg-amber-50 text-amber-600"
-                              : "bg-emerald-50 text-emerald-600"
+                              : attendance.status === "outside"
+                                ? "bg-blue-50 text-blue-600"
+                                : "bg-emerald-50 text-emerald-600"
                           }`}
                         >
                           {statusLabels[attendance.status]}
@@ -573,6 +1102,18 @@ export default function EmployeeRoom() {
                         </span>
                       </div>
 
+                      {attendance.status === "outside" &&
+                        attendance.outside_expected_end && (
+                          <div className="mt-1.5 flex items-center justify-between text-[11px]">
+                            <span className="text-gray-400">帰社予定</span>
+                            <span className="font-semibold text-blue-600">
+                              {formatWorkTime(
+                                attendance.outside_expected_end,
+                              )}
+                            </span>
+                          </div>
+                        )}
+
                       <span className="absolute left-1/2 top-full h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r border-gray-100 bg-white" />
                     </div>
                   )}
@@ -581,7 +1122,9 @@ export default function EmployeeRoom() {
                     className={`absolute -right-1 top-0 h-3 w-3 rounded-full border-2 border-white shadow-sm ${
                       attendance.status === "break"
                         ? "bg-amber-400"
-                        : "bg-emerald-500"
+                        : attendance.status === "outside"
+                          ? "bg-blue-500"
+                          : "bg-emerald-500"
                     }`}
                   />
 
@@ -631,7 +1174,7 @@ export default function EmployeeRoom() {
 
               <button
                 type="button"
-                onClick={handleStartWork}
+                onClick={handleStartRequest}
                 disabled={!employeeName || isWorkStarted || isSubmitting}
                 className="flex h-11 items-center justify-center gap-2 self-end rounded-xl bg-[#635BFF] px-5 text-sm font-bold text-white shadow-md shadow-indigo-500/20 transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none"
               >
@@ -661,8 +1204,16 @@ export default function EmployeeRoom() {
                     </p>
                   </div>
 
-                  <span className="w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">
-                    勤務を開始しました
+                  <span
+                    className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${
+                      workStatus === "break"
+                        ? "bg-amber-50 text-amber-600"
+                        : workStatus === "outside"
+                          ? "bg-blue-50 text-blue-600"
+                          : "bg-emerald-50 text-emerald-600"
+                    }`}
+                  >
+                    {statusLabels[workStatus]}
                   </span>
                 </div>
 
@@ -670,7 +1221,7 @@ export default function EmployeeRoom() {
                   勤務ステータス
                 </p>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   {/* Working */}
                   <button
                     type="button"
@@ -699,6 +1250,21 @@ export default function EmployeeRoom() {
                   >
                     <Coffee size={17} />
                     休憩中
+                  </button>
+
+                  {/* Outside */}
+                  <button
+                    type="button"
+                    onClick={() => handleStatusRequest("outside")}
+                    disabled={isSubmitting}
+                    className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      workStatus === "outside"
+                        ? "border-blue-500 bg-blue-50 text-blue-600 ring-2 ring-blue-100"
+                        : "border-gray-200 bg-white text-gray-500 hover:border-blue-300 hover:bg-blue-50"
+                    }`}
+                  >
+                    <MapPin size={17} />
+                    外出中
                   </button>
 
                   {/* Offline */}
@@ -814,6 +1380,121 @@ export default function EmployeeRoom() {
         </div>
       </div>
 
+      {/* In-app notification toast */}
+      {toastNotification && (
+        <div
+          role="status"
+          className={`fixed right-4 top-4 z-[120] flex w-[min(23rem,calc(100vw-2rem))] items-start gap-3 rounded-2xl border bg-white p-4 shadow-2xl shadow-slate-900/15 ${
+            toastNotification.kind === "success"
+              ? "border-emerald-100"
+              : toastNotification.kind === "warning"
+                ? "border-amber-100"
+                : toastNotification.kind === "error"
+                  ? "border-red-100"
+                  : "border-blue-100"
+          }`}
+        >
+          <span
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+              toastNotification.kind === "success"
+                ? "bg-emerald-100 text-emerald-600"
+                : toastNotification.kind === "warning"
+                  ? "bg-amber-100 text-amber-600"
+                  : toastNotification.kind === "error"
+                    ? "bg-red-100 text-red-600"
+                    : "bg-blue-100 text-blue-600"
+            }`}
+          >
+            {toastNotification.kind === "success" ? (
+              <CheckCircle2 size={20} />
+            ) : toastNotification.kind === "warning" ||
+              toastNotification.kind === "error" ? (
+              <AlertTriangle size={20} />
+            ) : (
+              <Info size={20} />
+            )}
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-gray-800">
+              {toastNotification.title}
+            </p>
+            <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
+              {toastNotification.message}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            aria-label="通知を閉じる"
+            onClick={() => setToastNotification(null)}
+            className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Start Work Confirmation Modal */}
+      {isStartConfirmationOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
+          onClick={() => setIsStartConfirmationOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="start-work-confirmation-title"
+            onClick={(event) => event.stopPropagation()}
+            className={`w-full rounded-3xl bg-white p-6 shadow-2xl ${
+              pendingStatus === "outside" ? "max-w-md" : "max-w-sm"
+            }`}
+          >
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
+              <Play size={26} />
+            </div>
+
+            <div className="text-center">
+              <h3
+                id="start-work-confirmation-title"
+                className="text-lg font-bold text-gray-800"
+              >
+                勤務開始の確認
+              </h3>
+
+              <p className="mt-2 text-sm leading-relaxed text-gray-500">
+                <span className="font-bold text-gray-800">{employeeName}</span>
+                さんの勤務を開始しますか？
+              </p>
+              <p className="mt-2 text-xs text-gray-400">
+                確認後、現在時刻が出勤時刻として記録されます。
+              </p>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setIsStartConfirmationOpen(false)}
+                disabled={isSubmitting}
+                className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50 disabled:opacity-60"
+              >
+                キャンセル
+              </button>
+
+              <button
+                type="button"
+                onClick={handleStartWork}
+                disabled={isSubmitting}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-md shadow-emerald-500/20 transition hover:bg-emerald-700 disabled:opacity-60"
+              >
+                <Play size={16} />
+                {isSubmitting ? "処理中..." : "勤務を開始"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Status Confirmation Modal */}
       {pendingStatus && (
         <div
@@ -831,7 +1512,9 @@ export default function EmployeeRoom() {
               className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ${
                 pendingStatus === "offline"
                   ? "bg-red-100 text-red-600"
-                  : "bg-indigo-100 text-indigo-600"
+                  : pendingStatus === "outside"
+                    ? "bg-blue-100 text-blue-600"
+                    : "bg-indigo-100 text-indigo-600"
               }`}
             >
               <CircleHelp size={28} />
@@ -851,7 +1534,9 @@ export default function EmployeeRoom() {
                   className={`mx-1 font-bold ${
                     pendingStatus === "offline"
                       ? "text-red-600"
-                      : "text-indigo-600"
+                      : pendingStatus === "outside"
+                        ? "text-blue-600"
+                        : "text-indigo-600"
                   }`}
                 >
                   「{statusLabels[pendingStatus]}」
@@ -859,6 +1544,33 @@ export default function EmployeeRoom() {
                 に変更しますか？
               </p>
             </div>
+
+            {pendingStatus === "outside" && (
+              <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-left">
+                <div className="mb-3 flex items-center gap-2 text-sm font-bold text-blue-700">
+                  <Clock3 size={17} />
+                  外出時間を設定
+                </div>
+
+                <div className="grid grid-cols-1 gap-3">
+                  <JapaneseTimePicker
+                    label="外出時刻"
+                    value={outsideStartTime}
+                    onChange={setOutsideStartTime}
+                  />
+
+                  <JapaneseTimePicker
+                    label="完了予定時刻"
+                    value={outsideExpectedEndTime}
+                    onChange={setOutsideExpectedEndTime}
+                  />
+                </div>
+
+                <p className="mt-3 text-[11px] leading-relaxed text-blue-600">
+                  外回り・出張・社外業務の予定時間を登録します。
+                </p>
+              </div>
+            )}
 
             <div className="mt-6 flex gap-3">
               <button
@@ -873,11 +1585,17 @@ export default function EmployeeRoom() {
               <button
                 type="button"
                 onClick={handleConfirmStatus}
-                disabled={isSubmitting}
+                disabled={
+                  isSubmitting ||
+                  (pendingStatus === "outside" &&
+                    (!outsideStartTime || !outsideExpectedEndTime))
+                }
                 className={`flex-1 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition ${
                   pendingStatus === "offline"
                     ? "bg-red-500 shadow-red-500/20 hover:bg-red-600"
-                    : "bg-[#635BFF] shadow-indigo-500/20 hover:bg-indigo-600"
+                    : pendingStatus === "outside"
+                      ? "bg-blue-600 shadow-blue-500/20 hover:bg-blue-700"
+                      : "bg-[#635BFF] shadow-indigo-500/20 hover:bg-indigo-600"
                 }`}
               >
                 {isSubmitting ? "処理中..." : "変更する"}

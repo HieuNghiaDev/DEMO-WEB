@@ -8,6 +8,7 @@ import {
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import MainLayout from "./layouts/MainLayout";
 import { AuthProvider } from "./contexts/AuthContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
 
 import Login from "./pages/Login";
 import EmployeeRoom from "./pages/EmployeeRoom";
@@ -19,9 +20,10 @@ import ApprovalRoom from "./pages/ApprovalRoom";
 
 function App() {
   return (
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
-      <AuthProvider>
-        <Routes>
+    <ThemeProvider>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
+        <AuthProvider>
+          <Routes>
           <Route path="/login" element={<Login />} />
 
           <Route element={<ProtectedRoute />}>
@@ -39,9 +41,10 @@ function App() {
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AuthProvider>
-    </BrowserRouter>
+          </Routes>
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
 

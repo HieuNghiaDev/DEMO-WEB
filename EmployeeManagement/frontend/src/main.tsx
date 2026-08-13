@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client'
 
 import './index.css'
 import App from './App'
+import { initializeTheme } from './utils/theme'
+
+initializeTheme()
 
 const rootElement = document.getElementById('root')
 

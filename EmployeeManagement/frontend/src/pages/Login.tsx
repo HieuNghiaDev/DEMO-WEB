@@ -2,12 +2,18 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
+  ArrowRight,
+  BadgeCheck,
   Building2,
+  Clock3,
   Eye,
   EyeOff,
   LoaderCircle,
   LockKeyhole,
-  UserRound,
+  Mail,
+  ShieldCheck,
+  Sparkles,
+  UsersRound,
 } from "lucide-react";
 
 import { useAuth } from "../contexts/AuthContext";
@@ -15,7 +21,7 @@ import { useAuth } from "../contexts/AuthContext";
 type LoginErrorResponse = {
   message?: string;
   errors?: {
-    login_id?: string[];
+    email?: string[];
     password?: string[];
   };
 };
@@ -29,7 +35,7 @@ export default function Login() {
   const location = useLocation();
   const { user, isLoading, login } = useAuth();
 
-  const [loginId, setLoginId] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -48,8 +54,8 @@ export default function Login() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!loginId.trim() || !password) {
-      setErrorMessage("社員コードとパスワードを入力してください。");
+    if (!email.trim() || !password) {
+      setErrorMessage("メールアドレスとパスワードを入力してください。");
       return;
     }
 
@@ -58,10 +64,15 @@ export default function Login() {
       setErrorMessage("");
 
       await login({
-        login_id: loginId.trim(),
+        email: email.trim().toLowerCase(),
         password,
         remember,
       });
+
+      window.sessionStorage.setItem(
+        "themis_login_notification",
+        JSON.stringify({ createdAt: new Date().toISOString() }),
+      );
 
       navigate(destination, { replace: true });
     } catch (error) {
@@ -74,7 +85,7 @@ export default function Login() {
         const responseData = error.response.data;
 
         setErrorMessage(
-          responseData?.errors?.login_id?.[0] ??
+          responseData?.errors?.email?.[0] ??
             responseData?.errors?.password?.[0] ??
             responseData?.message ??
             "ログインに失敗しました。",
@@ -88,88 +99,183 @@ export default function Login() {
   };
 
   return (
-    <main className="flex min-h-screen bg-[#f4f6fb]">
-      <section className="relative hidden w-1/2 overflow-hidden bg-[#0d1125] lg:flex lg:flex-col lg:justify-between lg:p-12">
-        <div className="absolute -left-20 top-24 h-72 w-72 rounded-full bg-indigo-600/20 blur-3xl" />
-        <div className="absolute bottom-10 right-0 h-80 w-80 rounded-full bg-purple-600/20 blur-3xl" />
+    <main className="relative min-h-screen overflow-hidden bg-[#080d1f] lg:flex lg:bg-[linear-gradient(108deg,#080d1f_0%,#0b1027_43%,#17183e_53%,#6f7196_65%,#d9ddeb_78%,#f7f8fc_91%,#f6f3ff_100%)]">
+      <div className="pointer-events-none absolute -left-32 top-24 h-[32rem] w-[32rem] rounded-full bg-indigo-600/18 blur-[120px]" />
+      <div className="pointer-events-none absolute bottom-[-14rem] left-[28%] h-[34rem] w-[34rem] rounded-full bg-purple-700/22 blur-[120px]" />
+      <div className="pointer-events-none absolute right-[-9rem] top-[-12rem] hidden h-[34rem] w-[34rem] rounded-full bg-violet-200/35 blur-[110px] lg:block" />
+      <div className="pointer-events-none absolute inset-0 hidden opacity-[0.22] lg:block lg:bg-[radial-gradient(circle,rgba(148,163,184,0.22)_1px,transparent_1px)] lg:[background-size:28px_28px] lg:[mask-image:linear-gradient(to_right,black,transparent_56%)]" />
 
-        <div className="relative flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-xl font-bold text-white">
+      <section className="relative z-10 hidden min-h-screen flex-1 overflow-hidden lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16 2xl:p-[4.5rem]">
+        <div className="pointer-events-none absolute right-10 top-[-10rem] h-[30rem] w-[30rem] rounded-full border border-indigo-300/10" />
+        <div className="pointer-events-none absolute right-28 top-[-4rem] h-[22rem] w-[22rem] rounded-full border border-indigo-300/[0.07]" />
+
+        <div className="relative flex items-center gap-3.5">
+          <div className="flex h-12 w-12 items-center justify-center rounded-[1.1rem] bg-gradient-to-br from-indigo-400 via-indigo-500 to-purple-600 text-xl font-black text-white shadow-[0_14px_35px_rgba(67,56,202,0.35)]">
             T
           </div>
           <div>
-            <h1 className="font-bold tracking-wide text-white">THEMIS HQ</h1>
-            <p className="text-xs text-gray-400">合同AI事務所</p>
+            <h1 className="font-bold tracking-[0.08em] text-white">THEMIS HQ</h1>
+            <p className="mt-0.5 text-xs text-slate-500">合同AI事務所</p>
           </div>
         </div>
 
-        <div className="relative max-w-md">
-          <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-300">
-            <Building2 size={14} />
-            EMPLOYEE MANAGEMENT
+        <div className="relative max-w-[39rem] pb-4">
+          <span className="inline-flex items-center gap-2 rounded-full border border-indigo-300/15 bg-indigo-400/[0.08] px-3.5 py-2 text-[11px] font-bold tracking-[0.08em] text-indigo-200 backdrop-blur">
+            <Sparkles size={14} />
+            EMPLOYEE WORKSPACE
           </span>
-          <h2 className="text-4xl font-bold leading-tight text-white">
-            ひとつのワークスペースで、
+
+          <h2 className="mt-7 text-[2.7rem] font-bold leading-[1.28] tracking-[-0.035em] text-white xl:text-[3.4rem]">
+            今日の仕事を、
             <br />
-            チームをもっと身近に。
+            もっと
+            <span className="bg-gradient-to-r from-indigo-300 to-violet-300 bg-clip-text text-transparent">
+              スマート
+            </span>
+            に。
           </h2>
-          <p className="mt-5 text-sm leading-7 text-gray-400">
-            勤怠状況、社員情報、事務所の活動を
-            一つの画面から確認できます。
+          <p className="mt-6 max-w-xl text-sm leading-7 text-slate-400 xl:text-[15px]">
+            勤怠状況、社員情報、事務所の活動を一つの画面に。
+            <br />
+            チームの一日を、ここから始めましょう。
           </p>
+
+          <div className="mt-9 grid max-w-[36rem] grid-cols-3 gap-3">
+            {[
+              { icon: Clock3, title: "かんたん勤怠", text: "出退勤をすぐ登録" },
+              { icon: UsersRound, title: "チーム状況", text: "働き方を見える化" },
+              { icon: ShieldCheck, title: "安心アクセス", text: "安全な社員ログイン" },
+            ].map(({ icon: Icon, title, text }) => (
+              <div
+                key={title}
+                className="group rounded-[1.25rem] border border-white/[0.08] bg-white/[0.045] p-4 transition hover:-translate-y-0.5 hover:border-indigo-300/20 hover:bg-white/[0.07]"
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-400/10 text-indigo-300 ring-1 ring-indigo-300/10">
+                  <Icon size={16} />
+                </span>
+                <p className="mt-3 text-xs font-bold text-white">{title}</p>
+                <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+                  {text}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <p className="relative text-xs text-gray-600">© 2026 THEMIS HQ</p>
+        <div className="relative flex max-w-[36rem] items-center justify-between text-[11px] text-slate-600">
+          <span>© 2026 THEMIS HQ</span>
+          <span className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.7)]" />
+            システム稼働中
+          </span>
+        </div>
       </section>
 
-      <section className="flex w-full items-center justify-center px-5 py-10 lg:w-1/2">
-        <div className="w-full max-w-md">
-          <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-lg font-bold text-white">
-              T
+      <section className="relative z-20 flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#f5f7fb] lg:w-[40%] lg:flex-none lg:bg-transparent">
+        <div className="absolute inset-x-0 top-0 h-[22rem] bg-[radial-gradient(circle_at_82%_8%,rgba(167,139,250,0.38),transparent_36%),linear-gradient(145deg,#121a3b_0%,#283176_50%,#6d4ce8_100%)] lg:hidden" />
+        <div className="pointer-events-none absolute inset-0 hidden opacity-25 lg:block lg:bg-[radial-gradient(circle,rgba(255,255,255,0.85)_1px,transparent_1px)] lg:[background-size:26px_26px] lg:[mask-image:radial-gradient(circle_at_center,black,transparent_72%)]" />
+
+        <div className="relative z-10 w-full max-w-[33rem] px-4 pb-8 pt-5 sm:px-6 lg:px-6 lg:py-8 xl:px-8">
+          <div className="lg:hidden">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-lg font-black text-white shadow-lg backdrop-blur">
+                  T
+                </div>
+                <div>
+                  <div className="font-bold tracking-wide text-white">THEMIS HQ</div>
+                  <div className="text-[11px] text-indigo-200">合同AI事務所</div>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-2.5 py-1.5 text-[10px] font-semibold text-indigo-100 backdrop-blur">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                ONLINE
+              </span>
             </div>
-            <div>
-              <div className="font-bold text-gray-900">THEMIS HQ</div>
-              <div className="text-xs text-gray-400">合同AI事務所</div>
+
+            <div className="pb-7 pt-8">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[10px] font-bold tracking-wide text-indigo-100 backdrop-blur">
+                <Building2 size={12} />
+                EMPLOYEE MANAGEMENT
+              </span>
+              <h1 className="mt-4 text-[2rem] font-bold leading-tight text-white">
+                おかえりなさい。
+              </h1>
+              <p className="mt-2 text-sm leading-6 text-indigo-100/75">
+                今日の仕事を、ここから始めましょう。
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-[10px] font-semibold text-white/90 backdrop-blur">
+                  <Clock3 size={12} /> 勤怠管理
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-[10px] font-semibold text-white/90 backdrop-blur">
+                  <ShieldCheck size={12} /> セキュアログイン
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-xl shadow-gray-200/60 sm:p-9">
+          <div className="pointer-events-none absolute inset-x-16 bottom-5 top-24 hidden rounded-[2.5rem] bg-indigo-950/22 blur-[34px] lg:block" />
+          <div className="relative rounded-[2rem] border border-white/80 bg-white/95 p-5 shadow-[0_28px_80px_rgba(49,46,129,0.16)] backdrop-blur-xl sm:p-8 lg:overflow-hidden lg:border-white/65 lg:bg-white/[0.72] lg:p-8 lg:shadow-[0_32px_90px_rgba(20,24,70,0.25),inset_0_1px_0_rgba(255,255,255,0.9)] lg:backdrop-blur-[28px] xl:p-9">
+            <div className="pointer-events-none absolute inset-x-12 top-0 hidden h-px bg-gradient-to-r from-transparent via-indigo-500/75 to-transparent lg:block" />
+            <div className="pointer-events-none absolute -right-20 -top-24 hidden h-48 w-48 rounded-full bg-violet-300/20 blur-3xl lg:block" />
+            <div className="mb-8 hidden items-center justify-between lg:flex">
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 items-center justify-center rounded-[1rem] bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-[0_10px_24px_rgba(79,70,229,0.28)]">
+                  <BadgeCheck size={21} />
+                </span>
+                <div>
+                  <p className="text-[10px] font-extrabold tracking-[0.18em] text-slate-800">
+                    THEMIS WORKSPACE
+                  </p>
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    Verified employee access
+                  </p>
+                </div>
+              </div>
+              <span className="hidden items-center gap-1.5 rounded-full border border-emerald-100/80 bg-emerald-50/80 px-2.5 py-1.5 text-[9px] font-bold text-emerald-600 sm:inline-flex">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                PROTECTED
+              </span>
+            </div>
+
             <div className="mb-7">
-              <p className="text-xs font-bold tracking-wider text-indigo-500">
-                WELCOME BACK
+              <p className="text-[11px] font-bold tracking-[0.16em] text-indigo-500">
+                EMPLOYEE PORTAL
               </p>
-              <h2 className="mt-2 text-2xl font-bold text-gray-900">
-                社員ログイン
+              <h2 className="mt-2 text-[1.8rem] font-bold tracking-[-0.035em] text-slate-900">
+                <span className="lg:hidden">社員ログイン</span>
+                <span className="hidden lg:inline">おかえりなさい</span>
               </h2>
-              <p className="mt-2 text-sm text-gray-400">
-                社員コードとパスワードを入力してください
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                メールアドレスで社員アカウントにログイン
               </p>
             </div>
 
-            <form className="space-y-5" onSubmit={handleSubmit}>
+            <form className="space-y-4.5" onSubmit={handleSubmit}>
               <div>
                 <label
-                  htmlFor="login-id"
-                  className="mb-2 block text-xs font-bold text-gray-600"
+                  htmlFor="email"
+                  className="mb-2 block text-xs font-bold text-slate-600"
                 >
-                  社員コード
+                  メールアドレス
                 </label>
-                <div className="relative">
-                  <UserRound
+                <div className="group relative">
+                  <Mail
                     size={18}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+                    className="absolute left-3 top-1/2 z-10 h-9 w-9 -translate-y-1/2 rounded-xl bg-gradient-to-br from-white to-indigo-50 p-2 text-slate-400 shadow-[0_5px_14px_rgba(71,75,130,0.10),inset_0_0_0_1px_rgba(148,163,184,0.12)] transition duration-200 group-hover:text-indigo-400 group-focus-within:-translate-y-[55%] group-focus-within:text-indigo-600 group-focus-within:shadow-[0_7px_16px_rgba(79,70,229,0.16),inset_0_0_0_1px_rgba(129,140,248,0.24)]"
                   />
                   <input
-                    id="login-id"
-                    type="text"
-                    value={loginId}
-                    onChange={(event) => setLoginId(event.target.value)}
-                    placeholder="例：TM001"
-                    autoComplete="username"
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="name@themis.local"
+                    autoComplete="email"
+                    inputMode="email"
                     autoCapitalize="none"
                     disabled={isSubmitting}
-                    className="h-12 w-full rounded-xl border border-gray-200 bg-gray-50 pl-11 pr-4 text-sm font-medium text-gray-800 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100 disabled:cursor-not-allowed"
+                    className="h-14 w-full rounded-2xl border border-white/90 bg-white/65 pl-14 pr-4 text-[15px] font-medium text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),inset_0_-1px_0_rgba(148,163,184,0.10),0_7px_20px_rgba(54,65,120,0.06)] outline-none transition duration-200 placeholder:text-slate-300 hover:-translate-y-px hover:bg-white/85 hover:shadow-[inset_0_1px_0_rgba(255,255,255,1),0_10px_24px_rgba(54,65,120,0.10)] focus:-translate-y-px focus:border-indigo-300 focus:bg-white focus:shadow-[inset_0_1px_0_rgba(255,255,255,1),0_12px_28px_rgba(79,70,229,0.13)] focus:ring-4 focus:ring-indigo-100/70 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -177,14 +283,14 @@ export default function Login() {
               <div>
                 <label
                   htmlFor="password"
-                  className="mb-2 block text-xs font-bold text-gray-600"
+                  className="mb-2 block text-xs font-bold text-slate-600"
                 >
                   パスワード
                 </label>
-                <div className="relative">
+                <div className="group relative">
                   <LockKeyhole
                     size={18}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+                    className="absolute left-3 top-1/2 z-10 h-9 w-9 -translate-y-1/2 rounded-xl bg-gradient-to-br from-white to-indigo-50 p-2 text-slate-400 shadow-[0_5px_14px_rgba(71,75,130,0.10),inset_0_0_0_1px_rgba(148,163,184,0.12)] transition duration-200 group-hover:text-indigo-400 group-focus-within:-translate-y-[55%] group-focus-within:text-indigo-600 group-focus-within:shadow-[0_7px_16px_rgba(79,70,229,0.16),inset_0_0_0_1px_rgba(129,140,248,0.24)]"
                   />
                   <input
                     id="password"
@@ -194,12 +300,12 @@ export default function Login() {
                     placeholder="パスワードを入力"
                     autoComplete="current-password"
                     disabled={isSubmitting}
-                    className="h-12 w-full rounded-xl border border-gray-200 bg-gray-50 pl-11 pr-12 text-sm font-medium text-gray-800 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100 disabled:cursor-not-allowed"
+                    className="h-14 w-full rounded-2xl border border-white/90 bg-white/65 pl-14 pr-12 text-[15px] font-medium text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),inset_0_-1px_0_rgba(148,163,184,0.10),0_7px_20px_rgba(54,65,120,0.06)] outline-none transition duration-200 placeholder:text-slate-300 hover:-translate-y-px hover:bg-white/85 hover:shadow-[inset_0_1px_0_rgba(255,255,255,1),0_10px_24px_rgba(54,65,120,0.10)] focus:-translate-y-px focus:border-indigo-300 focus:bg-white focus:shadow-[inset_0_1px_0_rgba(255,255,255,1),0_12px_28px_rgba(79,70,229,0.13)] focus:ring-4 focus:ring-indigo-100/70 disabled:cursor-not-allowed"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((current) => !current)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                    className="absolute right-3.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                     aria-label={
                       showPassword
                         ? "パスワードを隠す"
@@ -211,18 +317,21 @@ export default function Login() {
                 </div>
               </div>
 
-              <label className="flex cursor-pointer items-center gap-2.5 text-xs font-medium text-gray-500">
+              <label className="flex min-h-8 cursor-pointer items-center gap-2.5 text-xs font-medium text-slate-500">
                 <input
                   type="checkbox"
                   checked={remember}
                   onChange={(event) => setRemember(event.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 accent-indigo-600"
+                  className="h-4.5 w-4.5 rounded border-slate-300 accent-indigo-600"
                 />
                 ログイン状態を保持する
               </label>
 
               {errorMessage && (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+                <div
+                  role="alert"
+                  className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium leading-5 text-red-600"
+                >
                   {errorMessage}
                 </div>
               )}
@@ -230,7 +339,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#635BFF] text-sm font-bold text-white shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none"
+                className="group flex h-14 w-full items-center justify-center gap-2 rounded-2xl border border-white/15 bg-gradient-to-r from-indigo-600 via-indigo-600 to-violet-600 text-sm font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_14px_30px_rgba(79,70,229,0.28)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.30),0_20px_38px_rgba(79,70,229,0.38)] active:translate-y-0 active:shadow-[inset_0_2px_5px_rgba(30,27,75,0.18),0_8px_18px_rgba(79,70,229,0.24)] disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none"
               >
                 {isSubmitting ? (
                   <>
@@ -238,11 +347,26 @@ export default function Login() {
                     処理中...
                   </>
                 ) : (
-                  "ログイン"
+                  <>
+                    ログイン
+                    <ArrowRight
+                      size={17}
+                      className="transition group-hover:translate-x-0.5"
+                    />
+                  </>
                 )}
               </button>
             </form>
+
+            <div className="mt-5 flex items-center justify-center gap-1.5 text-[10px] text-slate-400">
+              <ShieldCheck size={13} className="text-emerald-500" />
+              接続は安全に保護されています
+            </div>
           </div>
+
+          <p className="mt-6 text-center text-[10px] text-slate-400 lg:hidden">
+            © 2026 THEMIS HQ · EMPLOYEE WORKSPACE
+          </p>
         </div>
       </section>
     </main>

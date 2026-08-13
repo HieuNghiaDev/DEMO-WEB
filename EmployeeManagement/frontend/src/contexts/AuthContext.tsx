@@ -34,6 +34,7 @@ export type AuthUser = {
   id: number;
   employee_id: number | null;
   login_id: string;
+  email: string;
   name: string | null;
   role: string;
   is_active: boolean;
@@ -42,7 +43,7 @@ export type AuthUser = {
 };
 
 type LoginCredentials = {
-  login_id: string;
+  email: string;
   password: string;
   remember: boolean;
 };
@@ -91,7 +92,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     const loadUser = async () => {
       try {
-        await refreshUser();
+        await Promise.all([
+          refreshUser(),
+          new Promise<void>((resolve) => {
+            window.setTimeout(resolve, 600);
+          }),
+        ]);
       } finally {
         setIsLoading(false);
       }

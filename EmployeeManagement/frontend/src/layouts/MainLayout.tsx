@@ -3,7 +3,7 @@ import Sidebar from '../components/layout/Sidebar'
 
 function MainLayout() {
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="themis-app flex min-h-screen bg-gray-50">
       <Sidebar />
 
       <main className="min-w-0 flex-1">

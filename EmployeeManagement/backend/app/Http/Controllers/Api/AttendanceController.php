@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Services\AttendanceExcelService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -18,9 +19,7 @@ class AttendanceController extends Controller
         private readonly AttendanceExcelService $attendanceExcelService
     ) {}
 
-    /**
-     * Danh sách nhân viên đang làm việc hoặc đang nghỉ.
-     */
+    /** Danh sách nhân viên đang hoạt động trong ngày. */
     public function active(): JsonResponse
     {
         $attendances = Attendance::query()
@@ -28,6 +27,7 @@ class AttendanceController extends Controller
             ->whereIn('status', [
                 'working',
                 'break',
+                'outside',
             ])
             ->orderBy('clock_in')
             ->get();
@@ -42,9 +42,7 @@ class AttendanceController extends Controller
         ]);
     }
 
-    /**
-     * Bắt đầu làm việc.
-     */
+    /** Bắt đầu làm việc. */
     public function start(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -60,7 +58,6 @@ class AttendanceController extends Controller
             ->where('status', 'active')
             ->first();
 
-        // Kiểm tra người này có phiên làm việc chưa kết thúc hay không.
         $existingAttendance = Attendance::query()
             ->where('employee_name', $validated['employee_name'])
             ->whereNull('clock_out')
@@ -97,9 +94,7 @@ class AttendanceController extends Controller
         ], 201);
     }
 
-    /**
-     * Thay đổi trạng thái làm việc.
-     */
+    /** Thay đổi trạng thái làm việc. */
     public function updateStatus(
         Request $request,
         Attendance $attendance
@@ -110,8 +105,19 @@ class AttendanceController extends Controller
                 Rule::in([
                     'working',
                     'break',
+                    'outside',
                     'offline',
                 ]),
+            ],
+            'outside_start' => [
+                'required_if:status,outside',
+                'nullable',
+                'date_format:H:i',
+            ],
+            'outside_expected_end' => [
+                'required_if:status,outside',
+                'nullable',
+                'date_format:H:i',
             ],
         ]);
 
@@ -124,22 +130,14 @@ class AttendanceController extends Controller
         $newStatus = $validated['status'];
         $now = now();
 
+        $this->closePreviousStatusPeriod($attendance, $newStatus, $now);
+
         switch ($newStatus) {
             case 'working':
-                // Nếu quay lại làm việc sau khi nghỉ.
-                if (
-                    $attendance->status === 'break' &&
-                    $attendance->break_start !== null &&
-                    $attendance->break_end === null
-                ) {
-                    $attendance->break_end = $now;
-                }
-
                 $message = '勤務中に変更しました。';
                 break;
 
             case 'break':
-                // Chỉ ghi giờ nghỉ nếu chưa được ghi trước đó.
                 if ($attendance->break_start === null) {
                     $attendance->break_start = $now;
                 }
@@ -147,15 +145,35 @@ class AttendanceController extends Controller
                 $message = '休憩を開始しました。';
                 break;
 
-            case 'offline':
-                // Nếu tan làm khi vẫn đang nghỉ thì kết thúc giờ nghỉ.
-                if (
-                    $attendance->status === 'break' &&
-                    $attendance->break_end === null
-                ) {
-                    $attendance->break_end = $now;
+            case 'outside':
+                [$outsideStart, $outsideExpectedEnd] = $this->parseOutsideTimes(
+                    $validated['outside_start'],
+                    $validated['outside_expected_end'],
+                    $now
+                );
+
+                if ($outsideStart->lessThan($attendance->clock_in)) {
+                    $isSameMinuteAsClockIn = $outsideStart->format('Y-m-d H:i')
+                        === $attendance->clock_in->format('Y-m-d H:i');
+
+                    if (! $isSameMinuteAsClockIn) {
+                        return response()->json([
+                            'message' => '外出時刻は出勤時刻以降に設定してください。',
+                        ], 422);
+                    }
+
+                    // Bộ chọn chỉ lưu đến phút. Nếu vừa chấm công và ra
+                    // ngoài trong cùng phút thì lấy thời điểm hiện tại.
+                    $outsideStart = $now;
                 }
 
+                $attendance->outside_start = $outsideStart;
+                $attendance->outside_expected_end = $outsideExpectedEnd;
+                $attendance->outside_end = null;
+                $message = '外出中に変更しました。';
+                break;
+
+            case 'offline':
                 $attendance->clock_out = $now;
                 $message = '勤務を終了しました。';
                 break;
@@ -171,6 +189,55 @@ class AttendanceController extends Controller
             'message' => $message,
             'attendance' => $this->attachEmployeeProfile($attendance),
         ]);
+    }
+
+    private function closePreviousStatusPeriod(
+        Attendance $attendance,
+        string $newStatus,
+        Carbon $now
+    ): void {
+        if (
+            $attendance->status === 'break' &&
+            $newStatus !== 'break' &&
+            $attendance->break_start !== null &&
+            $attendance->break_end === null
+        ) {
+            $attendance->break_end = $now;
+        }
+
+        if (
+            $attendance->status === 'outside' &&
+            $newStatus !== 'outside' &&
+            $attendance->outside_start !== null &&
+            $attendance->outside_end === null
+        ) {
+            $attendance->outside_end = $now;
+        }
+    }
+
+    /** @return array{0: Carbon, 1: Carbon} */
+    private function parseOutsideTimes(
+        string $startTime,
+        string $expectedEndTime,
+        Carbon $now
+    ): array {
+        $outsideStart = Carbon::createFromFormat(
+            'Y-m-d H:i',
+            $now->toDateString().' '.$startTime,
+            config('app.timezone')
+        );
+
+        $outsideExpectedEnd = Carbon::createFromFormat(
+            'Y-m-d H:i',
+            $now->toDateString().' '.$expectedEndTime,
+            config('app.timezone')
+        );
+
+        if ($outsideExpectedEnd->lessThanOrEqualTo($outsideStart)) {
+            $outsideExpectedEnd->addDay();
+        }
+
+        return [$outsideStart, $outsideExpectedEnd];
     }
 
     private function attachEmployeeProfile(Attendance $attendance): Attendance

@@ -7,8 +7,10 @@ import {
   LoaderCircle,
   LogOut,
   Menu,
+  Moon,
   Sparkles,
   SquareCode,
+  Sun,
   X,
 } from 'lucide-react'
 import {
@@ -17,6 +19,7 @@ import {
 } from 'react-router-dom'
 
 import { useAuth } from '../../contexts/AuthContext'
+import { useTheme } from '../../contexts/ThemeContext'
 
 const menuItems = [
   {
@@ -54,6 +57,7 @@ const menuItems = [
 export default function Sidebar() {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const { isDark, toggleTheme } = useTheme()
 
   const [isOpen, setIsOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] =
@@ -232,6 +236,42 @@ export default function Sidebar() {
 
         {/* Người đang đăng nhập */}
         <div className="mt-4 border-t border-white/10 pt-4">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="mb-3 flex w-full items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.045] px-3 py-2.5 text-left transition hover:border-indigo-300/15 hover:bg-white/[0.08]"
+            aria-label={isDark ? 'ライトモードに切り替える' : 'ダークモードに切り替える'}
+            title={isDark ? 'ライトモード' : 'ダークモード'}
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300">
+              {isDark ? <Moon size={17} /> : <Sun size={17} />}
+            </span>
+
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] font-bold text-white">
+                表示モード
+              </span>
+              <span className="mt-0.5 block text-[10px] text-gray-500">
+                {isDark ? 'ダーク' : 'ライト'}
+              </span>
+            </span>
+
+            <span
+              className={`relative h-6 w-11 shrink-0 rounded-full border transition ${
+                isDark
+                  ? 'border-indigo-400/40 bg-indigo-500/75'
+                  : 'border-white/10 bg-white/10'
+              }`}
+              aria-hidden="true"
+            >
+              <span
+                className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow-md transition-transform ${
+                  isDark ? 'translate-x-[1.35rem]' : 'translate-x-1'
+                }`}
+              />
+            </span>
+          </button>
+
           <div className="mb-3 flex items-center gap-3 rounded-xl bg-white/5 px-3 py-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-500/20 text-sm font-bold text-indigo-300">
               {employeeName

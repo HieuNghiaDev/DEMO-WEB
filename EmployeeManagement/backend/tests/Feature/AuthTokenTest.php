@@ -45,14 +45,15 @@ class AuthTokenTest extends TestCase
         $loginResponse = $this
             ->withHeader('Origin', 'http://localhost:5173')
             ->postJson('/api/login', [
-                'login_id' => 'TM003',
+                'email' => 'mai@themis.local',
                 'password' => 'Themis@123456',
                 'remember' => true,
             ]);
 
         $loginResponse
             ->assertOk()
-            ->assertJsonPath('user.login_id', 'TM003')
+            ->assertJsonPath('user.email', 'mai@themis.local')
+            ->assertJsonPath('user.employee.employee_code', 'TM003')
             ->assertJsonPath('user.employee.gender', 'female')
             ->assertJsonStructure(['token']);
 
