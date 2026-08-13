@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\SecurityAuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -11,6 +12,10 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    public function __construct(
+        private readonly SecurityAuditLogger $securityAuditLogger
+    ) {}
+
     /**
      * Đăng nhập.
      */
@@ -32,16 +37,41 @@ class AuthController extends Controller
             ],
         ]);
 
+        $email = strtolower($validated['email']);
+
         $user = User::query()
             ->with([
                 'employee.office',
                 'employee.department',
             ])
-            ->where('email', strtolower($validated['email']))
-            ->where('is_active', true)
+            ->where('email', $email)
             ->first();
 
-        if ($user === null || ! Hash::check($validated['password'], $user->password)) {
+        $passwordIsValid = $user !== null &&
+            Hash::check($validated['password'], $user->password);
+
+        if (
+            $user === null ||
+            ! $user->is_active ||
+            ! $passwordIsValid
+        ) {
+            $reason = match (true) {
+                $user === null => 'unknown_account',
+                ! $user->is_active => 'inactive_account',
+                default => 'invalid_password',
+            };
+
+            $this->securityAuditLogger->record(
+                request: $request,
+                event: 'auth.login.failed',
+                outcome: 'failure',
+                user: $user,
+                identifier: $email,
+                metadata: [
+                    'reason' => $reason,
+                ]
+            );
+
             throw ValidationException::withMessages([
                 'email' => [
                     'メールアドレスまたはパスワードが正しくありません。',
@@ -54,6 +84,17 @@ class AuthController extends Controller
             $user->employee === null ||
             $user->employee->status !== 'active'
         ) {
+            $this->securityAuditLogger->record(
+                request: $request,
+                event: 'auth.login.denied',
+                outcome: 'failure',
+                user: $user,
+                identifier: $email,
+                metadata: [
+                    'reason' => 'inactive_employee_profile',
+                ]
+            );
+
             return response()->json([
                 'message' => 'この従業員アカウントは利用できません。',
             ], 403);
@@ -70,6 +111,17 @@ class AuthController extends Controller
         $token = $user
             ->createToken('employee-web', ['*'], $expiresAt)
             ->plainTextToken;
+
+        $this->securityAuditLogger->record(
+            request: $request,
+            event: 'auth.login.succeeded',
+            outcome: 'success',
+            user: $user,
+            metadata: [
+                'remember' => $validated['remember'] ?? false,
+                'expires_at' => $expiresAt->toIso8601String(),
+            ]
+        );
 
         return response()->json([
             'message' => 'ログインしました。',
@@ -98,7 +150,16 @@ class AuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()?->delete();
+        $user = $request->user();
+
+        $user->currentAccessToken()?->delete();
+
+        $this->securityAuditLogger->record(
+            request: $request,
+            event: 'auth.logout.succeeded',
+            outcome: 'success',
+            user: $user
+        );
 
         return response()->json([
             'message' => 'ログアウトしました。',

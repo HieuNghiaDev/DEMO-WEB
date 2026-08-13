@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Services\AttendanceExcelService;
+use App\Services\SecurityAuditLogger;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,7 +17,8 @@ use Throwable;
 class AttendanceController extends Controller
 {
     public function __construct(
-        private readonly AttendanceExcelService $attendanceExcelService
+        private readonly AttendanceExcelService $attendanceExcelService,
+        private readonly SecurityAuditLogger $securityAuditLogger
     ) {}
 
     /** Danh sách nhân viên đang hoạt động trong ngày. */
@@ -73,6 +75,16 @@ class AttendanceController extends Controller
                 $existingAttendance->save();
             }
 
+            $this->securityAuditLogger->record(
+                request: $request,
+                event: 'attendance.start.reused',
+                outcome: 'success',
+                employee: $employee,
+                metadata: [
+                    'attendance_id' => $existingAttendance->id,
+                ]
+            );
+
             return response()->json([
                 'message' => 'すでに勤務を開始しています。',
                 'attendance' => $this->attachEmployeeProfile($existingAttendance),
@@ -90,6 +102,16 @@ class AttendanceController extends Controller
         ]);
 
         $this->syncExcelSafely($attendance);
+
+        $this->securityAuditLogger->record(
+            request: $request,
+            event: 'attendance.started',
+            outcome: 'success',
+            employee: $employee,
+            metadata: [
+                'attendance_id' => $attendance->id,
+            ]
+        );
 
         return response()->json([
             'message' => '勤務を開始しました。',
@@ -144,6 +166,7 @@ class AttendanceController extends Controller
             ], 422);
         }
 
+        $previousStatus = $attendance->status;
         $newStatus = $validated['status'];
         $now = now();
 
@@ -201,6 +224,18 @@ class AttendanceController extends Controller
 
         $attendance = $attendance->fresh();
         $this->syncExcelSafely($attendance);
+
+        $this->securityAuditLogger->record(
+            request: $request,
+            event: 'attendance.status.changed',
+            outcome: 'success',
+            employee: $employee,
+            metadata: [
+                'attendance_id' => $attendance->id,
+                'from_status' => $previousStatus,
+                'to_status' => $newStatus,
+            ]
+        );
 
         return response()->json([
             'message' => $message,

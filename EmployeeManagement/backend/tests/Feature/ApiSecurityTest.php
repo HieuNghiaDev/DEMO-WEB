@@ -27,6 +27,20 @@ class ApiSecurityTest extends TestCase
             ->assertHeader('Referrer-Policy', 'no-referrer')
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('X-Frame-Options', 'DENY');
+
+        $this->assertDatabaseHas('security_audit_logs', [
+            'event' => 'auth.request.unauthenticated',
+            'outcome' => 'failure',
+        ]);
+    }
+
+    public function test_repeated_denied_requests_are_deduplicated(): void
+    {
+        $this->getJson('/api/me')->assertUnauthorized();
+        $this->getJson('/api/me')->assertUnauthorized();
+        $this->getJson('/api/me')->assertUnauthorized();
+
+        $this->assertDatabaseCount('security_audit_logs', 1);
     }
 
     public function test_cors_allows_the_known_frontend_origin(): void
@@ -62,5 +76,11 @@ class ApiSecurityTest extends TestCase
         }
 
         $this->getJson('/api/me')->assertTooManyRequests();
+
+        $this->assertDatabaseHas('security_audit_logs', [
+            'event' => 'security.rate_limit.exceeded',
+            'outcome' => 'failure',
+            'user_id' => auth()->id(),
+        ]);
     }
 }
