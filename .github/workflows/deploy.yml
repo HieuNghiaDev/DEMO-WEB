@@ -39,6 +39,13 @@ jobs:
         working-directory: EmployeeManagement/frontend
         run: npm run build
 
+      # GitHub Pages does not rewrite React routes to index.html. Serving the
+      # compiled app as 404.html lets BrowserRouter handle direct visits and
+      # page refreshes such as /DEMO-WEB/login without switching to hash URLs.
+      - name: Add React route fallback
+        working-directory: EmployeeManagement/frontend
+        run: cp dist/index.html dist/404.html
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
