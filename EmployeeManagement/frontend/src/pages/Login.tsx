@@ -99,15 +99,40 @@ export default function Login() {
   };
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#080d1f] lg:flex lg:bg-[linear-gradient(108deg,#080d1f_0%,#0b1027_43%,#17183e_53%,#6f7196_65%,#d9ddeb_78%,#f7f8fc_91%,#f6f3ff_100%)]">
-      <div className="pointer-events-none absolute -left-32 top-24 h-[32rem] w-[32rem] rounded-full bg-indigo-600/18 blur-[120px]" />
-      <div className="pointer-events-none absolute bottom-[-14rem] left-[28%] h-[34rem] w-[34rem] rounded-full bg-purple-700/22 blur-[120px]" />
-      <div className="pointer-events-none absolute right-[-9rem] top-[-12rem] hidden h-[34rem] w-[34rem] rounded-full bg-violet-200/35 blur-[110px] lg:block" />
-      <div className="pointer-events-none absolute inset-0 hidden opacity-[0.22] lg:block lg:bg-[radial-gradient(circle,rgba(148,163,184,0.22)_1px,transparent_1px)] lg:[background-size:28px_28px] lg:[mask-image:linear-gradient(to_right,black,transparent_56%)]" />
+    <main className="themis-login relative min-h-screen overflow-hidden bg-[#080d1f] lg:flex lg:bg-[linear-gradient(108deg,#080d1f_0%,#0b1027_43%,#17183e_53%,#6f7196_65%,#d9ddeb_78%,#f7f8fc_91%,#f6f3ff_100%)]">
+      <div
+        aria-hidden="true"
+        className="themis-login-glow themis-login-glow-one pointer-events-none absolute -left-32 top-24 h-[32rem] w-[32rem] rounded-full bg-indigo-600/18 blur-[120px]"
+      />
+      <div
+        aria-hidden="true"
+        className="themis-login-glow themis-login-glow-two pointer-events-none absolute bottom-[-14rem] left-[28%] h-[34rem] w-[34rem] rounded-full bg-purple-700/22 blur-[120px]"
+      />
+      <div
+        aria-hidden="true"
+        className="themis-login-glow themis-login-glow-three pointer-events-none absolute right-[-9rem] top-[-12rem] hidden h-[34rem] w-[34rem] rounded-full bg-violet-200/35 blur-[110px] lg:block"
+      />
+      <div
+        aria-hidden="true"
+        className="themis-login-stars pointer-events-none absolute inset-0 hidden opacity-[0.22] lg:block lg:bg-[radial-gradient(circle,rgba(148,163,184,0.22)_1px,transparent_1px)] lg:[background-size:28px_28px] lg:[mask-image:linear-gradient(to_right,black,transparent_56%)]"
+      />
 
       <section className="relative z-10 hidden min-h-screen flex-1 overflow-hidden lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16 2xl:p-[4.5rem]">
-        <div className="pointer-events-none absolute right-10 top-[-10rem] h-[30rem] w-[30rem] rounded-full border border-indigo-300/10" />
-        <div className="pointer-events-none absolute right-28 top-[-4rem] h-[22rem] w-[22rem] rounded-full border border-indigo-300/[0.07]" />
+        <div
+          aria-hidden="true"
+          className="themis-login-orbits pointer-events-none absolute inset-0 overflow-hidden"
+        >
+          <span className="themis-login-orbit themis-login-orbit-primary">
+            <i className="themis-login-orbit-node" />
+          </span>
+          <span className="themis-login-orbit themis-login-orbit-secondary">
+            <i className="themis-login-orbit-node" />
+          </span>
+          <span className="themis-login-orbit themis-login-orbit-tertiary">
+            <i className="themis-login-orbit-node" />
+          </span>
+          <span className="themis-login-orbit-core" />
+        </div>
 
         <div className="relative flex items-center gap-3.5">
           <div className="flex h-12 w-12 items-center justify-center rounded-[1.1rem] bg-gradient-to-br from-indigo-400 via-indigo-500 to-purple-600 text-xl font-black text-white shadow-[0_14px_35px_rgba(67,56,202,0.35)]">
@@ -172,7 +197,10 @@ export default function Login() {
       </section>
 
       <section className="relative z-20 flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#f5f7fb] lg:w-[40%] lg:flex-none lg:bg-transparent">
-        <div className="absolute inset-x-0 top-0 h-[22rem] bg-[radial-gradient(circle_at_82%_8%,rgba(167,139,250,0.38),transparent_36%),linear-gradient(145deg,#121a3b_0%,#283176_50%,#6d4ce8_100%)] lg:hidden" />
+        <div className="themis-login-mobile-sky absolute inset-x-0 top-0 h-[22rem] overflow-hidden bg-[radial-gradient(circle_at_82%_8%,rgba(167,139,250,0.38),transparent_36%),linear-gradient(145deg,#121a3b_0%,#283176_50%,#6d4ce8_100%)] lg:hidden">
+          <span aria-hidden="true" className="themis-login-mobile-ring themis-login-mobile-ring-one" />
+          <span aria-hidden="true" className="themis-login-mobile-ring themis-login-mobile-ring-two" />
+        </div>
         <div className="pointer-events-none absolute inset-0 hidden opacity-25 lg:block lg:bg-[radial-gradient(circle,rgba(255,255,255,0.85)_1px,transparent_1px)] lg:[background-size:26px_26px] lg:[mask-image:radial-gradient(circle_at_center,black,transparent_72%)]" />
 
         <div className="relative z-10 w-full max-w-[33rem] px-4 pb-8 pt-5 sm:px-6 lg:px-6 lg:py-8 xl:px-8">

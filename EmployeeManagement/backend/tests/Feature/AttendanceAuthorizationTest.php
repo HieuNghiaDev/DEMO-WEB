@@ -45,7 +45,8 @@ class AttendanceAuthorizationTest extends TestCase
         ])
             ->assertCreated()
             ->assertJsonPath('attendance.employee_id', $employee->id)
-            ->assertJsonPath('attendance.employee_name', $employee->full_name);
+            ->assertJsonPath('attendance.employee_name', $employee->full_name)
+            ->assertJsonPath('attendance.active_work_session', null);
 
         $this->assertDatabaseHas('attendances', [
             'employee_id' => $employee->id,

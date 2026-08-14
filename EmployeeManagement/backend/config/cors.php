@@ -27,7 +27,9 @@ return [
         'Origin',
     ],
 
-    'exposed_headers' => [],
+    'exposed_headers' => [
+        'Content-Disposition',
+    ],
 
     'max_age' => 600,
 

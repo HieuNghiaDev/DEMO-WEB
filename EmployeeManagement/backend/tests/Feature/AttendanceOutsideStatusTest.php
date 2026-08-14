@@ -61,6 +61,7 @@ class AttendanceOutsideStatusTest extends TestCase
 
         $this->patchJson("/api/attendances/{$attendance->id}/status", [
             'status' => 'outside',
+            'outside_destination' => '大阪法務局で書類提出',
             'outside_start' => '10:00',
             'outside_expected_end' => '12:00',
         ])
@@ -68,6 +69,7 @@ class AttendanceOutsideStatusTest extends TestCase
             ->assertJsonPath('attendance.status', 'outside')
             ->assertJsonStructure([
                 'attendance' => [
+                    'outside_destination',
                     'outside_start',
                     'outside_expected_end',
                 ],
@@ -76,6 +78,7 @@ class AttendanceOutsideStatusTest extends TestCase
         $this->assertDatabaseHas('attendances', [
             'id' => $attendance->id,
             'status' => 'outside',
+            'outside_destination' => '大阪法務局で書類提出',
             'outside_start' => '2026-08-12 10:00:00',
             'outside_expected_end' => '2026-08-12 12:00:00',
             'outside_end' => null,
@@ -113,6 +116,7 @@ class AttendanceOutsideStatusTest extends TestCase
 
         $this->patchJson("/api/attendances/{$attendance->id}/status", [
             'status' => 'outside',
+            'outside_destination' => '松原市役所',
             'outside_start' => '10:00',
             'outside_expected_end' => '11:00',
         ])
@@ -124,5 +128,27 @@ class AttendanceOutsideStatusTest extends TestCase
             'outside_start' => '2026-08-12 10:00:45',
             'outside_expected_end' => '2026-08-12 11:00:00',
         ]);
+    }
+
+    public function test_outside_destination_is_required(): void
+    {
+        $excelService = $this->mock(AttendanceExcelService::class);
+        $excelService->shouldNotReceive('sync');
+
+        $attendance = Attendance::create([
+            'employee_id' => $this->employee->id,
+            'employee_name' => 'LE HIEU NGHIA',
+            'work_date' => '2026-08-12',
+            'clock_in' => '2026-08-12 09:00:00',
+            'status' => 'working',
+        ]);
+
+        $this->patchJson("/api/attendances/{$attendance->id}/status", [
+            'status' => 'outside',
+            'outside_start' => '10:00',
+            'outside_expected_end' => '11:00',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('outside_destination');
     }
 }

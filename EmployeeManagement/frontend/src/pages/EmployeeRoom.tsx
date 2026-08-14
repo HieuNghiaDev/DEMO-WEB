@@ -16,11 +16,18 @@ import {
   CheckCircle2,
   AlertTriangle,
   Info,
+  ListTodo,
+  PencilLine,
+  Timer,
+  Download,
+  FileSpreadsheet,
   X,
 } from "lucide-react";
 
 type WorkStatus = "working" | "break" | "outside" | "offline";
 type OfficeId = "themis" | "law";
+type TaskModalMode = "start" | "change";
+type TaskDurationPreset = 30 | 60 | 120 | "custom";
 
 type Office = {
   id: OfficeId;
@@ -32,6 +39,16 @@ type Office = {
   accent: string;
 };
 
+type WorkSession = {
+  id: number;
+  attendance_id: number;
+  task_description: string;
+  started_at: string;
+  expected_end_at: string;
+  ended_at: string | null;
+  status: "active" | "completed";
+};
+
 type Attendance = {
   id: number;
   employee_name: string;
@@ -39,11 +56,13 @@ type Attendance = {
   clock_in: string;
   break_start: string | null;
   break_end: string | null;
+  outside_destination: string | null;
   outside_start: string | null;
   outside_expected_end: string | null;
   outside_end: string | null;
   clock_out: string | null;
   status: WorkStatus;
+  active_work_session: WorkSession | null;
   employee: {
     id: number;
     employee_code: string;
@@ -62,6 +81,11 @@ type AttendanceResponse = {
 type ActiveAttendancesResponse = {
   count: number;
   attendances: Attendance[];
+};
+
+type WorkSessionResponse = {
+  message: string;
+  work_session: WorkSession;
 };
 
 type NotificationKind = "success" | "info" | "warning" | "error";
@@ -161,6 +185,46 @@ const formatExpectedTime = (value: string) =>
     hour12: false,
     timeZone: "Asia/Tokyo",
   }).format(new Date(value));
+
+const getDownloadFilename = (contentDisposition?: string) => {
+  const encodedMatch = contentDisposition?.match(/filename\*=UTF-8''([^;]+)/i);
+
+  if (encodedMatch?.[1]) {
+    return decodeURIComponent(encodedMatch[1].replace(/["']/g, ""));
+  }
+
+  const plainMatch = contentDisposition?.match(/filename="?([^";]+)"?/i);
+
+  return plainMatch?.[1] ?? `attendance-${new Date().toISOString().slice(0, 10)}.xlsx`;
+};
+
+const getOutsideReturnTiming = (
+  expectedValue: string,
+  actualValue: string,
+) => {
+  const expectedTime = new Date(expectedValue).getTime();
+  const actualTime = new Date(actualValue).getTime();
+  const differenceMinutes = Math.round((actualTime - expectedTime) / 60_000);
+
+  if (differenceMinutes === 0) {
+    return {
+      label: "予定どおりに帰社",
+      className: "bg-emerald-50 text-emerald-600",
+    };
+  }
+
+  if (differenceMinutes < 0) {
+    return {
+      label: `予定より${Math.abs(differenceMinutes)}分早く帰社`,
+      className: "bg-sky-50 text-sky-600",
+    };
+  }
+
+  return {
+    label: `予定より${differenceMinutes}分遅く帰社`,
+    className: "bg-amber-50 text-amber-700",
+  };
+};
 
 type JapaneseTimePart = "hour" | "minute";
 
@@ -324,11 +388,26 @@ export default function EmployeeRoom() {
 
   const [isWorkStarted, setIsWorkStarted] = useState(false);
   const [workStatus, setWorkStatus] = useState<WorkStatus>("working");
-  const [pendingStatus, setPendingStatus] = useState<WorkStatus | null>(null);
   const [isStartConfirmationOpen, setIsStartConfirmationOpen] =
     useState(false);
+  const [isAttendanceReportPromptOpen, setIsAttendanceReportPromptOpen] =
+    useState(false);
+  const [isDownloadingAttendanceReport, setIsDownloadingAttendanceReport] =
+    useState(false);
+  const [attendanceReportError, setAttendanceReportError] = useState("");
+  const [pendingStatus, setPendingStatus] = useState<WorkStatus | null>(null);
+  const [taskModalMode, setTaskModalMode] =
+    useState<TaskModalMode | null>(null);
+  const [taskDescription, setTaskDescription] = useState("");
+  const [taskStartTime, setTaskStartTime] = useState("");
+  const [taskExpectedEndTime, setTaskExpectedEndTime] = useState("");
+  const [taskDurationPreset, setTaskDurationPreset] =
+    useState<TaskDurationPreset>(60);
+  const [activeWorkSession, setActiveWorkSession] =
+    useState<WorkSession | null>(null);
   const [outsideStartTime, setOutsideStartTime] = useState("");
   const [outsideExpectedEndTime, setOutsideExpectedEndTime] = useState("");
+  const [outsideDestination, setOutsideDestination] = useState("");
 
   const [attendanceId, setAttendanceId] = useState<number | null>(null);
 
@@ -533,6 +612,7 @@ export default function EmployeeRoom() {
       setAttendanceId(ownAttendance.id);
       setWorkStatus(ownAttendance.status);
       setIsWorkStarted(true);
+      setActiveWorkSession(ownAttendance.active_work_session ?? null);
     }, 0);
 
     return () => {
@@ -590,14 +670,33 @@ export default function EmployeeRoom() {
     return () => window.clearInterval(intervalId);
   }, [activeAttendances, employeeName, pushNotification]);
 
+  const openTaskModal = (mode: TaskModalMode) => {
+    const startTime = getJapanTimeInput();
+
+    setTaskDescription("");
+    setTaskStartTime(startTime);
+    setTaskExpectedEndTime(getJapanTimeInput(60));
+    setTaskDurationPreset(60);
+    setTaskModalMode(mode);
+  };
+
+  const handleTaskDurationChange = (preset: TaskDurationPreset) => {
+    setTaskDurationPreset(preset);
+
+    if (preset !== "custom") {
+      setTaskExpectedEndTime(getJapanTimeInput(preset));
+    }
+  };
+
   const handleStartRequest = () => {
     if (!employeeName || isWorkStarted || isSubmitting) return;
 
+    setErrorMessage("");
     setIsStartConfirmationOpen(true);
   };
 
-  const handleStartWork = async () => {
-    if (!employeeName || isSubmitting) return;
+  const handleConfirmStartWork = async () => {
+    if (!employeeName || isWorkStarted || isSubmitting) return;
 
     try {
       setIsSubmitting(true);
@@ -612,6 +711,7 @@ export default function EmployeeRoom() {
       setAttendanceId(newAttendance.id);
       setWorkStatus(newAttendance.status);
       setIsWorkStarted(true);
+      setActiveWorkSession(newAttendance.active_work_session ?? null);
       setIsStartConfirmationOpen(false);
       setSelectedOffice("themis");
       setActiveAttendances((current) => [
@@ -621,7 +721,7 @@ export default function EmployeeRoom() {
       pushNotification({
         sourceKey: `attendance-start-${newAttendance.id}`,
         title: "勤務を開始しました",
-        message: "現在時刻を出勤時刻として登録しました。",
+        message: "出勤時刻を記録しました。続けて現在の作業を登録してください。",
         kind: "success",
       });
     } catch (error) {
@@ -637,8 +737,169 @@ export default function EmployeeRoom() {
     }
   };
 
+  const handleDownloadAttendanceReport = async () => {
+    if (isDownloadingAttendanceReport) return;
+
+    try {
+      setIsDownloadingAttendanceReport(true);
+      setErrorMessage("");
+
+      const response = await api.get<Blob>("/attendances/my-report", {
+        responseType: "blob",
+      });
+      const downloadUrl = window.URL.createObjectURL(response.data);
+      const downloadLink = document.createElement("a");
+
+      downloadLink.href = downloadUrl;
+      downloadLink.download = getDownloadFilename(
+        response.headers["content-disposition"],
+      );
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      downloadLink.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1000);
+
+      setIsAttendanceReportPromptOpen(false);
+      setAttendanceReportError("");
+      pushNotification({
+        sourceKey: `attendance-report-${Date.now()}`,
+        title: "勤怠表をダウンロードしました",
+        message: "本人の勤怠記録と作業記録をExcelファイルにまとめました。",
+        kind: "success",
+      });
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        setAttendanceReportError(
+          error.response?.data?.message ??
+            "勤怠表のダウンロードに失敗しました。",
+        );
+      } else {
+        setAttendanceReportError("サーバーとの通信に失敗しました。");
+      }
+    } finally {
+      setIsDownloadingAttendanceReport(false);
+    }
+  };
+
+  const handleChangeTask = async () => {
+    if (
+      attendanceId === null ||
+      !taskDescription.trim() ||
+      isSubmitting
+    ) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setErrorMessage("");
+
+      const response = await api.post<WorkSessionResponse>(
+        "/work-sessions",
+        {
+          attendance_id: attendanceId,
+          task_description: taskDescription.trim(),
+          expected_end_time: taskExpectedEndTime,
+        },
+      );
+      const workSession = response.data.work_session;
+
+      setActiveWorkSession(workSession);
+      setActiveAttendances((current) =>
+        current.map((attendance) =>
+          attendance.id === attendanceId
+            ? { ...attendance, active_work_session: workSession }
+            : attendance,
+        ),
+      );
+      setTaskModalMode(null);
+      pushNotification({
+        sourceKey: `work-session-${workSession.id}`,
+        title: "作業を開始しました",
+        message: `${workSession.task_description}を${formatWorkTime(workSession.expected_end_at)}までの予定で開始しました。`,
+        kind: "info",
+      });
+    } catch (error) {
+      setIsStartConfirmationOpen(false);
+
+      if (axios.isAxiosError(error)) {
+        setErrorMessage(
+          error.response?.data?.message ?? "作業の登録に失敗しました。",
+        );
+      } else {
+        setErrorMessage("サーバーとの通信に失敗しました。");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCompleteTask = async () => {
+    if (!activeWorkSession || isSubmitting) return;
+
+    try {
+      setIsSubmitting(true);
+      setErrorMessage("");
+
+      const response = await api.patch<WorkSessionResponse>(
+        `/work-sessions/${activeWorkSession.id}/complete`,
+      );
+      const completedSession = response.data.work_session;
+
+      setActiveWorkSession(null);
+      setActiveAttendances((current) =>
+        current.map((attendance) =>
+          attendance.id === completedSession.attendance_id
+            ? { ...attendance, active_work_session: null }
+            : attendance,
+        ),
+      );
+      pushNotification({
+        sourceKey: `work-session-completed-${completedSession.id}`,
+        title: "作業を完了しました",
+        message: `${completedSession.task_description}を完了として記録しました。`,
+        kind: "success",
+      });
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 404) {
+          const staleWorkSessionId = activeWorkSession.id;
+
+          setActiveWorkSession(null);
+          setActiveAttendances((current) =>
+            current.map((attendance) =>
+              attendance.id === activeWorkSession.attendance_id
+                ? { ...attendance, active_work_session: null }
+                : attendance,
+            ),
+          );
+          setErrorMessage("");
+          pushNotification({
+            sourceKey: `work-session-missing-${staleWorkSessionId}`,
+            title: "作業情報を更新しました",
+            message:
+              "この作業はすでに削除または完了されていたため、最新の状態に更新しました。",
+            kind: "info",
+          });
+          void loadActiveAttendances();
+
+          return;
+        }
+
+        setErrorMessage(
+          error.response?.data?.message ?? "作業の完了登録に失敗しました。",
+        );
+      } else {
+        setErrorMessage("サーバーとの通信に失敗しました。");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleStatusRequest = (status: WorkStatus) => {
     if (status === "outside") {
+      setOutsideDestination("");
       setOutsideStartTime(getJapanTimeInput());
       setOutsideExpectedEndTime(getJapanTimeInput(60));
     }
@@ -647,7 +908,12 @@ export default function EmployeeRoom() {
   };
 
   const handleConfirmStatus = async () => {
-    if (!pendingStatus || attendanceId === null || isSubmitting) {
+    if (
+      !pendingStatus ||
+      attendanceId === null ||
+      isSubmitting ||
+      (pendingStatus === "outside" && !outsideDestination.trim())
+    ) {
       return;
     }
 
@@ -661,6 +927,7 @@ export default function EmployeeRoom() {
           status: pendingStatus,
           ...(pendingStatus === "outside"
             ? {
+                outside_destination: outsideDestination.trim(),
                 outside_start: outsideStartTime,
                 outside_expected_end: outsideExpectedEndTime,
               }
@@ -669,8 +936,19 @@ export default function EmployeeRoom() {
       );
 
       const updatedAttendance = response.data.attendance;
+      const outsideReturnTiming =
+        workStatus === "outside" &&
+        updatedAttendance.status !== "outside" &&
+        updatedAttendance.outside_expected_end &&
+        updatedAttendance.outside_end
+          ? getOutsideReturnTiming(
+              updatedAttendance.outside_expected_end,
+              updatedAttendance.outside_end,
+            )
+          : null;
 
       setWorkStatus(updatedAttendance.status);
+      setActiveWorkSession(updatedAttendance.active_work_session ?? null);
       setPendingStatus(null);
 
       setActiveAttendances((current) => {
@@ -698,14 +976,16 @@ export default function EmployeeRoom() {
         pushNotification({
           sourceKey: `outside-start-${updatedAttendance.id}-${updatedAttendance.outside_expected_end}`,
           title: "外出予定を登録しました",
-          message: `帰社予定は${formatExpectedTime(updatedAttendance.outside_expected_end)}です。30分前と10分前にお知らせします。`,
+          message: `${updatedAttendance.outside_destination ?? "外出先未設定"}へ外出します。帰社予定は${formatExpectedTime(updatedAttendance.outside_expected_end)}です。30分前と10分前にお知らせします。`,
           kind: "info",
         });
       } else {
         const statusNotification = {
           working: {
             title: "勤務中に変更しました",
-            message: "社内業務を再開しました。",
+            message: outsideReturnTiming
+              ? `実際の帰社時刻は${formatWorkTime(updatedAttendance.outside_end!)}です。${outsideReturnTiming.label}しました。`
+              : "社内業務を再開しました。",
             kind: "success" as const,
           },
           break: {
@@ -733,6 +1013,8 @@ export default function EmployeeRoom() {
         setIsWorkStarted(false);
         setAttendanceId(null);
         setSelectedAttendanceId(null);
+        setAttendanceReportError("");
+        setIsAttendanceReportPromptOpen(true);
       }
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -1060,6 +1342,13 @@ export default function EmployeeRoom() {
               const kanaName = attendance.employee?.full_name_kana?.trim();
               const position = getEmployeePosition(attendance);
               const isSelected = selectedAttendanceId === attendance.id;
+              const outsideReturnTiming =
+                attendance.outside_expected_end && attendance.outside_end
+                  ? getOutsideReturnTiming(
+                      attendance.outside_expected_end,
+                      attendance.outside_end,
+                    )
+                  : null;
 
               return (
                 <button
@@ -1110,17 +1399,69 @@ export default function EmployeeRoom() {
                         </span>
                       </div>
 
-                      {attendance.status === "outside" &&
-                        attendance.outside_expected_end && (
-                          <div className="mt-1.5 flex items-center justify-between text-[11px]">
-                            <span className="text-gray-400">帰社予定</span>
-                            <span className="font-semibold text-blue-600">
-                              {formatWorkTime(
-                                attendance.outside_expected_end,
-                              )}
-                            </span>
+                      {attendance.active_work_session && (
+                        <div className="mt-2.5 rounded-xl border border-indigo-100 bg-indigo-50/80 p-2.5">
+                          <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-indigo-500">
+                            <ListTodo size={12} />
+                            CURRENT TASK
                           </div>
-                        )}
+                          <p className="mt-1.5 break-words text-[11px] font-bold leading-relaxed text-gray-800">
+                            {
+                              attendance.active_work_session
+                                .task_description
+                            }
+                          </p>
+                          <div className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-indigo-600">
+                            <Clock3 size={11} />
+                            {formatWorkTime(
+                              attendance.active_work_session.started_at,
+                            )}
+                            <span className="text-indigo-300">→</span>
+                            {formatWorkTime(
+                              attendance.active_work_session.expected_end_at,
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {attendance.outside_destination && (
+                        <div className="mt-1.5 flex items-start justify-between gap-3 text-[11px]">
+                          <span className="shrink-0 text-gray-400">
+                            外出先・用件
+                          </span>
+                          <span className="break-words text-right font-semibold text-blue-600">
+                            {attendance.outside_destination}
+                          </span>
+                        </div>
+                      )}
+
+                      {attendance.outside_expected_end && (
+                        <div className="mt-1.5 flex items-center justify-between text-[11px]">
+                          <span className="text-gray-400">帰社予定</span>
+                          <span className="font-semibold text-blue-600">
+                            {formatWorkTime(attendance.outside_expected_end)}
+                          </span>
+                        </div>
+                      )}
+
+                      {attendance.outside_end && (
+                        <div className="mt-1.5 flex items-center justify-between text-[11px]">
+                          <span className="text-gray-400">実際の帰社</span>
+                          <span className="font-semibold text-gray-700">
+                            {formatWorkTime(attendance.outside_end)}
+                          </span>
+                        </div>
+                      )}
+
+                      {outsideReturnTiming && (
+                        <div className="mt-2 flex justify-end">
+                          <span
+                            className={`rounded-full px-2 py-1 text-[10px] font-bold ${outsideReturnTiming.className}`}
+                          >
+                            {outsideReturnTiming.label}
+                          </span>
+                        </div>
+                      )}
 
                       <span className="absolute left-1/2 top-full h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r border-gray-100 bg-white" />
                     </div>
@@ -1223,6 +1564,70 @@ export default function EmployeeRoom() {
                   >
                     {statusLabels[workStatus]}
                   </span>
+                </div>
+
+                <div className="mb-5 rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/70 p-4 shadow-sm dark:border-indigo-400/25 dark:from-slate-900 dark:to-indigo-950/80 dark:shadow-indigo-950/30">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-indigo-500">
+                        <ListTodo size={14} />
+                        CURRENT TASK
+                      </div>
+
+                      {activeWorkSession ? (
+                        <>
+                          <p className="mt-2 break-words text-sm font-bold text-gray-800">
+                            {activeWorkSession.task_description}
+                          </p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 shadow-sm ring-1 ring-indigo-100">
+                              <Clock3 size={13} className="text-indigo-500" />
+                              {formatWorkTime(activeWorkSession.started_at)}
+                              <span className="text-gray-300">→</span>
+                              {formatWorkTime(
+                                activeWorkSession.expected_end_at,
+                              )}
+                            </span>
+                            <span className="rounded-full bg-indigo-100 px-2.5 py-1 font-bold text-indigo-600">
+                              進行中
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="mt-2 text-sm font-medium text-gray-400">
+                          現在登録されている作業はありません
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openTaskModal(
+                            activeWorkSession ? "change" : "start",
+                          )
+                        }
+                        disabled={isSubmitting}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-600 transition hover:bg-indigo-50 disabled:opacity-60"
+                      >
+                        <PencilLine size={14} />
+                        {activeWorkSession ? "作業を変更" : "作業を登録"}
+                      </button>
+
+                      {activeWorkSession && (
+                        <button
+                          type="button"
+                          onClick={handleCompleteTask}
+                          disabled={isSubmitting}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm shadow-emerald-500/20 transition hover:bg-emerald-700 disabled:opacity-60"
+                        >
+                          <CheckCircle2 size={14} />
+                          完了
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <p className="mb-3 text-xs font-semibold text-gray-600">
@@ -1443,46 +1848,272 @@ export default function EmployeeRoom() {
         </div>
       )}
 
-      {/* Start Work Confirmation Modal */}
+      {/* Attendance Start Confirmation Modal */}
       {isStartConfirmationOpen && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
-          onClick={() => setIsStartConfirmationOpen(false)}
+          onClick={() => {
+            if (!isSubmitting) setIsStartConfirmationOpen(false);
+          }}
         >
           <div
             role="dialog"
             aria-modal="true"
-            aria-labelledby="start-work-confirmation-title"
+            aria-labelledby="attendance-start-confirmation-title"
             onClick={(event) => event.stopPropagation()}
-            className={`w-full rounded-3xl bg-white p-6 shadow-2xl ${
-              pendingStatus === "outside" ? "max-w-md" : "max-w-sm"
-            }`}
+            className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
           >
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
-              <Play size={26} />
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600">
+              <Play size={27} />
             </div>
 
             <div className="text-center">
               <h3
-                id="start-work-confirmation-title"
+                id="attendance-start-confirmation-title"
                 className="text-lg font-bold text-gray-800"
               >
                 勤務開始の確認
               </h3>
-
               <p className="mt-2 text-sm leading-relaxed text-gray-500">
-                <span className="font-bold text-gray-800">{employeeName}</span>
-                さんの勤務を開始しますか？
+                出勤時刻を記録して、勤務を開始しますか？
               </p>
-              <p className="mt-2 text-xs text-gray-400">
-                確認後、現在時刻が出勤時刻として記録されます。
-              </p>
+              <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-left">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-indigo-500">
+                  EMPLOYEE
+                </span>
+                <span className="mt-1 block break-words text-sm font-bold text-gray-800">
+                  {employeeName}
+                </span>
+              </div>
             </div>
 
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
                 onClick={() => setIsStartConfirmationOpen(false)}
+                disabled={isSubmitting}
+                className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmStartWork}
+                disabled={isSubmitting}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#635BFF] px-4 py-3 text-sm font-bold text-white shadow-md shadow-indigo-500/20 transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Play size={16} />
+                {isSubmitting ? "処理中..." : "勤務を開始"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Personal Attendance Report Prompt */}
+      {isAttendanceReportPromptOpen && (
+        <div
+          className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+          onClick={() => {
+            if (!isDownloadingAttendanceReport) {
+              setIsAttendanceReportPromptOpen(false);
+              setAttendanceReportError("");
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="attendance-report-prompt-title"
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-md overflow-hidden rounded-t-[2rem] border border-white/70 bg-white shadow-2xl shadow-slate-950/30 dark:border-slate-700/80 dark:bg-slate-900 sm:rounded-3xl"
+          >
+            <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-200 dark:bg-slate-700 sm:hidden" />
+
+            <div className="p-5 sm:p-6">
+              <div className="flex items-center gap-4 text-left">
+                <span className="flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 shadow-sm ring-4 ring-emerald-50 dark:bg-emerald-400/15 dark:text-emerald-300 dark:ring-emerald-400/5">
+                  <CheckCircle2 size={27} strokeWidth={2.2} />
+                </span>
+                <div className="min-w-0">
+                  <h3
+                    id="attendance-report-prompt-title"
+                    className="text-lg font-bold text-slate-900 dark:text-white"
+                  >
+                    勤務を終了しました
+                  </h3>
+                  <p className="mt-1 text-sm font-medium leading-relaxed text-slate-500 dark:text-slate-300">
+                    本日の勤怠表を確認しますか？
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 flex items-start gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4 text-left dark:border-indigo-400/20 dark:bg-indigo-400/10">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm dark:bg-slate-950/70 dark:text-indigo-300">
+                  <FileSpreadsheet size={21} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                    個人勤怠表（Excel）
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                    あなた本人の勤怠記録と作業記録だけを安全に出力します。
+                  </p>
+                </div>
+              </div>
+
+              {attendanceReportError && (
+                <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-600">
+                  {attendanceReportError}
+                </p>
+              )}
+
+              <div className="mt-5 grid grid-cols-[0.85fr_1.15fr] gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAttendanceReportPromptOpen(false);
+                    setAttendanceReportError("");
+                  }}
+                  disabled={isDownloadingAttendanceReport}
+                  className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  あとで
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadAttendanceReport}
+                  disabled={isDownloadingAttendanceReport}
+                  className="flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Download size={17} />
+                  {isDownloadingAttendanceReport
+                    ? "作成中..."
+                    : "Excelを保存"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Work Session Modal */}
+      {taskModalMode && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
+          onClick={() => setTaskModalMode(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="work-session-modal-title"
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl sm:p-6"
+          >
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600">
+              {taskModalMode === "start" ? (
+                <Play size={25} />
+              ) : (
+                <PencilLine size={24} />
+              )}
+            </div>
+
+            <div className="text-center">
+              <h3
+                id="work-session-modal-title"
+                className="text-lg font-bold text-gray-800"
+              >
+                {taskModalMode === "start"
+                  ? "最初の作業を登録"
+                  : "作業を変更"}
+              </h3>
+
+              <p className="mt-2 text-sm leading-relaxed text-gray-500">
+                {taskModalMode === "start"
+                  ? "出勤時刻を記録しました。続けて、今から取り組む内容を入力してください。"
+                  : "現在の作業を完了し、次の作業を開始します。"}
+              </p>
+            </div>
+
+            <div className="mt-5 space-y-4 text-left">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold text-gray-600">
+                  作業内容
+                </span>
+                <span className="relative block">
+                  <ListTodo
+                    size={17}
+                    className="pointer-events-none absolute left-3 top-3 text-indigo-500"
+                  />
+                  <input
+                    type="text"
+                    value={taskDescription}
+                    onChange={(event) =>
+                      setTaskDescription(event.target.value)
+                    }
+                    maxLength={255}
+                    autoFocus
+                    placeholder="例：契約書の確認"
+                    className="h-11 w-full rounded-xl border border-indigo-200 bg-white pl-10 pr-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                  />
+                </span>
+              </label>
+
+              <div>
+                <span className="mb-2 block text-xs font-bold text-gray-600">
+                  予定時間
+                </span>
+                <div className="grid grid-cols-4 gap-2">
+                  {([30, 60, 120] as const).map((minutes) => (
+                    <button
+                      key={minutes}
+                      type="button"
+                      onClick={() => handleTaskDurationChange(minutes)}
+                      className={`rounded-xl border px-2 py-2 text-xs font-bold transition ${
+                        taskDurationPreset === minutes
+                          ? "border-indigo-500 bg-indigo-50 text-indigo-600 ring-2 ring-indigo-100"
+                          : "border-gray-200 text-gray-500 hover:border-indigo-200 hover:bg-indigo-50/50"
+                      }`}
+                    >
+                      {minutes < 60 ? `${minutes}分` : `${minutes / 60}時間`}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => handleTaskDurationChange("custom")}
+                    className={`rounded-xl border px-2 py-2 text-xs font-bold transition ${
+                      taskDurationPreset === "custom"
+                        ? "border-indigo-500 bg-indigo-50 text-indigo-600 ring-2 ring-indigo-100"
+                        : "border-gray-200 text-gray-500 hover:border-indigo-200 hover:bg-indigo-50/50"
+                    }`}
+                  >
+                    時刻指定
+                  </button>
+                </div>
+              </div>
+
+              {taskDurationPreset === "custom" && (
+                <JapaneseTimePicker
+                  label="完了予定時刻"
+                  value={taskExpectedEndTime}
+                  onChange={setTaskExpectedEndTime}
+                />
+              )}
+
+              <div className="flex items-center justify-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-sm font-bold text-gray-700">
+                <Timer size={17} className="text-indigo-500" />
+                <span>{taskStartTime}</span>
+                <span className="text-indigo-300">→</span>
+                <span className="text-indigo-600">
+                  {taskExpectedEndTime}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setTaskModalMode(null)}
                 disabled={isSubmitting}
                 className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50 disabled:opacity-60"
               >
@@ -1491,12 +2122,20 @@ export default function EmployeeRoom() {
 
               <button
                 type="button"
-                onClick={handleStartWork}
-                disabled={isSubmitting}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-md shadow-emerald-500/20 transition hover:bg-emerald-700 disabled:opacity-60"
+                onClick={handleChangeTask}
+                disabled={
+                  isSubmitting ||
+                  !taskDescription.trim() ||
+                  !taskExpectedEndTime
+                }
+                className="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-2 py-3 text-[13px] font-bold text-white shadow-md shadow-indigo-500/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none sm:gap-2 sm:px-4 sm:text-sm"
               >
                 <Play size={16} />
-                {isSubmitting ? "処理中..." : "勤務を開始"}
+                {isSubmitting
+                  ? "処理中..."
+                  : taskModalMode === "start"
+                    ? "作業を開始"
+                    : "次の作業を開始"}
               </button>
             </div>
           </div>
@@ -1514,7 +2153,9 @@ export default function EmployeeRoom() {
             aria-modal="true"
             aria-labelledby="status-confirmation-title"
             onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
+            className={`max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ${
+              pendingStatus === "outside" ? "max-w-md" : "max-w-sm"
+            }`}
           >
             <div
               className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ${
@@ -1557,10 +2198,36 @@ export default function EmployeeRoom() {
               <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-left">
                 <div className="mb-3 flex items-center gap-2 text-sm font-bold text-blue-700">
                   <Clock3 size={17} />
-                  外出時間を設定
+                  外出予定を登録
                 </div>
 
                 <div className="grid grid-cols-1 gap-3">
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-bold text-gray-600">
+                      外出先・用件
+                    </span>
+                    <span className="relative block">
+                      <MapPin
+                        size={17}
+                        className="pointer-events-none absolute left-3 top-3 text-blue-500"
+                      />
+                      <textarea
+                        value={outsideDestination}
+                        onChange={(event) =>
+                          setOutsideDestination(event.target.value)
+                        }
+                        rows={2}
+                        maxLength={255}
+                        autoFocus
+                        placeholder="例：大阪法務局で書類を提出"
+                        className="w-full resize-none rounded-xl border border-blue-200 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </span>
+                    <span className="mt-1 block text-right text-[10px] text-gray-400">
+                      {outsideDestination.length}/255
+                    </span>
+                  </label>
+
                   <JapaneseTimePicker
                     label="外出時刻"
                     value={outsideStartTime}
@@ -1596,7 +2263,9 @@ export default function EmployeeRoom() {
                 disabled={
                   isSubmitting ||
                   (pendingStatus === "outside" &&
-                    (!outsideStartTime || !outsideExpectedEndTime))
+                    (!outsideDestination.trim() ||
+                      !outsideStartTime ||
+                      !outsideExpectedEndTime))
                 }
                 className={`flex-1 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition ${
                   pendingStatus === "offline"

@@ -5,21 +5,66 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\WorkSession;
 use App\Services\AttendanceExcelService;
+use App\Services\PersonalAttendanceReportService;
 use App\Services\SecurityAuditLogger;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 class AttendanceController extends Controller
 {
     public function __construct(
         private readonly AttendanceExcelService $attendanceExcelService,
+        private readonly PersonalAttendanceReportService $personalAttendanceReportService,
         private readonly SecurityAuditLogger $securityAuditLogger
     ) {}
+
+    /** Download the signed-in employee's own attendance workbook. */
+    public function personalReport(Request $request): StreamedResponse
+    {
+        $employee = $this->authenticatedEmployee($request);
+        $spreadsheet = $this->personalAttendanceReportService->build($employee);
+        $safeEmployeeCode = preg_replace(
+            '/[^A-Za-z0-9_-]/',
+            '-',
+            $employee->employee_code
+        ) ?: 'employee';
+        $filename = sprintf(
+            'attendance-%s-%s.xlsx',
+            $safeEmployeeCode,
+            now()->format('Ymd-His')
+        );
+
+        $this->securityAuditLogger->record(
+            request: $request,
+            event: 'attendance.personal_report.downloaded',
+            outcome: 'success',
+            employee: $employee,
+            metadata: [
+                'filename' => $filename,
+            ]
+        );
+
+        return response()->streamDownload(
+            function () use ($spreadsheet): void {
+                $writer = new Xlsx($spreadsheet);
+                $writer->save('php://output');
+                $spreadsheet->disconnectWorksheets();
+            },
+            $filename,
+            [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Cache-Control' => 'private, no-store, max-age=0',
+            ]
+        );
+    }
 
     /** Danh sách nhân viên đang hoạt động trong ngày. */
     public function active(Request $request): JsonResponse
@@ -50,6 +95,7 @@ class AttendanceController extends Controller
     public function start(Request $request): JsonResponse
     {
         $employee = $this->authenticatedEmployee($request);
+        $now = now();
 
         $existingAttendance = Attendance::query()
             ->where(function ($query) use ($employee) {
@@ -90,8 +136,6 @@ class AttendanceController extends Controller
                 'attendance' => $this->attachEmployeeProfile($existingAttendance),
             ]);
         }
-
-        $now = now();
 
         $attendance = Attendance::create([
             'employee_id' => $employee->id,
@@ -158,6 +202,12 @@ class AttendanceController extends Controller
                 'nullable',
                 'date_format:H:i',
             ],
+            'outside_destination' => [
+                'required_if:status,outside',
+                'nullable',
+                'string',
+                'max:255',
+            ],
         ]);
 
         if ($attendance->clock_out !== null) {
@@ -169,6 +219,7 @@ class AttendanceController extends Controller
         $previousStatus = $attendance->status;
         $newStatus = $validated['status'];
         $now = now();
+        $completedWorkSession = null;
 
         $this->closePreviousStatusPeriod($attendance, $newStatus, $now);
 
@@ -210,11 +261,23 @@ class AttendanceController extends Controller
                 $attendance->outside_start = $outsideStart;
                 $attendance->outside_expected_end = $outsideExpectedEnd;
                 $attendance->outside_end = null;
+                $attendance->outside_destination = trim(
+                    $validated['outside_destination']
+                );
                 $message = '外出中に変更しました。';
                 break;
 
             case 'offline':
                 $attendance->clock_out = $now;
+                $completedWorkSession = $attendance->activeWorkSession()
+                    ->first();
+
+                if ($completedWorkSession !== null) {
+                    $completedWorkSession->update([
+                        'ended_at' => $now,
+                        'status' => 'completed',
+                    ]);
+                }
                 $message = '勤務を終了しました。';
                 break;
         }
@@ -224,6 +287,10 @@ class AttendanceController extends Controller
 
         $attendance = $attendance->fresh();
         $this->syncExcelSafely($attendance);
+
+        if ($completedWorkSession !== null) {
+            $this->syncWorkSessionExcelSafely($completedWorkSession);
+        }
 
         $this->securityAuditLogger->record(
             request: $request,
@@ -296,6 +363,7 @@ class AttendanceController extends Controller
     {
         $attendance->loadMissing([
             'employee:id,employee_code,full_name,full_name_kana,gender,avatar_path',
+            'activeWorkSession',
         ]);
 
         if ($attendance->employee === null) {
@@ -351,6 +419,19 @@ class AttendanceController extends Controller
         } catch (Throwable $exception) {
             Log::warning('Attendance Excel sync failed.', [
                 'attendance_id' => $attendance->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    private function syncWorkSessionExcelSafely(
+        WorkSession $workSession
+    ): void {
+        try {
+            $this->attendanceExcelService->syncWorkSession($workSession);
+        } catch (Throwable $exception) {
+            Log::warning('Work session Excel sync failed.', [
+                'work_session_id' => $workSession->id,
                 'error' => $exception->getMessage(),
             ]);
         }

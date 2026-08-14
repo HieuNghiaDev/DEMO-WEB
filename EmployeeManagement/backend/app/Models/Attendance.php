@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Attendance extends Model
 {
@@ -14,6 +16,7 @@ class Attendance extends Model
         'clock_in',
         'break_start',
         'break_end',
+        'outside_destination',
         'outside_start',
         'outside_expected_end',
         'outside_end',
@@ -38,5 +41,17 @@ class Attendance extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function workSessions(): HasMany
+    {
+        return $this->hasMany(WorkSession::class);
+    }
+
+    public function activeWorkSession(): HasOne
+    {
+        return $this->hasOne(WorkSession::class)
+            ->where('status', 'active')
+            ->latestOfMany();
     }
 }

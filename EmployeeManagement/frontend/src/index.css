@@ -357,3 +357,279 @@ html.theme-switching .theme-mode-icon {
     opacity: 0.7;
   }
 }
+
+/* Login atmosphere ------------------------------------------------------- */
+.themis-login-glow {
+  will-change: transform, opacity;
+}
+
+.themis-login-glow-one {
+  animation: themis-login-glow-one 18s ease-in-out infinite alternate;
+}
+
+.themis-login-glow-two {
+  animation: themis-login-glow-two 23s ease-in-out infinite alternate;
+}
+
+.themis-login-glow-three {
+  animation: themis-login-glow-three 20s ease-in-out infinite alternate;
+}
+
+.themis-login-stars {
+  animation: themis-login-stars 42s linear infinite;
+  will-change: background-position;
+}
+
+.themis-login-orbits {
+  animation: themis-login-orbit-stage 16s ease-in-out infinite alternate;
+  transform-origin: 74% 12%;
+  will-change: transform;
+}
+
+.themis-login-orbit {
+  position: absolute;
+  display: block;
+  border: 1px solid rgb(165 180 252 / 0.11);
+  border-radius: 9999px;
+  opacity: 0.9;
+  box-shadow:
+    inset 0 0 40px rgb(99 102 241 / 0.018),
+    0 0 34px rgb(99 102 241 / 0.025);
+  will-change: transform;
+}
+
+.themis-login-orbit::before {
+  position: absolute;
+  inset: -1px;
+  border: 1px solid transparent;
+  border-top-color: rgb(165 180 252 / 0.2);
+  border-right-color: rgb(129 140 248 / 0.08);
+  border-radius: inherit;
+  content: "";
+  filter: drop-shadow(0 0 3px rgb(129 140 248 / 0.16));
+}
+
+.themis-login-orbit-primary {
+  top: -12rem;
+  right: 2.5rem;
+  width: 34rem;
+  height: 34rem;
+  animation: themis-login-orbit-spin 38s linear infinite;
+}
+
+.themis-login-orbit-secondary {
+  top: -4.5rem;
+  right: 7rem;
+  width: 27rem;
+  height: 20rem;
+  animation: themis-login-orbit-spin-reverse 29s linear infinite;
+  border-color: rgb(196 181 253 / 0.085);
+  opacity: 0.76;
+}
+
+.themis-login-orbit-tertiary {
+  top: 1.25rem;
+  right: 12rem;
+  width: 17rem;
+  height: 17rem;
+  animation: themis-login-orbit-spin 22s linear infinite;
+  border-color: rgb(129 140 248 / 0.07);
+  opacity: 0.64;
+}
+
+.themis-login-orbit-node {
+  position: absolute;
+  top: -0.25rem;
+  left: 50%;
+  width: 0.45rem;
+  height: 0.45rem;
+  border: 1px solid rgb(199 210 254 / 0.7);
+  border-radius: 9999px;
+  background: radial-gradient(circle at 32% 28%, #ffffff 0 9%, #c7d2fe 22%, #818cf8 58%, #4f46e5 100%);
+  box-shadow:
+    0 0 0 5px rgb(99 102 241 / 0.055),
+    0 0 20px rgb(129 140 248 / 0.52);
+  animation: themis-login-node-glow 4.6s ease-in-out infinite;
+}
+
+.themis-login-orbit-secondary .themis-login-orbit-node {
+  top: 48%;
+  right: -0.2rem;
+  left: auto;
+  width: 0.35rem;
+  height: 0.35rem;
+  background: radial-gradient(circle at 32% 28%, #ffffff 0 8%, #ddd6fe 24%, #a78bfa 62%, #7c3aed 100%);
+  animation-delay: -1.8s;
+}
+
+.themis-login-orbit-tertiary .themis-login-orbit-node {
+  top: auto;
+  bottom: -0.2rem;
+  left: 38%;
+  width: 0.3rem;
+  height: 0.3rem;
+  animation-delay: -3.1s;
+}
+
+.themis-login-orbit-core {
+  position: absolute;
+  top: 8.4rem;
+  right: 20.2rem;
+  width: 0.52rem;
+  height: 0.52rem;
+  border: 1px solid rgb(224 231 255 / 0.56);
+  border-radius: 9999px;
+  background: radial-gradient(circle at 34% 30%, #ffffff 0 9%, #c7d2fe 24%, #818cf8 58%, #4338ca 100%);
+  box-shadow:
+    0 0 0 8px rgb(99 102 241 / 0.045),
+    0 0 38px 9px rgb(99 102 241 / 0.22);
+  animation: themis-login-core-pulse 4.8s ease-in-out infinite;
+}
+
+.themis-login-mobile-ring {
+  position: absolute;
+  display: block;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 9999px;
+  will-change: transform;
+}
+
+.themis-login-mobile-ring-one {
+  top: -8rem;
+  right: -5rem;
+  width: 22rem;
+  height: 22rem;
+  animation: themis-login-orbit-spin 34s linear infinite;
+}
+
+.themis-login-mobile-ring-two {
+  top: -2rem;
+  right: -2rem;
+  width: 15rem;
+  height: 10rem;
+  animation: themis-login-orbit-spin-reverse 24s linear infinite;
+}
+
+@keyframes themis-login-orbit-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes themis-login-orbit-spin-reverse {
+  from {
+    transform: rotate(360deg);
+  }
+
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes themis-login-orbit-stage {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  100% {
+    transform: translate3d(-1.2rem, 1rem, 0) scale(1.025);
+  }
+}
+
+@keyframes themis-login-core-pulse {
+  0%,
+  100% {
+    opacity: 0.42;
+    transform: scale(0.8);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+}
+
+@keyframes themis-login-node-glow {
+  0%,
+  100% {
+    filter: brightness(0.9);
+    box-shadow:
+      0 0 0 4px rgb(99 102 241 / 0.04),
+      0 0 13px rgb(129 140 248 / 0.38);
+  }
+
+  50% {
+    filter: brightness(1.14);
+    box-shadow:
+      0 0 0 6px rgb(99 102 241 / 0.065),
+      0 0 22px rgb(129 140 248 / 0.6);
+  }
+}
+
+@keyframes themis-login-glow-one {
+  0% {
+    opacity: 0.68;
+    transform: translate3d(0, 0, 0) scale(0.94);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate3d(4.5rem, -2rem, 0) scale(1.08);
+  }
+}
+
+@keyframes themis-login-glow-two {
+  0% {
+    opacity: 0.62;
+    transform: translate3d(0, 0, 0) scale(0.94);
+  }
+
+  100% {
+    opacity: 0.96;
+    transform: translate3d(3rem, -3rem, 0) scale(1.12);
+  }
+}
+
+@keyframes themis-login-glow-three {
+  0% {
+    opacity: 0.62;
+    transform: translate3d(0, 0, 0) scale(0.96);
+  }
+
+  100% {
+    opacity: 0.95;
+    transform: translate3d(-3rem, 2.5rem, 0) scale(1.08);
+  }
+}
+
+@keyframes themis-login-stars {
+  from {
+    background-position: 0 0;
+    opacity: 0.17;
+  }
+
+  50% {
+    opacity: 0.24;
+  }
+
+  to {
+    background-position: 56px 28px;
+    opacity: 0.17;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .themis-login-glow,
+  .themis-login-mobile-ring,
+  .themis-login-orbit-node,
+  .themis-login-orbit,
+  .themis-login-orbit-core,
+  .themis-login-orbits,
+  .themis-login-stars {
+    animation: none;
+  }
+}
