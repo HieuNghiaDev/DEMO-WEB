@@ -589,13 +589,11 @@ function EmployeeAvatar({
 
   return (
     <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-sm font-bold text-indigo-600 ring-1 ring-indigo-100 transition-transform group-hover:scale-105 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-500/20">
-      {employee.avatar_path ? (
-        <img src={employee.avatar_path} alt={employee.full_name} className="h-full w-full rounded-xl object-cover" />
-      ) : (
-        initial
-      )}
+      {initial}
 
-      <span className={`absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-white dark:border-slate-900 ${status.dot}`} />
+      <span
+        className={`absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-white dark:border-slate-900 ${status.dot}`}
+      />
     </div>
   )
 }
