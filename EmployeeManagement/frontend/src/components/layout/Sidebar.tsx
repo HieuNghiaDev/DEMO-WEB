@@ -13,45 +13,18 @@ import {
   Sun,
   X,
 } from 'lucide-react'
-import {
-  NavLink,
-  useNavigate,
-} from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 
 import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
 
 const menuItems = [
-  {
-    path: '/',
-    name: '社員ルーム',
-    icon: Home,
-  },
-  {
-    path: '/organization',
-    name: '組織設計',
-    icon: Grid,
-  },
-  {
-    path: '/quests',
-    name: '業務クエスト',
-    icon: SquareCode,
-  },
-  {
-    path: '/manual',
-    name: 'マニュアル工房',
-    icon: FileText,
-  },
-  {
-    path: '/ai',
-    name: 'AI社員',
-    icon: Sparkles,
-  },
-  {
-    path: '/approvals',
-    name: '承認室',
-    icon: Check,
-  },
+  { path: '/', name: '社員ルーム', icon: Home },
+  { path: '/organization', name: '組織設計', icon: Grid },
+  { path: '/quests', name: '業務クエスト', icon: SquareCode },
+  { path: '/manual', name: 'マニュアル工房', icon: FileText },
+  { path: '/ai', name: 'AI社員', icon: Sparkles },
+  { path: '/approvals', name: '承認室', icon: Check },
 ]
 
 export default function Sidebar() {
@@ -60,8 +33,7 @@ export default function Sidebar() {
   const { isDark, toggleTheme } = useTheme()
 
   const [isOpen, setIsOpen] = useState(false)
-  const [isLoggingOut, setIsLoggingOut] =
-    useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const employeeName =
     user?.employee?.full_name ||
@@ -70,66 +42,45 @@ export default function Sidebar() {
     '社員'
 
   useEffect(() => {
-    if (!isOpen) {
-      return
-    }
+    if (!isOpen) return
 
-    const previousOverflow =
-      document.body.style.overflow
-
+    const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
 
-    const handleEscape = (
-      event: KeyboardEvent,
-    ) => {
-      if (event.key === 'Escape') {
-        setIsOpen(false)
-      }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false)
     }
 
-    window.addEventListener(
-      'keydown',
-      handleEscape,
-    )
+    window.addEventListener('keydown', handleEscape)
 
     return () => {
-      document.body.style.overflow =
-        previousOverflow
-
-      window.removeEventListener(
-        'keydown',
-        handleEscape,
-      )
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleEscape)
     }
   }, [isOpen])
 
   const handleLogout = async () => {
-    if (isLoggingOut) {
-      return
-    }
+    if (isLoggingOut) return
 
     try {
       setIsLoggingOut(true)
       await logout()
     } catch {
-      // AuthContext vẫn xóa trạng thái đăng nhập.
+      // AuthContext vẫn xóa trạng thái đăng nhập
     } finally {
       setIsLoggingOut(false)
       setIsOpen(false)
-
-      navigate('/login', {
-        replace: true,
-      })
+      navigate('/login', { replace: true })
     }
   }
 
   return (
     <>
-      {/* Nút mở Sidebar trên điện thoại */}
+      {/* Mobile menu button */}
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="fixed left-4 top-4 z-40 flex h-11 w-11 items-center justify-center rounded-xl bg-[#0d1020] text-white shadow-lg transition hover:bg-[#171b34] md:hidden"
+        className="fixed left-4 top-4 z-40 flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-lg transition hover:bg-slate-50 dark:border-white/10 dark:bg-[#0d1020] dark:text-white dark:hover:bg-[#171b34] md:hidden"
         aria-label="メニューを開く"
         aria-expanded={isOpen}
         aria-controls="main-sidebar"
@@ -137,11 +88,11 @@ export default function Sidebar() {
         <Menu size={22} />
       </button>
 
-      {/* Lớp nền tối trên điện thoại */}
+      {/* Mobile overlay */}
       {isOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-sm md:hidden"
           onClick={() => setIsOpen(false)}
           aria-label="メニューを閉じる"
         />
@@ -149,10 +100,8 @@ export default function Sidebar() {
 
       <aside
         id="main-sidebar"
-        className={`fixed inset-y-0 left-0 z-50 flex h-dvh w-72 max-w-[88vw] shrink-0 flex-col bg-[#0d1020] p-3 shadow-2xl transition-transform duration-300 ease-out md:sticky md:top-0 md:h-screen md:max-w-none md:translate-x-0 md:shadow-none ${
-          isOpen
-            ? 'translate-x-0'
-            : '-translate-x-full'
+        className={`fixed inset-y-0 left-0 z-50 flex h-dvh w-72 max-w-[88vw] shrink-0 flex-col border-r border-slate-200 bg-white p-3 text-slate-700 shadow-2xl transition-all duration-300 ease-out dark:border-white/[0.06] dark:bg-[#0d1020] dark:text-white md:sticky md:top-0 md:h-screen md:max-w-none md:translate-x-0 md:shadow-none ${
+          isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         aria-label="メインメニュー"
       >
@@ -163,20 +112,19 @@ export default function Sidebar() {
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate font-bold tracking-wide text-white">
+            <span className="truncate font-bold tracking-wide text-slate-900 dark:text-white">
               THEMIS HQ
             </span>
 
-            <span className="truncate text-xs text-gray-400">
+            <span className="truncate text-xs text-slate-400 dark:text-gray-400">
               合同AI事務所
             </span>
           </div>
 
-          {/* Nút đóng trên điện thoại */}
           <button
             type="button"
             onClick={() => setIsOpen(false)}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-400 transition hover:bg-white/10 hover:text-white md:hidden"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white md:hidden"
             aria-label="メニューを閉じる"
           >
             <X size={20} />
@@ -185,57 +133,58 @@ export default function Sidebar() {
 
         {/* Workspace + theme */}
         <div className="mb-6 flex items-center gap-2">
-          <div className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-xl border border-gray-800 bg-[#161b30]/60 px-2.5 text-[10px] text-gray-300">
+          <div className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-[10px] text-slate-600 dark:border-gray-800 dark:bg-[#161b30]/60 dark:text-gray-300">
             <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-emerald-400" />
-
-            <span className="truncate font-medium">
-              合同ワークスペース
-            </span>
+            <span className="truncate font-medium">合同ワークスペース</span>
           </div>
 
+          {/* Theme switch */}
           <button
             type="button"
             onClick={toggleTheme}
             className={`theme-mode-pill group relative block h-9 w-28 shrink-0 overflow-hidden rounded-full border transition duration-300 hover:-translate-y-px hover:scale-[1.02] active:translate-y-0 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${
               isDark
                 ? 'border-[#151923] bg-gradient-to-b from-[#424754] via-[#333844] to-[#242934] shadow-[inset_0_3px_3px_rgba(255,255,255,0.09),inset_0_-3px_5px_rgba(2,6,23,0.28),0_2px_0_rgba(255,255,255,0.08),0_7px_16px_rgba(2,6,23,0.3)] hover:border-indigo-300/30'
-                : 'theme-mode-pill-light border-slate-400/60 bg-gradient-to-b from-white via-[#f0f2f5] to-[#d8dce1] shadow-[inset_0_3px_4px_rgba(255,255,255,1),inset_0_-3px_5px_rgba(100,116,139,0.16),0_2px_0_rgba(255,255,255,0.55),0_7px_16px_rgba(2,6,23,0.19)] hover:border-white'
+                : 'border-slate-300 bg-gradient-to-b from-white via-slate-100 to-slate-200 shadow-[inset_0_2px_3px_rgba(255,255,255,1),0_4px_10px_rgba(15,23,42,0.12)] hover:border-indigo-300'
             }`}
             aria-label={isDark ? 'ライトモードに切り替える' : 'ダークモードに切り替える'}
             title={isDark ? 'ライトモード' : 'ダークモード'}
           >
             <span
-              className={`theme-mode-label pointer-events-none absolute top-1/2 -translate-y-1/2 text-left text-[8px] font-black leading-[0.6rem] tracking-[0.04em] transition-all ${
-                isDark
-                  ? 'left-[2.8rem] text-slate-200'
-                  : 'left-2.5 text-slate-600'
+              className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-left text-[8px] font-black leading-[0.6rem] tracking-[0.04em] transition-all ${
+                isDark ? 'left-[2.8rem] text-slate-200' : 'left-2.5 text-slate-600'
               }`}
             >
               {isDark ? (
                 <>
-                  DARK<br />MODE
+                  DARK
+                  <br />
+                  MODE
                 </>
               ) : (
                 <>
-                  LIGHT<br />MODE
+                  LIGHT
+                  <br />
+                  MODE
                 </>
               )}
             </span>
 
             <span className="pointer-events-none absolute inset-[2px] rounded-full border-t border-white/25 opacity-70" />
-            <span className="theme-mode-pill-flash pointer-events-none absolute inset-0 rounded-full" />
 
             <span
-              className="theme-mode-pill-knob absolute top-0.5 flex h-8 w-8 items-center justify-center rounded-full border-2 border-slate-300/90 bg-gradient-to-br from-white via-slate-100 to-slate-300 text-slate-400 shadow-[inset_0_3px_4px_rgba(255,255,255,1),inset_0_-3px_5px_rgba(100,116,139,0.2),0_3px_4px_rgba(2,6,23,0.24),0_5px_9px_rgba(2,6,23,0.28)] transition-all group-hover:shadow-[inset_0_3px_4px_rgba(255,255,255,1),inset_0_-3px_5px_rgba(100,116,139,0.22),0_4px_5px_rgba(2,6,23,0.26),0_7px_12px_rgba(2,6,23,0.34)]"
+              className={`absolute top-0.5 flex h-8 w-8 items-center justify-center rounded-full border-2 bg-gradient-to-br from-white via-slate-100 to-slate-300 shadow-md transition-all duration-300 ${
+                isDark
+                  ? 'left-0.5 border-slate-400 text-slate-500'
+                  : 'left-[4.75rem] border-amber-200 text-amber-500'
+              }`}
               aria-hidden="true"
             >
-              <span className="theme-mode-icon relative z-10 flex items-center justify-center">
-                {isDark ? (
-                  <Moon size={18} strokeWidth={1.7} />
-                ) : (
-                  <Sun size={18} strokeWidth={1.7} />
-                )}
-              </span>
+              {isDark ? (
+                <Moon size={18} strokeWidth={1.7} />
+              ) : (
+                <Sun size={18} strokeWidth={1.7} />
+              )}
             </span>
           </button>
         </div>
@@ -250,14 +199,12 @@ export default function Sidebar() {
                 key={item.path}
                 to={item.path}
                 end={item.path === '/'}
-                onClick={() =>
-                  setIsOpen(false)
-                }
+                onClick={() => setIsOpen(false)}
                 className={({ isActive }) =>
                   `flex w-full items-center gap-3.5 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
                     isActive
                       ? 'bg-[#635BFF] text-white shadow-lg shadow-indigo-500/20'
-                      : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-gray-300 dark:hover:bg-white/5 dark:hover:text-white'
                   }`
                 }
               >
@@ -268,13 +215,11 @@ export default function Sidebar() {
                       className={
                         isActive
                           ? 'shrink-0 text-white'
-                          : 'shrink-0 text-gray-400'
+                          : 'shrink-0 text-slate-400 dark:text-gray-400'
                       }
                     />
 
-                    <span className="truncate">
-                      {item.name}
-                    </span>
+                    <span className="truncate">{item.name}</span>
                   </>
                 )}
               </NavLink>
@@ -282,45 +227,38 @@ export default function Sidebar() {
           })}
         </nav>
 
-        {/* Người đang đăng nhập */}
-        <div className="mt-4 border-t border-white/10 pt-4">
-          <div className="mb-3 flex items-center gap-3 rounded-xl bg-white/5 px-3 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-500/20 text-sm font-bold text-indigo-300">
-              {employeeName
-                .charAt(0)
-                .toUpperCase()}
+        {/* Logged user */}
+        <div className="mt-4 border-t border-slate-200 pt-4 dark:border-white/10">
+          <div className="mb-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-white/[0.05] dark:bg-white/5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-sm font-bold text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300">
+              {employeeName.charAt(0).toUpperCase()}
             </div>
 
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-bold text-white">
+              <p className="truncate text-xs font-bold text-slate-900 dark:text-white">
                 {employeeName}
               </p>
 
-              <p className="mt-0.5 truncate text-[10px] text-gray-500">
+              <p className="mt-0.5 truncate text-[10px] text-slate-400 dark:text-gray-500">
                 {user?.login_id}
               </p>
             </div>
           </div>
 
-          {/* Đăng xuất */}
+          {/* Logout */}
           <button
             type="button"
             onClick={handleLogout}
             disabled={isLoggingOut}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-300 transition hover:bg-red-500/20 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-600 transition hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20 dark:hover:text-red-200"
           >
             {isLoggingOut ? (
-              <LoaderCircle
-                size={18}
-                className="animate-spin"
-              />
+              <LoaderCircle size={18} className="animate-spin" />
             ) : (
               <LogOut size={18} />
             )}
 
-            {isLoggingOut
-              ? 'ログアウト中...'
-              : 'ログアウト'}
+            {isLoggingOut ? 'ログアウト中...' : 'ログアウト'}
           </button>
         </div>
       </aside>
