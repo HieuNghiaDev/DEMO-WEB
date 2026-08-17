@@ -48,10 +48,10 @@ class Attendance extends Model
         return $this->hasMany(WorkSession::class);
     }
 
-    public function activeWorkSession(): HasOne
+    public function activeWorkSession()
     {
         return $this->hasOne(WorkSession::class)
-            ->where('status', 'active')
+            ->where('work_sessions.status', 'active')
             ->latestOfMany();
     }
 }
