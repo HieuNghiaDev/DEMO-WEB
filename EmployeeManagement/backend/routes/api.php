@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\WorkSessionController;
 use App\Http\Controllers\Api\OrganizationController;
+use App\Http\Controllers\Api\EmployeeTaskController;
 use Illuminate\Support\Facades\Route;
 
 // Authentication: không nằm trong prefix attendances
@@ -65,6 +66,28 @@ Route::middleware([
         Route::patch('/{workSession}/complete', [
             WorkSessionController::class,
             'complete',
-        ]);
+        ])->missing(fn () => response()->json([
+            'message' => '対象の作業はすでに削除されたか、完了しています。',
+        ], 404));
     });
+
+    Route::post(
+        '/employees/{employee}/tasks',
+        [EmployeeTaskController::class, 'store']
+    );
+
+    Route::get(
+        '/my/tasks',
+        [EmployeeTaskController::class, 'myTasks']
+    );
+
+    Route::patch(
+        '/tasks/{task}/accept',
+        [EmployeeTaskController::class, 'accept']
+    );
+
+    Route::patch(
+        '/tasks/{task}/status',
+        [EmployeeTaskController::class, 'updateStatus']
+    );
 });

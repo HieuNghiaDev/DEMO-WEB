@@ -13,8 +13,11 @@ import {
   UserRound,
   Users,
   X,
+  ListTodo,
+  Play,
 } from 'lucide-react'
 import api from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 
 type WorkStatus = 'working' | 'break' | 'outside' | 'offline'
 
@@ -35,6 +38,7 @@ type AttendanceInfo = {
 
 type OrganizationEmployee = {
   id: number
+  employee_code: string
   full_name: string
   full_name_kana: string | null
   position_title: string | null
@@ -124,7 +128,14 @@ function maskEmail(email: string) {
   return `${name[0]}${'*'.repeat(Math.max(name.length - 1, 5))}@${domain}`
 }
 
+type AssignDuration = 30 | 60 | 120
+
+function formatTaskDuration(minutes: AssignDuration) {
+  return minutes < 60 ? `${minutes}分` : `${minutes / 60}時間`
+}
+
 export default function OrganizationDesign() {
+  const { user } = useAuth()
   const [employees, setEmployees] = useState<OrganizationEmployee[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -167,7 +178,7 @@ export default function OrganizationDesign() {
     }, 30_000)
 
     return () => window.clearInterval(intervalId)
-  }, [])
+  }, [loadOrganization])
 
   const offices = useMemo(() => {
     const map = new Map<number, NonNullable<OrganizationEmployee['office']>>()
@@ -396,6 +407,7 @@ export default function OrganizationDesign() {
       {selectedEmployee && (
         <EmployeeDetailModal
           employee={selectedEmployee}
+          canAssignTasks={user?.role === 'manager' || user?.role === 'admin'}
           onClose={() => setSelectedEmployee(null)}
         />
       )}
@@ -609,16 +621,21 @@ function EmptyState() {
 
 function EmployeeDetailModal({
   employee,
+  canAssignTasks,
   onClose,
 }: {
   employee: OrganizationEmployee
+  canAssignTasks: boolean
   onClose: () => void
 }) {
   const [showEmail, setShowEmail] = useState(false)
+  const [showAssignTask, setShowAssignTask] = useState(false)
+  const [assignmentMessage, setAssignmentMessage] = useState('')
   const status = statusConfig[employee.work_status]
   const initial = employee.full_name.trim().charAt(0).toUpperCase() || '?'
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onMouseDown={onClose}
@@ -664,6 +681,32 @@ function EmployeeDetailModal({
               {status.label}
             </span>
           </div>
+
+          {assignmentMessage && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+              {assignmentMessage}
+            </div>
+          )}
+
+          {canAssignTasks && (
+            <button
+              type="button"
+              onClick={() => {
+                setAssignmentMessage('')
+                setShowAssignTask(true)
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-500 active:scale-[0.99]"
+            >
+              <BriefcaseBusiness size={17} />
+              業務を依頼
+            </button>
+          )}
+
+          {canAssignTasks && (
+            <p className="-mt-3 text-center text-[11px] text-slate-400 dark:text-slate-500">
+              この社員にのみ業務を割り当てます。
+            </p>
+          )}
 
           <DetailSection title="基本情報">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -745,6 +788,194 @@ function EmployeeDetailModal({
             </DetailSection>
           )}
 
+        </div>
+      </div>
+    </div>
+
+    {showAssignTask && (
+      <AssignTaskModal
+        employee={employee}
+        onClose={() => setShowAssignTask(false)}
+        onAssigned={() => {
+          setShowAssignTask(false)
+          setAssignmentMessage('業務を依頼しました。')
+        }}
+      />
+    )}
+    </>
+  )
+}
+
+function AssignTaskModal({
+  employee,
+  onClose,
+  onAssigned,
+}: {
+  employee: OrganizationEmployee
+  onClose: () => void
+  onAssigned: () => void
+}) {
+  const [title, setTitle] = useState('')
+  const [duration, setDuration] = useState<AssignDuration>(60)
+  const [submitting, setSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+
+  const handleSubmit = async () => {
+    if (!title.trim() || submitting) return
+
+    try {
+      setSubmitting(true)
+      setErrorMessage('')
+
+      await api.post(`/employees/${employee.id}/tasks`, {
+        title: title.trim(),
+        description: null,
+        duration_minutes: duration,
+      })
+
+      onAssigned()
+    } catch (error) {
+      setErrorMessage(
+        axios.isAxiosError(error)
+          ? error.response?.data?.message ?? '業務の依頼に失敗しました。'
+          : 'サーバーとの通信に失敗しました。',
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+      onMouseDown={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(event) => event.stopPropagation()}
+        className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-900 sm:p-6"
+      >
+        {/* Icon */}
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
+          <BriefcaseBusiness size={25} />
+        </div>
+
+        {/* Title */}
+        <div className="text-center">
+          <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+            業務を依頼
+          </h3>
+
+          <p className="mt-2 text-sm leading-relaxed text-gray-500 dark:text-slate-400">
+            <span className="font-bold text-indigo-600 dark:text-indigo-400">
+              {employee.full_name}
+            </span>
+            さん（{employee.employee_code}）専用の業務を登録します。
+          </p>
+
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1.5 text-[11px] font-bold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
+            <UserRound size={13} />
+            送信先：{employee.full_name}
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-4 text-left">
+
+          {/* Task */}
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-bold text-gray-600 dark:text-slate-300">
+              作業内容
+            </span>
+
+            <span className="relative block">
+              <ListTodo
+                size={17}
+                className="pointer-events-none absolute left-3 top-3 text-indigo-500"
+              />
+
+              <input
+                type="text"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                maxLength={255}
+                autoFocus
+                placeholder="例：契約書の確認"
+                className="h-11 w-full rounded-xl border border-indigo-200 bg-white pl-10 pr-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500 dark:focus:ring-indigo-500/10"
+              />
+            </span>
+          </label>
+
+          <div>
+            <span className="mb-1.5 block text-xs font-bold text-gray-600 dark:text-slate-300">
+              作業時間
+            </span>
+            <span className="mb-3 block text-[11px] text-slate-400 dark:text-slate-500">
+              社員が業務を確認した時点から、タイマーが開始されます。
+            </span>
+            <div className="grid grid-cols-3 gap-2">
+              {([30, 60, 120] as const).map((minutes) => (
+                <button
+                  key={minutes}
+                  type="button"
+                  onClick={() => setDuration(minutes)}
+                  className={`rounded-xl border px-2 py-3 text-sm font-bold transition ${
+                    duration === minutes
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-600 ring-2 ring-indigo-100 dark:bg-indigo-500/10 dark:ring-indigo-500/20'
+                      : 'border-gray-200 text-gray-500 hover:border-indigo-200 hover:bg-indigo-50/50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {formatTaskDuration(minutes)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 px-4 py-3.5 dark:border-indigo-500/20 dark:from-indigo-500/[0.12] dark:to-violet-500/[0.08]">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm dark:bg-slate-800 dark:text-indigo-300">
+                <Clock3 size={17} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold tracking-wider text-indigo-500 dark:text-indigo-300">TASK DURATION</div>
+                <p className="mt-1 text-sm font-bold leading-relaxed text-slate-700 dark:text-slate-100">
+                  作業時間は <span className="text-indigo-600 dark:text-indigo-300">{formatTaskDuration(duration)}</span> です。社員が確認するとタイマーが始まります。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Error */}
+          {errorMessage && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+              {errorMessage}
+            </div>
+          )}
+        </div>
+
+        {/* Buttons */}
+        <div className="mt-6 flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            キャンセル
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void handleSubmit()}
+            disabled={submitting || !title.trim()}
+            className="flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-indigo-600 px-3 py-3 text-sm font-bold text-white shadow-md shadow-indigo-500/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none dark:disabled:bg-slate-700"
+          >
+            <Play size={16} />
+
+            {submitting
+              ? '依頼中...'
+              : '業務を依頼'}
+          </button>
         </div>
       </div>
     </div>

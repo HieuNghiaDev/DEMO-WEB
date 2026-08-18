@@ -19,5 +19,9 @@ class DatabaseSeeder extends Seeder
             EmployeeUserSeeder::class,
             AdditionalEmployeeUserSeeder::class,
         ]);
+
+        if (app()->environment('local')) {
+            $this->call(ManagerTestUserSeeder::class);
+        }
     }
 }

@@ -88,6 +88,35 @@ type WorkSessionResponse = {
   work_session: WorkSession;
 };
 
+type AssignedTaskStatus =
+  | "pending"
+  | "accepted"
+  | "in_progress"
+  | "completed"
+  | "rejected";
+
+type AssignedTask = {
+  id: number;
+  employee_id: number;
+  title: string;
+  description: string | null;
+  duration_minutes: number;
+  status: AssignedTaskStatus;
+  due_at: string | null;
+  accepted_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+};
+
+type AssignedTasksResponse = {
+  tasks: AssignedTask[];
+};
+
+type AssignedTaskResponse = {
+  message: string;
+  task: AssignedTask;
+};
+
 type NotificationKind = "success" | "info" | "warning" | "error";
 
 type UserNotification = {
@@ -185,6 +214,41 @@ const formatExpectedTime = (value: string) =>
     hour12: false,
     timeZone: "Asia/Tokyo",
   }).format(new Date(value));
+
+const formatAssignedTaskDeadline = (value: string | null) => {
+  if (!value) return "期限なし";
+
+  return new Intl.DateTimeFormat("ja-JP", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Tokyo",
+  }).format(new Date(value));
+};
+
+const formatAssignedTaskDuration = (minutes: number) =>
+  minutes < 60 ? `${minutes}分` : `${minutes / 60}時間`;
+
+const getAssignedTaskCountdown = (task: AssignedTask, now: number) => {
+  if (!task.accepted_at) return null;
+
+  const endsAt = new Date(task.accepted_at).getTime() + task.duration_minutes * 60_000;
+  const difference = endsAt - now;
+  const absoluteSeconds = Math.floor(Math.abs(difference) / 1_000);
+  const hours = Math.floor(absoluteSeconds / 3_600);
+  const minutes = Math.floor((absoluteSeconds % 3_600) / 60);
+  const seconds = absoluteSeconds % 60;
+  const formatted = [hours, minutes, seconds]
+    .map((value) => String(value).padStart(2, "0"))
+    .join(":");
+
+  return {
+    isOvertime: difference < 0,
+    formatted,
+  };
+};
 
 const getDownloadFilename = (contentDisposition?: string) => {
   const encodedMatch = contentDisposition?.match(/filename\*=UTF-8''([^;]+)/i);
@@ -438,6 +502,12 @@ export default function EmployeeRoom() {
     useState(false);
   const [toastNotification, setToastNotification] =
     useState<UserNotification | null>(null);
+  const [assignedTasks, setAssignedTasks] = useState<AssignedTask[]>([]);
+  const [taskClock, setTaskClock] = useState(() => Date.now());
+  const [updatingAssignedTaskId, setUpdatingAssignedTaskId] = useState<
+    number | null
+  >(null);
+  const [assignedTaskError, setAssignedTaskError] = useState("");
 
   const unreadNotificationCount = notifications.filter(
     (notification) => !notification.isRead,
@@ -451,6 +521,9 @@ export default function EmployeeRoom() {
   };
 
   const selectedOfficeInfo = offices[selectedOffice];
+  const pendingAssignedTaskCount = assignedTasks.filter(
+    (task) => task.status === "pending",
+  ).length;
 
   const saveNotifications = useCallback(
     (nextNotifications: UserNotification[]) => {
@@ -541,6 +614,15 @@ export default function EmployeeRoom() {
     }
   }, []);
 
+  const loadAssignedTasks = useCallback(async () => {
+    try {
+      const response = await api.get<AssignedTasksResponse>("/my/tasks");
+      setAssignedTasks(Array.isArray(response.data.tasks) ? response.data.tasks : []);
+    } catch {
+      // Endpoint giao việc có thể chưa được bật ở backend; không làm hỏng EmployeeRoom.
+    }
+  }, []);
+
   useEffect(() => {
     if (!user || !notificationStorageKey) return;
 
@@ -595,6 +677,49 @@ export default function EmployeeRoom() {
       window.clearInterval(intervalId);
     };
   }, [loadActiveAttendances]);
+
+  useEffect(() => {
+    const initialLoadId = window.setTimeout(() => {
+      void loadAssignedTasks();
+    }, 0);
+
+    const intervalId = window.setInterval(() => {
+      void loadAssignedTasks();
+    }, 10000);
+
+    return () => {
+      window.clearTimeout(initialLoadId);
+      window.clearInterval(intervalId);
+    };
+  }, [loadAssignedTasks]);
+
+  useEffect(() => {
+    assignedTasks
+      .filter((task) => task.status === "pending")
+      .forEach((task) => {
+        pushNotification({
+          sourceKey: `assigned-task-${task.id}`,
+          title: "新しい業務が届きました",
+          message: task.title,
+          kind: "info",
+        });
+      });
+  }, [assignedTasks, pushNotification]);
+
+  useEffect(() => {
+    const hasActiveTimer = assignedTasks.some(
+      (task) =>
+        (task.status === "accepted" || task.status === "in_progress") &&
+        task.accepted_at,
+    );
+
+    if (!hasActiveTimer) return;
+
+    setTaskClock(Date.now());
+    const intervalId = window.setInterval(() => setTaskClock(Date.now()), 1_000);
+
+    return () => window.clearInterval(intervalId);
+  }, [assignedTasks]);
 
   // Khôi phục trạng thái chấm công của người đang đăng nhập sau khi tải lại trang.
   useEffect(() => {
@@ -669,6 +794,86 @@ export default function EmployeeRoom() {
 
     return () => window.clearInterval(intervalId);
   }, [activeAttendances, employeeName, pushNotification]);
+
+  const handleAcceptAssignedTask = async (task: AssignedTask) => {
+    if (task.status !== "pending" || updatingAssignedTaskId !== null) return;
+
+    try {
+      setUpdatingAssignedTaskId(task.id);
+      setAssignedTaskError("");
+
+      const response = await api.patch<AssignedTaskResponse>(
+        `/tasks/${task.id}/accept`,
+      );
+      const acceptedTask = response.data.task;
+
+      setAssignedTasks((current) =>
+        current.map((item) =>
+          item.id === acceptedTask.id ? acceptedTask : item,
+        ),
+      );
+
+      pushNotification({
+        sourceKey: `assigned-task-accepted-${acceptedTask.id}`,
+        title: "業務を確認しました",
+        message: `${acceptedTask.title}を受け付けました。`,
+        kind: "success",
+      });
+    } catch (error) {
+      setAssignedTaskError(
+        axios.isAxiosError(error)
+          ? error.response?.data?.message ?? "業務の確認に失敗しました。"
+          : "サーバーとの通信に失敗しました。",
+      );
+    } finally {
+      setUpdatingAssignedTaskId(null);
+    }
+  };
+
+  const handleAssignedTaskStatusChange = async (
+    task: AssignedTask,
+    status: "in_progress" | "completed",
+  ) => {
+    if (updatingAssignedTaskId !== null) return;
+
+    try {
+      setUpdatingAssignedTaskId(task.id);
+      setAssignedTaskError("");
+
+      const response = await api.patch<AssignedTaskResponse>(
+        `/tasks/${task.id}/status`,
+        { status },
+      );
+      const updatedTask = response.data.task;
+
+      setAssignedTasks((current) =>
+        status === "completed"
+          ? current.filter((item) => item.id !== updatedTask.id)
+          : current.map((item) =>
+              item.id === updatedTask.id ? updatedTask : item,
+            ),
+      );
+
+      pushNotification({
+        sourceKey: `assigned-task-${status}-${updatedTask.id}`,
+        title: status === "completed" ? "業務を完了しました" : "業務を開始しました",
+        message:
+          status === "completed"
+            ? `${updatedTask.title}を完了として記録しました。`
+            : `${updatedTask.title}に取り組み始めました。`,
+        kind: "success",
+      });
+    } catch (error) {
+      setAssignedTaskError(
+        axios.isAxiosError(error)
+          ? error.response?.data?.message ?? "業務の更新に失敗しました。"
+          : "サーバーとの通信に失敗しました。",
+      );
+      void loadAssignedTasks();
+    } finally {
+      setUpdatingAssignedTaskId(null);
+    }
+  };
 
   const openTaskModal = (mode: TaskModalMode) => {
     const startTime = getJapanTimeInput();
@@ -1766,29 +1971,155 @@ export default function EmployeeRoom() {
             </button>
           </div>
 
-          {/* Main Quest Status */}
-          <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <div className="absolute left-0 right-0 top-0 h-1 bg-amber-400" />
+          {/* Assigned tasks */}
+          <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+            <div className={`absolute left-0 right-0 top-0 h-1 ${assignedTasks.length ? "bg-indigo-500" : "bg-slate-300 dark:bg-slate-700"}`} />
 
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
-                MAIN QUEST
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
+                  MY TASKS
+                </span>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  割り当てられた業務を確認・進行できます
+                </p>
+              </div>
+              <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
+                {assignedTasks.length}件
               </span>
-
-              <span className="text-xs font-bold text-amber-500">35%</span>
             </div>
 
-            <h4 className="mb-1 text-sm font-bold text-gray-800">
-              最初の業務を仕組みにする
-            </h4>
+            {pendingAssignedTaskCount > 0 && (
+              <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                確認待ちの業務が{pendingAssignedTaskCount}件あります
+              </div>
+            )}
 
-            <p className="mb-4 text-xs leading-relaxed text-gray-400">
-              新規相談受付の流れを記録し、マニュアル第1版を完成させます。
-            </p>
+            {assignedTaskError && (
+              <div className="mb-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-semibold text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                {assignedTaskError}
+              </div>
+            )}
 
-            <button className="flex items-center gap-1 text-xs font-bold text-amber-500 hover:underline">
-              クエストを見る →
-            </button>
+            {assignedTasks.length > 0 ? (
+              <div className="space-y-3">
+                {assignedTasks.map((task) => {
+                  const isUpdating = updatingAssignedTaskId === task.id;
+                  const countdown = getAssignedTaskCountdown(task, taskClock);
+                  const status = task.status === "pending"
+                    ? { label: "未確認", className: "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300" }
+                    : task.status === "accepted"
+                      ? { label: "受付済み", className: "bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300" }
+                      : { label: "進行中", className: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300" };
+
+                  return (
+                    <article
+                      key={task.id}
+                      className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-indigo-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-indigo-500/40"
+                    >
+                      <div className={`absolute inset-x-0 top-0 h-1 ${
+                        task.status === "pending"
+                          ? "bg-amber-400"
+                          : task.status === "accepted"
+                            ? "bg-sky-500"
+                            : "bg-emerald-500"
+                      }`} />
+
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="mb-1.5 flex items-center gap-1.5 text-[9px] font-bold tracking-[0.12em] text-slate-400 dark:text-slate-500">
+                            <ListTodo size={12} />
+                            ASSIGNED TASK
+                          </div>
+                          <h4 className="text-sm font-bold leading-snug text-gray-800 dark:text-white">
+                            {task.title}
+                          </h4>
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-bold ${status.className}`}>
+                          {status.label}
+                        </span>
+                      </div>
+
+                      <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-gray-500 dark:text-slate-400">
+                        {task.description || "業務内容を確認し、期限までに完了してください。"}
+                      </p>
+
+                      <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/70 px-3 py-2.5 dark:border-indigo-500/15 dark:bg-indigo-500/[0.08]">
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-indigo-500 dark:text-indigo-300">
+                          <Clock3 size={13} />
+                          {countdown ? "作業タイマー" : "予定作業時間"}
+                        </div>
+                        {countdown ? (
+                          <div className="mt-1 flex items-end justify-between gap-2">
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                              {countdown.isOvertime ? "予定時間を超過" : "残り時間"}
+                            </span>
+                            <span className={`font-mono text-lg font-black tracking-wider ${
+                              countdown.isOvertime
+                                ? "text-rose-600 dark:text-rose-300"
+                                : "text-indigo-700 dark:text-indigo-200"
+                            }`}>
+                              {countdown.isOvertime ? "+" : ""}{countdown.formatted}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="mt-1 flex items-end justify-between gap-2">
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400">業務を確認後に開始</span>
+                            <span className="text-sm font-bold text-indigo-700 dark:text-indigo-200">
+                              {formatAssignedTaskDuration(task.duration_minutes)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {task.status === "pending" && (
+                        <button
+                          type="button"
+                          disabled={updatingAssignedTaskId !== null}
+                          onClick={() => void handleAcceptAssignedTask(task)}
+                          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <CheckCircle2 size={14} />
+                          {isUpdating ? "確認中..." : "内容を確認する"}
+                        </button>
+                      )}
+
+                      {task.status === "accepted" && (
+                        <button
+                          type="button"
+                          disabled={updatingAssignedTaskId !== null}
+                          onClick={() => void handleAssignedTaskStatusChange(task, "in_progress")}
+                          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-sky-600 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Play size={14} />
+                          {isUpdating ? "開始中..." : "業務を開始する"}
+                        </button>
+                      )}
+
+                      {task.status === "in_progress" && (
+                        <button
+                          type="button"
+                          disabled={updatingAssignedTaskId !== null}
+                          onClick={() => void handleAssignedTaskStatusChange(task, "completed")}
+                          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <CheckCircle2 size={14} />
+                          {isUpdating ? "完了中..." : "完了にする"}
+                        </button>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <>
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
+                  <ListTodo size={20} />
+                </div>
+                <h4 className="mt-3 text-sm font-bold text-gray-800 dark:text-white">現在、割り当てられた業務はありません</h4>
+                <p className="mt-1 text-xs leading-relaxed text-gray-400 dark:text-slate-500">新しい業務が届くと、ここから内容の確認と進捗の更新ができます。</p>
+              </>
+            )}
           </div>
         </div>
       </div>
