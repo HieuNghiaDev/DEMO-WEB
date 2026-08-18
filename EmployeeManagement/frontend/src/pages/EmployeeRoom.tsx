@@ -70,6 +70,8 @@ type Attendance = {
     full_name_kana: string | null;
     gender: string | null;
     avatar_path: string | null;
+    position_title: string | null;
+    employment_type: string | null;
   } | null;
 };
 
@@ -102,7 +104,6 @@ type AssignedTask = {
   description: string | null;
   duration_minutes: number;
   status: AssignedTaskStatus;
-  due_at: string | null;
   accepted_at: string | null;
   completed_at: string | null;
   created_at: string;
@@ -214,19 +215,6 @@ const formatExpectedTime = (value: string) =>
     hour12: false,
     timeZone: "Asia/Tokyo",
   }).format(new Date(value));
-
-const formatAssignedTaskDeadline = (value: string | null) => {
-  if (!value) return "期限なし";
-
-  return new Intl.DateTimeFormat("ja-JP", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Tokyo",
-  }).format(new Date(value));
-};
 
 const formatAssignedTaskDuration = (minutes: number) =>
   minutes < 60 ? `${minutes}分` : `${minutes / 60}時間`;
@@ -381,6 +369,17 @@ const getEmployeeAvatar = (attendance: Attendance) => {
   const avatarPath = attendance.employee?.avatar_path || fallbackAvatar;
 
   return `${BASE_URL}${avatarPath.replace(/^\/+/, "")}`;
+};
+
+const formatEmploymentType = (type?: string | null) => {
+  const labels: Record<string, string> = {
+    full_time: "正社員",
+    part_time: "アルバイト",
+    contract: "契約社員",
+    intern: "インターン",
+  };
+
+  return (type && labels[type]) || "雇用形態未登録";
 };
 
 const getEmployeePosition = (attendance: Attendance) => {
@@ -596,6 +595,16 @@ export default function EmployeeRoom() {
   // Chưa có company_id nên dữ liệu chấm công hiện tại tạm thuộc THEMIS.
   const visibleAttendances =
     selectedOffice === "themis" ? activeAttendances : [];
+  const selectedAttendance = visibleAttendances.find(
+    (attendance) => attendance.id === selectedAttendanceId,
+  );
+  const ownActiveAttendance = activeAttendances.find(
+    (attendance) => attendance.employee?.id === user?.employee?.id,
+  );
+  const profileAttendance = selectedAttendance ?? ownActiveAttendance ?? null;
+  const profileEmployeeName = profileAttendance
+    ? profileAttendance.employee?.full_name?.trim() || profileAttendance.employee_name
+    : "社員を選択してください";
 
   const handleOfficeChange = (officeId: OfficeId) => {
     setSelectedOffice(officeId);
@@ -715,7 +724,6 @@ export default function EmployeeRoom() {
 
     if (!hasActiveTimer) return;
 
-    setTaskClock(Date.now());
     const intervalId = window.setInterval(() => setTaskClock(Date.now()), 1_000);
 
     return () => window.clearInterval(intervalId);
@@ -1547,13 +1555,6 @@ export default function EmployeeRoom() {
               const kanaName = attendance.employee?.full_name_kana?.trim();
               const position = getEmployeePosition(attendance);
               const isSelected = selectedAttendanceId === attendance.id;
-              const outsideReturnTiming =
-                attendance.outside_expected_end && attendance.outside_end
-                  ? getOutsideReturnTiming(
-                      attendance.outside_expected_end,
-                      attendance.outside_end,
-                    )
-                  : null;
 
               return (
                 <button
@@ -1570,105 +1571,8 @@ export default function EmployeeRoom() {
                   }`}
                 >
                   {isSelected && (
-                    <div className="absolute bottom-full left-1/2 mb-2 w-52 -translate-x-1/2 rounded-xl border border-gray-100 bg-white p-2.5 text-left shadow-xl sm:w-56">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <span className="block truncate text-sm font-bold text-gray-800">
-                            {kanaName || vietnameseName}
-                          </span>
-
-                          {kanaName && (
-                            <span className="mt-0.5 block truncate text-[11px] font-medium text-gray-400">
-                              {vietnameseName}
-                            </span>
-                          )}
-                        </div>
-
-                        <span
-                          className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${
-                            attendance.status === "break"
-                              ? "bg-amber-50 text-amber-600"
-                              : attendance.status === "outside"
-                                ? "bg-blue-50 text-blue-600"
-                                : "bg-emerald-50 text-emerald-600"
-                          }`}
-                        >
-                          {statusLabels[attendance.status]}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-gray-400">出勤時刻</span>
-                        <span className="font-semibold text-gray-700">
-                          {formatWorkTime(attendance.clock_in)}
-                        </span>
-                      </div>
-
-                      {attendance.active_work_session && (
-                        <div className="mt-2.5 rounded-xl border border-indigo-100 bg-indigo-50/80 p-2.5">
-                          <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-indigo-500">
-                            <ListTodo size={12} />
-                            CURRENT TASK
-                          </div>
-                          <p className="mt-1.5 break-words text-[11px] font-bold leading-relaxed text-gray-800">
-                            {
-                              attendance.active_work_session
-                                .task_description
-                            }
-                          </p>
-                          <div className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-indigo-600">
-                            <Clock3 size={11} />
-                            {formatWorkTime(
-                              attendance.active_work_session.started_at,
-                            )}
-                            <span className="text-indigo-300">→</span>
-                            {formatWorkTime(
-                              attendance.active_work_session.expected_end_at,
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {attendance.outside_destination && (
-                        <div className="mt-1.5 flex items-start justify-between gap-3 text-[11px]">
-                          <span className="shrink-0 text-gray-400">
-                            外出先・用件
-                          </span>
-                          <span className="break-words text-right font-semibold text-blue-600">
-                            {attendance.outside_destination}
-                          </span>
-                        </div>
-                      )}
-
-                      {attendance.outside_expected_end && (
-                        <div className="mt-1.5 flex items-center justify-between text-[11px]">
-                          <span className="text-gray-400">帰社予定</span>
-                          <span className="font-semibold text-blue-600">
-                            {formatWorkTime(attendance.outside_expected_end)}
-                          </span>
-                        </div>
-                      )}
-
-                      {attendance.outside_end && (
-                        <div className="mt-1.5 flex items-center justify-between text-[11px]">
-                          <span className="text-gray-400">実際の帰社</span>
-                          <span className="font-semibold text-gray-700">
-                            {formatWorkTime(attendance.outside_end)}
-                          </span>
-                        </div>
-                      )}
-
-                      {outsideReturnTiming && (
-                        <div className="mt-2 flex justify-end">
-                          <span
-                            className={`rounded-full px-2 py-1 text-[10px] font-bold ${outsideReturnTiming.className}`}
-                          >
-                            {outsideReturnTiming.label}
-                          </span>
-                        </div>
-                      )}
-
-                      <span className="absolute left-1/2 top-full h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r border-gray-100 bg-white" />
+                    <div className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/20 bg-slate-950/90 px-3 py-1.5 text-xs font-bold text-white shadow-lg backdrop-blur">
+                      {kanaName || vietnameseName}
                     </div>
                   )}
 
@@ -1907,68 +1811,127 @@ export default function EmployeeRoom() {
 
         {/* Right Column */}
         <div className="space-y-6">
-          {/* AI Assistant Profile */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-sm font-bold text-white shadow-sm">
-                AI
+          {/* Selected employee profile */}
+          <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500" />
+
+            {profileAttendance ? (
+              <>
+                <div className="mb-4 flex items-start gap-3">
+                  <div className="relative shrink-0">
+                    <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-indigo-50 ring-1 ring-indigo-100 dark:bg-indigo-500/10 dark:ring-indigo-500/20">
+                      <img
+                        src={getEmployeeAvatar(profileAttendance)}
+                        alt={profileEmployeeName}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <span className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-[3px] border-white dark:border-slate-900 ${
+                      profileAttendance.status === "break"
+                        ? "bg-amber-400"
+                        : profileAttendance.status === "outside"
+                          ? "bg-blue-500"
+                          : "bg-emerald-500"
+                    }`} />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-[10px] font-bold tracking-wider text-indigo-500 dark:text-indigo-400">
+                      EMPLOYEE PROFILE
+                    </span>
+                    <h3 className="mt-1 truncate text-base font-bold text-gray-800 dark:text-white">
+                      {profileEmployeeName}
+                    </h3>
+                    <p className="mt-0.5 truncate text-xs text-gray-400 dark:text-slate-500">
+                      {profileAttendance.employee?.full_name_kana || profileAttendance.employee?.employee_code || "社員情報"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mb-4 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3.5 dark:border-indigo-500/20 dark:bg-indigo-500/[0.08]">
+                  <span className="mb-1 block text-[10px] font-bold tracking-wider text-indigo-500 dark:text-indigo-300">
+                    CURRENT TASK
+                  </span>
+                  <p className="text-xs font-bold leading-relaxed text-gray-800 dark:text-slate-100">
+                    {profileAttendance.active_work_session?.task_description || "現在登録されている作業はありません"}
+                  </p>
+                </div>
+
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-400 dark:text-slate-500">雇用形態</span>
+                    <span className="font-semibold text-gray-700 dark:text-slate-200">
+                      {formatEmploymentType(profileAttendance.employee?.employment_type)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-400 dark:text-slate-500">勤務開始</span>
+                    <span className="font-semibold text-gray-700 dark:text-slate-200">
+                      {formatWorkTime(profileAttendance.clock_in)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-gray-400 dark:text-slate-500">状態</span>
+                    <span className={`flex items-center gap-1.5 font-semibold ${
+                      profileAttendance.status === "break"
+                        ? "text-amber-600 dark:text-amber-300"
+                        : profileAttendance.status === "outside"
+                          ? "text-blue-600 dark:text-blue-300"
+                          : "text-emerald-600 dark:text-emerald-300"
+                    }`}>
+                      <span className="h-2 w-2 rounded-full bg-current" />
+                      {statusLabels[profileAttendance.status]}
+                    </span>
+                  </div>
+                  {profileAttendance.status === "outside" && (
+                    <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-500/20 dark:bg-blue-500/[0.08]">
+                      <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-blue-600 dark:text-blue-300">
+                        <MapPin size={12} />
+                        OUTSIDE DETAILS
+                      </div>
+                      <div className="space-y-2 text-[11px]">
+                        <div className="flex justify-between gap-3">
+                          <span className="text-slate-400 dark:text-slate-500">外出開始</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-200">
+                            {formatWorkTime(profileAttendance.outside_start ?? "")}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <span className="text-slate-400 dark:text-slate-500">帰社予定</span>
+                          <span className="font-semibold text-blue-600 dark:text-blue-300">
+                            {formatWorkTime(profileAttendance.outside_expected_end ?? "")}
+                          </span>
+                        </div>
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="shrink-0 text-slate-400 dark:text-slate-500">外出先・用件</span>
+                          <span className="text-right font-semibold text-blue-600 dark:text-blue-300">
+                            {profileAttendance.outside_destination || "未登録"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {selectedAttendance && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAttendanceId(null)}
+                    className="mt-5 w-full rounded-xl border border-gray-200 py-2.5 text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    自分の情報に戻る
+                  </button>
+                )}
+              </>
+            ) : (
+              <div className="py-6 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
+                  <CircleHelp size={20} />
+                </div>
+                <h3 className="mt-3 text-sm font-bold text-gray-800 dark:text-white">社員を選択してください</h3>
+                <p className="mt-1 text-xs leading-relaxed text-gray-400 dark:text-slate-500">オフィスマップ上の社員をクリックすると、ここに勤務情報が表示されます。</p>
               </div>
-
-              <div>
-                <span className="block text-[10px] font-medium text-gray-400">
-                  AI社員
-                </span>
-
-                <h3 className="text-base font-bold text-gray-800">
-                  業務改善AI
-                </h3>
-
-                <span className="text-xs text-gray-400">
-                  AIサブマネージャー
-                </span>
-              </div>
-            </div>
-
-            {/* Current Work */}
-            <div className="mb-4 rounded-xl border border-indigo-50/80 bg-indigo-50/40 p-3.5">
-              <span className="mb-1 block text-[11px] font-medium text-gray-400">
-                現在の仕事
-              </span>
-
-              <p className="text-xs font-bold leading-relaxed text-gray-800">
-                改善候補と不足マニュアルを分析しています
-              </p>
-            </div>
-
-            {/* Meta Details */}
-            <div className="space-y-2.5 text-xs">
-              <div className="flex justify-between">
-                <span className="text-gray-400">所属</span>
-
-                <span className="font-semibold text-gray-700">共通AI</span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">状態</span>
-
-                <span className="flex items-center gap-1.5 font-semibold text-emerald-600">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  視察中
-                </span>
-              </div>
-
-              <div className="flex justify-between">
-                <span className="text-gray-400">権限</span>
-
-                <span className="font-semibold text-gray-700">
-                  提案・下書き
-                </span>
-              </div>
-            </div>
-
-            <button className="mt-5 w-full rounded-xl border border-gray-200 py-2.5 text-xs font-bold text-gray-700 transition hover:bg-gray-50">
-              プロフィールを開く
-            </button>
+            )}
           </div>
 
           {/* Assigned tasks */}
@@ -2120,6 +2083,24 @@ export default function EmployeeRoom() {
                 <p className="mt-1 text-xs leading-relaxed text-gray-400 dark:text-slate-500">新しい業務が届くと、ここから内容の確認と進捗の更新ができます。</p>
               </>
             )}
+          </div>
+
+          {/* AI assistant */}
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-sm font-bold text-white shadow-sm">
+                AI
+              </div>
+              <div>
+                <span className="block text-[10px] font-medium text-gray-400 dark:text-slate-500">AI社員</span>
+                <h3 className="text-base font-bold text-gray-800 dark:text-white">業務改善AI</h3>
+                <span className="text-xs text-gray-400 dark:text-slate-500">AIサブマネージャー</span>
+              </div>
+            </div>
+            <div className="mt-4 rounded-xl border border-indigo-50 bg-indigo-50/40 p-3.5 dark:border-indigo-500/15 dark:bg-indigo-500/[0.08]">
+              <span className="block text-[10px] font-bold tracking-wider text-indigo-500 dark:text-indigo-300">CURRENT WORK</span>
+              <p className="mt-1 text-xs font-bold leading-relaxed text-gray-800 dark:text-slate-100">改善候補と不足マニュアルを分析しています</p>
+            </div>
           </div>
         </div>
       </div>

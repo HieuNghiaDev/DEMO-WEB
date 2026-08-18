@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\EmployeeTask;
+use App\Models\Attendance;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class EmployeeTaskController extends Controller
@@ -104,7 +106,7 @@ class EmployeeTaskController extends Controller
         Request $request,
         EmployeeTask $task
     ): JsonResponse {
-        $this->authorizeTaskOwner($request, $task);
+        $employee = $this->authorizeTaskOwner($request, $task);
 
         $validated = $request->validate([
             'status' => [
@@ -116,43 +118,113 @@ class EmployeeTaskController extends Controller
         $nextStatus = $validated['status'];
 
         if ($nextStatus === 'in_progress') {
-            abort_unless(
-                in_array($task->status, ['pending', 'accepted'], true),
-                422,
-                'この業務は開始できる状態ではありません。'
-            );
-
-            $task->update([
-                'status' => 'in_progress',
-                'accepted_at' => $task->accepted_at ?? now(),
-            ]);
+            $task = $this->startTaskWorkSession($task, $employee);
         }
 
         if ($nextStatus === 'completed') {
-            abort_unless(
-                $task->status === 'in_progress',
-                422,
-                '開始中の業務のみ完了できます。'
-            );
-
-            $task->update([
-                'status' => 'completed',
-                'completed_at' => now(),
-            ]);
+            $task = $this->completeTaskWorkSession($task);
         }
 
         return response()->json([
             'message' => $nextStatus === 'completed'
                 ? '業務を完了しました。'
                 : '業務を開始しました。',
-            'task' => $task->fresh(),
+            'task' => $task,
         ]);
+    }
+
+    private function startTaskWorkSession(
+        EmployeeTask $task,
+        Employee $employee
+    ): EmployeeTask {
+        return DB::transaction(function () use ($task, $employee) {
+            $task = EmployeeTask::query()
+                ->lockForUpdate()
+                ->findOrFail($task->id);
+
+            abort_unless(
+                $task->status === 'accepted',
+                422,
+                '確認済みの業務のみ開始できます。'
+            );
+
+            $attendance = Attendance::query()
+                ->where('employee_id', $employee->id)
+                ->whereNull('clock_out')
+                ->latest('id')
+                ->lockForUpdate()
+                ->first();
+
+            abort_unless(
+                $attendance !== null,
+                422,
+                '業務を開始する前に勤務を開始してください。'
+            );
+
+            $now = now();
+            $attendance->workSessions()
+                ->where('status', 'active')
+                ->lockForUpdate()
+                ->get()
+                ->each(fn ($session) => $session->update([
+                    'ended_at' => $now,
+                    'status' => 'completed',
+                ]));
+
+            $acceptedAt = $task->accepted_at ?? $now;
+            $workSession = $attendance->workSessions()->create([
+                'task_description' => $task->title,
+                'started_at' => $now,
+                'expected_end_at' => $acceptedAt->copy()
+                    ->addMinutes($task->duration_minutes),
+                'status' => 'active',
+            ]);
+
+            $task->update([
+                'status' => 'in_progress',
+                'work_session_id' => $workSession->id,
+            ]);
+
+            return $task->fresh();
+        });
+    }
+
+    private function completeTaskWorkSession(EmployeeTask $task): EmployeeTask
+    {
+        return DB::transaction(function () use ($task) {
+            $task = EmployeeTask::query()
+                ->with('workSession')
+                ->lockForUpdate()
+                ->findOrFail($task->id);
+
+            abort_unless(
+                $task->status === 'in_progress',
+                422,
+                '開始中の業務のみ完了できます。'
+            );
+
+            $now = now();
+
+            if ($task->workSession?->status === 'active') {
+                $task->workSession->update([
+                    'ended_at' => $now,
+                    'status' => 'completed',
+                ]);
+            }
+
+            $task->update([
+                'status' => 'completed',
+                'completed_at' => $now,
+            ]);
+
+            return $task->fresh();
+        });
     }
 
     private function authorizeTaskOwner(
         Request $request,
         EmployeeTask $task
-    ): void {
+    ): Employee {
         $employee = $request->user()->employee;
 
         abort_unless(
@@ -161,5 +233,7 @@ class EmployeeTaskController extends Controller
             403,
             '他の社員の業務は変更できません。'
         );
+
+        return $employee;
     }
 }

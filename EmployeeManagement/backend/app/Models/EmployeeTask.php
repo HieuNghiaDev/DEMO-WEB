@@ -9,6 +9,7 @@ class EmployeeTask extends Model
 {
     protected $fillable = [
         'employee_id',
+        'work_session_id',
         'assigned_by',
         'title',
         'description',
@@ -37,5 +38,10 @@ class EmployeeTask extends Model
     public function assignedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_by');
+    }
+
+    public function workSession(): BelongsTo
+    {
+        return $this->belongsTo(WorkSession::class);
     }
 }

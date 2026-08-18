@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Employee;
+use App\Models\Attendance;
 use App\Models\Office;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -83,17 +84,37 @@ class EmployeeTaskWorkflowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('task.status', 'accepted');
 
+        Attendance::create([
+            'employee_id' => $this->employee->id,
+            'employee_name' => $this->employee->full_name,
+            'work_date' => now()->toDateString(),
+            'clock_in' => now(),
+            'status' => 'working',
+        ]);
+
         $this->patchJson("/api/tasks/{$taskId}/status", [
             'status' => 'in_progress',
         ])
             ->assertOk()
-            ->assertJsonPath('task.status', 'in_progress');
+            ->assertJsonPath('task.status', 'in_progress')
+            ->assertJsonPath('task.work_session_id', 1);
+
+        $this->assertDatabaseHas('work_sessions', [
+            'id' => 1,
+            'task_description' => '契約書の確認',
+            'status' => 'active',
+        ]);
 
         $this->patchJson("/api/tasks/{$taskId}/status", [
             'status' => 'completed',
         ])
             ->assertOk()
             ->assertJsonPath('task.status', 'completed');
+
+        $this->assertDatabaseHas('work_sessions', [
+            'id' => 1,
+            'status' => 'completed',
+        ]);
 
         $this->getJson('/api/my/tasks')
             ->assertOk()
