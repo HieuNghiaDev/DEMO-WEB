@@ -64,6 +64,25 @@ class OrganizationController extends Controller
                         ->orderByDesc('clock_in')
                         ->with('activeWorkSession');
                 },
+
+                'tasks' => function ($query) {
+                    $query
+                        ->select([
+                            'id',
+                            'employee_id',
+                            'title',
+                            'status',
+                            'due_at',
+                            'accepted_at',
+                        ])
+                        ->whereIn('status', [
+                            'pending',
+                            'accepted',
+                            'in_progress',
+                        ])
+                        ->orderByRaw("CASE status WHEN 'in_progress' THEN 0 WHEN 'accepted' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END")
+                        ->latest('id');
+                },
             ])
             ->orderBy('office_id')
             ->orderBy('department_id')
@@ -71,6 +90,7 @@ class OrganizationController extends Controller
             ->get()
             ->map(function (Employee $employee) use ($canViewPrivate) {
                 $attendance = $employee->attendances->first();
+                $quest = $employee->tasks->first();
 
                 return [
                     'id' => $employee->id,
@@ -155,30 +175,23 @@ class OrganizationController extends Controller
 
                             'status' => $attendance->status,
 
-                            'current_task' =>
-                                $attendance->activeWorkSession
+                            'current_task' => $attendance->activeWorkSession
+                                ? [
+                                    'id' => $attendance->activeWorkSession->id,
+                                    'task_description' => $attendance->activeWorkSession->task_description,
+                                    'status' => 'in_progress',
+                                    'started_at' => $attendance->activeWorkSession->started_at,
+                                    'expected_end_at' => $attendance->activeWorkSession->expected_end_at,
+                                ]
+                                : ($quest
                                     ? [
-                                        'id' =>
-                                            $attendance
-                                                ->activeWorkSession
-                                                ->id,
-
-                                        'task_description' =>
-                                            $attendance
-                                                ->activeWorkSession
-                                                ->task_description,
-
-                                        'started_at' =>
-                                            $attendance
-                                                ->activeWorkSession
-                                                ->started_at,
-
-                                        'expected_end_at' =>
-                                            $attendance
-                                                ->activeWorkSession
-                                                ->expected_end_at,
+                                        'id' => $quest->id,
+                                        'task_description' => $quest->title,
+                                        'status' => $quest->status,
+                                        'started_at' => $quest->accepted_at,
+                                        'expected_end_at' => $quest->due_at,
                                     ]
-                                    : null,
+                                    : null),
                         ]
                         : null,
                 ];

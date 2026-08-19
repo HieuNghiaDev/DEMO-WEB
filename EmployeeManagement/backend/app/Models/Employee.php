@@ -4,8 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Employee extends Model
 {
@@ -62,5 +62,10 @@ class Employee extends Model
     public function tasks()
     {
         return $this->hasMany(EmployeeTask::class);
+    }
+
+    public function assignedCaseFiles(): HasMany
+    {
+        return $this->hasMany(CaseFile::class, 'assigned_employee_id');
     }
 }

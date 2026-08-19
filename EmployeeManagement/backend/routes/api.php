@@ -1,10 +1,17 @@
 <?php
 
+use App\Http\Controllers\Api\AiChatController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\WorkSessionController;
-use App\Http\Controllers\Api\OrganizationController;
+use App\Http\Controllers\Api\CaseDocumentController;
+use App\Http\Controllers\Api\CaseFileController;
+use App\Http\Controllers\Api\CaseMeetingLogController;
+use App\Http\Controllers\Api\CasePrecedentController;
+use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\EmployeeTaskController;
+use App\Http\Controllers\Api\OrganizationController;
+use App\Http\Controllers\Api\PersonaController;
+use App\Http\Controllers\Api\WorkSessionController;
 use Illuminate\Support\Facades\Route;
 
 // Authentication: không nằm trong prefix attendances
@@ -32,6 +39,30 @@ Route::middleware([
         OrganizationController::class,
         'index',
     ]);
+
+    Route::get('/personas', [
+        PersonaController::class,
+        'index',
+    ]);
+
+    Route::post('/ai/chat', [
+        AiChatController::class,
+        'store',
+    ]);
+
+    Route::apiResource('clients', ClientController::class);
+    Route::apiResource('case-files', CaseFileController::class);
+
+    Route::prefix('case-files/{caseFile}')->group(function () {
+        Route::get('documents', [CaseDocumentController::class, 'index']);
+        Route::post('documents', [CaseDocumentController::class, 'store']);
+        Route::patch('documents/{document}', [CaseDocumentController::class, 'update']);
+        Route::get('precedents', [CasePrecedentController::class, 'index']);
+        Route::post('precedents', [CasePrecedentController::class, 'store']);
+        Route::get('meeting-logs', [CaseMeetingLogController::class, 'index']);
+        Route::post('meeting-logs', [CaseMeetingLogController::class, 'store']);
+        Route::patch('meeting-logs/{meetingLog}', [CaseMeetingLogController::class, 'update']);
+    });
 
     Route::prefix('attendances')->group(function () {
 

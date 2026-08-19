@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             OfficeSeeder::class,
             EmployeeUserSeeder::class,
             AdditionalEmployeeUserSeeder::class,
+            PersonaSeeder::class,
         ]);
 
         if (app()->environment('local')) {

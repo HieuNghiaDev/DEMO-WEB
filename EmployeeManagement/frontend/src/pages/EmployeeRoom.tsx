@@ -103,6 +103,7 @@ type AssignedTask = {
   title: string;
   description: string | null;
   duration_minutes: number;
+  due_at: string | null;
   status: AssignedTaskStatus;
   accepted_at: string | null;
   completed_at: string | null;
@@ -216,13 +217,12 @@ const formatExpectedTime = (value: string) =>
     timeZone: "Asia/Tokyo",
   }).format(new Date(value));
 
-const formatAssignedTaskDuration = (minutes: number) =>
-  minutes < 60 ? `${minutes}分` : `${minutes / 60}時間`;
-
 const getAssignedTaskCountdown = (task: AssignedTask, now: number) => {
   if (!task.accepted_at) return null;
 
-  const endsAt = new Date(task.accepted_at).getTime() + task.duration_minutes * 60_000;
+  const endsAt = task.due_at
+    ? new Date(task.due_at).getTime()
+    : new Date(task.accepted_at).getTime() + task.duration_minutes * 60_000;
   const difference = endsAt - now;
   const absoluteSeconds = Math.floor(Math.abs(difference) / 1_000);
   const hours = Math.floor(absoluteSeconds / 3_600);
@@ -235,6 +235,18 @@ const getAssignedTaskCountdown = (task: AssignedTask, now: number) => {
   return {
     isOvertime: difference < 0,
     formatted,
+    remainingPercent: Math.max(
+      0,
+      Math.min(
+        100,
+        (difference /
+          Math.max(
+            1,
+            endsAt - new Date(task.accepted_at).getTime(),
+          )) *
+          100,
+      ),
+    ),
   };
 };
 
@@ -357,6 +369,41 @@ function JapaneseTimePicker({
       </div>
     </fieldset>
   );
+}
+
+function EmployeeProfilePopover({
+  attendance,
+  statusLabel,
+  onClose,
+  position,
+}: {
+  attendance: Attendance;
+  statusLabel: string;
+  onClose: () => void;
+  position: { left: string; top: string };
+}) {
+  const employeeName =
+    attendance.employee?.full_name?.trim() || attendance.employee_name;
+  const statusColor =
+    attendance.status === "break"
+      ? "bg-amber-400"
+      : attendance.status === "outside"
+        ? "bg-blue-500"
+        : "bg-emerald-500";
+
+  const opensLeft = Number.parseFloat(position.left) > 58;
+
+  return <section role="dialog" aria-labelledby="employee-profile-title" onClick={(event) => event.stopPropagation()} style={position} className={`absolute z-40 w-72 -translate-y-1/2 rounded-2xl border border-white/80 bg-white/95 p-4 shadow-xl shadow-slate-950/25 ${opensLeft ? '-translate-x-[calc(100%+2.5rem)]' : 'translate-x-10'} dark:border-slate-600 dark:bg-slate-900/95`}>
+    <span className={`absolute top-1/2 h-3 w-3 -translate-y-1/2 rotate-45 border-b border-l border-white/80 bg-white/95 dark:border-slate-600 dark:bg-slate-900/95 ${opensLeft ? '-right-1.5 rotate-[225deg]' : '-left-1.5'}`} />
+    <div className="relative flex items-start gap-3">
+      <img src={getEmployeeAvatar(attendance)} alt={employeeName} className="h-11 w-11 shrink-0 rounded-xl object-cover ring-1 ring-indigo-100 dark:ring-indigo-500/30" />
+      <div className="min-w-0 flex-1"><p className="text-[9px] font-bold tracking-wider text-indigo-500">EMPLOYEE PROFILE</p><h2 id="employee-profile-title" className="mt-0.5 truncate text-sm font-bold text-slate-900 dark:text-white">{employeeName}</h2><p className="truncate text-[10px] text-slate-400">{attendance.employee?.full_name_kana || attendance.employee?.employee_code || "社員情報"}</p></div>
+      <button type="button" onClick={onClose} aria-label="プロフィールを閉じる" className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800"><X size={15} /></button>
+    </div>
+    <div className="mt-3 rounded-xl bg-indigo-50/80 p-3 dark:bg-indigo-500/10"><p className="text-[9px] font-bold tracking-wider text-indigo-500">CURRENT TASK</p><p className="mt-1 text-xs font-bold leading-relaxed text-slate-800 dark:text-slate-100">{attendance.active_work_session?.task_description || "現在登録されている作業はありません"}</p></div>
+    <div className="mt-3 grid grid-cols-3 gap-2 text-[10px]"><div><p className="text-slate-400">雇用形態</p><p className="mt-0.5 truncate font-semibold text-slate-700 dark:text-slate-200">{formatEmploymentType(attendance.employee?.employment_type)}</p></div><div><p className="text-slate-400">勤務開始</p><p className="mt-0.5 font-semibold text-slate-700 dark:text-slate-200">{formatWorkTime(attendance.clock_in)}</p></div><div><p className="text-slate-400">状態</p><p className="mt-0.5 inline-flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-200"><span className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />{statusLabel}</p></div></div>
+    {attendance.status === "outside" && <p className="mt-3 border-t border-slate-100 pt-2 text-[10px] font-semibold text-blue-600 dark:border-slate-700 dark:text-blue-300"><MapPin className="mr-1 inline" size={12} />{attendance.outside_destination || "外出先未登録"}</p>}
+  </section>;
 }
 
 const BASE_URL = import.meta.env.BASE_URL
@@ -601,11 +648,6 @@ export default function EmployeeRoom() {
   const ownActiveAttendance = activeAttendances.find(
     (attendance) => attendance.employee?.id === user?.employee?.id,
   );
-  const profileAttendance = selectedAttendance ?? ownActiveAttendance ?? null;
-  const profileEmployeeName = profileAttendance
-    ? profileAttendance.employee?.full_name?.trim() || profileAttendance.employee_name
-    : "社員を選択してください";
-
   const handleOfficeChange = (officeId: OfficeId) => {
     setSelectedOffice(officeId);
     setSelectedAttendanceId(null);
@@ -1519,7 +1561,7 @@ export default function EmployeeRoom() {
 
           {/* Map Container */}
           <div
-            className="relative aspect-[16/9] min-h-[220px] w-full overflow-hidden rounded-xl border border-gray-200 bg-slate-900 sm:min-h-0"
+            className="relative aspect-[16/9] min-h-[220px] w-full overflow-visible rounded-xl border border-gray-200 bg-slate-900 sm:min-h-0"
             onClick={() => setSelectedAttendanceId(null)}
           >
             <img
@@ -1530,7 +1572,7 @@ export default function EmployeeRoom() {
                 event.currentTarget.onerror = null;
                 event.currentTarget.src = `${BASE_URL}images/room.png`;
               }}
-              className="absolute inset-0 h-full w-full object-cover brightness-90 contrast-105"
+              className="absolute inset-0 h-full w-full rounded-xl object-cover brightness-90 contrast-105"
             />
 
             {/* <div
@@ -1552,7 +1594,6 @@ export default function EmployeeRoom() {
               const vietnameseName =
                 attendance.employee?.full_name?.trim() ||
                 attendance.employee_name;
-              const kanaName = attendance.employee?.full_name_kana?.trim();
               const position = getEmployeePosition(attendance);
               const isSelected = selectedAttendanceId === attendance.id;
 
@@ -1570,12 +1611,6 @@ export default function EmployeeRoom() {
                     isSelected ? "z-30" : "z-10"
                   }`}
                 >
-                  {isSelected && (
-                    <div className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/20 bg-slate-950/90 px-3 py-1.5 text-xs font-bold text-white shadow-lg backdrop-blur">
-                      {kanaName || vietnameseName}
-                    </div>
-                  )}
-
                   <span
                     className={`absolute -right-1 top-0 h-3 w-3 rounded-full border-2 border-white shadow-sm ${
                       attendance.status === "break"
@@ -1593,12 +1628,20 @@ export default function EmployeeRoom() {
                     draggable={false}
                   />
 
-                  <span className="absolute left-1/2 top-full mt-1 max-w-24 -translate-x-1/2 truncate rounded-full bg-slate-950/75 px-2 py-0.5 text-[9px] font-semibold text-white backdrop-blur-sm sm:text-[10px]">
+                  <span className="absolute left-1/2 top-full mt-1 max-w-24 -translate-x-1/2 truncate rounded-full bg-slate-950/75 px-2 py-0.5 text-[9px] font-semibold text-white sm:text-[10px]">
                     {vietnameseName}
                   </span>
                 </button>
               );
             })}
+            {selectedAttendance && (
+              <EmployeeProfilePopover
+                attendance={selectedAttendance}
+                statusLabel={statusLabels[selectedAttendance.status]}
+                position={getEmployeePosition(selectedAttendance)}
+                onClose={() => setSelectedAttendanceId(null)}
+              />
+            )}
           </div>
 
           {/* Work Attendance Section */}
@@ -1743,6 +1786,17 @@ export default function EmployeeRoom() {
                   勤務ステータス
                 </p>
 
+                {workStatus === "outside" && (
+                  <div className="mb-3 flex flex-col gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-3.5 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-orange-800">外出・出張を終了しますか？</p>
+                      <p className="mt-1 text-[11px] text-orange-700">帰社した今の時刻を実際の終了時刻として記録します。予定より早くても遅くても記録できます。</p>
+                      {ownActiveAttendance?.outside_expected_end && <p className="mt-1.5 text-[11px] font-semibold text-orange-700">帰社予定: {formatWorkTime(ownActiveAttendance.outside_expected_end)}</p>}
+                    </div>
+                    <button type="button" onClick={() => handleStatusRequest("working")} disabled={isSubmitting} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-orange-500/25 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"><CheckCircle2 size={15} />外出を終了・帰社</button>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   {/* Working */}
                   <button
@@ -1810,146 +1864,20 @@ export default function EmployeeRoom() {
         </div>
 
         {/* Right Column */}
-        <div className="space-y-6">
-          {/* Selected employee profile */}
-          <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500" />
-
-            {profileAttendance ? (
-              <>
-                <div className="mb-4 flex items-start gap-3">
-                  <div className="relative shrink-0">
-                    <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-indigo-50 ring-1 ring-indigo-100 dark:bg-indigo-500/10 dark:ring-indigo-500/20">
-                      <img
-                        src={getEmployeeAvatar(profileAttendance)}
-                        alt={profileEmployeeName}
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                    <span className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-[3px] border-white dark:border-slate-900 ${
-                      profileAttendance.status === "break"
-                        ? "bg-amber-400"
-                        : profileAttendance.status === "outside"
-                          ? "bg-blue-500"
-                          : "bg-emerald-500"
-                    }`} />
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <span className="block text-[10px] font-bold tracking-wider text-indigo-500 dark:text-indigo-400">
-                      EMPLOYEE PROFILE
-                    </span>
-                    <h3 className="mt-1 truncate text-base font-bold text-gray-800 dark:text-white">
-                      {profileEmployeeName}
-                    </h3>
-                    <p className="mt-0.5 truncate text-xs text-gray-400 dark:text-slate-500">
-                      {profileAttendance.employee?.full_name_kana || profileAttendance.employee?.employee_code || "社員情報"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mb-4 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3.5 dark:border-indigo-500/20 dark:bg-indigo-500/[0.08]">
-                  <span className="mb-1 block text-[10px] font-bold tracking-wider text-indigo-500 dark:text-indigo-300">
-                    CURRENT TASK
-                  </span>
-                  <p className="text-xs font-bold leading-relaxed text-gray-800 dark:text-slate-100">
-                    {profileAttendance.active_work_session?.task_description || "現在登録されている作業はありません"}
-                  </p>
-                </div>
-
-                <div className="space-y-2.5 text-xs">
-                  <div className="flex justify-between gap-3">
-                    <span className="text-gray-400 dark:text-slate-500">雇用形態</span>
-                    <span className="font-semibold text-gray-700 dark:text-slate-200">
-                      {formatEmploymentType(profileAttendance.employee?.employment_type)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-gray-400 dark:text-slate-500">勤務開始</span>
-                    <span className="font-semibold text-gray-700 dark:text-slate-200">
-                      {formatWorkTime(profileAttendance.clock_in)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-gray-400 dark:text-slate-500">状態</span>
-                    <span className={`flex items-center gap-1.5 font-semibold ${
-                      profileAttendance.status === "break"
-                        ? "text-amber-600 dark:text-amber-300"
-                        : profileAttendance.status === "outside"
-                          ? "text-blue-600 dark:text-blue-300"
-                          : "text-emerald-600 dark:text-emerald-300"
-                    }`}>
-                      <span className="h-2 w-2 rounded-full bg-current" />
-                      {statusLabels[profileAttendance.status]}
-                    </span>
-                  </div>
-                  {profileAttendance.status === "outside" && (
-                    <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-500/20 dark:bg-blue-500/[0.08]">
-                      <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-blue-600 dark:text-blue-300">
-                        <MapPin size={12} />
-                        OUTSIDE DETAILS
-                      </div>
-                      <div className="space-y-2 text-[11px]">
-                        <div className="flex justify-between gap-3">
-                          <span className="text-slate-400 dark:text-slate-500">外出開始</span>
-                          <span className="font-semibold text-slate-700 dark:text-slate-200">
-                            {formatWorkTime(profileAttendance.outside_start ?? "")}
-                          </span>
-                        </div>
-                        <div className="flex justify-between gap-3">
-                          <span className="text-slate-400 dark:text-slate-500">帰社予定</span>
-                          <span className="font-semibold text-blue-600 dark:text-blue-300">
-                            {formatWorkTime(profileAttendance.outside_expected_end ?? "")}
-                          </span>
-                        </div>
-                        <div className="flex items-start justify-between gap-3">
-                          <span className="shrink-0 text-slate-400 dark:text-slate-500">外出先・用件</span>
-                          <span className="text-right font-semibold text-blue-600 dark:text-blue-300">
-                            {profileAttendance.outside_destination || "未登録"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {selectedAttendance && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedAttendanceId(null)}
-                    className="mt-5 w-full rounded-xl border border-gray-200 py-2.5 text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                  >
-                    自分の情報に戻る
-                  </button>
-                )}
-              </>
-            ) : (
-              <div className="py-6 text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
-                  <CircleHelp size={20} />
-                </div>
-                <h3 className="mt-3 text-sm font-bold text-gray-800 dark:text-white">社員を選択してください</h3>
-                <p className="mt-1 text-xs leading-relaxed text-gray-400 dark:text-slate-500">オフィスマップ上の社員をクリックすると、ここに勤務情報が表示されます。</p>
-              </div>
-            )}
-          </div>
-
+        <div className="flex flex-col gap-6">
           {/* Assigned tasks */}
-          <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="order-2 relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <div className={`absolute left-0 right-0 top-0 h-1 ${assignedTasks.length ? "bg-indigo-500" : "bg-slate-300 dark:bg-slate-700"}`} />
 
-            <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="mb-4">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
-                  MY TASKS
+                  MY QUEST
                 </span>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  割り当てられた業務を確認・進行できます
+                  受け取った業務の内容と残り時間を確認できます
                 </p>
               </div>
-              <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
-                {assignedTasks.length}件
-              </span>
             </div>
 
             {pendingAssignedTaskCount > 0 && (
@@ -1976,24 +1904,9 @@ export default function EmployeeRoom() {
                       : { label: "進行中", className: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300" };
 
                   return (
-                    <article
-                      key={task.id}
-                      className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-indigo-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-indigo-500/40"
-                    >
-                      <div className={`absolute inset-x-0 top-0 h-1 ${
-                        task.status === "pending"
-                          ? "bg-amber-400"
-                          : task.status === "accepted"
-                            ? "bg-sky-500"
-                            : "bg-emerald-500"
-                      }`} />
-
+                    <article key={task.id} className="border-b border-slate-100 pb-4 last:border-b-0 last:pb-0 dark:border-slate-700">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="mb-1.5 flex items-center gap-1.5 text-[9px] font-bold tracking-[0.12em] text-slate-400 dark:text-slate-500">
-                            <ListTodo size={12} />
-                            ASSIGNED TASK
-                          </div>
                           <h4 className="text-sm font-bold leading-snug text-gray-800 dark:text-white">
                             {task.title}
                           </h4>
@@ -2003,35 +1916,16 @@ export default function EmployeeRoom() {
                         </span>
                       </div>
 
-                      <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-gray-500 dark:text-slate-400">
-                        {task.description || "業務内容を確認し、期限までに完了してください。"}
-                      </p>
+                      <div className="mt-2">
+                        <span className="text-[9px] font-bold tracking-wider text-slate-400 dark:text-slate-500">NOTE</span>
+                        <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-gray-500 dark:text-slate-400">{task.description || "業務内容を確認し、期限までに完了してください。"}</p>
+                      </div>
 
-                      <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/70 px-3 py-2.5 dark:border-indigo-500/15 dark:bg-indigo-500/[0.08]">
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-indigo-500 dark:text-indigo-300">
-                          <Clock3 size={13} />
-                          {countdown ? "作業タイマー" : "予定作業時間"}
-                        </div>
+                      <div className="mt-4">
                         {countdown ? (
-                          <div className="mt-1 flex items-end justify-between gap-2">
-                            <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                              {countdown.isOvertime ? "予定時間を超過" : "残り時間"}
-                            </span>
-                            <span className={`font-mono text-lg font-black tracking-wider ${
-                              countdown.isOvertime
-                                ? "text-rose-600 dark:text-rose-300"
-                                : "text-indigo-700 dark:text-indigo-200"
-                            }`}>
-                              {countdown.isOvertime ? "+" : ""}{countdown.formatted}
-                            </span>
-                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700"><div className="h-full rounded-full transition-[width,background-color] duration-1000 ease-linear" style={{ width: `${countdown.remainingPercent}%`, backgroundColor: countdown.isOvertime ? "#ef4444" : `hsl(${Math.round(countdown.remainingPercent * 2.1)} 86% 48%)` }} /></div>
                         ) : (
-                          <div className="mt-1 flex items-end justify-between gap-2">
-                            <span className="text-[11px] text-slate-500 dark:text-slate-400">業務を確認後に開始</span>
-                            <span className="text-sm font-bold text-indigo-700 dark:text-indigo-200">
-                              {formatAssignedTaskDuration(task.duration_minutes)}
-                            </span>
-                          </div>
+                          <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-700" />
                         )}
                       </div>
 
@@ -2086,7 +1980,7 @@ export default function EmployeeRoom() {
           </div>
 
           {/* AI assistant */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="order-1 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-sm font-bold text-white shadow-sm">
                 AI
@@ -2101,6 +1995,12 @@ export default function EmployeeRoom() {
               <span className="block text-[10px] font-bold tracking-wider text-indigo-500 dark:text-indigo-300">CURRENT WORK</span>
               <p className="mt-1 text-xs font-bold leading-relaxed text-gray-800 dark:text-slate-100">改善候補と不足マニュアルを分析しています</p>
             </div>
+            <div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs dark:border-slate-700">
+              <div className="flex justify-between gap-3"><span className="text-slate-400 dark:text-slate-500">所属</span><span className="font-semibold text-slate-700 dark:text-slate-200">共通AI</span></div>
+              <div className="flex justify-between gap-3"><span className="text-slate-400 dark:text-slate-500">状態</span><span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-300"><span className="h-2 w-2 rounded-full bg-emerald-500" />観察中</span></div>
+              <div className="flex justify-between gap-3"><span className="text-slate-400 dark:text-slate-500">権限</span><span className="font-semibold text-slate-700 dark:text-slate-200">提案・下書き</span></div>
+            </div>
+            <button type="button" className="mt-4 w-full rounded-xl border border-slate-200 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">プロフィールを開く</button>
           </div>
         </div>
       </div>

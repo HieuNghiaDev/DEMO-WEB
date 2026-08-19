@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\EmployeeTask;
-use App\Models\Attendance;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +27,18 @@ class EmployeeTaskController extends Controller
             '在籍中の社員にのみ業務を依頼できます。'
         );
 
+        $isOnline = Attendance::query()
+            ->where('employee_id', $employee->id)
+            ->whereNull('clock_out')
+            ->whereIn('status', ['working', 'break', 'outside'])
+            ->exists();
+
+        abort_unless(
+            $isOnline,
+            422,
+            '勤務中の社員にのみ業務を依頼できます。'
+        );
+
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
@@ -35,6 +47,7 @@ class EmployeeTaskController extends Controller
                 'integer',
                 Rule::in([30, 60, 120]),
             ],
+            'due_at' => ['nullable', 'date', 'after:now'],
         ]);
 
         $task = EmployeeTask::create([
@@ -45,6 +58,7 @@ class EmployeeTaskController extends Controller
                 ? trim($validated['description'])
                 : null,
             'duration_minutes' => $validated['duration_minutes'],
+            'due_at' => $validated['due_at'] ?? null,
             'status' => 'pending',
         ]);
 
@@ -58,7 +72,7 @@ class EmployeeTaskController extends Controller
     {
         $employee = $request->user()->employee;
 
-        if (!$employee) {
+        if (! $employee) {
             return response()->json([
                 'tasks' => [],
             ]);
@@ -172,11 +186,13 @@ class EmployeeTaskController extends Controller
                 ]));
 
             $acceptedAt = $task->accepted_at ?? $now;
+            $expectedEndAt = $task->due_at ?? $acceptedAt->copy()
+                ->addMinutes($task->duration_minutes);
+
             $workSession = $attendance->workSessions()->create([
                 'task_description' => $task->title,
                 'started_at' => $now,
-                'expected_end_at' => $acceptedAt->copy()
-                    ->addMinutes($task->duration_minutes),
+                'expected_end_at' => $expectedEndAt,
                 'status' => 'active',
             ]);
 

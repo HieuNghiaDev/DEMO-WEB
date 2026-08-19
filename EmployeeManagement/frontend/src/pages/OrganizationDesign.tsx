@@ -24,6 +24,7 @@ type WorkStatus = 'working' | 'break' | 'outside' | 'offline'
 type CurrentTask = {
   id: number
   task_description: string
+  status: 'pending' | 'accepted' | 'in_progress'
   started_at: string
   expected_end_at: string | null
 }
@@ -128,10 +129,41 @@ function maskEmail(email: string) {
   return `${name[0]}${'*'.repeat(Math.max(name.length - 1, 5))}@${domain}`
 }
 
-type AssignDuration = 30 | 60 | 120
+type AssignDuration = 30 | 60 | 120 | 'custom'
 
-function formatTaskDuration(minutes: AssignDuration) {
+function formatTaskDuration(minutes: Exclude<AssignDuration, 'custom'>) {
   return minutes < 60 ? `${minutes}分` : `${minutes / 60}時間`
+}
+
+const questStatusLabel: Record<CurrentTask['status'], string> = {
+  pending: '未確認',
+  accepted: '受付済み',
+  in_progress: '作業中',
+}
+
+const taskHours = Array.from({ length: 24 }, (_, hour) => hour)
+const taskMinutes = Array.from({ length: 60 }, (_, minute) => minute)
+
+const buildClosestTokyoDeadline = (hour: string, minute: string) => {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+  const toParts = (date: Date) => Object.fromEntries(
+    formatter.formatToParts(date)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  ) as Record<string, string>
+  const today = toParts(new Date())
+  const selectedAt = new Date(`${today.year}-${today.month}-${today.day}T${hour}:${minute}:00+09:00`)
+  const deadline = selectedAt.getTime() <= Date.now()
+    ? new Date(selectedAt.getTime() + 24 * 60 * 60 * 1000)
+    : selectedAt
+  const date = toParts(deadline)
+
+  return `${date.year}-${date.month}-${date.day}T${hour}:${minute}:00`
 }
 
 export default function OrganizationDesign() {
@@ -510,7 +542,7 @@ function EmployeeRow({
 
               <div className="mt-1 flex items-center gap-1.5 text-[10px] font-medium text-emerald-500">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                作業中
+                {questStatusLabel[employee.attendance.current_task.status]}
               </div>
             </>
           ) : (
@@ -570,7 +602,7 @@ function EmployeeRow({
               <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2.5 dark:border-indigo-500/10 dark:bg-indigo-500/[0.07]">
                 <div className="mb-1 flex items-center gap-1.5 text-[9px] font-bold text-indigo-500 dark:text-indigo-400">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                  現在の作業
+                  {questStatusLabel[employee.attendance.current_task.status]}
                 </div>
 
                 <div className="truncate text-[11px] font-semibold text-slate-700 dark:text-slate-200">
@@ -633,6 +665,7 @@ function EmployeeDetailModal({
   const [assignmentMessage, setAssignmentMessage] = useState('')
   const status = statusConfig[employee.work_status]
   const initial = employee.full_name.trim().charAt(0).toUpperCase() || '?'
+  const isEmployeeOnline = employee.work_status !== 'offline' && employee.attendance !== null
 
   return (
     <>
@@ -688,7 +721,7 @@ function EmployeeDetailModal({
             </div>
           )}
 
-          {canAssignTasks && (
+          {canAssignTasks && isEmployeeOnline && (
             <button
               type="button"
               onClick={() => {
@@ -702,10 +735,16 @@ function EmployeeDetailModal({
             </button>
           )}
 
-          {canAssignTasks && (
+          {canAssignTasks && isEmployeeOnline && (
             <p className="-mt-3 text-center text-[11px] text-slate-400 dark:text-slate-500">
               この社員にのみ業務を割り当てます。
             </p>
+          )}
+
+          {canAssignTasks && !isEmployeeOnline && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-400">
+              この社員はオフラインのため、業務を依頼できません。勤務開始後に依頼してください。
+            </div>
           )}
 
           <DetailSection title="基本情報">
@@ -778,7 +817,7 @@ function EmployeeDetailModal({
 
               {employee.attendance.current_task && (
                 <div className="mt-3 rounded-xl bg-indigo-50 p-4 dark:bg-indigo-500/[0.08]">
-                  <div className="text-[10px] font-bold text-indigo-500">現在の作業</div>
+                  <div className="text-[10px] font-bold text-indigo-500">{questStatusLabel[employee.attendance.current_task.status]}</div>
                   <p className="mt-2 text-sm font-medium leading-relaxed text-slate-700 dark:text-slate-200">
                     {employee.attendance.current_task.task_description}
                   </p>
@@ -816,7 +855,10 @@ function AssignTaskModal({
   onAssigned: () => void
 }) {
   const [title, setTitle] = useState('')
+  const [note, setNote] = useState('')
   const [duration, setDuration] = useState<AssignDuration>(60)
+  const [deadlineHour, setDeadlineHour] = useState('')
+  const [deadlineMinute, setDeadlineMinute] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -829,8 +871,11 @@ function AssignTaskModal({
 
       await api.post(`/employees/${employee.id}/tasks`, {
         title: title.trim(),
-        description: null,
-        duration_minutes: duration,
+        description: note.trim() || null,
+        duration_minutes: duration === 'custom' ? 60 : duration,
+        due_at: duration === 'custom'
+          ? buildClosestTokyoDeadline(deadlineHour, deadlineMinute)
+          : null,
       })
 
       onAssigned()
@@ -906,6 +951,20 @@ function AssignTaskModal({
             </span>
           </label>
 
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-bold text-gray-600 dark:text-slate-300">
+              Note・依頼メモ
+            </span>
+            <textarea
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              rows={3}
+              maxLength={5000}
+              placeholder="例：機能A・B・Cを実装し、確認結果を報告してください。"
+              className="w-full resize-none rounded-xl border border-indigo-200 bg-white px-3 py-2.5 text-sm text-gray-800 outline-none transition placeholder:text-gray-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500 dark:focus:ring-indigo-500/10"
+            />
+          </label>
+
           <div>
             <span className="mb-1.5 block text-xs font-bold text-gray-600 dark:text-slate-300">
               作業時間
@@ -913,7 +972,7 @@ function AssignTaskModal({
             <span className="mb-3 block text-[11px] text-slate-400 dark:text-slate-500">
               社員が業務を確認した時点から、タイマーが開始されます。
             </span>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {([30, 60, 120] as const).map((minutes) => (
                 <button
                   key={minutes}
@@ -928,7 +987,29 @@ function AssignTaskModal({
                   {formatTaskDuration(minutes)}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => setDuration('custom')}
+                className={`rounded-xl border px-2 py-3 text-sm font-bold transition ${
+                  duration === 'custom'
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-600 ring-2 ring-indigo-100 dark:bg-indigo-500/10 dark:ring-indigo-500/20'
+                    : 'border-gray-200 text-gray-500 hover:border-indigo-200 hover:bg-indigo-50/50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800'
+                }`}
+              >
+                時刻指定
+              </button>
             </div>
+            {duration === 'custom' && (
+              <div className="mt-3">
+                <span className="mb-1.5 block text-xs font-bold text-gray-600 dark:text-slate-300">完了予定時刻</span>
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <select value={deadlineHour} onChange={(event) => setDeadlineHour(event.target.value)} className="h-12 rounded-xl border border-indigo-200 bg-white px-3 text-center text-sm font-bold text-gray-800 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:ring-indigo-500/10"><option value="" disabled>時</option>{taskHours.map((hour) => <option key={hour} value={String(hour).padStart(2, '0')}>{String(hour).padStart(2, '0')}</option>)}</select>
+                  <span className="text-lg font-bold text-slate-400">:</span>
+                  <select value={deadlineMinute} onChange={(event) => setDeadlineMinute(event.target.value)} className="h-12 rounded-xl border border-indigo-200 bg-white px-3 text-center text-sm font-bold text-gray-800 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:ring-indigo-500/10"><option value="" disabled>分</option>{taskMinutes.map((minute) => <option key={minute} value={String(minute).padStart(2, '0')}>{String(minute).padStart(2, '0')}</option>)}</select>
+                </div>
+                <p className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">今日の時刻を過ぎている場合は、翌日の完了予定として登録されます。</p>
+              </div>
+            )}
           </div>
 
           <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 px-4 py-3.5 dark:border-indigo-500/20 dark:from-indigo-500/[0.12] dark:to-violet-500/[0.08]">
@@ -939,7 +1020,9 @@ function AssignTaskModal({
               <div className="min-w-0">
                 <div className="text-[10px] font-bold tracking-wider text-indigo-500 dark:text-indigo-300">TASK DURATION</div>
                 <p className="mt-1 text-sm font-bold leading-relaxed text-slate-700 dark:text-slate-100">
-                  作業時間は <span className="text-indigo-600 dark:text-indigo-300">{formatTaskDuration(duration)}</span> です。社員が確認するとタイマーが始まります。
+                  {duration === 'custom'
+                    ? '指定した完了予定時刻までタイマーが進みます。'
+                    : <>作業時間は <span className="text-indigo-600 dark:text-indigo-300">{formatTaskDuration(duration)}</span> です。社員が確認するとタイマーが始まります。</>}
                 </p>
               </div>
             </div>
@@ -967,7 +1050,7 @@ function AssignTaskModal({
           <button
             type="button"
             onClick={() => void handleSubmit()}
-            disabled={submitting || !title.trim()}
+            disabled={submitting || !title.trim() || (duration === 'custom' && (!deadlineHour || !deadlineMinute))}
             className="flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-indigo-600 px-3 py-3 text-sm font-bold text-white shadow-md shadow-indigo-500/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none dark:disabled:bg-slate-700"
           >
             <Play size={16} />
