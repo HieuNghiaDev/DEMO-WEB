@@ -32,6 +32,8 @@ class AdditionalEmployeeUserSeeder extends Seeder
                 'office_code' => 'THEMIS',
                 'work_email' => 'thanvansay@gmail.com',
                 'avatar_path' => '/images/boy.png',
+                'position_title' => 'アルバイト',
+                'employment_type' => 'part_time',
             ],
             [
                 'employee_code' => 'TM003',
@@ -42,6 +44,8 @@ class AdditionalEmployeeUserSeeder extends Seeder
                 'office_code' => 'THEMIS',
                 'work_email' => 'trinhhuong888888@gmail.com',
                 'avatar_path' => '/images/girl.png',
+                'position_title' => '社員',
+                'employment_type' => 'full_time',
             ],
             [
                 'employee_code' => 'TM004',
@@ -52,6 +56,8 @@ class AdditionalEmployeeUserSeeder extends Seeder
                 'office_code' => 'THEMIS',
                 'work_email' => 'coltdthemis@gmail.com',
                 'avatar_path' => '/images/girl.png',
+                'position_title' => '社員',
+                'employment_type' => 'full_time',
             ],
             [
                 'employee_code' => 'LW001',
@@ -62,6 +68,8 @@ class AdditionalEmployeeUserSeeder extends Seeder
                 'office_code' => 'CHUKA_LAW',
                 'work_email' => 'syuri0622syunisan@docomo.ne.jp',
                 'avatar_path' => '/images/girl.png',
+                'position_title' => '弁護士',
+                'employment_type' => 'full_time',
             ],
             [
                 'employee_code' => 'LW002',
@@ -72,6 +80,8 @@ class AdditionalEmployeeUserSeeder extends Seeder
                 'office_code' => 'CHUKA_LAW',
                 'work_email' => 'nakaminelaw-jimu@basil.ocn.ne.jp',
                 'avatar_path' => '/images/boy.png',
+                'position_title' => '弁護士',
+                'employment_type' => 'full_time',
             ],
         ];
 
@@ -91,8 +101,8 @@ class AdditionalEmployeeUserSeeder extends Seeder
                         'termination_date' => null,
                         'office_id' => $offices[$employeeData['office_code']]->id,
                         'department_id' => null,
-                        'position_title' => null,
-                        'employment_type' => 'full_time',
+                        'position_title' => $employeeData['position_title'],
+                        'employment_type' => $employeeData['employment_type'],
                         'work_email' => $employeeData['work_email'],
                         'phone' => null,
                         'avatar_path' => $employeeData['avatar_path'],
