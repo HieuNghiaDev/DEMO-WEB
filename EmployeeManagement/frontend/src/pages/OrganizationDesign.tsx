@@ -264,15 +264,20 @@ export default function OrganizationDesign() {
     <div className="mx-auto w-full max-w-[1600px] space-y-4 px-2.5 pb-10 sm:px-4 lg:px-6">
 
       {/* Header */}
-      <header className="flex flex-col gap-3 rounded-2xl border border-slate-300 bg-white py-4 pl-16 pr-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <header className="mt-3 flex flex-col gap-3 rounded-2xl border border-slate-300 bg-white py-4 pl-16 pr-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:mt-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div>
           <div className="mb-1.5 flex items-center gap-2 text-[9px] font-bold tracking-[0.16em] text-indigo-600 dark:text-indigo-400 sm:text-[10px]">
             <Building2 size={13} />
             THEMIS ORGANIZATION
           </div>
 
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">組織設計</h1>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">社員・所属・勤務状況を確認</p>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+            組織設計
+          </h1>
+
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
+            社員・所属・勤務状況を確認
+          </p>
         </div>
 
         <button

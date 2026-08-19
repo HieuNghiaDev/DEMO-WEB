@@ -187,4 +187,29 @@ class EmployeeTaskWorkflowTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('message', '勤務中の社員にのみ業務を依頼できます。');
     }
+
+    public function test_manager_sees_a_received_quest_as_the_employee_current_task(): void
+    {
+        Attendance::create([
+            'employee_id' => $this->employee->id,
+            'employee_name' => $this->employee->full_name,
+            'work_date' => now()->toDateString(),
+            'clock_in' => now(),
+            'status' => 'working',
+        ]);
+        $manager = User::factory()->create(['role' => 'manager']);
+        Sanctum::actingAs($manager);
+
+        $taskId = $this->postJson("/api/employees/{$this->employee->id}/tasks", [
+            'title' => '機能Aを実装',
+            'description' => '画面とAPIを確認してください。',
+            'duration_minutes' => 60,
+        ])->assertCreated()->json('task.id');
+
+        $this->getJson('/api/organization')
+            ->assertOk()
+            ->assertJsonPath('employees.0.attendance.current_task.id', $taskId)
+            ->assertJsonPath('employees.0.attendance.current_task.task_description', '機能Aを実装')
+            ->assertJsonPath('employees.0.attendance.current_task.status', 'pending');
+    }
 }
