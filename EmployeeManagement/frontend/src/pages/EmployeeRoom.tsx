@@ -189,6 +189,17 @@ const formatWorkTime = (value: string) =>
     timeZone: "Asia/Tokyo",
   }).format(new Date(value));
 
+const formatElapsedTime = (startValue: string, now: number) => {
+  const elapsedSeconds = Math.max(0, Math.floor((now - new Date(startValue).getTime()) / 1_000));
+  const hours = Math.floor(elapsedSeconds / 3_600);
+  const minutes = Math.floor((elapsedSeconds % 3_600) / 60);
+  const seconds = elapsedSeconds % 60;
+
+  return [hours, minutes, seconds]
+    .map((value) => String(value).padStart(2, "0"))
+    .join(":");
+};
+
 const getJapanTimeInput = (minutesFromNow = 0) => {
   const date = new Date(Date.now() + minutesFromNow * 60_000);
 
@@ -376,11 +387,13 @@ function EmployeeProfilePopover({
   statusLabel,
   onClose,
   position,
+  now,
 }: {
   attendance: Attendance;
   statusLabel: string;
   onClose: () => void;
   position: { left: string; top: string };
+  now: number;
 }) {
   const employeeName =
     attendance.employee?.full_name?.trim() || attendance.employee_name;
@@ -402,7 +415,7 @@ function EmployeeProfilePopover({
     </div>
     <div className="mt-3 rounded-xl bg-indigo-50/80 p-3 dark:bg-indigo-500/10"><p className="text-[9px] font-bold tracking-wider text-indigo-500">CURRENT TASK</p><p className="mt-1 text-xs font-bold leading-relaxed text-slate-800 dark:text-slate-100">{attendance.active_work_session?.task_description || "現在登録されている作業はありません"}</p></div>
     <div className="mt-3 grid grid-cols-3 gap-2 text-[10px]"><div><p className="text-slate-400">雇用形態</p><p className="mt-0.5 truncate font-semibold text-slate-700 dark:text-slate-200">{formatEmploymentType(attendance.employee?.employment_type)}</p></div><div><p className="text-slate-400">勤務開始</p><p className="mt-0.5 font-semibold text-slate-700 dark:text-slate-200">{formatWorkTime(attendance.clock_in)}</p></div><div><p className="text-slate-400">状態</p><p className="mt-0.5 inline-flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-200"><span className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />{statusLabel}</p></div></div>
-    {attendance.status === "outside" && <p className="mt-3 border-t border-slate-100 pt-2 text-[10px] font-semibold text-blue-600 dark:border-slate-700 dark:text-blue-300"><MapPin className="mr-1 inline" size={12} />{attendance.outside_destination || "外出先未登録"}</p>}
+    {attendance.status === "outside" && <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-700"><p className="text-[10px] font-semibold text-blue-600 dark:text-blue-300"><MapPin className="mr-1 inline" size={12} />{attendance.outside_destination || "外出先未登録"}</p><div className="mt-2 grid grid-cols-3 gap-2 text-[10px]"><div><p className="text-slate-400">外出開始</p><p className="mt-0.5 font-semibold text-slate-700 dark:text-slate-200">{formatWorkTime(attendance.outside_start ?? "")}</p></div><div><p className="text-slate-400">帰社予定</p><p className="mt-0.5 font-semibold text-blue-600 dark:text-blue-300">{formatWorkTime(attendance.outside_expected_end ?? "")}</p></div><div><p className="text-slate-400">外出時間</p><p className="mt-0.5 font-mono font-bold text-blue-700 dark:text-blue-200">{attendance.outside_start ? formatElapsedTime(attendance.outside_start, now) : "--:--:--"}</p></div></div></div>}
   </section>;
 }
 
@@ -770,6 +783,18 @@ export default function EmployeeRoom() {
 
     return () => window.clearInterval(intervalId);
   }, [assignedTasks]);
+
+  useEffect(() => {
+    const hasOutsideEmployee = activeAttendances.some(
+      (attendance) => attendance.status === "outside" && attendance.outside_start,
+    );
+
+    if (!hasOutsideEmployee) return;
+
+    const intervalId = window.setInterval(() => setTaskClock(Date.now()), 1_000);
+
+    return () => window.clearInterval(intervalId);
+  }, [activeAttendances]);
 
   // Khôi phục trạng thái chấm công của người đang đăng nhập sau khi tải lại trang.
   useEffect(() => {
@@ -1639,6 +1664,7 @@ export default function EmployeeRoom() {
                 attendance={selectedAttendance}
                 statusLabel={statusLabels[selectedAttendance.status]}
                 position={getEmployeePosition(selectedAttendance)}
+                now={taskClock}
                 onClose={() => setSelectedAttendanceId(null)}
               />
             )}
