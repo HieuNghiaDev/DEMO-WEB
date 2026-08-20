@@ -5,9 +5,11 @@ import {
   ChevronRight,
   FileText,
   Plus,
+  Pencil,
   RefreshCw,
   Search,
   Scale,
+  Trash2,
 } from 'lucide-react'
 import api from '../services/api'
 
@@ -798,19 +800,84 @@ function MobileCaseCard({
 /* ========================================================= */
 
 function CaseDetailPage({ caseFile, onBack }: { caseFile: CaseDetail; onBack: () => void }) {
+  type DocumentRecord = CaseDetail['documents'][number]
+  type DocumentForm = { title: string; category: string; file_url: string; version: string; status: string }
+
+  const emptyDocument = (): DocumentForm => ({
+    title: '',
+    category: 'その他',
+    file_url: '',
+    version: '1',
+    status: 'draft',
+  })
+
   const [tab, setTab] = useState<'documents' | 'precedents' | 'meetings'>('documents')
   const [currentCase, setCurrentCase] = useState(caseFile)
   const [dialog, setDialog] = useState<'document' | 'precedent' | 'meeting' | null>(null)
+  const [editingDocumentId, setEditingDocumentId] = useState<number | null>(null)
+  const [deletingDocumentId, setDeletingDocumentId] = useState<number | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [document, setDocument] = useState({ title: '', category: 'その他', file_url: '', version: '1', status: 'draft' })
+  const [document, setDocument] = useState<DocumentForm>(emptyDocument)
   const [precedent, setPrecedent] = useState({ title: '', citation: '', summary: '', relevance: '', source_url: '' })
   const [meeting, setMeeting] = useState({ meeting_date: new Date().toISOString().slice(0, 10), attendees: '', content: '', next_action: '', status: 'draft' })
   const records = tab === 'documents' ? currentCase.documents : tab === 'precedents' ? currentCase.precedents : currentCase.meeting_logs
   const businessCase = mapCaseFile(currentCase)
 
-  const openDialog = (next: 'document' | 'precedent' | 'meeting') => { setSaveError(null); setDialog(next) }
-  const closeDialog = () => { if (!isSaving) setDialog(null) }
+  const openDialog = (next: 'document' | 'precedent' | 'meeting') => {
+    setSaveError(null)
+    if (next === 'document') {
+      setEditingDocumentId(null)
+      setDocument(emptyDocument())
+    }
+    setDialog(next)
+  }
+
+  const openDocumentEdit = (record: DocumentRecord) => {
+    setSaveError(null)
+    setEditingDocumentId(record.id)
+    setDocument({
+      title: record.title,
+      category: record.category,
+      file_url: record.file_url ?? '',
+      version: record.version,
+      status: record.status,
+    })
+    setDialog('document')
+  }
+
+  const closeDialog = () => {
+    if (isSaving) return
+    setDialog(null)
+    setEditingDocumentId(null)
+    setSaveError(null)
+  }
+
+  const deleteDocument = async (record: DocumentRecord) => {
+    const confirmed = window.confirm(`「${record.title}」を削除しますか？\nこの操作は取り消せません。`)
+    if (!confirmed) return
+
+    setSaveError(null)
+    setDeletingDocumentId(record.id)
+
+    try {
+      await api.delete(`/case-files/${currentCase.id}/documents/${record.id}`)
+
+      setCurrentCase((value) => ({
+        ...value,
+        documents: value.documents.filter((item) => item.id !== record.id),
+        documents_count: Math.max(0, value.documents_count - 1),
+        confirmed_documents_count: Math.max(
+          0,
+          value.confirmed_documents_count - (record.status === 'confirmed' ? 1 : 0),
+        ),
+      }))
+    } catch {
+      setSaveError('資料を削除できませんでした。もう一度お試しください。')
+    } finally {
+      setDeletingDocumentId(null)
+    }
+  }
 
   const saveRecord = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -820,38 +887,157 @@ function CaseDetailPage({ caseFile, onBack }: { caseFile: CaseDetail; onBack: ()
 
     try {
       if (dialog === 'document') {
-        const response = await api.post<{ document: CaseDetail['documents'][number] }>(`/case-files/${currentCase.id}/documents`, { ...document, file_url: document.file_url || null })
-        setCurrentCase((value) => ({ ...value, documents: [response.data.document, ...value.documents], documents_count: value.documents_count + 1 }))
-        setDocument({ title: '', category: 'その他', file_url: '', version: '1', status: 'draft' })
+        const payload = { ...document, file_url: document.file_url || null }
+
+        if (editingDocumentId !== null) {
+          const oldDocument = currentCase.documents.find((item) => item.id === editingDocumentId)
+          const response = await api.patch<{ document: DocumentRecord }>(
+            `/case-files/${currentCase.id}/documents/${editingDocumentId}`,
+            payload,
+          )
+
+          setCurrentCase((value) => {
+            const wasConfirmed = oldDocument?.status === 'confirmed'
+            const isConfirmed = response.data.document.status === 'confirmed'
+            const confirmedDelta = wasConfirmed === isConfirmed ? 0 : isConfirmed ? 1 : -1
+
+            return {
+              ...value,
+              documents: value.documents.map((item) =>
+                item.id === editingDocumentId ? response.data.document : item,
+              ),
+              confirmed_documents_count: Math.max(
+                0,
+                value.confirmed_documents_count + confirmedDelta,
+              ),
+            }
+          })
+        } else {
+          const response = await api.post<{ document: DocumentRecord }>(
+            `/case-files/${currentCase.id}/documents`,
+            payload,
+          )
+          setCurrentCase((value) => ({
+            ...value,
+            documents: [response.data.document, ...value.documents],
+            documents_count: value.documents_count + 1,
+            confirmed_documents_count:
+              value.confirmed_documents_count +
+              (response.data.document.status === 'confirmed' ? 1 : 0),
+          }))
+        }
+
+        setDocument(emptyDocument())
+        setEditingDocumentId(null)
       }
+
       if (dialog === 'precedent') {
         const response = await api.post<{ precedent: CaseDetail['precedents'][number] }>(`/case-files/${currentCase.id}/precedents`, { ...precedent, citation: precedent.citation || null, summary: precedent.summary || null, relevance: precedent.relevance || null, source_url: precedent.source_url || null })
         setCurrentCase((value) => ({ ...value, precedents: [response.data.precedent, ...value.precedents] }))
         setPrecedent({ title: '', citation: '', summary: '', relevance: '', source_url: '' })
       }
+
       if (dialog === 'meeting') {
         const response = await api.post<{ meeting_log: CaseDetail['meeting_logs'][number] }>(`/case-files/${currentCase.id}/meeting-logs`, { ...meeting, attendees: meeting.attendees || null, next_action: meeting.next_action || null })
         setCurrentCase((value) => ({ ...value, meeting_logs: [response.data.meeting_log, ...value.meeting_logs] }))
         setMeeting({ meeting_date: new Date().toISOString().slice(0, 10), attendees: '', content: '', next_action: '', status: 'draft' })
       }
+
       setDialog(null)
     } catch {
-      setSaveError('保存できませんでした。必須項目とリンク形式を確認してください。')
+      setSaveError(editingDocumentId !== null ? '資料を更新できませんでした。入力内容を確認してください。' : '保存できませんでした。必須項目とリンク形式を確認してください。')
     } finally {
       setIsSaving(false)
     }
   }
 
   const actionLabel = tab === 'documents' ? '資料・書面を追加' : tab === 'precedents' ? '判例・メモを追加' : '打合せ記録を追加'
+  const dialogTitle = dialog === 'document'
+    ? editingDocumentId !== null ? '資料・書面を編集' : '資料・書面を追加'
+    : dialog === 'precedent'
+      ? '判例・法令メモを追加'
+      : '打合せ記録を追加'
 
   return <div className="w-full min-w-0 max-w-full px-3 pb-8 pt-3 sm:px-4 lg:px-6">
     <button type="button" onClick={onBack} className="mb-4 inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-indigo-200 hover:text-indigo-700 dark:border-slate-700 dark:bg-[#111a2e] dark:text-slate-200 dark:hover:border-indigo-400/50 dark:hover:text-indigo-300"><ChevronLeft size={17} />案件一覧に戻る</button>
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-[#111a2e]">
       <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 p-5 dark:border-slate-700"><div><p className="text-xs font-semibold text-sky-600">{currentCase.client.name}</p><h1 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">{currentCase.title}</h1><p className="mt-2 text-sm text-slate-500">種類: {currentCase.case_type ?? '未分類'} ・ 担当: {currentCase.assigned_employee?.full_name ?? '未割当'}</p></div><StatusBadge status={businessCase.status}/></header>
       <nav className="flex overflow-x-auto border-b border-slate-200 px-4 dark:border-slate-700">{([['documents', '資料・書面'], ['precedents', '判例・法令メモ'], ['meetings', '打合せ記録']] as const).map(([id, label]) => <button key={id} type="button" onClick={() => setTab(id)} className={`shrink-0 border-b-2 px-4 py-3 text-sm font-semibold ${tab === id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'}`}>{label}</button>)}</nav>
-      <div className="p-5"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-500 dark:text-slate-400">{tab === 'documents' ? '案件に必要な資料と外部ファイルのリンクを管理します。' : tab === 'precedents' ? '参考となる判例・法令・調査メモを残します。' : '顧客や社内との打合せ内容を記録します。'}</p><button type="button" onClick={() => openDialog(tab === 'documents' ? 'document' : tab === 'precedents' ? 'precedent' : 'meeting')} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-xs font-bold text-white transition hover:bg-indigo-500"><Plus size={15}/>{actionLabel}</button></div><div className="space-y-3">{records.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 py-10 text-center dark:border-slate-600"><p className="text-sm font-medium text-slate-500">この記録はまだありません。</p><button type="button" onClick={() => openDialog(tab === 'documents' ? 'document' : tab === 'precedents' ? 'precedent' : 'meeting')} className="mt-3 text-sm font-bold text-indigo-600">+ {actionLabel}</button></div> : records.map((record) => <article key={record.id} className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">{'category' in record && <><p className="font-bold text-slate-800 dark:text-slate-100">{record.title}</p><p className="mt-1 text-xs text-slate-500">{record.category} ・ v{record.version} ・ {record.status}</p>{record.file_url && <a href={record.file_url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-xs font-semibold text-indigo-600">資料リンクを開く</a>}</>}{'citation' in record && <><p className="font-bold text-slate-800 dark:text-slate-100">{record.title}</p>{record.citation && <p className="mt-1 text-xs text-slate-500">{record.citation}</p>}{record.summary && <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{record.summary}</p>}{record.relevance && <p className="mt-2 text-sm text-slate-500">関連性: {record.relevance}</p>}</>}{'meeting_date' in record && <><div className="flex justify-between gap-3"><p className="font-bold text-slate-800 dark:text-slate-100">{record.meeting_date}</p><span className="text-xs text-slate-500">{record.status}</span></div>{record.attendees && <p className="mt-1 text-xs text-slate-500">出席者: {record.attendees}</p>}<p className="mt-3 whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{record.content}</p>{record.next_action && <p className="mt-3 text-sm text-indigo-700">次の対応: {record.next_action}</p>}</>}</article>)}</div></div>
+      <div className="p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-slate-500 dark:text-slate-400">{tab === 'documents' ? '案件に必要な資料と外部ファイルのリンクを管理します。' : tab === 'precedents' ? '参考となる判例・法令・調査メモを残します。' : '顧客や社内との打合せ内容を記録します。'}</p>
+          <button type="button" onClick={() => openDialog(tab === 'documents' ? 'document' : tab === 'precedents' ? 'precedent' : 'meeting')} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-xs font-bold text-white transition hover:bg-indigo-500"><Plus size={15}/>{actionLabel}</button>
+        </div>
+
+        {saveError && !dialog && (
+          <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-600 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
+            {saveError}
+          </p>
+        )}
+
+        <div className="space-y-3">
+          {records.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-300 py-10 text-center dark:border-slate-600">
+              <p className="text-sm font-medium text-slate-500">この記録はまだありません。</p>
+              <button type="button" onClick={() => openDialog(tab === 'documents' ? 'document' : tab === 'precedents' ? 'precedent' : 'meeting')} className="mt-3 text-sm font-bold text-indigo-600">+ {actionLabel}</button>
+            </div>
+          ) : records.map((record) => (
+            <article key={record.id} className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+              {'category' in record && <>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-bold text-slate-800 dark:text-slate-100">{record.title}</p>
+                    <p className="mt-1 text-xs text-slate-500">{record.category} ・ v{record.version} ・ {record.status}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openDocumentEdit(record)}
+                      disabled={deletingDocumentId === record.id}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-600 transition hover:border-indigo-300 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-[#0c1527] dark:text-slate-300 dark:hover:border-indigo-400/60 dark:hover:text-indigo-300"
+                    >
+                      <Pencil size={13}/>
+                      編集
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void deleteDocument(record)}
+                      disabled={deletingDocumentId === record.id}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 text-xs font-bold text-rose-600 transition hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:border-rose-400/50 dark:hover:bg-rose-500/15"
+                    >
+                      <Trash2 size={13}/>
+                      {deletingDocumentId === record.id ? '削除中…' : '削除'}
+                    </button>
+                  </div>
+                </div>
+                {record.file_url && <a href={record.file_url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-xs font-semibold text-indigo-600">資料リンクを開く</a>}
+              </>}
+              {'citation' in record && <><p className="font-bold text-slate-800 dark:text-slate-100">{record.title}</p>{record.citation && <p className="mt-1 text-xs text-slate-500">{record.citation}</p>}{record.summary && <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{record.summary}</p>}{record.relevance && <p className="mt-2 text-sm text-slate-500">関連性: {record.relevance}</p>}</>}
+              {'meeting_date' in record && <><div className="flex justify-between gap-3"><p className="font-bold text-slate-800 dark:text-slate-100">{record.meeting_date}</p><span className="text-xs text-slate-500">{record.status}</span></div>{record.attendees && <p className="mt-1 text-xs text-slate-500">出席者: {record.attendees}</p>}<p className="mt-3 whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{record.content}</p>{record.next_action && <p className="mt-3 text-sm text-indigo-700">次の対応: {record.next_action}</p>}</>}
+            </article>
+          ))}
+        </div>
+      </div>
     </section>
-    {dialog && <Dialog title={dialog === 'document' ? '資料・書面を追加' : dialog === 'precedent' ? '判例・法令メモを追加' : '打合せ記録を追加'} onClose={closeDialog}><form onSubmit={saveRecord} className="space-y-4">{dialog === 'document' && <><FormField label="資料名 *"><input required value={document.title} onChange={(event) => setDocument({ ...document, title: event.target.value })} className={inputClass} placeholder="例：パスポート写し" /></FormField><div className="grid gap-3 sm:grid-cols-2"><FormField label="種類 *"><input required value={document.category} onChange={(event) => setDocument({ ...document, category: event.target.value })} className={inputClass} placeholder="例：本人確認書類" /></FormField><FormField label="ステータス"><select value={document.status} onChange={(event) => setDocument({ ...document, status: event.target.value })} className={inputClass}><option value="draft">下書き</option><option value="submitted">提出済み</option><option value="confirmed">確認済み</option></select></FormField></div><FormField label="資料リンク（任意）"><input type="url" value={document.file_url} onChange={(event) => setDocument({ ...document, file_url: event.target.value })} className={inputClass} placeholder="https://..." /></FormField><p className="text-xs text-slate-500">ファイル本体は保存せず、Box・Google Drive等の資料リンクを登録します。</p></>}{dialog === 'precedent' && <><FormField label="タイトル *"><input required value={precedent.title} onChange={(event) => setPrecedent({ ...precedent, title: event.target.value })} className={inputClass} /></FormField><FormField label="引用・法令番号"><input value={precedent.citation} onChange={(event) => setPrecedent({ ...precedent, citation: event.target.value })} className={inputClass} /></FormField><FormField label="要約"><textarea value={precedent.summary} onChange={(event) => setPrecedent({ ...precedent, summary: event.target.value })} className={textareaClass} /></FormField><FormField label="案件との関連"><input value={precedent.relevance} onChange={(event) => setPrecedent({ ...precedent, relevance: event.target.value })} className={inputClass} /></FormField></>}{dialog === 'meeting' && <><div className="grid gap-3 sm:grid-cols-2"><FormField label="日付 *"><input required type="date" value={meeting.meeting_date} onChange={(event) => setMeeting({ ...meeting, meeting_date: event.target.value })} className={inputClass} /></FormField><FormField label="出席者"><input value={meeting.attendees} onChange={(event) => setMeeting({ ...meeting, attendees: event.target.value })} className={inputClass} /></FormField></div><FormField label="内容 *"><textarea required value={meeting.content} onChange={(event) => setMeeting({ ...meeting, content: event.target.value })} className={textareaClass} /></FormField><FormField label="次の対応"><input value={meeting.next_action} onChange={(event) => setMeeting({ ...meeting, next_action: event.target.value })} className={inputClass} /></FormField></>}{saveError && <p className="text-sm font-medium text-rose-600">{saveError}</p>}<DialogActions onClose={closeDialog} submitting={isSaving} submitLabel="保存する" /></form></Dialog>}
+
+    {dialog && <Dialog title={dialogTitle} onClose={closeDialog}>
+      <form onSubmit={saveRecord} className="space-y-4">
+        {dialog === 'document' && <>
+          <FormField label="資料名 *"><input required value={document.title} onChange={(event) => setDocument({ ...document, title: event.target.value })} className={inputClass} placeholder="例：パスポート写し" /></FormField>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FormField label="種類 *"><input required value={document.category} onChange={(event) => setDocument({ ...document, category: event.target.value })} className={inputClass} placeholder="例：本人確認書類" /></FormField>
+            <FormField label="バージョン"><input required value={document.version} onChange={(event) => setDocument({ ...document, version: event.target.value })} className={inputClass} placeholder="例：1" /></FormField>
+          </div>
+          <FormField label="ステータス"><select value={document.status} onChange={(event) => setDocument({ ...document, status: event.target.value })} className={inputClass}><option value="draft">下書き</option><option value="submitted">提出済み</option><option value="confirmed">確認済み</option></select></FormField>
+          <FormField label="資料リンク（任意）"><input type="url" value={document.file_url} onChange={(event) => setDocument({ ...document, file_url: event.target.value })} className={inputClass} placeholder="https://..." /></FormField>
+          <p className="text-xs text-slate-500">ファイル本体は保存せず、Box・Google Drive等の資料リンクを登録します。</p>
+        </>}
+        {dialog === 'precedent' && <><FormField label="タイトル *"><input required value={precedent.title} onChange={(event) => setPrecedent({ ...precedent, title: event.target.value })} className={inputClass} /></FormField><FormField label="引用・法令番号"><input value={precedent.citation} onChange={(event) => setPrecedent({ ...precedent, citation: event.target.value })} className={inputClass} /></FormField><FormField label="要約"><textarea value={precedent.summary} onChange={(event) => setPrecedent({ ...precedent, summary: event.target.value })} className={textareaClass} /></FormField><FormField label="案件との関連"><input value={precedent.relevance} onChange={(event) => setPrecedent({ ...precedent, relevance: event.target.value })} className={inputClass} /></FormField></>}
+        {dialog === 'meeting' && <><div className="grid gap-3 sm:grid-cols-2"><FormField label="日付 *"><input required type="date" value={meeting.meeting_date} onChange={(event) => setMeeting({ ...meeting, meeting_date: event.target.value })} className={inputClass} /></FormField><FormField label="出席者"><input value={meeting.attendees} onChange={(event) => setMeeting({ ...meeting, attendees: event.target.value })} className={inputClass} /></FormField></div><FormField label="内容 *"><textarea required value={meeting.content} onChange={(event) => setMeeting({ ...meeting, content: event.target.value })} className={textareaClass} /></FormField><FormField label="次の対応"><input value={meeting.next_action} onChange={(event) => setMeeting({ ...meeting, next_action: event.target.value })} className={inputClass} /></FormField></>}
+        {saveError && <p className="text-sm font-medium text-rose-600">{saveError}</p>}
+        <DialogActions onClose={closeDialog} submitting={isSaving} submitLabel={dialog === 'document' && editingDocumentId !== null ? '更新する' : '保存する'} />
+      </form>
+    </Dialog>}
   </div>
 }
 
