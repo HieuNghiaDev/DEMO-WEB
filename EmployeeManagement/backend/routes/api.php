@@ -57,6 +57,7 @@ Route::middleware([
         Route::get('documents', [CaseDocumentController::class, 'index']);
         Route::post('documents', [CaseDocumentController::class, 'store']);
         Route::patch('documents/{document}', [CaseDocumentController::class, 'update']);
+        Route::delete('documents/{document}', [CaseDocumentController::class, 'destroy']);
         Route::get('precedents', [CasePrecedentController::class, 'index']);
         Route::post('precedents', [CasePrecedentController::class, 'store']);
         Route::get('meeting-logs', [CaseMeetingLogController::class, 'index']);
@@ -69,6 +70,16 @@ Route::middleware([
         Route::get('/my-report', [
             AttendanceController::class,
             'personalReport',
+        ]);
+
+        Route::get('/my-history', [
+            AttendanceController::class,
+            'history',
+        ]);
+
+        Route::get('/my-timeline', [
+            AttendanceController::class,
+            'timeline',
         ]);
 
         Route::get('/active', [

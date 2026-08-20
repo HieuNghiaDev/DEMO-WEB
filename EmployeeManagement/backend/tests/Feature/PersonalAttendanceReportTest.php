@@ -49,6 +49,25 @@ class PersonalAttendanceReportTest extends TestCase
             'ended_at' => '2026-08-13 10:00:00',
             'status' => 'completed',
         ]);
+        $attendance->periods()->createMany([
+            [
+                'type' => 'break',
+                'started_at' => '2026-08-13 10:00:00',
+                'ended_at' => '2026-08-13 10:15:00',
+            ],
+            [
+                'type' => 'break',
+                'started_at' => '2026-08-13 12:00:00',
+                'ended_at' => '2026-08-13 12:45:00',
+            ],
+            [
+                'type' => 'outside',
+                'started_at' => '2026-08-13 14:00:00',
+                'expected_end_at' => '2026-08-13 15:00:00',
+                'ended_at' => '2026-08-13 14:50:00',
+                'destination' => '大阪法務局',
+            ],
+        ]);
         $this->createAttendance($otherEmployee, '2026-08-12');
 
         Sanctum::actingAs(User::factory()->create([
@@ -73,10 +92,10 @@ class PersonalAttendanceReportTest extends TestCase
 
         try {
             $workbook = IOFactory::load($temporaryFile);
-            $this->assertSame(['勤怠記録', '作業記録'], $workbook->getSheetNames());
+            $this->assertSame(['勤怠サマリー', '作業記録', '勤務履歴'], $workbook->getSheetNames());
 
             $attendanceValues = json_encode(
-                $workbook->getSheetByName('勤怠記録')?->toArray(),
+                $workbook->getSheetByName('勤怠サマリー')?->toArray(),
                 JSON_UNESCAPED_UNICODE
             );
             $workSessionSheet = $workbook->getSheetByName('作業記録');
@@ -84,10 +103,25 @@ class PersonalAttendanceReportTest extends TestCase
                 $workSessionSheet?->toArray(),
                 JSON_UNESCAPED_UNICODE
             );
+            $periodValues = json_encode(
+                $workbook->getSheetByName('勤務履歴')?->toArray(),
+                JSON_UNESCAPED_UNICODE
+            );
 
             $this->assertStringContainsString('LE HIEU NGHIA', $attendanceValues);
             $this->assertStringNotContainsString('TRINH THI THU HUONG', $attendanceValues);
             $this->assertStringContainsString('HYPERLINK', $workSessionValues);
+            $this->assertStringContainsString('大阪法務局', $periodValues);
+            $periodSheet = $workbook->getSheetByName('勤務履歴');
+            $this->assertSame('休憩', $periodSheet?->getCell('C7')->getValue());
+            $this->assertNotNull($periodSheet?->getCell('E7')->getValue());
+            $this->assertNotNull($periodSheet?->getCell('G7')->getValue());
+            $this->assertSame('休憩', $periodSheet?->getCell('C8')->getValue());
+            $this->assertNotNull($periodSheet?->getCell('E8')->getValue());
+            $this->assertNotNull($periodSheet?->getCell('G8')->getValue());
+            $this->assertSame(2, $workbook->getSheetByName('勤怠サマリー')?->getCell('D9')->getValue());
+            $this->assertSame('外出合計', $workbook->getSheetByName('勤怠サマリー')?->getCell('G8')->getValue());
+            $this->assertStringContainsString('"外出"', (string) $workbook->getSheetByName('勤怠サマリー')?->getCell('G9')->getValue());
             $this->assertSame(
                 DataType::TYPE_STRING,
                 $workSessionSheet?->getCell('B8')->getDataType()

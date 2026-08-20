@@ -151,4 +151,75 @@ class AttendanceOutsideStatusTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('outside_destination');
     }
+
+    public function test_one_shift_keeps_multiple_breaks_and_outside_periods(): void
+    {
+        $this->mock(AttendanceExcelService::class)
+            ->shouldReceive('sync')
+            ->zeroOrMoreTimes();
+
+        Carbon::setTestNow('2026-08-12 09:00:00');
+        $attendance = Attendance::create([
+            'employee_id' => $this->employee->id,
+            'employee_name' => $this->employee->full_name,
+            'work_date' => '2026-08-12',
+            'clock_in' => now(),
+            'status' => 'working',
+        ]);
+
+        foreach ([
+            ['09:30:00', ['status' => 'break']],
+            ['09:45:00', ['status' => 'working']],
+            ['11:00:00', ['status' => 'break']],
+            ['11:10:00', ['status' => 'working']],
+            ['13:00:00', [
+                'status' => 'outside',
+                'outside_destination' => '大阪法務局',
+                'outside_start' => '13:00',
+                'outside_expected_end' => '14:00',
+            ]],
+            ['13:50:00', ['status' => 'working']],
+            ['15:00:00', [
+                'status' => 'outside',
+                'outside_destination' => '松原市役所',
+                'outside_start' => '15:00',
+                'outside_expected_end' => '16:00',
+            ]],
+            ['15:40:00', ['status' => 'working']],
+        ] as [$time, $payload]) {
+            Carbon::setTestNow("2026-08-12 {$time}");
+            $this->patchJson("/api/attendances/{$attendance->id}/status", $payload)
+                ->assertOk();
+        }
+
+        $this->assertDatabaseCount('attendance_periods', 4);
+        $this->assertSame(2, $attendance->periods()->where('type', 'break')->count());
+        $this->assertSame(2, $attendance->periods()->where('type', 'outside')->count());
+        $this->assertSame(
+            ['大阪法務局', '松原市役所'],
+            $attendance->periods()
+                ->where('type', 'outside')
+                ->orderBy('started_at')
+                ->pluck('destination')
+                ->all()
+        );
+        $this->assertSame(0, $attendance->periods()->whereNull('ended_at')->count());
+
+        $this->getJson('/api/attendances/my-history')
+            ->assertOk()
+            ->assertJsonPath('attendances.0.break_count', 2)
+            ->assertJsonPath('attendances.0.break_minutes', 25)
+            ->assertJsonPath('attendances.0.outside_count', 2)
+            ->assertJsonPath('attendances.0.outside_minutes', 90);
+
+        $this->getJson('/api/attendances/my-timeline')
+            ->assertOk()
+            ->assertJsonPath('attendance.id', $attendance->id)
+            ->assertJsonPath('summary.break_count', 2)
+            ->assertJsonPath('summary.break_seconds', 1500)
+            ->assertJsonPath('summary.outside_count', 2)
+            ->assertJsonPath('summary.outside_seconds', 5400)
+            ->assertJsonPath('summary.work_seconds', 22500)
+            ->assertJsonCount(4, 'activities');
+    }
 }

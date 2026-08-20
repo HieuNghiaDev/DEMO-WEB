@@ -31,6 +31,14 @@ class CaseDocumentController extends Controller
         return response()->json(['document' => $document]);
     }
 
+    public function destroy(CaseFile $caseFile, CaseDocument $document): JsonResponse
+    {
+        abort_unless($document->case_file_id === $caseFile->id, 404);
+        $document->delete();
+
+        return response()->json(['message' => '資料を削除しました。']);
+    }
+
     private function validated(Request $request, bool $partial = false): array
     {
         return $request->validate([

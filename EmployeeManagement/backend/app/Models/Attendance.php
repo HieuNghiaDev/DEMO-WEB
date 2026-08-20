@@ -48,6 +48,19 @@ class Attendance extends Model
         return $this->hasMany(WorkSession::class);
     }
 
+    public function periods(): HasMany
+    {
+        return $this->hasMany(AttendancePeriod::class)
+            ->orderBy('started_at');
+    }
+
+    public function activePeriod(): HasOne
+    {
+        return $this->hasOne(AttendancePeriod::class)
+            ->whereNull('ended_at')
+            ->latestOfMany('started_at');
+    }
+
     public function activeWorkSession()
     {
         return $this->hasOne(WorkSession::class)

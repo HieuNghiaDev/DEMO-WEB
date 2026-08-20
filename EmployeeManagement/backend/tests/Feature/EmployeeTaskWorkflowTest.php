@@ -97,7 +97,12 @@ class EmployeeTaskWorkflowTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('task.status', 'in_progress')
-            ->assertJsonPath('task.work_session_id', 1);
+            ->assertJsonPath('task.work_session_id', 1)
+            ->assertJsonPath('task.work_session.status', 'active')
+            ->assertJsonPath(
+                'task.work_session.task_description',
+                '契約書の確認'
+            );
 
         $this->assertDatabaseHas('work_sessions', [
             'id' => 1,

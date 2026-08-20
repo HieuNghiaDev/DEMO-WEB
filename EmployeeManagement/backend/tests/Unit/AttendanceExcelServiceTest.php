@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\Attendance;
+use App\Models\AttendancePeriod;
 use App\Models\Employee;
 use App\Models\WorkSession;
 use App\Services\AttendanceExcelService;
@@ -55,6 +56,15 @@ class AttendanceExcelServiceTest extends TestCase
         ]);
         $attendance->id = 42;
         $attendance->setRelation('employee', $employee);
+        $period = new AttendancePeriod([
+            'type' => 'outside',
+            'destination' => '大阪法務局で書類提出',
+            'started_at' => '2026-08-13 10:00:00',
+            'expected_end_at' => '2026-08-13 12:00:00',
+        ]);
+        $period->id = 7;
+        $period->attendance_id = 42;
+        $attendance->setRelation('periods', collect([$period]));
 
         app(AttendanceExcelService::class)->sync($attendance);
 
@@ -70,9 +80,12 @@ class AttendanceExcelServiceTest extends TestCase
         $this->assertSame('大阪法務局で書類提出', $sheet->getCell('H6')->getValue());
         $this->assertSame('外出中', $sheet->getCell('M6')->getValue());
         $this->assertSame(
-            '=IF(L6="","",MAX(0,L6-E6-IF(OR(F6="",G6=""),0,G6-F6)))',
+            '=IF(L6="","",MAX(0,L6-E6-SUMIFS(\'休憩・外出履歴\'!$K$6:$K$5000,\'休憩・外出履歴\'!$B$6:$B$5000,A6,\'休憩・外出履歴\'!$F$6:$F$5000,"休憩")))',
             $sheet->getCell('N6')->getValue()
         );
+        $periodSheet = $spreadsheet->getSheetByName('休憩・外出履歴');
+        $this->assertNotNull($periodSheet);
+        $this->assertSame('大阪法務局で書類提出', $periodSheet->getCell('G6')->getValue());
 
         $spreadsheet->disconnectWorksheets();
     }

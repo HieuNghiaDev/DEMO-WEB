@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\EmployeeTask;
 use App\Models\WorkSession;
 use App\Services\AttendanceExcelService;
 use App\Services\SecurityAuditLogger;
@@ -56,6 +57,14 @@ class WorkSessionController extends Controller
                         'ended_at' => $now,
                         'status' => 'completed',
                     ]);
+
+                    EmployeeTask::query()
+                        ->where('work_session_id', $session->id)
+                        ->where('status', 'in_progress')
+                        ->update([
+                            'status' => 'completed',
+                            'completed_at' => $now,
+                        ]);
                 }
 
                 $workSession = $attendance->workSessions()->create([
@@ -99,12 +108,24 @@ class WorkSessionController extends Controller
         $workSession->loadMissing('attendance');
         $this->authorizeAttendance($workSession->attendance, $employee);
 
-        if ($workSession->status !== 'completed') {
-            $workSession->update([
-                'ended_at' => now(),
-                'status' => 'completed',
-            ]);
-        }
+        DB::transaction(function () use ($workSession) {
+            $now = now();
+
+            if ($workSession->status !== 'completed') {
+                $workSession->update([
+                    'ended_at' => $now,
+                    'status' => 'completed',
+                ]);
+            }
+
+            EmployeeTask::query()
+                ->where('work_session_id', $workSession->id)
+                ->where('status', 'in_progress')
+                ->update([
+                    'status' => 'completed',
+                    'completed_at' => $now,
+                ]);
+        });
 
         $workSession = $workSession->fresh();
         $this->syncExcelSafely($workSession);

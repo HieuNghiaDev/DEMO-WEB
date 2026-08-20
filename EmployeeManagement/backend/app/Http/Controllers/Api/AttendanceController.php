@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
+use App\Models\AttendancePeriod;
 use App\Models\Employee;
 use App\Models\WorkSession;
 use App\Services\AttendanceExcelService;
@@ -88,6 +89,114 @@ class AttendanceController extends Controller
         return response()->json([
             'count' => $attendances->count(),
             'attendances' => $attendances,
+        ]);
+    }
+
+    /** Recent shifts, work sessions and status periods for the signed-in employee. */
+    public function history(Request $request): JsonResponse
+    {
+        $employee = $this->authenticatedEmployee($request);
+        $limit = min(max((int) $request->integer('limit', 8), 1), 30);
+
+        $attendances = Attendance::query()
+            ->where('employee_id', $employee->id)
+            ->with([
+                'periods',
+                'workSessions' => fn ($query) => $query->orderBy('started_at'),
+            ])
+            ->latest('clock_in')
+            ->limit($limit)
+            ->get()
+            ->map(function (Attendance $attendance): array {
+                $breakPeriods = $attendance->periods->where('type', 'break');
+                $outsidePeriods = $attendance->periods->where('type', 'outside');
+                $shiftEnd = $attendance->clock_out ?? now();
+                $totalMinutes = max(
+                    0,
+                    (int) floor($attendance->clock_in->diffInMinutes($shiftEnd))
+                );
+                $breakMinutes = $breakPeriods->sum(
+                    fn (AttendancePeriod $period): int => $this->periodMinutes($period)
+                );
+
+                return [
+                    'id' => $attendance->id,
+                    'work_date' => $attendance->work_date,
+                    'clock_in' => $attendance->clock_in,
+                    'clock_out' => $attendance->clock_out,
+                    'status' => $attendance->status,
+                    'break_count' => $breakPeriods->count(),
+                    'break_minutes' => $breakMinutes,
+                    'outside_count' => $outsidePeriods->count(),
+                    'outside_minutes' => $outsidePeriods->sum(
+                        fn (AttendancePeriod $period): int => $this->periodMinutes($period)
+                    ),
+                    'work_minutes' => max(0, $totalMinutes - $breakMinutes),
+                    'periods' => $attendance->periods->values(),
+                    'work_sessions' => $attendance->workSessions->values(),
+                ];
+            });
+
+        return response()->json(['attendances' => $attendances]);
+    }
+
+    /** Live timeline for the employee's current (or latest) shift today. */
+    public function timeline(Request $request): JsonResponse
+    {
+        $employee = $this->authenticatedEmployee($request);
+        $attendance = Attendance::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('work_date', now()->toDateString())
+            ->whereNull('clock_out')
+            ->with(['periods', 'workSessions' => fn ($query) => $query->orderBy('started_at')])
+            ->latest('clock_in')
+            ->first();
+
+        if ($attendance === null) {
+            return response()->json([
+                'attendance' => null,
+                'summary' => [
+                    'break_count' => 0,
+                    'break_seconds' => 0,
+                    'outside_count' => 0,
+                    'outside_seconds' => 0,
+                    'work_seconds' => 0,
+                ],
+                'activities' => [],
+            ]);
+        }
+
+        $breakPeriods = $attendance->periods->where('type', 'break');
+        $outsidePeriods = $attendance->periods->where('type', 'outside');
+        $breakSeconds = $breakPeriods->sum(
+            fn (AttendancePeriod $period): int => $this->periodSeconds($period)
+        );
+        $outsideSeconds = $outsidePeriods->sum(
+            fn (AttendancePeriod $period): int => $this->periodSeconds($period)
+        );
+        $shiftSeconds = max(
+            0,
+            (int) floor($attendance->clock_in->diffInSeconds($attendance->clock_out ?? now()))
+        );
+
+        return response()->json([
+            'attendance' => [
+                'id' => $attendance->id,
+                'work_date' => $attendance->work_date,
+                'clock_in' => $attendance->clock_in,
+                'clock_out' => $attendance->clock_out,
+                'status' => $attendance->status,
+            ],
+            'summary' => [
+                'break_count' => $breakPeriods->count(),
+                'break_seconds' => $breakSeconds,
+                'outside_count' => $outsidePeriods->count(),
+                'outside_seconds' => $outsideSeconds,
+                // Outside work is paid work; only breaks are deducted.
+                'work_seconds' => max(0, $shiftSeconds - $breakSeconds),
+            ],
+            'activities' => $attendance->periods->values(),
+            'work_sessions' => $attendance->workSessions->values(),
         ]);
     }
 
@@ -229,8 +338,15 @@ class AttendanceController extends Controller
                 break;
 
             case 'break':
-                if ($attendance->break_start === null) {
+                if ($previousStatus !== 'break') {
+                    $attendance->periods()->create([
+                        'type' => 'break',
+                        'started_at' => $now,
+                    ]);
+
+                    // Keep the newest period in legacy columns during rollout.
                     $attendance->break_start = $now;
+                    $attendance->break_end = null;
                 }
 
                 $message = '休憩を開始しました。';
@@ -257,6 +373,25 @@ class AttendanceController extends Controller
                     // ngoài trong cùng phút thì lấy thời điểm hiện tại.
                     $outsideStart = $now;
                 }
+
+                $outsidePeriod = $attendance->periods()
+                    ->where('type', 'outside')
+                    ->whereNull('ended_at')
+                    ->latest('started_at')
+                    ->first();
+
+                if ($outsidePeriod === null) {
+                    $outsidePeriod = $attendance->periods()->create([
+                        'type' => 'outside',
+                        'started_at' => $outsideStart,
+                    ]);
+                }
+
+                $outsidePeriod->update([
+                    'started_at' => $outsideStart,
+                    'expected_end_at' => $outsideExpectedEnd,
+                    'destination' => trim($validated['outside_destination']),
+                ]);
 
                 $attendance->outside_start = $outsideStart;
                 $attendance->outside_expected_end = $outsideExpectedEnd;
@@ -317,21 +452,45 @@ class AttendanceController extends Controller
     ): void {
         if (
             $attendance->status === 'break' &&
-            $newStatus !== 'break' &&
-            $attendance->break_start !== null &&
-            $attendance->break_end === null
+            $newStatus !== 'break'
         ) {
+            $attendance->periods()
+                ->where('type', 'break')
+                ->whereNull('ended_at')
+                ->update(['ended_at' => $now]);
             $attendance->break_end = $now;
         }
 
         if (
             $attendance->status === 'outside' &&
-            $newStatus !== 'outside' &&
-            $attendance->outside_start !== null &&
-            $attendance->outside_end === null
+            $newStatus !== 'outside'
         ) {
+            $attendance->periods()
+                ->where('type', 'outside')
+                ->whereNull('ended_at')
+                ->update(['ended_at' => $now]);
             $attendance->outside_end = $now;
         }
+    }
+
+    private function periodMinutes(AttendancePeriod $period): int
+    {
+        return max(
+            0,
+            (int) floor(
+                $period->started_at->diffInMinutes($period->ended_at ?? now())
+            )
+        );
+    }
+
+    private function periodSeconds(AttendancePeriod $period): int
+    {
+        return max(
+            0,
+            (int) floor(
+                $period->started_at->diffInSeconds($period->ended_at ?? now())
+            )
+        );
     }
 
     /** @return array{0: Carbon, 1: Carbon} */
@@ -364,6 +523,7 @@ class AttendanceController extends Controller
         $attendance->loadMissing([
             'employee:id,employee_code,full_name,full_name_kana,gender,avatar_path,position_title,employment_type',
             'activeWorkSession',
+            'periods',
         ]);
 
         if ($attendance->employee === null) {

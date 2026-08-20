@@ -21,6 +21,7 @@ import {
   Timer,
   Download,
   FileSpreadsheet,
+  History,
   X,
 } from "lucide-react";
 
@@ -49,6 +50,16 @@ type WorkSession = {
   status: "active" | "completed";
 };
 
+type AttendancePeriod = {
+  id: number;
+  attendance_id: number;
+  type: "break" | "outside";
+  started_at: string;
+  expected_end_at: string | null;
+  ended_at: string | null;
+  destination: string | null;
+};
+
 type Attendance = {
   id: number;
   employee_name: string;
@@ -63,6 +74,7 @@ type Attendance = {
   clock_out: string | null;
   status: WorkStatus;
   active_work_session: WorkSession | null;
+  periods: AttendancePeriod[];
   employee: {
     id: number;
     employee_code: string;
@@ -100,6 +112,7 @@ type AssignedTaskStatus =
 type AssignedTask = {
   id: number;
   employee_id: number;
+  work_session_id: number | null;
   title: string;
   description: string | null;
   duration_minutes: number;
@@ -108,6 +121,7 @@ type AssignedTask = {
   accepted_at: string | null;
   completed_at: string | null;
   created_at: string;
+  work_session?: WorkSession | null;
 };
 
 type AssignedTasksResponse = {
@@ -117,6 +131,29 @@ type AssignedTasksResponse = {
 type AssignedTaskResponse = {
   message: string;
   task: AssignedTask;
+};
+
+type TimelineAttendance = {
+  id: number;
+  work_date: string;
+  clock_in: string;
+  clock_out: string | null;
+  status: WorkStatus;
+};
+
+type TimelineSummary = {
+  break_count: number;
+  break_seconds: number;
+  outside_count: number;
+  outside_seconds: number;
+  work_seconds: number;
+};
+
+type TimelineResponse = {
+  attendance: TimelineAttendance | null;
+  summary: TimelineSummary;
+  activities: AttendancePeriod[];
+  work_sessions?: WorkSession[];
 };
 
 type NotificationKind = "success" | "info" | "warning" | "error";
@@ -226,6 +263,22 @@ const formatExpectedTime = (value: string) =>
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: "Asia/Tokyo",
+  }).format(new Date(value));
+
+const formatSeconds = (seconds: number) => {
+  const totalMinutes = Math.floor(seconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const rest = totalMinutes % 60;
+
+  return hours > 0 ? `${hours}時間${rest ? `${rest}分` : ""}` : `${rest}分`;
+};
+
+const formatWorkDate = (value: string) =>
+  new Intl.DateTimeFormat("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    weekday: "short",
     timeZone: "Asia/Tokyo",
   }).format(new Date(value));
 
@@ -563,6 +616,8 @@ export default function EmployeeRoom() {
   const [toastNotification, setToastNotification] =
     useState<UserNotification | null>(null);
   const [assignedTasks, setAssignedTasks] = useState<AssignedTask[]>([]);
+  const [timeline, setTimeline] = useState<TimelineResponse | null>(null);
+  const [timelineError, setTimelineError] = useState("");
   const [taskClock, setTaskClock] = useState(() => Date.now());
   const [updatingAssignedTaskId, setUpdatingAssignedTaskId] = useState<
     number | null
@@ -587,6 +642,70 @@ export default function EmployeeRoom() {
   const pendingAssignedTaskCount = assignedTasks.filter(
     (task) => task.status === "pending",
   ).length;
+  const timelineEvents = timeline?.attendance
+    ? [
+        {
+          id: `shift-start-${timeline.attendance.id}`,
+          at: timeline.attendance.clock_in,
+          title: "勤務開始",
+          detail: "出勤",
+          kind: "working" as const,
+        },
+        ...timeline.activities.flatMap((activity) => {
+          const startEvent = {
+            id: `activity-start-${activity.id}`,
+            at: activity.started_at,
+            title: activity.type === "break" ? "休憩開始" : "外出",
+            detail:
+              activity.type === "outside"
+                ? [
+                    activity.destination || "外出先未登録",
+                    activity.expected_end_at
+                      ? `帰社予定 ${formatWorkTime(activity.expected_end_at)}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join("・")
+                : "休憩に入りました",
+            kind: activity.type,
+          };
+
+          if (!activity.ended_at) return [startEvent];
+
+          const durationSeconds = Math.max(
+            0,
+            Math.floor(
+              (new Date(activity.ended_at).getTime() -
+                new Date(activity.started_at).getTime()) /
+                1000,
+            ),
+          );
+
+          return [
+            startEvent,
+            {
+              id: `activity-end-${activity.id}`,
+              at: activity.ended_at,
+              title: activity.type === "break" ? "勤務再開" : "帰社",
+              detail: formatSeconds(durationSeconds),
+              kind: "working" as const,
+            },
+          ];
+        }),
+        ...(timeline.attendance.clock_out
+          ? [
+              {
+                id: `shift-end-${timeline.attendance.id}`,
+                at: timeline.attendance.clock_out,
+                title: "勤務終了",
+                detail: "退勤",
+                kind: "offline" as const,
+              },
+            ]
+          : []),
+      ].sort((left, right) => new Date(left.at).getTime() - new Date(right.at).getTime())
+    : [];
+  const recentTimelineEvents = timelineEvents.slice(-4);
 
   const saveNotifications = useCallback(
     (nextNotifications: UserNotification[]) => {
@@ -722,6 +841,18 @@ export default function EmployeeRoom() {
     }
   }, []);
 
+  const loadTimeline = useCallback(async () => {
+    try {
+      const response = await api.get<TimelineResponse>(
+        "/attendances/my-timeline",
+      );
+      setTimeline(response.data);
+      setTimelineError("");
+    } catch {
+      setTimelineError("本日の勤務履歴を読み込めませんでした。");
+    }
+  }, []);
+
   useEffect(() => {
     if (!user || !notificationStorageKey) return;
 
@@ -791,6 +922,21 @@ export default function EmployeeRoom() {
       window.clearInterval(intervalId);
     };
   }, [loadAssignedTasks]);
+
+  useEffect(() => {
+    const initialLoadId = window.setTimeout(() => {
+      void loadTimeline();
+    }, 0);
+
+    const intervalId = window.setInterval(() => {
+      void loadTimeline();
+    }, 10000);
+
+    return () => {
+      window.clearTimeout(initialLoadId);
+      window.clearInterval(intervalId);
+    };
+  }, [loadTimeline]);
 
   useEffect(() => {
     const pendingTasks = assignedTasks.filter((task) => task.status === "pending");
@@ -985,6 +1131,36 @@ export default function EmployeeRoom() {
             ),
       );
 
+      if (status === "in_progress" && updatedTask.work_session) {
+        setActiveWorkSession(updatedTask.work_session);
+        setActiveAttendances((current) =>
+          current.map((attendance) =>
+            attendance.id === updatedTask.work_session?.attendance_id
+              ? {
+                  ...attendance,
+                  active_work_session: updatedTask.work_session ?? null,
+                }
+              : attendance,
+          ),
+        );
+      }
+
+      if (
+        status === "completed" &&
+        activeWorkSession?.id === updatedTask.work_session_id
+      ) {
+        setActiveWorkSession(null);
+        setActiveAttendances((current) =>
+          current.map((attendance) =>
+            attendance.id === activeWorkSession.attendance_id
+              ? { ...attendance, active_work_session: null }
+              : attendance,
+          ),
+        );
+      }
+
+      void loadTimeline();
+
       pushNotification({
         sourceKey: `assigned-task-${status}-${updatedTask.id}`,
         title: status === "completed" ? "業務を完了しました" : "業務を開始しました",
@@ -1054,6 +1230,7 @@ export default function EmployeeRoom() {
         ...current.filter((item) => item.id !== newAttendance.id),
         newAttendance,
       ]);
+      void loadTimeline();
       pushNotification({
         sourceKey: `attendance-start-${newAttendance.id}`,
         title: "勤務を開始しました",
@@ -1149,6 +1326,7 @@ export default function EmployeeRoom() {
         ),
       );
       setTaskModalMode(null);
+      void loadTimeline();
       pushNotification({
         sourceKey: `work-session-${workSession.id}`,
         title: "作業を開始しました",
@@ -1190,6 +1368,8 @@ export default function EmployeeRoom() {
             : attendance,
         ),
       );
+      void loadTimeline();
+      void loadAssignedTasks();
       pushNotification({
         sourceKey: `work-session-completed-${completedSession.id}`,
         title: "作業を完了しました",
@@ -1286,6 +1466,7 @@ export default function EmployeeRoom() {
       setWorkStatus(updatedAttendance.status);
       setActiveWorkSession(updatedAttendance.active_work_session ?? null);
       setPendingStatus(null);
+      void loadTimeline();
 
       setActiveAttendances((current) => {
         if (updatedAttendance.status === "offline") {
@@ -2059,7 +2240,75 @@ export default function EmployeeRoom() {
                 <p className="mt-1 text-xs leading-relaxed text-gray-400 dark:text-slate-500">新しい業務が届くと、ここから内容の確認と進捗の更新ができます。</p>
               </>
             )}
+
           </div>
+
+          {/* Live attendance timeline: shown only while the employee is clocked in. */}
+          {timeline?.attendance && (
+          <div className="order-3 relative overflow-hidden rounded-2xl border border-sky-100 bg-white p-5 shadow-sm dark:border-sky-500/20 dark:bg-slate-900">
+            <div className="absolute left-0 right-0 top-0 h-1 bg-gradient-to-r from-sky-500 to-indigo-500" />
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-600 dark:text-sky-300">
+                  <History size={13} /> TODAY ACTIVITY
+                </span>
+                <h3 className="mt-1 text-sm font-bold text-slate-800 dark:text-white">本日の勤務履歴</h3>
+                <p className="mt-0.5 text-[10px] text-slate-400">{formatWorkDate(timeline.attendance.work_date)}</p>
+              </div>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[9px] font-bold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> LIVE
+              </span>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2">
+                {[
+                  ["出勤", formatWorkTime(timeline.attendance.clock_in), "text-indigo-600 dark:text-indigo-300"],
+                  ["休憩", `${timeline.summary.break_count}回・${formatSeconds(timeline.summary.break_seconds)}`, "text-amber-600 dark:text-amber-300"],
+                  ["外出", `${timeline.summary.outside_count}回・${formatSeconds(timeline.summary.outside_seconds)}`, "text-sky-600 dark:text-sky-300"],
+                  ["実働", formatSeconds(timeline.summary.work_seconds), "text-emerald-600 dark:text-emerald-300"],
+                ].map(([label, value, color]) => (
+                  <div key={label} className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800/70">
+                    <p className="text-[9px] font-medium text-slate-400">{label}</p>
+                    <p className={`mt-0.5 text-xs font-bold ${color}`}>{value}</p>
+                  </div>
+                ))}
+              </div>
+
+            {timelineError && (
+              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-[10px] font-semibold text-red-600 dark:bg-red-500/10 dark:text-red-300">{timelineError}</p>
+            )}
+
+            {recentTimelineEvents.length > 0 && (
+              <div className="mt-5 border-t border-slate-100 pt-4 dark:border-slate-700">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">RECENT ACTIVITY</p>
+                  {timelineEvents.length > recentTimelineEvents.length && (
+                    <p className="text-[9px] text-slate-400">最新{recentTimelineEvents.length}件を表示</p>
+                  )}
+                </div>
+                <div className="overflow-x-auto pb-1">
+                  <div className="flex min-w-max px-1">
+                    {recentTimelineEvents.map((event, index) => (
+                      <div key={event.id} className="w-28 shrink-0 text-center">
+                        <time className="font-mono text-[10px] font-semibold text-slate-400">
+                          {formatWorkTime(event.at)}
+                        </time>
+                        <div className="mt-1.5 flex items-center">
+                          <span className={`h-px flex-1 ${index === 0 ? "bg-transparent" : "bg-slate-200 dark:bg-slate-700"}`} />
+                          <span className={`relative z-10 h-2.5 w-2.5 shrink-0 rounded-full ring-[3px] ring-white dark:ring-slate-900 ${event.kind === "break" ? "bg-amber-400" : event.kind === "outside" ? "bg-sky-500" : event.kind === "offline" ? "bg-slate-400" : "bg-emerald-500"}`} />
+                          <span className={`h-px flex-1 ${index === recentTimelineEvents.length - 1 ? "bg-transparent" : "bg-slate-200 dark:bg-slate-700"}`} />
+                        </div>
+                        <p className="mt-2 truncate px-1 text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                          {event.title}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          )}
 
           {/* AI assistant */}
           <div className="order-1 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">

@@ -4,17 +4,17 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 
-class WorkSession extends Model
+class AttendancePeriod extends Model
 {
     protected $fillable = [
         'attendance_id',
-        'task_description',
+        'type',
         'started_at',
         'expected_end_at',
         'ended_at',
-        'status',
+        'destination',
+        'note',
     ];
 
     protected function casts(): array
@@ -29,10 +29,5 @@ class WorkSession extends Model
     public function attendance(): BelongsTo
     {
         return $this->belongsTo(Attendance::class);
-    }
-
-    public function employeeTask(): HasOne
-    {
-        return $this->hasOne(EmployeeTask::class);
     }
 }

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\EmployeeTask;
 use App\Models\Office;
 use App\Models\User;
 use App\Services\AttendanceExcelService;
@@ -85,6 +86,14 @@ class WorkSessionTest extends TestCase
             'expected_end_at' => '2026-08-13 09:30:00',
             'status' => 'active',
         ]);
+        $previousAssignedTask = EmployeeTask::create([
+            'employee_id' => $this->employee->id,
+            'work_session_id' => $previousSession->id,
+            'title' => 'メール確認',
+            'duration_minutes' => 30,
+            'status' => 'in_progress',
+            'accepted_at' => '2026-08-13 08:55:00',
+        ]);
 
         Carbon::setTestNow('2026-08-13 09:20:00');
 
@@ -106,6 +115,11 @@ class WorkSessionTest extends TestCase
             'id' => $response->json('work_session.id'),
             'attendance_id' => $attendance->id,
             'status' => 'active',
+        ]);
+        $this->assertDatabaseHas('employee_tasks', [
+            'id' => $previousAssignedTask->id,
+            'status' => 'completed',
+            'completed_at' => '2026-08-13 09:20:00',
         ]);
     }
 
@@ -136,6 +150,40 @@ class WorkSessionTest extends TestCase
             'id' => $workSession->id,
             'ended_at' => '2026-08-13 09:45:00',
             'status' => 'completed',
+        ]);
+    }
+
+    public function test_completing_current_task_also_completes_linked_my_quest(): void
+    {
+        $excelService = $this->mock(AttendanceExcelService::class);
+        $excelService->shouldReceive('syncWorkSession')->once();
+
+        $attendance = $this->createAttendance();
+        $workSession = $attendance->workSessions()->create([
+            'task_description' => '依頼された契約書確認',
+            'started_at' => '2026-08-13 09:00:00',
+            'expected_end_at' => '2026-08-13 10:00:00',
+            'status' => 'active',
+        ]);
+        $task = EmployeeTask::create([
+            'employee_id' => $this->employee->id,
+            'work_session_id' => $workSession->id,
+            'title' => '依頼された契約書確認',
+            'duration_minutes' => 60,
+            'status' => 'in_progress',
+            'accepted_at' => '2026-08-13 08:55:00',
+        ]);
+
+        Carbon::setTestNow('2026-08-13 09:45:00');
+
+        $this->patchJson("/api/work-sessions/{$workSession->id}/complete")
+            ->assertOk()
+            ->assertJsonPath('work_session.status', 'completed');
+
+        $this->assertDatabaseHas('employee_tasks', [
+            'id' => $task->id,
+            'status' => 'completed',
+            'completed_at' => '2026-08-13 09:45:00',
         ]);
     }
 

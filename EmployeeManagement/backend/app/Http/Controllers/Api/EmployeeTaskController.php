@@ -79,6 +79,7 @@ class EmployeeTaskController extends Controller
         }
 
         $tasks = EmployeeTask::query()
+            ->with('workSession')
             ->where('employee_id', $employee->id)
             ->whereIn('status', [
                 'pending',
@@ -176,17 +177,27 @@ class EmployeeTaskController extends Controller
             );
 
             $now = now();
-            $attendance->workSessions()
+            $completedSessions = $attendance->workSessions()
                 ->where('status', 'active')
                 ->lockForUpdate()
-                ->get()
-                ->each(fn ($session) => $session->update([
+                ->get();
+
+            foreach ($completedSessions as $session) {
+                $session->update([
                     'ended_at' => $now,
                     'status' => 'completed',
-                ]));
+                ]);
 
-            $acceptedAt = $task->accepted_at ?? $now;
-            $expectedEndAt = $task->due_at ?? $acceptedAt->copy()
+                EmployeeTask::query()
+                    ->where('work_session_id', $session->id)
+                    ->where('status', 'in_progress')
+                    ->update([
+                        'status' => 'completed',
+                        'completed_at' => $now,
+                    ]);
+            }
+
+            $expectedEndAt = $task->due_at ?? $now->copy()
                 ->addMinutes($task->duration_minutes);
 
             $workSession = $attendance->workSessions()->create([
@@ -201,7 +212,7 @@ class EmployeeTaskController extends Controller
                 'work_session_id' => $workSession->id,
             ]);
 
-            return $task->fresh();
+            return $task->fresh('workSession');
         });
     }
 
@@ -233,7 +244,7 @@ class EmployeeTaskController extends Controller
                 'completed_at' => $now,
             ]);
 
-            return $task->fresh();
+            return $task->fresh('workSession');
         });
     }
 

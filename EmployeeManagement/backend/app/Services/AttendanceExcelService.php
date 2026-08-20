@@ -39,7 +39,10 @@ class AttendanceExcelService
         $this->prepareColumns($sheet);
         $this->clearPreviousLayout($sheet);
 
-        $attendance->loadMissing('employee:id,employee_code');
+        $attendance->loadMissing([
+            'employee:id,employee_code',
+            'periods',
+        ]);
         $row = $this->findRow($sheet, $attendance->id);
 
         $values = [
@@ -65,7 +68,7 @@ class AttendanceExcelService
 
         $sheet->setCellValue(
             "N{$row}",
-            "=IF(L{$row}=\"\",\"\",MAX(0,L{$row}-E{$row}-IF(OR(F{$row}=\"\",G{$row}=\"\"),0,G{$row}-F{$row})))"
+            "=IF(L{$row}=\"\",\"\",MAX(0,L{$row}-E{$row}-SUMIFS('休憩・外出履歴'!\$K\$6:\$K\$5000,'休憩・外出履歴'!\$B\$6:\$B\$5000,A{$row},'休憩・外出履歴'!\$F\$6:\$F\$5000,\"休憩\")))"
         );
 
         $sheet->getStyle("D{$row}")
@@ -86,6 +89,7 @@ class AttendanceExcelService
 
         $this->applySheetDesign($sheet);
         $this->applyStatusStyle($sheet, $row, $attendance->status);
+        $this->syncPeriods($spreadsheet, $attendance);
 
         IOFactory::createWriter($spreadsheet, 'Xlsx')->save($filePath);
         $spreadsheet->disconnectWorksheets();
@@ -171,6 +175,109 @@ class AttendanceExcelService
         $spreadsheet->getActiveSheet()->setTitle('勤怠記録');
 
         return $spreadsheet;
+    }
+
+    private function syncPeriods(
+        Spreadsheet $spreadsheet,
+        Attendance $attendance
+    ): void {
+        $sheet = $spreadsheet->getSheetByName('休憩・外出履歴');
+
+        if ($sheet === null) {
+            $sheet = $spreadsheet->createSheet();
+            $sheet->setTitle('休憩・外出履歴');
+        }
+
+        $sheet->fromArray([
+            '期間ID', '勤怠ID', '社員コード', '氏名', '勤務日',
+            '種類', '外出先・用件', '開始', '完了予定', '終了実績', '時間',
+        ], null, 'A5');
+
+        foreach ($attendance->periods as $period) {
+            $row = $this->findPeriodRow($sheet, $period->id);
+            $sheet->fromArray([
+                $period->id,
+                $attendance->id,
+                $attendance->employee?->employee_code,
+                $attendance->employee_name,
+                $this->toExcelDate($attendance->work_date),
+                $period->type === 'break' ? '休憩' : '外出',
+                $period->destination,
+                $this->toExcelDate($period->started_at),
+                $this->toExcelDate($period->expected_end_at),
+                $this->toExcelDate($period->ended_at),
+            ], null, "A{$row}");
+            $sheet->setCellValue("K{$row}", "=IF(OR(H{$row}=\"\",J{$row}=\"\"),\"\",MAX(0,J{$row}-H{$row}))");
+        }
+
+        $this->applyPeriodSheetDesign($sheet);
+    }
+
+    private function findPeriodRow(Worksheet $sheet, int $periodId): int
+    {
+        $lastRow = max(self::FIRST_DATA_ROW, $sheet->getHighestRow());
+
+        for ($row = self::FIRST_DATA_ROW; $row <= $lastRow; $row++) {
+            if ((string) $sheet->getCell("A{$row}")->getValue() === (string) $periodId) {
+                return $row;
+            }
+        }
+
+        for ($row = self::FIRST_DATA_ROW; $row <= $lastRow; $row++) {
+            if ($sheet->getCell("A{$row}")->getValue() === null || $sheet->getCell("A{$row}")->getValue() === '') {
+                return $row;
+            }
+        }
+
+        return $lastRow + 1;
+    }
+
+    private function applyPeriodSheetDesign(Worksheet $sheet): void
+    {
+        foreach (array_keys($sheet->getMergeCells()) as $mergedRange) {
+            $sheet->unmergeCells($mergedRange);
+        }
+
+        $lastRow = max(25, $sheet->getHighestRow());
+        $sheet->mergeCells('A1:K2');
+        $sheet->setCellValue('A1', '休憩・外出履歴 / ACTIVITY PERIODS');
+        $sheet->mergeCells('A3:K3');
+        $sheet->setCellValue('A3', '同じ勤務内の複数回の休憩・外出を時系列で確認できます');
+        $sheet->getStyle('A1:K2')->applyFromArray([
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '0F766E']],
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 18],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+        ]);
+        $sheet->getStyle('A3:K3')->applyFromArray([
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'ECFEFF']],
+            'font' => ['italic' => true, 'color' => ['rgb' => '475569']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+        ]);
+        $sheet->getStyle('A5:K5')->applyFromArray([
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '0D9488']],
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+        ]);
+
+        for ($row = self::FIRST_DATA_ROW; $row <= $lastRow; $row++) {
+            $sheet->getStyle("A{$row}:K{$row}")->applyFromArray([
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $row % 2 === 0 ? 'F8FAFC' : 'FFFFFF']],
+                'borders' => ['bottom' => ['borderStyle' => Border::BORDER_HAIR, 'color' => ['rgb' => 'CBD5E1']]],
+                'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+            ]);
+        }
+
+        $sheet->getStyle("E6:E{$lastRow}")->getNumberFormat()->setFormatCode('yyyy/mm/dd');
+        $sheet->getStyle("H6:J{$lastRow}")->getNumberFormat()->setFormatCode('hh:mm');
+        $sheet->getStyle("K6:K{$lastRow}")->getNumberFormat()->setFormatCode('[h]:mm');
+        foreach (['A' => 8, 'B' => 9, 'C' => 12, 'D' => 22, 'E' => 12, 'F' => 10, 'G' => 32, 'H' => 11, 'I' => 12, 'J' => 12, 'K' => 11] as $column => $width) {
+            $sheet->getColumnDimension($column)->setWidth($width);
+        }
+        $sheet->getColumnDimension('A')->setVisible(false);
+        $sheet->getColumnDimension('B')->setVisible(false);
+        $sheet->freezePane('C6');
+        $sheet->setAutoFilter("C5:K{$lastRow}");
+        $sheet->setShowGridlines(false);
     }
 
     /** Nâng cấp file 8 cột cũ mà không làm mất dữ liệu đã ghi. */
@@ -419,7 +526,7 @@ class AttendanceExcelService
             if (is_numeric($sheet->getCell("A{$row}")->getValue())) {
                 $sheet->setCellValue(
                     "N{$row}",
-                    "=IF(L{$row}=\"\",\"\",MAX(0,L{$row}-E{$row}-IF(OR(F{$row}=\"\",G{$row}=\"\"),0,G{$row}-F{$row})))"
+                    "=IF(L{$row}=\"\",\"\",MAX(0,L{$row}-E{$row}-SUMIFS('休憩・外出履歴'!\$K\$6:\$K\$5000,'休憩・外出履歴'!\$B\$6:\$B\$5000,A{$row},'休憩・外出履歴'!\$F\$6:\$F\$5000,\"休憩\")))"
                 );
 
                 $this->applyStatusStyleFromLabel($sheet, $row);

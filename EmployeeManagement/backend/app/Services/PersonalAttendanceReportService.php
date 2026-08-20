@@ -22,13 +22,18 @@ class PersonalAttendanceReportService
 
     private const WORK_SESSION_FIRST_ROW = 8;
 
+    private const PERIOD_FIRST_ROW = 7;
+
     public function build(Employee $employee): Spreadsheet
     {
         $employee->loadMissing('office');
 
         $attendances = Attendance::query()
             ->where('employee_id', $employee->id)
-            ->with(['workSessions' => fn ($query) => $query->orderBy('started_at')])
+            ->with([
+                'periods',
+                'workSessions' => fn ($query) => $query->orderBy('started_at'),
+            ])
             ->orderBy('work_date')
             ->orderBy('clock_in')
             ->get();
@@ -43,19 +48,19 @@ class PersonalAttendanceReportService
             ->setSubject('社員本人用の勤怠・作業記録');
 
         $attendanceSheet = $spreadsheet->getActiveSheet();
-        $attendanceSheet->setTitle('勤怠記録');
-        $workSessionLastRow = max(
-            self::WORK_SESSION_FIRST_ROW,
-            self::WORK_SESSION_FIRST_ROW
+        $attendanceSheet->setTitle('勤怠サマリー');
+        $periodLastRow = max(
+            self::PERIOD_FIRST_ROW,
+            self::PERIOD_FIRST_ROW
                 + $attendances->sum(
-                    fn (Attendance $attendance) => $attendance->workSessions->count()
+                    fn (Attendance $attendance) => $attendance->periods->count()
                 ) - 1
         );
         $this->buildAttendanceSheet(
             $attendanceSheet,
             $employee,
             $attendances,
-            $workSessionLastRow
+            $periodLastRow
         );
 
         $workSessionSheet = $spreadsheet->createSheet();
@@ -65,6 +70,10 @@ class PersonalAttendanceReportService
             $employee,
             $attendances
         );
+
+        $periodSheet = $spreadsheet->createSheet();
+        $periodSheet->setTitle('勤務履歴');
+        $this->buildPeriodSheet($periodSheet, $employee, $attendances);
 
         $spreadsheet->setActiveSheetIndex(0);
 
@@ -76,7 +85,7 @@ class PersonalAttendanceReportService
         Worksheet $sheet,
         Employee $employee,
         Collection $attendances,
-        int $workSessionLastRow
+        int $periodLastRow
     ): void {
         $lastRow = max(
             self::ATTENDANCE_FIRST_ROW,
@@ -85,65 +94,63 @@ class PersonalAttendanceReportService
 
         $latestAttendance = $attendances->last();
 
-        $sheet->mergeCells('A1:K1');
+        $sheet->mergeCells('A1:I1');
         $sheet->setCellValue('A1', '個人勤怠表 / PERSONAL ATTENDANCE');
-        $sheet->mergeCells('A2:G2');
+        $sheet->mergeCells('A2:F2');
         $sheet->setCellValue('A2', 'THEMIS WORKSPACE  •  EMPLOYEE REPORT');
-        $sheet->mergeCells('H2:K2');
-        $sheet->setCellValue('H2', '出力日時  '.now()->format('Y/m/d H:i'));
-        $sheet->mergeCells('A3:H3');
+        $sheet->mergeCells('G2:I2');
+        $sheet->setCellValue('G2', '出力日時  '.now()->format('Y/m/d H:i'));
+        $sheet->mergeCells('A3:F3');
         $sheet->setCellValueExplicit(
             'A3',
             $this->employeeSummary($employee),
             DataType::TYPE_STRING
         );
-        $sheet->mergeCells('I3:K3');
-        $sheet->setCellValue('I3', '本人専用・社外秘');
+        $sheet->mergeCells('G3:I3');
+        $sheet->setCellValue('G3', '本人専用・社外秘');
 
-        $sheet->mergeCells('A5:C5');
-        $sheet->mergeCells('A6:C6');
-        $sheet->mergeCells('D5:F5');
-        $sheet->mergeCells('D6:F6');
+        $sheet->mergeCells('A5:B5');
+        $sheet->mergeCells('A6:B6');
+        $sheet->mergeCells('C5:D5');
+        $sheet->mergeCells('C6:D6');
+        $sheet->mergeCells('E5:F5');
+        $sheet->mergeCells('E6:F6');
         $sheet->mergeCells('G5:I5');
         $sheet->mergeCells('G6:I6');
-        $sheet->mergeCells('J5:K5');
-        $sheet->mergeCells('J6:K6');
-        $sheet->setCellValue('A5', '勤務日数');
+        $sheet->setCellValue('A5', '勤務回数');
         $sheet->setCellValue(
             'A6',
-            '=COUNTA(A'.self::ATTENDANCE_FIRST_ROW.':A'.$lastRow.')&" 日"'
+            '=COUNTA(A'.self::ATTENDANCE_FIRST_ROW.':A'.$lastRow.')&" 回"'
         );
-        $sheet->setCellValue('D5', '実働合計');
+        $sheet->setCellValue('C5', '実働合計');
         $sheet->setCellValue(
-            'D6',
-            '=SUM(K'.self::ATTENDANCE_FIRST_ROW.':K'.$lastRow.')'
+            'C6',
+            '=SUM(I'.self::ATTENDANCE_FIRST_ROW.':I'.$lastRow.')'
         );
-        $sheet->setCellValue('G5', '完了した作業');
+        $sheet->setCellValue('E5', '休憩合計');
+        $sheet->setCellValue(
+            'E6',
+            '=SUM(E'.self::ATTENDANCE_FIRST_ROW.':E'.$lastRow.')'
+        );
+        $sheet->setCellValue('G5', '現在の状態');
         $sheet->setCellValue(
             'G6',
-            '=COUNTIF(\'作業記録\'!H'.self::WORK_SESSION_FIRST_ROW.':H'.$workSessionLastRow.',"完了")&" 件"'
-        );
-        $sheet->setCellValue('J5', '現在の状態');
-        $sheet->setCellValue(
-            'J6',
             $latestAttendance instanceof Attendance
                 ? $this->translateAttendanceStatus($latestAttendance->status)
                 : '記録なし'
         );
 
-        $sheet->mergeCells('A7:K7');
+        $sheet->mergeCells('A7:I7');
         $sheet->setCellValue('A7', '勤怠明細  /  ATTENDANCE DETAILS');
 
         $headers = [
             '日付',
             '出勤',
-            '休憩開始',
-            '休憩終了',
-            '外出先・用件',
-            '外出',
-            '帰社予定',
-            '帰社実績',
             '退勤',
+            '休憩回数',
+            '休憩合計',
+            '外出回数',
+            '外出合計',
             'ステータス',
             '実働時間',
         ];
@@ -153,30 +160,69 @@ class PersonalAttendanceReportService
             $row = self::ATTENDANCE_FIRST_ROW + $index;
             $sheet->setCellValue("A{$row}", $this->toExcelDate($attendance->work_date));
             $sheet->setCellValue("B{$row}", $this->toExcelDate($attendance->clock_in));
-            $sheet->setCellValue("C{$row}", $this->toExcelDate($attendance->break_start));
-            $sheet->setCellValue("D{$row}", $this->toExcelDate($attendance->break_end));
-            $sheet->setCellValueExplicit(
-                "E{$row}",
-                (string) ($attendance->outside_destination ?? ''),
-                DataType::TYPE_STRING
-            );
-            $sheet->setCellValue("F{$row}", $this->toExcelDate($attendance->outside_start));
-            $sheet->setCellValue("G{$row}", $this->toExcelDate($attendance->outside_expected_end));
-            $sheet->setCellValue("H{$row}", $this->toExcelDate($attendance->outside_end));
-            $sheet->setCellValue("I{$row}", $this->toExcelDate($attendance->clock_out));
-            $sheet->setCellValue("J{$row}", $this->translateAttendanceStatus($attendance->status));
+            $sheet->setCellValue("C{$row}", $this->toExcelDate($attendance->clock_out));
+            $sheet->setCellValue("D{$row}", $attendance->periods->where('type', 'break')->count());
+            $sheet->setCellValue("E{$row}", "=SUMIFS('勤務履歴'!\$H\$".self::PERIOD_FIRST_ROW.":\$H\${$periodLastRow},'勤務履歴'!\$A\$".self::PERIOD_FIRST_ROW.":\$A\${$periodLastRow},J{$row},'勤務履歴'!\$C\$".self::PERIOD_FIRST_ROW.":\$C\${$periodLastRow},\"休憩\")");
+            $sheet->setCellValue("F{$row}", $attendance->periods->where('type', 'outside')->count());
+            $sheet->setCellValue("G{$row}", "=SUMIFS('勤務履歴'!\$H\$".self::PERIOD_FIRST_ROW.":\$H\${$periodLastRow},'勤務履歴'!\$A\$".self::PERIOD_FIRST_ROW.":\$A\${$periodLastRow},J{$row},'勤務履歴'!\$C\$".self::PERIOD_FIRST_ROW.":\$C\${$periodLastRow},\"外出\")");
+            $sheet->setCellValue("H{$row}", $this->translateAttendanceStatus($attendance->status));
             $sheet->setCellValue(
-                "K{$row}",
-                "=IF(OR(B{$row}=\"\",I{$row}=\"\"),\"\",MAX(0,I{$row}-B{$row}-IF(OR(C{$row}=\"\",D{$row}=\"\"),0,D{$row}-C{$row})))"
+                "I{$row}",
+                "=IF(OR(B{$row}=\"\",C{$row}=\"\"),\"\",MAX(0,C{$row}-B{$row}-E{$row}))"
             );
+            $sheet->setCellValue("J{$row}", $attendance->id);
         }
 
         $this->applyAttendanceDesign($sheet, $lastRow, $attendances->isNotEmpty());
 
         foreach ($attendances->values() as $index => $attendance) {
             $row = self::ATTENDANCE_FIRST_ROW + $index;
-            $this->styleStatusCell($sheet, "J{$row}", $attendance->status);
+            $this->styleStatusCell($sheet, "H{$row}", $attendance->status);
         }
+    }
+
+    /** @param Collection<int, Attendance> $attendances */
+    private function buildPeriodSheet(
+        Worksheet $sheet,
+        Employee $employee,
+        Collection $attendances
+    ): void {
+        $periods = $attendances
+            ->flatMap(fn (Attendance $attendance) => $attendance->periods)
+            ->sortBy('started_at')
+            ->values();
+        $lastRow = max(
+            self::PERIOD_FIRST_ROW,
+            self::PERIOD_FIRST_ROW + $periods->count() - 1
+        );
+
+        $sheet->mergeCells('A1:H1');
+        $sheet->setCellValue('A1', '休憩・外出履歴 / ACTIVITY PERIODS');
+        $sheet->mergeCells('A2:E2');
+        $sheet->setCellValue('A2', '1勤務内のすべての休憩・外出を記録');
+        $sheet->mergeCells('F2:H2');
+        $sheet->setCellValue('F2', '出力日時  '.now()->format('Y/m/d H:i'));
+        $sheet->mergeCells('A3:H3');
+        $sheet->setCellValueExplicit('A3', $this->employeeSummary($employee), DataType::TYPE_STRING);
+
+        $sheet->fromArray([
+            '勤怠ID', '日付', '種類', '外出先・用件',
+            '開始', '完了予定', '終了実績', '時間',
+        ], null, 'A6');
+
+        foreach ($periods as $index => $period) {
+            $row = self::PERIOD_FIRST_ROW + $index;
+            $sheet->setCellValue("A{$row}", $period->attendance_id);
+            $sheet->setCellValue("B{$row}", $this->toExcelDate($period->started_at));
+            $sheet->setCellValue("C{$row}", $period->type === 'break' ? '休憩' : '外出');
+            $sheet->setCellValueExplicit("D{$row}", (string) ($period->destination ?? ''), DataType::TYPE_STRING);
+            $sheet->setCellValue("E{$row}", $this->toExcelDate($period->started_at));
+            $sheet->setCellValue("F{$row}", $this->toExcelDate($period->expected_end_at));
+            $sheet->setCellValue("G{$row}", $this->toExcelDate($period->ended_at));
+            $sheet->setCellValue("H{$row}", "=IF(OR(E{$row}=\"\",G{$row}=\"\"),\"\",MAX(0,G{$row}-E{$row}))");
+        }
+
+        $this->applyPeriodDesign($sheet, $lastRow, $periods->isNotEmpty());
     }
 
     /** @param Collection<int, Attendance> $attendances */
@@ -277,11 +323,11 @@ class PersonalAttendanceReportService
         int $lastRow,
         bool $hasData
     ): void {
-        $this->styleTitle($sheet, 'A1:K1');
-        $this->styleSubtitle($sheet, 'A2:G2', Alignment::HORIZONTAL_LEFT);
-        $this->styleSubtitle($sheet, 'H2:K2', Alignment::HORIZONTAL_RIGHT);
-        $this->styleEmployeeLine($sheet, 'A3:H3');
-        $sheet->getStyle('I3:K3')->applyFromArray([
+        $this->styleTitle($sheet, 'A1:I1');
+        $this->styleSubtitle($sheet, 'A2:F2', Alignment::HORIZONTAL_LEFT);
+        $this->styleSubtitle($sheet, 'G2:I2', Alignment::HORIZONTAL_RIGHT);
+        $this->styleEmployeeLine($sheet, 'A3:F3');
+        $sheet->getStyle('G3:I3')->applyFromArray([
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F8FAFC']],
             'font' => ['bold' => true, 'color' => ['rgb' => 'DC2626'], 'size' => 9],
             'alignment' => [
@@ -296,10 +342,10 @@ class PersonalAttendanceReportService
         $sheet->getRowDimension(4)->setRowHeight(9);
 
         foreach ([
-            ['A5:C5', 'A6:C6', 'EFF6FF', '2563EB', '1E3A8A'],
-            ['D5:F5', 'D6:F6', 'ECFDF5', '059669', '065F46'],
-            ['G5:I5', 'G6:I6', 'F5F3FF', '7C3AED', '5B21B6'],
-            ['J5:K5', 'J6:K6', 'FFF7ED', 'EA580C', '9A3412'],
+            ['A5:B5', 'A6:B6', 'EFF6FF', '2563EB', '1E3A8A'],
+            ['C5:D5', 'C6:D6', 'ECFDF5', '059669', '065F46'],
+            ['E5:F5', 'E6:F6', 'F5F3FF', '7C3AED', '5B21B6'],
+            ['G5:I5', 'G6:I6', 'FFF7ED', 'EA580C', '9A3412'],
         ] as [$labelRange, $valueRange, $fillColor, $accentColor, $valueColor]) {
             $this->styleMetricCard(
                 $sheet,
@@ -310,43 +356,83 @@ class PersonalAttendanceReportService
                 $valueColor
             );
         }
-        $sheet->getStyle('D6:F6')
+        $sheet->getStyle('C6:F6')
             ->getNumberFormat()
             ->setFormatCode('[h]"時間"mm"分"');
-        $this->styleSection($sheet, 'A7:K7');
-        $this->styleHeader($sheet, 'A8:K8');
-        $this->styleDataRows($sheet, 'A', 'K', self::ATTENDANCE_FIRST_ROW, $lastRow);
+        $this->styleSection($sheet, 'A7:I7');
+        $this->styleHeader($sheet, 'A8:I8');
+        $this->styleDataRows($sheet, 'A', 'I', self::ATTENDANCE_FIRST_ROW, $lastRow);
 
         if ($hasData) {
-            $sheet->setAutoFilter("A8:K{$lastRow}");
+            $sheet->setAutoFilter("A8:I{$lastRow}");
         }
 
         $sheet->getStyle('A'.self::ATTENDANCE_FIRST_ROW.':A'.$lastRow)
             ->getNumberFormat()->setFormatCode('yyyy/mm/dd');
-        $sheet->getStyle('B'.self::ATTENDANCE_FIRST_ROW.':D'.$lastRow)
+        $sheet->getStyle('B'.self::ATTENDANCE_FIRST_ROW.':C'.$lastRow)
             ->getNumberFormat()->setFormatCode('hh:mm');
-        $sheet->getStyle('F'.self::ATTENDANCE_FIRST_ROW.':I'.$lastRow)
-            ->getNumberFormat()->setFormatCode('hh:mm');
-        $sheet->getStyle('K'.self::ATTENDANCE_FIRST_ROW.':K'.$lastRow)
-            ->getNumberFormat()->setFormatCode('[h]:mm');
         $sheet->getStyle('E'.self::ATTENDANCE_FIRST_ROW.':E'.$lastRow)
-            ->getAlignment()
-            ->setHorizontal(Alignment::HORIZONTAL_LEFT)
-            ->setWrapText(true);
-        $sheet->getStyle('A'.self::ATTENDANCE_FIRST_ROW.':D'.$lastRow)
-            ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle('F'.self::ATTENDANCE_FIRST_ROW.':K'.$lastRow)
+            ->getNumberFormat()->setFormatCode('[h]:mm');
+        $sheet->getStyle('G'.self::ATTENDANCE_FIRST_ROW.':G'.$lastRow)
+            ->getNumberFormat()->setFormatCode('[h]:mm');
+        $sheet->getStyle('I'.self::ATTENDANCE_FIRST_ROW.':I'.$lastRow)
+            ->getNumberFormat()->setFormatCode('[h]:mm');
+        $sheet->getStyle('A'.self::ATTENDANCE_FIRST_ROW.':I'.$lastRow)
             ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         foreach ([
-            'A' => 13, 'B' => 10, 'C' => 12, 'D' => 12, 'E' => 30,
-            'F' => 10, 'G' => 12, 'H' => 12, 'I' => 10, 'J' => 14, 'K' => 13,
+            'A' => 13, 'B' => 11, 'C' => 11, 'D' => 11, 'E' => 13,
+            'F' => 11, 'G' => 11, 'H' => 14, 'I' => 13,
         ] as $column => $width) {
             $sheet->getColumnDimension($column)->setWidth($width);
         }
 
+        $sheet->getColumnDimension('J')->setVisible(false);
+
         $sheet->getTabColor()->setRGB('4F46E5');
-        $this->finishSheet($sheet, 'A9', "A1:K{$lastRow}");
+        $this->finishSheet($sheet, 'A9', "A1:I{$lastRow}");
+    }
+
+    private function applyPeriodDesign(
+        Worksheet $sheet,
+        int $lastRow,
+        bool $hasData
+    ): void {
+        $this->styleTitle($sheet, 'A1:H1');
+        $this->styleSubtitle($sheet, 'A2:E2', Alignment::HORIZONTAL_LEFT);
+        $this->styleSubtitle($sheet, 'F2:H2', Alignment::HORIZONTAL_RIGHT);
+        $this->styleEmployeeLine($sheet, 'A3:H3');
+        $sheet->getRowDimension(4)->setRowHeight(9);
+        $this->styleHeader($sheet, 'A6:H6');
+        $this->styleDataRows($sheet, 'A', 'H', self::PERIOD_FIRST_ROW, $lastRow);
+
+        if ($hasData) {
+            $sheet->setAutoFilter("B6:H{$lastRow}");
+        }
+
+        $sheet->getStyle('B'.self::PERIOD_FIRST_ROW.':B'.$lastRow)
+            ->getNumberFormat()->setFormatCode('yyyy/mm/dd');
+        $sheet->getStyle('E'.self::PERIOD_FIRST_ROW.':G'.$lastRow)
+            ->getNumberFormat()->setFormatCode('hh:mm');
+        $sheet->getStyle('H'.self::PERIOD_FIRST_ROW.':H'.$lastRow)
+            ->getNumberFormat()->setFormatCode('[h]:mm');
+        $sheet->getStyle('B'.self::PERIOD_FIRST_ROW.':C'.$lastRow)
+            ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('D'.self::PERIOD_FIRST_ROW.':D'.$lastRow)
+            ->getAlignment()->setWrapText(true);
+        $sheet->getStyle('E'.self::PERIOD_FIRST_ROW.':H'.$lastRow)
+            ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        foreach ([
+            'A' => 10, 'B' => 13, 'C' => 10, 'D' => 34,
+            'E' => 11, 'F' => 12, 'G' => 12, 'H' => 12,
+        ] as $column => $width) {
+            $sheet->getColumnDimension($column)->setWidth($width);
+        }
+
+        $sheet->getColumnDimension('A')->setVisible(false);
+        $sheet->getTabColor()->setRGB('0EA5E9');
+        $this->finishSheet($sheet, 'B7', "B1:H{$lastRow}");
     }
 
     private function applyWorkSessionDesign(
