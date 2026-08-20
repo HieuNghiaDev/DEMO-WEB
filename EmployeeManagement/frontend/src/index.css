@@ -205,8 +205,8 @@ html.dark {
 html.theme-switching .themis-app,
 html.theme-switching .themis-app * {
   transition-property: background-color, border-color, color, box-shadow, opacity, transform;
-  transition-duration: 900ms;
-  transition-timing-function: cubic-bezier(0.22, 0.7, 0.26, 1);
+  transition-duration: 1500ms;
+  transition-timing-function: cubic-bezier(0.22, 0.82, 0.2, 1);
 }
 
 html.theme-switching::after {
@@ -216,7 +216,7 @@ html.theme-switching::after {
   content: "";
   pointer-events: none;
   background: radial-gradient(circle at 7rem calc(100% - 9rem), rgb(255 255 255 / 0.18), transparent 46%);
-  animation: themis-theme-wash 1280ms ease-out both;
+  animation: themis-theme-wash 1500ms cubic-bezier(0.22, 0.82, 0.2, 1) both;
 }
 
 html.dark.theme-switching::after {
@@ -333,11 +333,36 @@ html.theme-switching .theme-mode-icon {
   }
 }
 
+.quest-notification-toast {
+  animation: themis-quest-toast-in 1500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes themis-quest-toast-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 1.5rem, 0) scale(0.94);
+  }
+
+  46% {
+    opacity: 1;
+    transform: translate3d(0, -0.2rem, 0) scale(1.01);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html.theme-switching .theme-mode-icon,
   html.theme-switching .theme-mode-pill-flash,
   html.theme-switching .theme-mode-pill-knob,
   html.theme-switching::after {
+    animation: none;
+  }
+
+  .quest-notification-toast {
     animation: none;
   }
 }

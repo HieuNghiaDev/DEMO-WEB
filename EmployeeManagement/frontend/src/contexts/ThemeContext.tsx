@@ -62,7 +62,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
     themeTransitionTimer = window.setTimeout(() => {
       document.documentElement.classList.remove("theme-switching");
-    }, 1380);
+    }, 1580);
 
     setThemeState(nextTheme);
   };

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
@@ -129,11 +129,12 @@ type UserNotification = {
   kind: NotificationKind;
   createdAt: string;
   isRead: boolean;
+  assignedTaskId?: number;
 };
 
 type NewNotification = Pick<
   UserNotification,
-  "sourceKey" | "title" | "message" | "kind"
+  "sourceKey" | "title" | "message" | "kind" | "assignedTaskId"
 >;
 
 const femaleDeskPositions = [
@@ -567,6 +568,8 @@ export default function EmployeeRoom() {
     number | null
   >(null);
   const [assignedTaskError, setAssignedTaskError] = useState("");
+  const knownPendingTaskIdsRef = useRef<Set<number> | null>(null);
+  const questAudioContextRef = useRef<AudioContext | null>(null);
 
   const unreadNotificationCount = notifications.filter(
     (notification) => !notification.isRead,
@@ -580,6 +583,7 @@ export default function EmployeeRoom() {
   };
 
   const selectedOfficeInfo = offices[selectedOffice];
+  const myQuestTasks = assignedTasks;
   const pendingAssignedTaskCount = assignedTasks.filter(
     (task) => task.status === "pending",
   ).length;
@@ -626,6 +630,37 @@ export default function EmployeeRoom() {
     },
     [notificationStorageKey, saveNotifications],
   );
+
+  const playNewQuestSound = useCallback(() => {
+    if (typeof window === "undefined" || !("AudioContext" in window)) {
+      return;
+    }
+
+    try {
+      const audioContext =
+        questAudioContextRef.current ?? new AudioContext();
+      questAudioContextRef.current = audioContext;
+      void audioContext.resume();
+
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      const startAt = audioContext.currentTime;
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(740, startAt);
+      oscillator.frequency.exponentialRampToValueAtTime(1046, startAt + 0.18);
+      gain.gain.setValueAtTime(0.0001, startAt);
+      gain.gain.exponentialRampToValueAtTime(0.16, startAt + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.42);
+
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start(startAt);
+      oscillator.stop(startAt + 0.45);
+    } catch {
+      // Trình duyệt có thể chặn âm thanh trước thao tác đầu tiên của người dùng.
+    }
+  }, []);
 
   const markNotificationAsRead = (notificationId: string) => {
     setNotifications((current) => {
@@ -722,7 +757,7 @@ export default function EmployeeRoom() {
 
     const timeoutId = window.setTimeout(() => {
       setToastNotification(null);
-    }, 5000);
+    }, 15000);
 
     return () => window.clearTimeout(timeoutId);
   }, [toastNotification]);
@@ -758,17 +793,38 @@ export default function EmployeeRoom() {
   }, [loadAssignedTasks]);
 
   useEffect(() => {
-    assignedTasks
-      .filter((task) => task.status === "pending")
-      .forEach((task) => {
+    const pendingTasks = assignedTasks.filter((task) => task.status === "pending");
+    const pendingTaskIds = new Set(pendingTasks.map((task) => task.id));
+    const knownTaskIds = knownPendingTaskIdsRef.current;
+
+    if (knownTaskIds === null) {
+      knownPendingTaskIdsRef.current = pendingTaskIds;
+      pendingTasks.forEach((task) => {
         pushNotification({
           sourceKey: `assigned-task-${task.id}`,
           title: "新しい業務が届きました",
           message: task.title,
           kind: "info",
+          assignedTaskId: task.id,
         });
       });
-  }, [assignedTasks, pushNotification]);
+      return;
+    }
+
+    const newTasks = pendingTasks.filter((task) => !knownTaskIds.has(task.id));
+    knownPendingTaskIdsRef.current = pendingTaskIds;
+
+    newTasks.forEach((task) => {
+      pushNotification({
+        sourceKey: `assigned-task-${task.id}`,
+        title: "新しい業務が届きました",
+        message: task.title,
+        kind: "info",
+        assignedTaskId: task.id,
+      });
+      playNewQuestSound();
+    });
+  }, [assignedTasks, playNewQuestSound, pushNotification]);
 
   useEffect(() => {
     const hasActiveTimer = assignedTasks.some(
@@ -1893,7 +1949,7 @@ export default function EmployeeRoom() {
         <div className="flex flex-col gap-6">
           {/* Assigned tasks */}
           <div className="order-2 relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-            <div className={`absolute left-0 right-0 top-0 h-1 ${assignedTasks.length ? "bg-indigo-500" : "bg-slate-300 dark:bg-slate-700"}`} />
+            <div className={`absolute left-0 right-0 top-0 h-1 ${myQuestTasks.length ? "bg-indigo-500" : "bg-slate-300 dark:bg-slate-700"}`} />
 
             <div className="mb-4">
               <div>
@@ -1907,8 +1963,8 @@ export default function EmployeeRoom() {
             </div>
 
             {pendingAssignedTaskCount > 0 && (
-              <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
-                確認待ちの業務が{pendingAssignedTaskCount}件あります
+              <div className="mb-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5 text-[10px] font-semibold text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+                確認待ちの業務が{pendingAssignedTaskCount}件あります。通知から内容を確認してください。
               </div>
             )}
 
@@ -1918,9 +1974,9 @@ export default function EmployeeRoom() {
               </div>
             )}
 
-            {assignedTasks.length > 0 ? (
+            {myQuestTasks.length > 0 ? (
               <div className="space-y-3">
-                {assignedTasks.map((task) => {
+                {myQuestTasks.map((task) => {
                   const isUpdating = updatingAssignedTaskId === task.id;
                   const countdown = getAssignedTaskCountdown(task, taskClock);
                   const status = task.status === "pending"
@@ -2034,55 +2090,92 @@ export default function EmployeeRoom() {
       {/* In-app notification toast */}
       {toastNotification && (
         <div
-          role="status"
-          className={`fixed right-4 top-4 z-[120] flex w-[min(23rem,calc(100vw-2rem))] items-start gap-3 rounded-2xl border bg-white p-4 shadow-2xl shadow-slate-900/15 ${
+          role="alert"
+          className={`quest-notification-toast fixed bottom-5 right-5 z-[120] w-[min(24rem,calc(100vw-2.5rem))] overflow-hidden rounded-2xl border bg-white/95 shadow-2xl shadow-slate-950/20 backdrop-blur dark:bg-slate-900/95 ${
             toastNotification.kind === "success"
-              ? "border-emerald-100"
+              ? "border-emerald-200"
               : toastNotification.kind === "warning"
-                ? "border-amber-100"
+                ? "border-amber-200"
                 : toastNotification.kind === "error"
-                  ? "border-red-100"
-                  : "border-blue-100"
+                  ? "border-red-200"
+                  : "border-blue-200"
           }`}
         >
-          <span
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+          <div
+            className={`absolute inset-y-0 left-0 w-1 ${
               toastNotification.kind === "success"
-                ? "bg-emerald-100 text-emerald-600"
+                ? "bg-emerald-500"
                 : toastNotification.kind === "warning"
-                  ? "bg-amber-100 text-amber-600"
+                  ? "bg-amber-500"
                   : toastNotification.kind === "error"
-                    ? "bg-red-100 text-red-600"
-                    : "bg-blue-100 text-blue-600"
+                    ? "bg-red-500"
+                    : "bg-indigo-500"
             }`}
-          >
-            {toastNotification.kind === "success" ? (
-              <CheckCircle2 size={20} />
-            ) : toastNotification.kind === "warning" ||
-              toastNotification.kind === "error" ? (
-              <AlertTriangle size={20} />
-            ) : (
-              <Info size={20} />
-            )}
-          </span>
+          />
+          <div className="flex items-start gap-3 p-4 pl-5">
+            <span
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                toastNotification.kind === "success"
+                  ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300"
+                  : toastNotification.kind === "warning"
+                    ? "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300"
+                    : toastNotification.kind === "error"
+                      ? "bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-300"
+                      : "bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300"
+              }`}
+            >
+              {toastNotification.assignedTaskId ? (
+                <Briefcase size={20} />
+              ) : toastNotification.kind === "success" ? (
+                <CheckCircle2 size={20} />
+              ) : toastNotification.kind === "warning" ||
+                toastNotification.kind === "error" ? (
+                <AlertTriangle size={20} />
+              ) : (
+                <Info size={20} />
+              )}
+            </span>
 
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-gray-800">
-              {toastNotification.title}
-            </p>
-            <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
-              {toastNotification.message}
-            </p>
+            <div className="min-w-0 flex-1 pr-5">
+              <p className="text-sm font-bold text-slate-900 dark:text-white">
+                {toastNotification.title}
+              </p>
+              <p className="mt-0.5 text-xs leading-relaxed text-slate-500 dark:text-slate-300">
+                {toastNotification.message}
+              </p>
+
+              {toastNotification.assignedTaskId &&
+                (() => {
+                  const task = assignedTasks.find(
+                    (item) => item.id === toastNotification.assignedTaskId,
+                  );
+                  const isUpdating = updatingAssignedTaskId === task?.id;
+
+                  if (!task || task.status !== "pending") return null;
+
+                  return (
+                    <button
+                      type="button"
+                      disabled={updatingAssignedTaskId !== null}
+                      onClick={() => void handleAcceptAssignedTask(task)}
+                      className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-bold text-white shadow-sm shadow-indigo-500/25 transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <CheckCircle2 size={15} />
+                      {isUpdating ? "確認中..." : "業務を確認して受け取る"}
+                    </button>
+                  );
+                })()}
+            </div>
+
+            <button
+              type="button"
+              aria-label="通知を閉じる"
+              onClick={() => setToastNotification(null)}
+              className="-ml-5 rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            >
+              <X size={16} />
+            </button>
           </div>
-
-          <button
-            type="button"
-            aria-label="通知を閉じる"
-            onClick={() => setToastNotification(null)}
-            className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-          >
-            <X size={16} />
-          </button>
         </div>
       )}
 
