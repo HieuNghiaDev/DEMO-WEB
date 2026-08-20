@@ -39,7 +39,16 @@ export type AuthUser = {
   role: string;
   is_active: boolean;
   must_change_password: boolean;
+  roles: AuthRole[];
+  role_names: string[];
+  permission_names: string[];
   employee: AuthEmployee | null;
+};
+
+export type AuthRole = {
+  id: number;
+  name: string;
+  display_name: string;
 };
 
 type LoginCredentials = {

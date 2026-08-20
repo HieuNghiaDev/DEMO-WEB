@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import axios from 'axios'
 import {
+  BadgeCheck,
   BriefcaseBusiness,
   Building2,
+  Check,
   ChevronRight,
   Clock3,
   Coffee,
@@ -10,6 +12,8 @@ import {
   MapPin,
   RefreshCw,
   Scale,
+  ShieldCheck,
+  UserCog,
   UserRound,
   Users,
   X,
@@ -48,6 +52,8 @@ type OrganizationEmployee = {
   avatar_path: string | null
   employee_status: string
   hire_date: string | null
+  user_id: number | null
+  roles: RoleOption[]
 
   office: {
     id: number
@@ -66,9 +72,54 @@ type OrganizationEmployee = {
   attendance: AttendanceInfo | null
 }
 
+type RoleOption = {
+  id: number
+  name: string
+  display_name: string
+}
+
 type OrganizationResponse = {
   employees: OrganizationEmployee[]
+  available_roles: RoleOption[]
 }
+
+const rolePresentation = {
+  super_admin: {
+    icon: ShieldCheck,
+    caption: 'SYSTEM ADMIN',
+    iconClass: 'bg-rose-500/10 text-rose-500 dark:bg-rose-500/15 dark:text-rose-300',
+    selectedClass: 'border-rose-400 bg-rose-50/70 dark:border-rose-400/50 dark:bg-rose-500/10',
+    checkClass: 'bg-rose-500 text-white',
+  },
+  manager: {
+    icon: UserCog,
+    caption: 'MANAGEMENT',
+    iconClass: 'bg-violet-500/10 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300',
+    selectedClass: 'border-violet-400 bg-violet-50/70 dark:border-violet-400/50 dark:bg-violet-500/10',
+    checkClass: 'bg-violet-600 text-white',
+  },
+  lawyer: {
+    icon: Scale,
+    caption: 'LEGAL PROFESSIONAL',
+    iconClass: 'bg-sky-500/10 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300',
+    selectedClass: 'border-sky-400 bg-sky-50/70 dark:border-sky-400/50 dark:bg-sky-500/10',
+    checkClass: 'bg-sky-600 text-white',
+  },
+  staff: {
+    icon: BadgeCheck,
+    caption: 'FULL-TIME STAFF',
+    iconClass: 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300',
+    selectedClass: 'border-emerald-400 bg-emerald-50/70 dark:border-emerald-400/50 dark:bg-emerald-500/10',
+    checkClass: 'bg-emerald-600 text-white',
+  },
+  part_time: {
+    icon: Clock3,
+    caption: 'PART-TIME STAFF',
+    iconClass: 'bg-amber-500/10 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300',
+    selectedClass: 'border-amber-400 bg-amber-50/70 dark:border-amber-400/50 dark:bg-amber-500/10',
+    checkClass: 'bg-amber-500 text-white',
+  },
+} as const
 
 const statusConfig: Record<
   WorkStatus,
@@ -169,6 +220,7 @@ const buildClosestTokyoDeadline = (hour: string, minute: string) => {
 export default function OrganizationDesign() {
   const { user } = useAuth()
   const [employees, setEmployees] = useState<OrganizationEmployee[]>([])
+  const [availableRoles, setAvailableRoles] = useState<RoleOption[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -186,6 +238,7 @@ export default function OrganizationDesign() {
     try {
       const response = await api.get<OrganizationResponse>('/organization')
       setEmployees(response.data.employees)
+      setAvailableRoles(response.data.available_roles)
     } catch (error) {
       setErrorMessage(
         axios.isAxiosError(error)
@@ -261,7 +314,7 @@ export default function OrganizationDesign() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-4 px-2.5 pb-10 sm:px-4 lg:px-6">
+    <div className="mx-auto w-full max-w-[1600px] space-y-4 px-2.5 pb-10 pt-3 sm:px-4 sm:pt-5 lg:px-6">
 
       {/* Header */}
       <header className="flex flex-col gap-3 rounded-2xl border border-slate-300 bg-white py-4 pl-16 pr-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between sm:px-6">
@@ -438,8 +491,20 @@ export default function OrganizationDesign() {
 
       {selectedEmployee && (
         <EmployeeDetailModal
+          key={selectedEmployee.id}
           employee={selectedEmployee}
-          canAssignTasks={user?.role === 'manager' || user?.role === 'admin'}
+          canAssignTasks={user?.permission_names.includes('task.assign') ?? false}
+          canManageRoles={user?.permission_names.includes('employee.manage_roles') ?? false}
+          canEditRoles={selectedEmployee.user_id !== user?.id}
+          availableRoles={availableRoles}
+          onRolesUpdated={(roles) => {
+            setEmployees((current) => current.map((item) => (
+              item.id === selectedEmployee.id ? { ...item, roles } : item
+            )))
+            setSelectedEmployee((current) => (
+              current?.id === selectedEmployee.id ? { ...current, roles } : current
+            ))
+          }}
           onClose={() => setSelectedEmployee(null)}
         />
       )}
@@ -654,18 +719,68 @@ function EmptyState() {
 function EmployeeDetailModal({
   employee,
   canAssignTasks,
+  canManageRoles,
+  canEditRoles,
+  availableRoles,
+  onRolesUpdated,
   onClose,
 }: {
   employee: OrganizationEmployee
   canAssignTasks: boolean
+  canManageRoles: boolean
+  canEditRoles: boolean
+  availableRoles: RoleOption[]
+  onRolesUpdated: (roles: RoleOption[]) => void
   onClose: () => void
 }) {
   const [showEmail, setShowEmail] = useState(false)
   const [showAssignTask, setShowAssignTask] = useState(false)
   const [assignmentMessage, setAssignmentMessage] = useState('')
+  const [roleIds, setRoleIds] = useState<number[]>(() => employee.roles.map((role) => role.id))
+  const [savingRoles, setSavingRoles] = useState(false)
+  const [rolesError, setRolesError] = useState('')
+  const [rolesSuccess, setRolesSuccess] = useState('')
   const status = statusConfig[employee.work_status]
   const initial = employee.full_name.trim().charAt(0).toUpperCase() || '?'
   const isEmployeeOnline = employee.work_status !== 'offline' && employee.attendance !== null
+
+  const toggleRole = (roleId: number) => {
+    setRolesError('')
+    setRolesSuccess('')
+    setRoleIds((current) => (
+      current.includes(roleId)
+        ? current.filter((id) => id !== roleId)
+        : [...current, roleId]
+    ))
+  }
+
+  const saveRoles = async () => {
+    if (roleIds.length === 0 || savingRoles) return
+
+    try {
+      setSavingRoles(true)
+      setRolesError('')
+      setRolesSuccess('')
+      const response = await api.put<{ roles: RoleOption[] }>(`/employees/${employee.id}/roles`, {
+        role_ids: roleIds,
+      })
+      onRolesUpdated(response.data.roles)
+      setRolesSuccess('権限を更新しました。')
+    } catch (error) {
+      if (!axios.isAxiosError(error)) {
+        setRolesError('権限を更新できませんでした。')
+      } else if (!error.response) {
+        setRolesError(`APIサーバーに接続できませんでした。（${api.defaults.baseURL}）`)
+      } else {
+        const serverMessage = typeof error.response.data?.message === 'string'
+          ? error.response.data.message
+          : '権限を更新できませんでした。'
+        setRolesError(`${serverMessage}（HTTP ${error.response.status}）`)
+      }
+    } finally {
+      setSavingRoles(false)
+    }
+  }
 
   return (
     <>
@@ -746,6 +861,76 @@ function EmployeeDetailModal({
               この社員はオフラインのため、業務を依頼できません。勤務開始後に依頼してください。
             </div>
           )}
+
+          <DetailSection title="権限 / Permissions">
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50/70 p-3.5 shadow-sm dark:border-slate-700 dark:from-slate-900 dark:to-slate-800/40 sm:p-4">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-2.5 dark:border-slate-700">
+                <div>
+                  <div className="text-[10px] font-bold tracking-[0.16em] text-indigo-500">ACCESS CONTROL</div>
+                  <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">この社員に付与されている役割</p>
+                </div>
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
+                  <ShieldCheck size={16} />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {employee.roles.length > 0 ? employee.roles.map((role) => (
+                  <RoleBadge
+                    key={role.id}
+                    role={role}
+                  />
+                )) : (
+                  <span className="text-xs text-slate-400">権限が設定されていません。</span>
+                )}
+              </div>
+
+              {canManageRoles && !canEditRoles && (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-200">
+                  自分自身の権限は変更できません。別のシステム管理者に依頼してください。
+                </p>
+              )}
+
+              {canManageRoles && canEditRoles && availableRoles.length > 0 && (
+                <>
+                  <div className="pt-1">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-xs font-bold text-slate-700 dark:text-slate-200">付与する役割</p>
+                      <span className="text-[10px] font-medium text-slate-400">複数選択可</span>
+                    </div>
+                    <div className="grid gap-1.5 sm:grid-cols-2">
+                      {availableRoles.map((role) => (
+                        <RoleSelectionCard
+                          key={role.id}
+                          role={role}
+                          selected={roleIds.includes(role.id)}
+                          onToggle={() => toggleRole(role.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {rolesError && (
+                    <p className="text-xs font-medium text-rose-600 dark:text-rose-300">{rolesError}</p>
+                  )}
+
+                  {rolesSuccess && (
+                    <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-300">{rolesSuccess}</p>
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={savingRoles || roleIds.length === 0}
+                    onClick={() => void saveRoles()}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/20 transition hover:from-indigo-500 hover:to-violet-500 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <ShieldCheck size={17} />
+                    {savingRoles ? '更新中...' : '権限を更新'}
+                  </button>
+                </>
+              )}
+            </div>
+          </DetailSection>
 
           <DetailSection title="基本情報">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -842,6 +1027,58 @@ function EmployeeDetailModal({
       />
     )}
     </>
+  )
+}
+
+function RoleBadge({ role }: { role: RoleOption }) {
+  const visual = rolePresentation[role.name as keyof typeof rolePresentation]
+  const Icon = visual?.icon ?? UserRound
+  const iconColor = visual?.iconClass.split(' ').find((className) => className.startsWith('text-')) ?? 'text-slate-500'
+
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+      <Icon size={13} className={iconColor} />
+      {role.display_name}
+    </span>
+  )
+}
+
+function RoleSelectionCard({
+  role,
+  selected,
+  onToggle,
+}: {
+  role: RoleOption
+  selected: boolean
+  onToggle: () => void
+}) {
+  const visual = rolePresentation[role.name as keyof typeof rolePresentation]
+  const Icon = visual?.icon ?? UserRound
+  const selectedClass = selected
+    ? visual?.selectedClass ?? 'border-indigo-400 bg-indigo-50 dark:border-indigo-400/50 dark:bg-indigo-500/10'
+    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:border-slate-600 dark:hover:bg-slate-800'
+  const checkClass = selected
+    ? visual?.checkClass ?? 'border-indigo-600 bg-indigo-600 text-white'
+    : 'border-slate-300 bg-white text-transparent dark:border-slate-600 dark:bg-slate-900'
+
+  return (
+    <label className={`group flex cursor-pointer items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-all ${selectedClass}`}>
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={onToggle}
+        className="sr-only"
+      />
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${visual?.iconClass ?? 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>
+        <Icon size={16} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-bold text-slate-800 dark:text-slate-100">{role.display_name}</span>
+      </span>
+      <span className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border transition ${checkClass}`}>
+        <Check size={12} strokeWidth={3} />
+      </span>
+    </label>
   )
 }
 

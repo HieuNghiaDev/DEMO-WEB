@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\CaseFileController;
 use App\Http\Controllers\Api\CaseMeetingLogController;
 use App\Http\Controllers\Api\CasePrecedentController;
 use App\Http\Controllers\Api\ClientController;
+use App\Http\Controllers\Api\EmployeeNotificationController;
 use App\Http\Controllers\Api\EmployeeTaskController;
 use App\Http\Controllers\Api\OrganizationController;
 use App\Http\Controllers\Api\PersonaController;
@@ -38,6 +39,24 @@ Route::middleware([
     Route::get('/organization', [
         OrganizationController::class,
         'index',
+    ])->middleware('permission:employee.view');
+
+    Route::put('/employees/{employee}/roles', [
+        OrganizationController::class,
+        'updateRoles',
+    ])->middleware('permission:employee.manage_roles');
+
+    Route::get('/notifications', [
+        EmployeeNotificationController::class,
+        'index',
+    ]);
+    Route::patch('/notifications/read-all', [
+        EmployeeNotificationController::class,
+        'markAllRead',
+    ]);
+    Route::patch('/notifications/{notification}/read', [
+        EmployeeNotificationController::class,
+        'markRead',
     ]);
 
     Route::get('/personas', [
@@ -48,16 +67,43 @@ Route::middleware([
     Route::post('/ai/chat', [
         AiChatController::class,
         'store',
-    ]);
+    ])->middleware('permission:ai.use');
 
-    Route::apiResource('clients', ClientController::class);
-    Route::apiResource('case-files', CaseFileController::class);
+    Route::apiResource('clients', ClientController::class)
+        ->only(['index', 'show'])
+        ->middleware('permission:case.view');
+    Route::apiResource('clients', ClientController::class)
+        ->only(['store'])
+        ->middleware('permission:case.create');
+    Route::apiResource('clients', ClientController::class)
+        ->only(['update'])
+        ->middleware('permission:case.update');
+    Route::apiResource('clients', ClientController::class)
+        ->only(['destroy'])
+        ->middleware('permission:case.delete');
+
+    Route::apiResource('case-files', CaseFileController::class)
+        ->only(['index', 'show'])
+        ->middleware('permission:case.view');
+    Route::apiResource('case-files', CaseFileController::class)
+        ->only(['store'])
+        ->middleware('permission:case.create');
+    Route::apiResource('case-files', CaseFileController::class)
+        ->only(['update'])
+        ->middleware('permission:case.update');
+    Route::apiResource('case-files', CaseFileController::class)
+        ->only(['destroy'])
+        ->middleware('permission:case.delete');
 
     Route::prefix('case-files/{caseFile}')->group(function () {
-        Route::get('documents', [CaseDocumentController::class, 'index']);
-        Route::post('documents', [CaseDocumentController::class, 'store']);
-        Route::patch('documents/{document}', [CaseDocumentController::class, 'update']);
-        Route::delete('documents/{document}', [CaseDocumentController::class, 'destroy']);
+        Route::get('documents', [CaseDocumentController::class, 'index'])
+            ->middleware('permission:document.view');
+        Route::post('documents', [CaseDocumentController::class, 'store'])
+            ->middleware('permission:document.create');
+        Route::patch('documents/{document}', [CaseDocumentController::class, 'update'])
+            ->middleware('permission:document.update');
+        Route::delete('documents/{document}', [CaseDocumentController::class, 'destroy'])
+            ->middleware('permission:document.delete');
         Route::get('precedents', [CasePrecedentController::class, 'index']);
         Route::post('precedents', [CasePrecedentController::class, 'store']);
         Route::get('meeting-logs', [CaseMeetingLogController::class, 'index']);
@@ -70,17 +116,17 @@ Route::middleware([
         Route::get('/my-report', [
             AttendanceController::class,
             'personalReport',
-        ]);
+        ])->middleware('permission:attendance.export_own');
 
         Route::get('/my-history', [
             AttendanceController::class,
             'history',
-        ]);
+        ])->middleware('permission:attendance.view_own');
 
         Route::get('/my-timeline', [
             AttendanceController::class,
             'timeline',
-        ]);
+        ])->middleware('permission:attendance.view_own');
 
         Route::get('/active', [
             AttendanceController::class,
@@ -90,12 +136,12 @@ Route::middleware([
         Route::post('/start', [
             AttendanceController::class,
             'start',
-        ]);
+        ])->middleware('permission:attendance.update_own');
 
         Route::patch('/{attendance}/status', [
             AttendanceController::class,
             'updateStatus',
-        ]);
+        ])->middleware('permission:attendance.update_own');
     });
 
     Route::prefix('work-sessions')->group(function () {
@@ -116,20 +162,20 @@ Route::middleware([
     Route::post(
         '/employees/{employee}/tasks',
         [EmployeeTaskController::class, 'store']
-    );
+    )->middleware('permission:task.assign');
 
     Route::get(
         '/my/tasks',
         [EmployeeTaskController::class, 'myTasks']
-    );
+    )->middleware('permission:task.view_own');
 
     Route::patch(
         '/tasks/{task}/accept',
         [EmployeeTaskController::class, 'accept']
-    );
+    )->middleware('permission:task.update');
 
     Route::patch(
         '/tasks/{task}/status',
         [EmployeeTaskController::class, 'updateStatus']
-    );
+    )->middleware('permission:task.update');
 });

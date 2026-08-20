@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\RequirePermission;
 use App\Http\Middleware\SecurityEventAudit;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
@@ -17,6 +18,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // API authentication uses Sanctum bearer tokens.
         $middleware->append(SecurityHeaders::class);
         $middleware->append(SecurityEventAudit::class);
+        $middleware->alias([
+            'permission' => RequirePermission::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

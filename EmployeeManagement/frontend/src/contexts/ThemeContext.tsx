@@ -53,16 +53,21 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
   const setTheme = (nextTheme: ThemeMode) => {
     window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
-    document.documentElement.classList.add("theme-switching");
-    applyTheme(nextTheme);
 
     if (themeTransitionTimer) {
       window.clearTimeout(themeTransitionTimer);
     }
 
+    // Bấm đổi chế độ liên tiếp vẫn phải khởi động lại animation từ đầu.
+    const root = document.documentElement;
+    root.classList.remove("theme-switching");
+    void root.offsetWidth;
+    root.classList.add("theme-switching");
+    applyTheme(nextTheme);
+
     themeTransitionTimer = window.setTimeout(() => {
-      document.documentElement.classList.remove("theme-switching");
-    }, 1580);
+      root.classList.remove("theme-switching");
+    }, 1760);
 
     setThemeState(nextTheme);
   };

@@ -22,6 +22,7 @@ body {
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
+  transition: background-color 1700ms cubic-bezier(0.22, 0.8, 0.24, 1);
 }
 
 html {
@@ -35,8 +36,8 @@ html.dark {
 .themis-app {
   color: #1f2937;
   transition:
-    background-color 220ms ease,
-    color 220ms ease;
+    background-color 1700ms cubic-bezier(0.22, 0.8, 0.24, 1),
+    color 1100ms ease;
 }
 
 .dark .themis-app {
@@ -205,22 +206,36 @@ html.dark {
 html.theme-switching .themis-app,
 html.theme-switching .themis-app * {
   transition-property: background-color, border-color, color, box-shadow, opacity, transform;
-  transition-duration: 1500ms;
-  transition-timing-function: cubic-bezier(0.22, 0.82, 0.2, 1);
+  transition-duration: 1700ms;
+  transition-timing-function: cubic-bezier(0.22, 0.8, 0.24, 1);
 }
 
 html.theme-switching::after {
   position: fixed;
   z-index: 9999;
-  inset: 0;
+  inset: -24%;
   content: "";
   pointer-events: none;
-  background: radial-gradient(circle at 7rem calc(100% - 9rem), rgb(255 255 255 / 0.18), transparent 46%);
-  animation: themis-theme-wash 1500ms cubic-bezier(0.22, 0.82, 0.2, 1) both;
+  background: linear-gradient(
+    108deg,
+    transparent 28%,
+    rgb(255 255 255 / 0.38) 43%,
+    rgb(224 231 255 / 0.58) 51%,
+    rgb(255 255 255 / 0.22) 61%,
+    transparent 76%
+  );
+  animation: themis-theme-sweep 1700ms cubic-bezier(0.22, 0.8, 0.24, 1) both;
 }
 
 html.dark.theme-switching::after {
-  background: radial-gradient(circle at 7rem calc(100% - 9rem), rgb(99 102 241 / 0.2), transparent 50%);
+  background: linear-gradient(
+    108deg,
+    transparent 25%,
+    rgb(15 23 42 / 0.42) 42%,
+    rgb(49 46 129 / 0.48) 51%,
+    rgb(15 23 42 / 0.3) 62%,
+    transparent 77%
+  );
 }
 
 .theme-mode-pill-knob {
@@ -317,19 +332,19 @@ html.theme-switching .theme-mode-icon {
   }
 }
 
-@keyframes themis-theme-wash {
+@keyframes themis-theme-sweep {
   0% {
     opacity: 0;
-    transform: scale(0.92);
+    transform: translate3d(-48%, 0, 0) skewX(-8deg);
   }
 
-  38% {
-    opacity: 1;
+  44% {
+    opacity: 0.92;
   }
 
   100% {
     opacity: 0;
-    transform: scale(1.08);
+    transform: translate3d(48%, 0, 0) skewX(-8deg);
   }
 }
 

@@ -43,6 +43,7 @@ class AuthController extends Controller
             ->with([
                 'employee.office',
                 'employee.department',
+                'roles.permissions',
             ])
             ->where('email', $email)
             ->first();
@@ -138,6 +139,7 @@ class AuthController extends Controller
         $user = $request->user()->load([
             'employee.office',
             'employee.department',
+            'roles.permissions',
         ]);
 
         return response()->json([

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\EmployeeNotification;
 use App\Models\EmployeeTask;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,7 +17,7 @@ class EmployeeTaskController extends Controller
     public function store(Request $request, Employee $employee): JsonResponse
     {
         abort_unless(
-            in_array($request->user()->role, ['manager', 'admin'], true),
+            $request->user()->hasPermission('task.assign'),
             403,
             '業務を依頼する権限がありません。'
         );
@@ -61,6 +62,18 @@ class EmployeeTaskController extends Controller
             'due_at' => $validated['due_at'] ?? null,
             'status' => 'pending',
         ]);
+
+        if ($employee->user !== null) {
+            EmployeeNotification::create([
+                'user_id' => $employee->user->id,
+                'kind' => 'info',
+                'title' => '新しい業務が届きました',
+                'message' => $task->title,
+                'data' => [
+                    'assigned_task_id' => $task->id,
+                ],
+            ]);
+        }
 
         return response()->json([
             'message' => '業務を依頼しました。',

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
+use App\Models\EmployeeNotification;
+use App\Models\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -27,17 +29,15 @@ class OrganizationController extends Controller
          * - trạng thái làm việc
          * - công việc hiện tại
          */
-        $canViewPrivate = in_array(
-            $user->role,
-            ['manager', 'admin'],
-            true
-        );
+        $canViewPrivate = $user->hasPermission('employee.update');
 
         $employees = Employee::query()
             ->with([
                 'office:id,office_code,name,address',
 
                 'department:id,department_code,name',
+
+                'user.roles:id,name,display_name',
 
                 'attendances' => function ($query) {
                     $query
@@ -115,6 +115,17 @@ class OrganizationController extends Controller
 
                     'hire_date' => $employee->hire_date?->toDateString(),
 
+                    'user_id' => $employee->user?->id,
+
+                    'roles' => $employee->user?->roles
+                        ->map(fn (Role $role) => [
+                            'id' => $role->id,
+                            'name' => $role->name,
+                            'display_name' => $role->display_name,
+                        ])
+                        ->values()
+                        ->all() ?? [],
+
                     'office' => $employee->office
                         ? [
                             'id' => $employee->office->id,
@@ -164,14 +175,11 @@ class OrganizationController extends Controller
 
                             'break_end' => $attendance->break_end,
 
-                            'outside_destination' =>
-                                $attendance->outside_destination,
+                            'outside_destination' => $attendance->outside_destination,
 
-                            'outside_start' =>
-                                $attendance->outside_start,
+                            'outside_start' => $attendance->outside_start,
 
-                            'outside_expected_end' =>
-                                $attendance->outside_expected_end,
+                            'outside_expected_end' => $attendance->outside_expected_end,
 
                             'status' => $attendance->status,
 
@@ -219,6 +227,92 @@ class OrganizationController extends Controller
             ],
 
             'employees' => $employees->values(),
+
+            'available_roles' => $user->hasPermission('employee.manage_roles')
+                ? Role::query()
+                    ->select(['id', 'name', 'display_name'])
+                    ->orderBy('id')
+                    ->get()
+                : [],
+        ]);
+    }
+
+    public function updateRoles(Request $request, Employee $employee): JsonResponse
+    {
+        $actor = $request->user();
+        $targetUser = $employee->user;
+
+        abort_unless(
+            $targetUser !== null,
+            422,
+            'この社員にはログインアカウントがありません。'
+        );
+
+        abort_if(
+            $actor->id === $targetUser->id,
+            403,
+            '自分自身の権限は変更できません。'
+        );
+
+        $validated = $request->validate([
+            'role_ids' => ['required', 'array', 'min:1'],
+            'role_ids.*' => ['integer', 'distinct', 'exists:roles,id'],
+        ]);
+
+        $roles = Role::query()
+            ->whereIn('id', $validated['role_ids'])
+            ->get(['id', 'name']);
+        $roleNames = $roles->pluck('name');
+        $isGrantingSuperAdmin = $roleNames->contains('super_admin');
+        $superAdminRole = Role::query()
+            ->where('name', 'super_admin')
+            ->firstOrFail();
+
+        abort_if(
+            $isGrantingSuperAdmin && ! $actor->hasRole('super_admin'),
+            403,
+            'システム管理者権限を付与できるのはシステム管理者のみです。'
+        );
+
+        $isRemovingLastSuperAdmin = $targetUser->hasRole('super_admin')
+            && ! $isGrantingSuperAdmin
+            && $superAdminRole->users()->count() <= 1;
+
+        abort_if(
+            $isRemovingLastSuperAdmin,
+            422,
+            '最後のシステム管理者権限は削除できません。'
+        );
+
+        $targetUser->roles()->sync($roles->pluck('id')->all());
+
+        // Legacy column stays in place until old clients no longer depend on it.
+        $targetUser->update([
+            'role' => match (true) {
+                $roleNames->contains('super_admin') => 'admin',
+                $roleNames->contains('manager') => 'manager',
+                $roleNames->contains('lawyer') => 'lawyer',
+                $roleNames->contains('part_time') => 'part_time',
+                default => 'employee',
+            },
+        ]);
+
+        EmployeeNotification::create([
+            'user_id' => $targetUser->id,
+            'kind' => 'info',
+            'title' => '権限が更新されました',
+            'message' => 'アカウントの役割が管理者によって更新されました。',
+            'data' => [
+                'role_names' => $roleNames->values()->all(),
+            ],
+        ]);
+
+        $targetUser->load('roles:id,name,display_name');
+
+        return response()->json([
+            'message' => '権限を更新しました。',
+            'employee_id' => $employee->id,
+            'roles' => $targetUser->roles,
         ]);
     }
 }

@@ -166,6 +166,7 @@ type UserNotification = {
   kind: NotificationKind;
   createdAt: string;
   isRead: boolean;
+  serverId?: number;
   assignedTaskId?: number;
 };
 
@@ -173,6 +174,30 @@ type NewNotification = Pick<
   UserNotification,
   "sourceKey" | "title" | "message" | "kind" | "assignedTaskId"
 >;
+
+type RemoteNotification = {
+  id: number;
+  kind: NotificationKind;
+  title: string;
+  message: string;
+  created_at: string;
+  read_at: string | null;
+  assigned_task_id: number | null;
+};
+
+const loadStoredNotifications = (storageKey: string): UserNotification[] => {
+  if (!storageKey) return [];
+
+  try {
+    const storedNotifications = JSON.parse(
+      window.localStorage.getItem(storageKey) ?? "[]",
+    ) as UserNotification[];
+
+    return Array.isArray(storedNotifications) ? storedNotifications : [];
+  } catch {
+    return [];
+  }
+};
 
 const femaleDeskPositions = [
   { left: "15%", top: "30%" },
@@ -596,20 +621,8 @@ export default function EmployeeRoom() {
     number | null
   >(null);
   const [selectedOffice, setSelectedOffice] = useState<OfficeId>("themis");
-  const [notifications, setNotifications] = useState<UserNotification[]>(
-    () => {
-      if (!notificationStorageKey) return [];
-
-      try {
-        const storedNotifications = JSON.parse(
-          window.localStorage.getItem(notificationStorageKey) ?? "[]",
-        ) as UserNotification[];
-
-        return Array.isArray(storedNotifications) ? storedNotifications : [];
-      } catch {
-        return [];
-      }
-    },
+  const [notifications, setNotifications] = useState<UserNotification[]>(() =>
+    loadStoredNotifications(notificationStorageKey),
   );
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] =
     useState(false);
@@ -625,6 +638,7 @@ export default function EmployeeRoom() {
   const [assignedTaskError, setAssignedTaskError] = useState("");
   const knownPendingTaskIdsRef = useRef<Set<number> | null>(null);
   const questAudioContextRef = useRef<AudioContext | null>(null);
+  const knownRemoteNotificationIdsRef = useRef<Set<number> | null>(null);
 
   const unreadNotificationCount = notifications.filter(
     (notification) => !notification.isRead,
@@ -750,6 +764,67 @@ export default function EmployeeRoom() {
     [notificationStorageKey, saveNotifications],
   );
 
+  const loadRemoteNotifications = useCallback(async () => {
+    try {
+      const response = await api.get<{ notifications: RemoteNotification[] }>(
+        "/notifications",
+      );
+      const remoteNotifications = response.data.notifications.map(
+        (notification): UserNotification => ({
+          id: `server-${notification.id}`,
+          sourceKey: `server-${notification.id}`,
+          title: notification.title,
+          message: notification.message,
+          kind: notification.kind,
+          createdAt: notification.created_at,
+          isRead: notification.read_at !== null,
+          serverId: notification.id,
+          assignedTaskId: notification.assigned_task_id ?? undefined,
+        }),
+      );
+
+      const unreadNotification = remoteNotifications.find(
+        (notification) => !notification.isRead,
+      );
+      const previousIds = knownRemoteNotificationIdsRef.current;
+      const newestNotification = previousIds
+        ? remoteNotifications.find(
+            (notification) =>
+              !notification.isRead &&
+              !previousIds.has(notification.serverId ?? -1),
+          )
+        : unreadNotification;
+
+      knownRemoteNotificationIdsRef.current = new Set(
+        remoteNotifications.flatMap((notification) =>
+          notification.serverId ? [notification.serverId] : [],
+        ),
+      );
+
+      setNotifications((current) => {
+        const localNotifications = current.filter(
+          (notification) => notification.serverId === undefined,
+        );
+        const nextNotifications = [...remoteNotifications, ...localNotifications]
+          .sort(
+            (left, right) =>
+              new Date(right.createdAt).getTime() -
+              new Date(left.createdAt).getTime(),
+          )
+          .slice(0, 50);
+
+        saveNotifications(nextNotifications);
+        return nextNotifications;
+      });
+
+      if (newestNotification) {
+        setToastNotification(newestNotification);
+      }
+    } catch {
+      // API không sẵn sàng thì vẫn giữ các thông báo đã lưu tại máy này.
+    }
+  }, [saveNotifications]);
+
   const playNewQuestSound = useCallback(() => {
     if (typeof window === "undefined" || !("AudioContext" in window)) {
       return;
@@ -782,6 +857,10 @@ export default function EmployeeRoom() {
   }, []);
 
   const markNotificationAsRead = (notificationId: string) => {
+    const notification = notifications.find(
+      (item) => item.id === notificationId,
+    );
+
     setNotifications((current) => {
       const nextNotifications = current.map((notification) =>
         notification.id === notificationId
@@ -792,9 +871,19 @@ export default function EmployeeRoom() {
       saveNotifications(nextNotifications);
       return nextNotifications;
     });
+
+    if (notification?.serverId) {
+      void api.patch(`/notifications/${notification.serverId}/read`).catch(() => {
+        void loadRemoteNotifications();
+      });
+    }
   };
 
   const markAllNotificationsAsRead = () => {
+    const hasUnreadRemoteNotifications = notifications.some(
+      (notification) => notification.serverId !== undefined && !notification.isRead,
+    );
+
     setNotifications((current) => {
       const nextNotifications = current.map((notification) => ({
         ...notification,
@@ -804,7 +893,41 @@ export default function EmployeeRoom() {
       saveNotifications(nextNotifications);
       return nextNotifications;
     });
+
+    if (hasUnreadRemoteNotifications) {
+      void api.patch("/notifications/read-all").catch(() => {
+        void loadRemoteNotifications();
+      });
+    }
   };
+
+  useEffect(() => {
+    // Khi đổi tài khoản, danh sách thông báo từ server phải được xem là mới.
+    // Nếu giữ ID của tài khoản trước, thông báo của nhân viên vừa đăng nhập
+    // có thể không hiện toast ngay lần đầu.
+    knownRemoteNotificationIdsRef.current = null;
+    const loadId = window.setTimeout(() => {
+      setNotifications(loadStoredNotifications(notificationStorageKey));
+    }, 0);
+
+    return () => window.clearTimeout(loadId);
+  }, [notificationStorageKey]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const initialLoadId = window.setTimeout(() => {
+      void loadRemoteNotifications();
+    }, 0);
+    const intervalId = window.setInterval(() => {
+      void loadRemoteNotifications();
+    }, 20_000);
+
+    return () => {
+      window.clearTimeout(initialLoadId);
+      window.clearInterval(intervalId);
+    };
+  }, [loadRemoteNotifications, user]);
 
   // Chưa có company_id nên dữ liệu chấm công hiện tại tạm thuộc THEMIS.
   const visibleAttendances =
@@ -2340,37 +2463,55 @@ export default function EmployeeRoom() {
       {toastNotification && (
         <div
           role="alert"
-          className={`quest-notification-toast fixed bottom-5 right-5 z-[120] w-[min(24rem,calc(100vw-2.5rem))] overflow-hidden rounded-2xl border bg-white/95 shadow-2xl shadow-slate-950/20 backdrop-blur dark:bg-slate-900/95 ${
+          className={`quest-notification-toast fixed bottom-5 right-5 z-[120] w-[min(25rem,calc(100vw-2rem))] overflow-hidden rounded-[1.4rem] border bg-white/95 shadow-2xl shadow-slate-950/25 backdrop-blur-xl dark:bg-slate-900/95 ${
             toastNotification.kind === "success"
-              ? "border-emerald-200"
+              ? "border-emerald-200/90"
               : toastNotification.kind === "warning"
-                ? "border-amber-200"
+                ? "border-amber-200/90"
                 : toastNotification.kind === "error"
-                  ? "border-red-200"
-                  : "border-blue-200"
+                  ? "border-red-200/90"
+                  : "border-indigo-200/90"
           }`}
         >
           <div
-            className={`absolute inset-y-0 left-0 w-1 ${
+            className={`absolute inset-x-0 top-0 h-1 ${
               toastNotification.kind === "success"
                 ? "bg-emerald-500"
                 : toastNotification.kind === "warning"
                   ? "bg-amber-500"
                   : toastNotification.kind === "error"
                     ? "bg-red-500"
-                    : "bg-indigo-500"
+                  : "bg-indigo-500"
             }`}
           />
-          <div className="flex items-start gap-3 p-4 pl-5">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+            <div className="flex items-center gap-2">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  toastNotification.kind === "success"
+                    ? "bg-emerald-500"
+                    : toastNotification.kind === "warning"
+                      ? "bg-amber-500"
+                      : toastNotification.kind === "error"
+                        ? "bg-red-500"
+                        : "bg-indigo-500"
+                }`}
+              />
+              <span className="text-[10px] font-extrabold tracking-[0.16em] text-slate-500 dark:text-slate-400">NEW NOTIFICATION</span>
+            </div>
+            <span className="rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">未読</span>
+          </div>
+
+          <div className="flex items-start gap-3.5 px-5 pb-4 pt-4">
             <span
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ring-4 ${
                 toastNotification.kind === "success"
-                  ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300"
+                  ? "bg-emerald-100 text-emerald-600 ring-emerald-50 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/5"
                   : toastNotification.kind === "warning"
-                    ? "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300"
+                    ? "bg-amber-100 text-amber-600 ring-amber-50 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/5"
                     : toastNotification.kind === "error"
-                      ? "bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-300"
-                      : "bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300"
+                      ? "bg-red-100 text-red-600 ring-red-50 dark:bg-red-500/15 dark:text-red-300 dark:ring-red-500/5"
+                      : "bg-indigo-100 text-indigo-600 ring-indigo-50 dark:bg-indigo-500/15 dark:text-indigo-300 dark:ring-indigo-500/5"
               }`}
             >
               {toastNotification.assignedTaskId ? (
@@ -2385,13 +2526,29 @@ export default function EmployeeRoom() {
               )}
             </span>
 
-            <div className="min-w-0 flex-1 pr-5">
-              <p className="text-sm font-bold text-slate-900 dark:text-white">
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] font-bold tracking-[-0.01em] text-slate-900 dark:text-white">
                 {toastNotification.title}
               </p>
-              <p className="mt-0.5 text-xs leading-relaxed text-slate-500 dark:text-slate-300">
+              <p className="mt-1 text-sm leading-5 text-slate-500 dark:text-slate-300">
                 {toastNotification.message}
               </p>
+
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                  {formatNotificationTime(toastNotification.createdAt)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    markNotificationAsRead(toastNotification.id);
+                    setToastNotification(null);
+                  }}
+                  className="rounded-lg px-2 py-1 text-[11px] font-bold text-indigo-600 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-500/10"
+                >
+                  既読にする
+                </button>
+              </div>
 
               {toastNotification.assignedTaskId &&
                 (() => {
@@ -2420,7 +2577,7 @@ export default function EmployeeRoom() {
               type="button"
               aria-label="通知を閉じる"
               onClick={() => setToastNotification(null)}
-              className="-ml-5 rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              className="-ml-1 -mt-1 rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
             >
               <X size={16} />
             </button>
