@@ -15,7 +15,7 @@ import api, {
 
 export type AuthOffice = {
   id: number;
-  code: string;
+  office_code: string;
   name: string;
   room_image_path?: string | null;
 };

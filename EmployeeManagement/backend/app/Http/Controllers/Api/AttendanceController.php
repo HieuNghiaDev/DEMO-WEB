@@ -521,7 +521,8 @@ class AttendanceController extends Controller
     private function attachEmployeeProfile(Attendance $attendance): Attendance
     {
         $attendance->loadMissing([
-            'employee:id,employee_code,full_name,full_name_kana,gender,avatar_path,position_title,employment_type',
+            'employee:id,employee_code,full_name,full_name_kana,gender,avatar_path,position_title,employment_type,office_id',
+            'employee.office:id,office_code',
             'activeWorkSession',
             'periods',
         ]);
@@ -538,7 +539,10 @@ class AttendanceController extends Controller
                     'avatar_path',
                     'position_title',
                     'employment_type',
+                    'office_id',
                 ]);
+
+            $employee?->load('office:id,office_code');
 
             $attendance->setRelation('employee', $employee);
         }

@@ -84,6 +84,10 @@ type Attendance = {
     avatar_path: string | null;
     position_title: string | null;
     employment_type: string | null;
+    office_id: number | null;
+    office: {
+      office_code: string;
+    } | null;
   } | null;
 };
 
@@ -576,6 +580,14 @@ const offices: Record<OfficeId, Office> = {
   },
 }
 
+const officeCodeToRoom: Record<string, OfficeId> = {
+  THEMIS: "themis",
+  CHUKA_LAW: "law",
+};
+
+const resolveOfficeRoom = (officeCode?: string | null): OfficeId =>
+  officeCode ? (officeCodeToRoom[officeCode] ?? "themis") : "themis";
+
 export default function EmployeeRoom() {
   const { user } = useAuth();
 
@@ -620,7 +632,9 @@ export default function EmployeeRoom() {
   const [selectedAttendanceId, setSelectedAttendanceId] = useState<
     number | null
   >(null);
-  const [selectedOffice, setSelectedOffice] = useState<OfficeId>("themis");
+  const [selectedOffice, setSelectedOffice] = useState<OfficeId>(() =>
+    resolveOfficeRoom(user?.employee?.office?.office_code),
+  );
   const [notifications, setNotifications] = useState<UserNotification[]>(() =>
     loadStoredNotifications(notificationStorageKey),
   );
@@ -649,7 +663,7 @@ export default function EmployeeRoom() {
     break: "休憩中",
     outside: "外出中",
     offline: "オフライン",
-  };
+};
 
   const selectedOfficeInfo = offices[selectedOffice];
   const myQuestTasks = assignedTasks;
@@ -929,9 +943,14 @@ export default function EmployeeRoom() {
     };
   }, [loadRemoteNotifications, user]);
 
-  // Chưa có company_id nên dữ liệu chấm công hiện tại tạm thuộc THEMIS.
-  const visibleAttendances =
-    selectedOffice === "themis" ? activeAttendances : [];
+  // Nhân viên chỉ xuất hiện trong đúng phòng thuộc văn phòng của họ.
+  // Các bản ghi cũ thiếu office_code vẫn tạm đặt ở THEMIS để không biến mất.
+  const visibleAttendances = activeAttendances.filter((attendance) => {
+    const officeCode = attendance.employee?.office?.office_code;
+    const employeeOffice = officeCode ? officeCodeToRoom[officeCode] : "themis";
+
+    return employeeOffice === selectedOffice;
+  });
   const selectedAttendance = visibleAttendances.find(
     (attendance) => attendance.id === selectedAttendanceId,
   );
