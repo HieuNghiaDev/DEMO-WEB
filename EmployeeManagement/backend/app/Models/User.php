@@ -61,8 +61,11 @@ class User extends Authenticatable
     public function hasRole(string $role): bool
     {
         $legacyRole = match ($role) {
-            'super_admin' => 'admin',
-            'staff' => 'employee',
+            'level_5' => 'admin',
+            'level_4' => 'manager',
+            'level_3' => 'lawyer',
+            'level_1' => 'part_time',
+            'level_2' => 'employee',
             default => $role,
         };
 
@@ -85,7 +88,7 @@ class User extends Authenticatable
 
     public function hasPermission(string $permission): bool
     {
-        if ($this->hasRole('super_admin')) {
+        if ($this->hasRole('level_5')) {
             return true;
         }
 
@@ -116,7 +119,7 @@ class User extends Authenticatable
     /** @return list<string> */
     public function getPermissionNamesAttribute(): array
     {
-        if ($this->hasRole('super_admin')) {
+        if ($this->hasRole('level_5')) {
             return Permission::query()->pluck('name')->all();
         }
 

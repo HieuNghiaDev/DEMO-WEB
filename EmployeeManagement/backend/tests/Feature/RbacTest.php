@@ -15,43 +15,43 @@ class RbacTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_multiple_roles_combine_their_permissions(): void
+    public function test_level_four_has_management_permissions(): void
     {
         $this->seed(RolePermissionSeeder::class);
         $user = $this->makeUser('RBAC001');
 
-        $user->roles()->sync($this->roleIds('manager', 'lawyer'));
+        $user->roles()->sync($this->roleIds('level_4'));
 
-        $this->assertTrue($user->hasRole('manager'));
-        $this->assertTrue($user->hasAnyRole(['staff', 'lawyer']));
+        $this->assertTrue($user->hasRole('level_4'));
+        $this->assertTrue($user->hasAnyRole(['level_1', 'level_4']));
         $this->assertTrue($user->hasPermission('task.assign'));
         $this->assertTrue($user->hasPermission('case.update'));
-        $this->assertFalse($user->hasRole('super_admin'));
+        $this->assertFalse($user->hasRole('level_5'));
     }
 
-    public function test_only_super_admin_can_grant_super_admin_and_users_cannot_edit_themselves(): void
+    public function test_only_level_five_can_grant_level_five_and_users_cannot_edit_themselves(): void
     {
         $this->seed(RolePermissionSeeder::class);
         $manager = $this->makeUser('RBAC002');
         $target = $this->makeUser('RBAC003');
-        $manager->roles()->sync($this->roleIds('manager'));
-        $target->roles()->sync($this->roleIds('staff'));
+        $manager->roles()->sync($this->roleIds('level_4'));
+        $target->roles()->sync($this->roleIds('level_2'));
 
         Sanctum::actingAs($manager);
         $this->putJson("/api/employees/{$target->employee_id}/roles", [
-            'role_ids' => $this->roleIds('super_admin'),
+            'role_ids' => $this->roleIds('level_5'),
         ])->assertForbidden();
 
         $superAdmin = $this->makeUser('RBAC004');
-        $superAdmin->roles()->sync($this->roleIds('super_admin'));
+        $superAdmin->roles()->sync($this->roleIds('level_5'));
 
         Sanctum::actingAs($superAdmin);
         $this->putJson("/api/employees/{$target->employee_id}/roles", [
-            'role_ids' => $this->roleIds('manager', 'lawyer'),
+            'role_ids' => $this->roleIds('level_3'),
         ])->assertOk()
             ->assertJsonPath('message', '権限を更新しました。');
 
-        $this->assertSame(2, $target->fresh()->roles()->count());
+        $this->assertSame(1, $target->fresh()->roles()->count());
         $this->assertDatabaseHas('employee_notifications', [
             'user_id' => $target->id,
             'title' => '権限が更新されました',
@@ -59,7 +59,7 @@ class RbacTest extends TestCase
 
         Sanctum::actingAs($target->fresh());
         $this->putJson("/api/employees/{$target->employee_id}/roles", [
-            'role_ids' => $this->roleIds('staff'),
+            'role_ids' => $this->roleIds('level_2'),
         ])->assertForbidden();
     }
 
@@ -71,7 +71,7 @@ class RbacTest extends TestCase
         Sanctum::actingAs($user);
         $this->getJson('/api/organization')->assertForbidden();
 
-        $user->roles()->sync($this->roleIds('staff'));
+        $user->roles()->sync($this->roleIds('level_2'));
         Sanctum::actingAs($user->fresh());
         $this->getJson('/api/organization')->assertOk();
     }

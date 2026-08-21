@@ -255,7 +255,7 @@ class OrganizationController extends Controller
         );
 
         $validated = $request->validate([
-            'role_ids' => ['required', 'array', 'min:1'],
+            'role_ids' => ['required', 'array', 'size:1'],
             'role_ids.*' => ['integer', 'distinct', 'exists:roles,id'],
         ]);
 
@@ -263,25 +263,25 @@ class OrganizationController extends Controller
             ->whereIn('id', $validated['role_ids'])
             ->get(['id', 'name']);
         $roleNames = $roles->pluck('name');
-        $isGrantingSuperAdmin = $roleNames->contains('super_admin');
+        $isGrantingLevelFive = $roleNames->contains('level_5');
         $superAdminRole = Role::query()
-            ->where('name', 'super_admin')
+            ->where('name', 'level_5')
             ->firstOrFail();
 
         abort_if(
-            $isGrantingSuperAdmin && ! $actor->hasRole('super_admin'),
+            $isGrantingLevelFive && ! $actor->hasRole('level_5'),
             403,
-            'システム管理者権限を付与できるのはシステム管理者のみです。'
+            'Level 5を付与できるのはLevel 5のユーザーのみです。'
         );
 
-        $isRemovingLastSuperAdmin = $targetUser->hasRole('super_admin')
-            && ! $isGrantingSuperAdmin
+        $isRemovingLastSuperAdmin = $targetUser->hasRole('level_5')
+            && ! $isGrantingLevelFive
             && $superAdminRole->users()->count() <= 1;
 
         abort_if(
             $isRemovingLastSuperAdmin,
             422,
-            '最後のシステム管理者権限は削除できません。'
+            '最後のLevel 5は変更できません。'
         );
 
         $targetUser->roles()->sync($roles->pluck('id')->all());
@@ -289,10 +289,10 @@ class OrganizationController extends Controller
         // Legacy column stays in place until old clients no longer depend on it.
         $targetUser->update([
             'role' => match (true) {
-                $roleNames->contains('super_admin') => 'admin',
-                $roleNames->contains('manager') => 'manager',
-                $roleNames->contains('lawyer') => 'lawyer',
-                $roleNames->contains('part_time') => 'part_time',
+                $roleNames->contains('level_5') => 'admin',
+                $roleNames->contains('level_4') => 'manager',
+                $roleNames->contains('level_3') => 'lawyer',
+                $roleNames->contains('level_1') => 'part_time',
                 default => 'employee',
             },
         ]);

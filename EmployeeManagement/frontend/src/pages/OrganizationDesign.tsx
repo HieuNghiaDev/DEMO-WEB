@@ -84,35 +84,35 @@ type OrganizationResponse = {
 }
 
 const rolePresentation = {
-  super_admin: {
+  level_5: {
     icon: ShieldCheck,
     caption: 'SYSTEM ADMIN',
     iconClass: 'bg-rose-500/10 text-rose-500 dark:bg-rose-500/15 dark:text-rose-300',
     selectedClass: 'border-rose-400 bg-rose-50/70 dark:border-rose-400/50 dark:bg-rose-500/10',
     checkClass: 'bg-rose-500 text-white',
   },
-  manager: {
+  level_4: {
     icon: UserCog,
     caption: 'MANAGEMENT',
     iconClass: 'bg-violet-500/10 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300',
     selectedClass: 'border-violet-400 bg-violet-50/70 dark:border-violet-400/50 dark:bg-violet-500/10',
     checkClass: 'bg-violet-600 text-white',
   },
-  lawyer: {
+  level_3: {
     icon: Scale,
     caption: 'LEGAL PROFESSIONAL',
     iconClass: 'bg-sky-500/10 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300',
     selectedClass: 'border-sky-400 bg-sky-50/70 dark:border-sky-400/50 dark:bg-sky-500/10',
     checkClass: 'bg-sky-600 text-white',
   },
-  staff: {
+  level_2: {
     icon: BadgeCheck,
     caption: 'FULL-TIME STAFF',
     iconClass: 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300',
     selectedClass: 'border-emerald-400 bg-emerald-50/70 dark:border-emerald-400/50 dark:bg-emerald-500/10',
     checkClass: 'bg-emerald-600 text-white',
   },
-  part_time: {
+  level_1: {
     icon: Clock3,
     caption: 'PART-TIME STAFF',
     iconClass: 'bg-amber-500/10 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300',
@@ -747,11 +747,7 @@ function EmployeeDetailModal({
   const toggleRole = (roleId: number) => {
     setRolesError('')
     setRolesSuccess('')
-    setRoleIds((current) => (
-      current.includes(roleId)
-        ? current.filter((id) => id !== roleId)
-        : [...current, roleId]
-    ))
+    setRoleIds([roleId])
   }
 
   const saveRoles = async () => {
@@ -896,7 +892,7 @@ function EmployeeDetailModal({
                   <div className="pt-1">
                     <div className="mb-2 flex items-center justify-between">
                       <p className="text-xs font-bold text-slate-700 dark:text-slate-200">付与する役割</p>
-                      <span className="text-[10px] font-medium text-slate-400">複数選択可</span>
+                      <span className="text-[10px] font-medium text-slate-400">1つ選択</span>
                     </div>
                     <div className="grid gap-1.5 sm:grid-cols-2">
                       {availableRoles.map((role) => (

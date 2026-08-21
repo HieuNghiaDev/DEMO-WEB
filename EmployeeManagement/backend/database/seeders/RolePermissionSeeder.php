@@ -12,11 +12,11 @@ class RolePermissionSeeder extends Seeder
     public function run(): void
     {
         $roles = [
-            'super_admin' => 'システム管理者',
-            'manager' => '管理者',
-            'lawyer' => '弁護士',
-            'staff' => '正社員',
-            'part_time' => 'アルバイト',
+            'level_1' => 'レベル 1',
+            'level_2' => 'レベル 2',
+            'level_3' => 'レベル 3',
+            'level_4' => 'レベル 4',
+            'level_5' => 'レベル 5',
         ];
 
         $permissions = [
@@ -54,7 +54,7 @@ class RolePermissionSeeder extends Seeder
 
         $roleModels = collect($roles)->mapWithKeys(
             fn (string $displayName, string $name) => [
-                $name => Role::query()->firstOrCreate(
+                $name => Role::query()->updateOrCreate(
                     ['name' => $name],
                     ['display_name' => $displayName]
                 ),
@@ -72,8 +72,23 @@ class RolePermissionSeeder extends Seeder
 
         $allPermissions = $permissionModels->pluck('id')->all();
         $rolePermissions = [
-            'super_admin' => $allPermissions,
-            'manager' => [
+            'level_1' => [
+                'employee.view', 'attendance.view_own', 'attendance.update_own',
+                'task.view_own', 'task.update', 'case.view', 'document.view',
+            ],
+            'level_2' => [
+                'employee.view', 'attendance.view_own', 'attendance.update_own',
+                'attendance.export_own', 'task.view_own', 'task.update',
+                'case.view', 'document.view', 'document.update', 'ai.use',
+            ],
+            'level_3' => [
+                'employee.view', 'attendance.view_own', 'attendance.update_own',
+                'attendance.export_own', 'task.view_own', 'task.view_all',
+                'task.create', 'task.assign', 'task.update', 'case.view',
+                'case.create', 'case.update', 'case.assign', 'document.view',
+                'document.create', 'document.update', 'ai.use',
+            ],
+            'level_4' => [
                 'employee.view', 'employee.create', 'employee.update',
                 'employee.disable', 'employee.manage_roles',
                 'attendance.view_own', 'attendance.view_all',
@@ -85,26 +100,11 @@ class RolePermissionSeeder extends Seeder
                 'document.create', 'document.update', 'document.delete',
                 'approval.submit', 'approval.view', 'approval.approve', 'ai.use',
             ],
-            'lawyer' => [
-                'employee.view', 'attendance.view_own', 'attendance.update_own',
-                'attendance.export_own', 'task.view_own', 'task.view_all',
-                'task.create', 'task.assign', 'task.update', 'case.view',
-                'case.create', 'case.update', 'case.assign', 'document.view',
-                'document.create', 'document.update', 'ai.use',
-            ],
-            'staff' => [
-                'employee.view', 'attendance.view_own', 'attendance.update_own',
-                'attendance.export_own', 'task.view_own', 'task.update',
-                'case.view', 'document.view', 'document.update', 'ai.use',
-            ],
-            'part_time' => [
-                'employee.view', 'attendance.view_own', 'attendance.update_own',
-                'task.view_own', 'task.update', 'case.view', 'document.view',
-            ],
+            'level_5' => $allPermissions,
         ];
 
         foreach ($rolePermissions as $roleName => $permissionNames) {
-            $ids = $roleName === 'super_admin'
+            $ids = $roleName === 'level_5'
                 ? $allPermissions
                 : $permissionModels->only($permissionNames)->pluck('id')->all();
             $roleModels[$roleName]->permissions()->sync($ids);
@@ -116,11 +116,11 @@ class RolePermissionSeeder extends Seeder
             }
 
             $legacyRole = match ($user->role) {
-                'admin' => 'super_admin',
-                'manager' => 'manager',
-                'lawyer' => 'lawyer',
-                'part_time' => 'part_time',
-                default => 'staff',
+                'admin' => 'level_5',
+                'manager' => 'level_4',
+                'lawyer' => 'level_3',
+                'part_time' => 'level_1',
+                default => 'level_2',
             };
 
             $user->roles()->syncWithoutDetaching([$roleModels[$legacyRole]->id]);
