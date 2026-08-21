@@ -662,6 +662,516 @@ html.theme-switching .theme-mode-icon {
   }
 }
 
+/* Organization: compact access levels with a deliberate, calm reveal. */
+.organization-tap {
+  transition:
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 240ms ease;
+}
+
+.organization-tap:hover {
+  filter: brightness(1.015);
+}
+
+.organization-tap:active {
+  transform: scale(0.985);
+}
+
+.access-level-expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 260ms ease;
+}
+
+.access-level-expand.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.organization-modal-backdrop {
+  animation: organization-backdrop-in 680ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.organization-modal-panel {
+  transform-origin: center bottom;
+  will-change: transform, opacity, filter;
+  animation: organization-modal-in 1180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.organization-modal-backdrop.is-closing {
+  animation: organization-backdrop-out 380ms ease-in both;
+}
+
+.organization-modal-panel.is-closing {
+  pointer-events: none;
+  animation: organization-modal-out 380ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.organization-employee-card {
+  isolation: isolate;
+  transition:
+    border-color 440ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 440ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 440ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 440ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+.organization-employee-card::after {
+  position: absolute;
+  z-index: 0;
+  top: -7rem;
+  right: -5rem;
+  width: 15rem;
+  height: 15rem;
+  border-radius: 999px;
+  content: "";
+  pointer-events: none;
+  background: radial-gradient(circle, rgb(129 140 248 / 0.17), transparent 68%);
+  opacity: 0;
+  transform: scale(0.55);
+  transition:
+    opacity 460ms ease,
+    transform 720ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.organization-employee-card > div:not(.absolute) {
+  position: relative;
+  z-index: 1;
+}
+
+.organization-employee-card:hover::after,
+.organization-employee-card:focus-visible::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.organization-employee-card:focus-visible {
+  outline: 2px solid rgb(99 102 241 / 0.72);
+  outline-offset: -2px;
+}
+
+.organization-employee-card:active {
+  transform: scale(0.992) !important;
+}
+
+.organization-office-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition:
+    border-color 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+.organization-office-card::before {
+  position: absolute;
+  z-index: 0;
+  top: 50%;
+  left: 50%;
+  width: 10rem;
+  height: 10rem;
+  border-radius: 999px;
+  content: "";
+  background: radial-gradient(circle, rgb(129 140 248 / 0.2), transparent 66%);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.35);
+  transition:
+    opacity 420ms ease,
+    transform 720ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.organization-office-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.organization-office-card.is-selected {
+  transform: translateY(-2px);
+}
+
+.organization-office-card.is-selected::before {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.organization-office-card:active {
+  transform: translateY(0) scale(0.985);
+}
+
+.organization-modal-scroll {
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(99 102 241 / 0.45) transparent;
+}
+
+.organization-modal-scroll::-webkit-scrollbar {
+  width: 7px;
+}
+
+.organization-modal-scroll::-webkit-scrollbar-track {
+  margin: 1rem 0;
+  background: transparent;
+}
+
+.organization-modal-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgb(99 102 241 / 0.45);
+  background-clip: padding-box;
+}
+
+/* Shared workspace interactions: responsive, tactile, and intentionally subtle. */
+.workspace-nav-link {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.workspace-nav-link::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0 auto 0 -110%;
+  width: 78%;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgb(129 140 248 / 0.16), transparent);
+  transform: skewX(-18deg);
+  transition: left 560ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.workspace-nav-link > * {
+  position: relative;
+  z-index: 1;
+}
+
+.workspace-nav-link:hover::before,
+.workspace-nav-link:focus-visible::before {
+  left: 120%;
+}
+
+.workspace-nav-link:not([aria-current="page"]):hover {
+  transform: translateX(4px);
+}
+
+.workspace-nav-link:active,
+.workspace-action-button:active {
+  transform: scale(0.975);
+}
+
+.workspace-confirm-backdrop {
+  animation: workspace-backdrop-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.workspace-confirm-panel {
+  animation: workspace-confirm-in 740ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.workspace-bell-button {
+  transition:
+    color 260ms ease,
+    background-color 260ms ease,
+    box-shadow 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+.workspace-bell-button:hover {
+  transform: translateY(-2px) rotate(-7deg);
+  box-shadow: 0 12px 24px rgb(79 70 229 / 0.14);
+}
+
+.workspace-bell-button.is-open {
+  animation: workspace-bell-open 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.workspace-notification-panel {
+  transform-origin: top right;
+  animation: workspace-notification-in 580ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.workspace-notification-panel.is-closing {
+  pointer-events: none;
+  animation: workspace-notification-out 300ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.workspace-mark-all {
+  position: relative;
+  overflow: hidden;
+}
+
+.workspace-mark-all.is-complete {
+  color: rgb(5 150 105);
+  background: rgb(236 253 245);
+  animation: workspace-mark-all-complete 1700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.workspace-mark-all.is-complete::after {
+  position: absolute;
+  inset: -70%;
+  border-radius: 999px;
+  content: "";
+  pointer-events: none;
+  background: radial-gradient(circle, rgb(52 211 153 / 0.46), transparent 58%);
+  animation: workspace-mark-all-ripple 1700ms ease-out both;
+}
+
+.workspace-show-more:active {
+  transform: scale(0.98);
+}
+
+.workspace-office-switch {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition:
+    transform 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 480ms ease,
+    background-color 480ms ease,
+    box-shadow 480ms ease !important;
+}
+
+.workspace-office-switch::after {
+  position: absolute;
+  z-index: 0;
+  inset: -70%;
+  border-radius: 999px;
+  content: "";
+  background: radial-gradient(circle, rgb(129 140 248 / 0.22), transparent 62%);
+  opacity: 0;
+  transform: scale(0.45);
+  transition:
+    opacity 360ms ease,
+    transform 760ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.workspace-office-switch > * {
+  position: relative;
+  z-index: 1;
+}
+
+.workspace-office-switch.is-active {
+  transform: translateY(-2px);
+}
+
+.workspace-office-switch.is-active::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.workspace-office-switch:active {
+  transform: scale(0.98);
+}
+
+.workspace-office-scene {
+  animation: workspace-office-scene-in 800ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.workspace-modal-backdrop {
+  animation: workspace-backdrop-in 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.workspace-modal-panel {
+  transform-origin: center bottom;
+  animation: workspace-modal-in 640ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.workspace-modal-backdrop.is-closing {
+  animation: workspace-backdrop-out 360ms ease-in both;
+}
+
+.workspace-modal-panel.is-closing {
+  animation: workspace-modal-out 360ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@keyframes workspace-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes workspace-confirm-in {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(34px) scale(0.93);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes workspace-bell-open {
+  0% { transform: rotate(0deg) scale(1); }
+  28% { transform: rotate(-15deg) scale(0.92); }
+  52% { transform: rotate(12deg) scale(1.08); }
+  74% { transform: rotate(-6deg) scale(1.03); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+@keyframes workspace-notification-in {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(-12px) scale(0.94);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes workspace-notification-out {
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    filter: blur(5px);
+    transform: translateY(-8px) scale(0.96);
+  }
+}
+
+@keyframes workspace-mark-all-complete {
+  0% {
+    opacity: 0;
+    transform: translateY(2px) scale(0.9);
+  }
+  25% {
+    opacity: 1;
+    color: rgb(5 150 105);
+    transform: translateY(0) scale(1.08);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes workspace-mark-all-ripple {
+  0% {
+    opacity: 0;
+    transform: scale(0.25);
+  }
+  26% { opacity: 0.75; }
+  72%, 100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@keyframes workspace-office-scene-in {
+  from {
+    opacity: 0;
+    filter: blur(7px);
+    transform: translateY(16px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes workspace-modal-in {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(38px) scale(0.94);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes workspace-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes workspace-modal-out {
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    filter: blur(5px);
+    transform: translateY(20px) scale(0.97);
+  }
+}
+
+@keyframes organization-backdrop-in {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0);
+  }
+
+  to {
+    opacity: 1;
+    backdrop-filter: blur(4px);
+  }
+}
+
+@keyframes organization-modal-in {
+  from {
+    opacity: 0;
+    filter: blur(16px);
+    transform: translateY(82px) scale(0.91);
+  }
+
+  70% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(-7px) scale(1.012);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes organization-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes organization-modal-out {
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(28px) scale(0.965);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .themis-login-glow,
   .themis-login-mobile-ring,
@@ -669,7 +1179,33 @@ html.theme-switching .theme-mode-icon {
   .themis-login-orbit,
   .themis-login-orbit-core,
   .themis-login-orbits,
-  .themis-login-stars {
+  .themis-login-stars,
+  .organization-modal-backdrop,
+  .organization-modal-panel,
+  .organization-modal-backdrop.is-closing,
+  .organization-modal-panel.is-closing,
+  .workspace-confirm-backdrop,
+  .workspace-confirm-panel,
+  .workspace-bell-button.is-open,
+  .workspace-notification-panel,
+  .workspace-notification-panel.is-closing,
+  .workspace-mark-all.is-complete,
+  .workspace-modal-backdrop,
+  .workspace-modal-panel,
+  .workspace-office-scene {
     animation: none;
+  }
+
+  .organization-tap,
+  .access-level-expand,
+  .organization-employee-card,
+  .organization-employee-card::after,
+  .organization-office-card,
+  .organization-office-card::before,
+  .workspace-nav-link,
+  .workspace-office-switch,
+  .workspace-office-switch::after,
+  .workspace-bell-button {
+    transition: none;
   }
 }

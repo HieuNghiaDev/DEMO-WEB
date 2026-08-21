@@ -5,6 +5,7 @@ import {
   BriefcaseBusiness,
   Building2,
   Check,
+  ChevronDown,
   ChevronRight,
   Clock3,
   Coffee,
@@ -121,6 +122,39 @@ const rolePresentation = {
   },
 } as const
 
+const accessLevelGuide = {
+  level_1: {
+    title: 'レベル 1',
+    summary: '基本業務',
+    description: '自分の勤怠と割り当て業務を扱えます。',
+    capabilities: ['自分の勤怠', '自分の業務', '資料の閲覧'],
+  },
+  level_2: {
+    title: 'レベル 2',
+    summary: '通常業務',
+    description: '日常業務の記録・更新とAI利用ができます。',
+    capabilities: ['勤怠表の出力', '資料の更新', 'AIの利用'],
+  },
+  level_3: {
+    title: 'レベル 3',
+    summary: '専門業務',
+    description: '案件・資料を作成し、業務を依頼できます。',
+    capabilities: ['案件の管理', '資料の作成', '業務の依頼'],
+  },
+  level_4: {
+    title: 'レベル 4',
+    summary: '運営管理',
+    description: '社員・勤怠・承認を含む事務所運営を管理します。',
+    capabilities: ['社員の管理', '全勤怠の管理', '承認の実行'],
+  },
+  level_5: {
+    title: 'レベル 5',
+    summary: 'システム管理',
+    description: 'すべての機能とアクセス設定を管理できます。',
+    capabilities: ['全機能へのアクセス', '権限の付与', '設定の管理'],
+  },
+} as const
+
 const statusConfig: Record<
   WorkStatus,
   {
@@ -226,6 +260,8 @@ export default function OrganizationDesign() {
   const [errorMessage, setErrorMessage] = useState('')
   const [selectedOfficeId, setSelectedOfficeId] = useState<number | null>(null)
   const [selectedEmployee, setSelectedEmployee] = useState<OrganizationEmployee | null>(null)
+  const [isEmployeeDetailClosing, setIsEmployeeDetailClosing] = useState(false)
+  const [isAccessGuideOpen, setIsAccessGuideOpen] = useState(false)
 
   const loadOrganization = useCallback(async (manual = false) => {
     if (manual) {
@@ -403,7 +439,7 @@ export default function OrganizationDesign() {
                   <button
                     type="button"
                     onClick={() => selectOffice(office.id)}
-                    className={`group flex min-w-0 flex-1 items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all ${
+                    className={`organization-office-card group flex min-w-0 flex-1 items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all ${selected ? 'is-selected' : ''} ${
                       selected
                         ? 'border-indigo-400 bg-indigo-50 shadow-sm ring-2 ring-indigo-500/10 dark:border-indigo-500/50 dark:bg-indigo-500/10'
                         : 'border-slate-200 bg-slate-50 hover:border-indigo-300 hover:bg-white hover:shadow-sm dark:border-slate-800 dark:bg-slate-800/50 dark:hover:border-indigo-500/30 dark:hover:bg-slate-800'
@@ -444,6 +480,56 @@ export default function OrganizationDesign() {
         </div>
       </section>
 
+      {/* Access-level guide */}
+      <section className="overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-sm dark:border-indigo-500/20 dark:bg-slate-900">
+        <button
+          type="button"
+          aria-expanded={isAccessGuideOpen}
+          onClick={() => setIsAccessGuideOpen((current) => !current)}
+          className="organization-tap flex w-full items-center justify-between gap-4 bg-gradient-to-r from-indigo-50/70 via-white to-white px-4 py-3 text-left transition hover:from-indigo-50 hover:to-indigo-50/40 dark:from-indigo-500/[0.08] dark:via-slate-900 dark:to-slate-900 dark:hover:from-indigo-500/[0.12] sm:px-5"
+        >
+          <div>
+            <span className="text-[10px] font-bold tracking-[0.14em] text-indigo-500">ACCESS LEVEL GUIDE</span>
+            <h2 className="mt-0.5 text-sm font-bold text-slate-900 dark:text-white">アクセスレベルの概要</h2>
+          </div>
+          <span className="flex shrink-0 items-center gap-2 text-[11px] font-bold text-indigo-600 dark:text-indigo-300">
+            <ShieldCheck size={18} />
+            <span className="hidden sm:inline">{isAccessGuideOpen ? '閉じる' : '確認する'}</span>
+            <ChevronDown size={17} className={`transition-transform duration-300 ${isAccessGuideOpen ? 'rotate-180' : ''}`} />
+          </span>
+        </button>
+
+        <div className={`access-level-expand ${isAccessGuideOpen ? 'is-open' : ''}`}>
+          <div className="overflow-hidden">
+            <div className="grid border-t border-indigo-50 divide-y divide-slate-100 dark:border-indigo-500/10 dark:divide-slate-800 sm:grid-cols-2 sm:divide-x sm:divide-y lg:grid-cols-5 lg:divide-y-0">
+              {Object.entries(accessLevelGuide).map(([levelName, level]) => {
+                const visual = rolePresentation[levelName as keyof typeof rolePresentation]
+                const Icon = visual.icon
+
+                return (
+                  <div key={levelName} className="p-3 sm:p-3.5">
+                    <div className="flex items-center gap-2">
+                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${visual.iconClass}`}>
+                        <Icon size={16} />
+                      </span>
+                      <p className="text-xs font-bold text-slate-900 dark:text-white">{level.title}</p>
+                    </div>
+                    <p className="mt-2 min-h-8 text-[10px] leading-4 text-slate-500 dark:text-slate-400">{level.description}</p>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {level.capabilities.map((capability) => (
+                        <span key={capability} className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                          {capability}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Employee list */}
       <section className="overflow-hidden rounded-2xl border-[1.5px] border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
 
@@ -465,10 +551,11 @@ export default function OrganizationDesign() {
         </div>
 
         {/* Desktop column names */}
-        <div className="hidden grid-cols-[minmax(220px,1.4fr)_minmax(200px,1.2fr)_minmax(150px,0.9fr)_130px_minmax(180px,1fr)_30px] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:border-slate-800 dark:bg-slate-950/40 lg:grid">
+        <div className="hidden grid-cols-[minmax(190px,1.15fr)_minmax(160px,1fr)_110px_minmax(175px,1.05fr)_120px_minmax(140px,0.8fr)_30px] gap-3 border-b border-slate-200 bg-slate-50 px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:border-slate-800 dark:bg-slate-950/40 lg:grid">
           <div>社員</div>
           <div>所属事務所</div>
           <div>役職</div>
+          <div>アクセスレベル・権限</div>
           <div>勤務状況</div>
           <div>現在の作業</div>
           <div />
@@ -482,7 +569,10 @@ export default function OrganizationDesign() {
               <EmployeeRow
                 key={employee.id}
                 employee={employee}
-                onClick={() => setSelectedEmployee(employee)}
+                onClick={() => {
+                  setIsEmployeeDetailClosing(false)
+                  setSelectedEmployee(employee)
+                }}
               />
             ))}
           </div>
@@ -496,6 +586,7 @@ export default function OrganizationDesign() {
           canAssignTasks={user?.permission_names.includes('task.assign') ?? false}
           canManageRoles={user?.permission_names.includes('employee.manage_roles') ?? false}
           canEditRoles={selectedEmployee.user_id !== user?.id}
+          isClosing={isEmployeeDetailClosing}
           availableRoles={availableRoles}
           onRolesUpdated={(roles) => {
             setEmployees((current) => current.map((item) => (
@@ -505,7 +596,14 @@ export default function OrganizationDesign() {
               current?.id === selectedEmployee.id ? { ...current, roles } : current
             ))
           }}
-          onClose={() => setSelectedEmployee(null)}
+          onClose={() => {
+            if (isEmployeeDetailClosing) return
+            setIsEmployeeDetailClosing(true)
+            window.setTimeout(() => {
+              setSelectedEmployee(null)
+              setIsEmployeeDetailClosing(false)
+            }, 380)
+          }}
         />
       )}
     </div>
@@ -552,12 +650,12 @@ function EmployeeRow({
     <button
       type="button"
       onClick={onClick}
-      className="group relative w-full overflow-hidden rounded-xl border border-slate-300 bg-white px-3.5 py-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:hover:border-indigo-500/40 sm:px-4 lg:rounded-none lg:border-x-0 lg:border-t-0 lg:border-b lg:border-slate-200 lg:px-5 lg:shadow-none lg:hover:translate-y-0 lg:hover:bg-indigo-50/40 lg:hover:shadow-none dark:lg:border-slate-800 dark:lg:hover:bg-indigo-500/[0.035] last:lg:border-b-0"
+      className="organization-employee-card group relative w-full overflow-hidden rounded-xl border border-slate-300 bg-white px-3.5 py-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:hover:border-indigo-500/40 sm:px-4 lg:rounded-none lg:border-x-0 lg:border-t-0 lg:border-b lg:border-slate-200 lg:px-5 lg:shadow-none lg:hover:translate-y-0 lg:hover:bg-indigo-50/40 lg:hover:shadow-none dark:lg:border-slate-800 dark:lg:hover:bg-indigo-500/[0.035] last:lg:border-b-0"
     >
       <div className="absolute bottom-2 left-0 top-2 w-[3px] scale-y-0 rounded-r-full bg-indigo-500 transition-transform group-hover:scale-y-100" />
 
       {/* Desktop */}
-      <div className="hidden grid-cols-[minmax(220px,1.4fr)_minmax(200px,1.2fr)_minmax(150px,0.9fr)_130px_minmax(180px,1fr)_30px] items-center gap-4 lg:grid">
+      <div className="hidden grid-cols-[minmax(190px,1.15fr)_minmax(160px,1fr)_110px_minmax(175px,1.05fr)_120px_minmax(140px,0.8fr)_30px] items-center gap-3 lg:grid">
 
         <div className="flex min-w-0 items-center gap-3">
           <EmployeeAvatar employee={employee} />
@@ -583,6 +681,8 @@ function EmployeeRow({
         <div className="truncate text-xs font-semibold text-slate-700 dark:text-slate-300">
           {employee.position_title ?? '役職未登録'}
         </div>
+
+        <AccessLevelSummary roles={employee.roles} />
 
         <div>
           <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ring-inset ${status.badge}`}>
@@ -650,6 +750,11 @@ function EmployeeRow({
               <div className="flex min-w-0 items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
                 <BriefcaseBusiness size={13} className="shrink-0 text-slate-400" />
                 <span className="truncate">{employee.position_title ?? '役職未登録'}</span>
+              </div>
+
+              <div className="flex min-w-0 items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                <ShieldCheck size={13} className="shrink-0 text-indigo-400" />
+                <AccessLevelSummary roles={employee.roles} compact />
               </div>
 
               {employee.attendance && (
@@ -721,6 +826,7 @@ function EmployeeDetailModal({
   canAssignTasks,
   canManageRoles,
   canEditRoles,
+  isClosing,
   availableRoles,
   onRolesUpdated,
   onClose,
@@ -729,6 +835,7 @@ function EmployeeDetailModal({
   canAssignTasks: boolean
   canManageRoles: boolean
   canEditRoles: boolean
+  isClosing: boolean
   availableRoles: RoleOption[]
   onRolesUpdated: (roles: RoleOption[]) => void
   onClose: () => void
@@ -740,6 +847,7 @@ function EmployeeDetailModal({
   const [savingRoles, setSavingRoles] = useState(false)
   const [rolesError, setRolesError] = useState('')
   const [rolesSuccess, setRolesSuccess] = useState('')
+  const [isLevelDetailOpen, setIsLevelDetailOpen] = useState(false)
   const status = statusConfig[employee.work_status]
   const initial = employee.full_name.trim().charAt(0).toUpperCase() || '?'
   const isEmployeeOnline = employee.work_status !== 'offline' && employee.attendance !== null
@@ -781,11 +889,11 @@ function EmployeeDetailModal({
   return (
     <>
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      className={`organization-modal-backdrop fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4 ${isClosing ? 'is-closing' : ''}`}
       onMouseDown={onClose}
     >
       <div
-        className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl border border-slate-300 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-w-2xl sm:rounded-3xl"
+        className={`organization-modal-panel organization-modal-scroll max-h-[92vh] w-full overflow-y-auto rounded-t-3xl border border-slate-300 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-w-2xl sm:rounded-3xl ${isClosing ? 'is-closing' : ''}`}
         onMouseDown={(event) => event.stopPropagation()}
       >
 
@@ -860,26 +968,11 @@ function EmployeeDetailModal({
 
           <DetailSection title="権限 / Permissions">
             <div className="space-y-3 rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50/70 p-3.5 shadow-sm dark:border-slate-700 dark:from-slate-900 dark:to-slate-800/40 sm:p-4">
-              <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-2.5 dark:border-slate-700">
-                <div>
-                  <div className="text-[10px] font-bold tracking-[0.16em] text-indigo-500">ACCESS CONTROL</div>
-                  <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">この社員に付与されている役割</p>
-                </div>
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
-                  <ShieldCheck size={16} />
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {employee.roles.length > 0 ? employee.roles.map((role) => (
-                  <RoleBadge
-                    key={role.id}
-                    role={role}
-                  />
-                )) : (
-                  <span className="text-xs text-slate-400">権限が設定されていません。</span>
-                )}
-              </div>
+              <AccessLevelDetail
+                roles={employee.roles}
+                open={isLevelDetailOpen}
+                onToggle={() => setIsLevelDetailOpen((current) => !current)}
+              />
 
               {canManageRoles && !canEditRoles && (
                 <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-200">
@@ -1026,16 +1119,95 @@ function EmployeeDetailModal({
   )
 }
 
-function RoleBadge({ role }: { role: RoleOption }) {
-  const visual = rolePresentation[role.name as keyof typeof rolePresentation]
-  const Icon = visual?.icon ?? UserRound
-  const iconColor = visual?.iconClass.split(' ').find((className) => className.startsWith('text-')) ?? 'text-slate-500'
+function AccessLevelDetail({
+  roles,
+  open,
+  onToggle,
+}: {
+  roles: RoleOption[]
+  open: boolean
+  onToggle: () => void
+}) {
+  const role = roles[0]
+  const level = role ? accessLevelGuide[role.name as keyof typeof accessLevelGuide] : undefined
+  const visual = role ? rolePresentation[role.name as keyof typeof rolePresentation] : undefined
+  const Icon = visual?.icon ?? ShieldCheck
+
+  if (!role || !level) {
+    return <span className="text-xs text-slate-400">権限が設定されていません。</span>
+  }
 
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-      <Icon size={13} className={iconColor} />
-      {role.display_name}
-    </span>
+    <div>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={onToggle}
+        className="organization-tap flex w-full items-center justify-between gap-3 rounded-xl px-1 py-0.5 text-left"
+      >
+        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+          <span className={`flex h-6 w-6 items-center justify-center rounded-lg ${visual?.iconClass ?? 'bg-slate-100 text-slate-500'}`}>
+            <Icon size={14} />
+          </span>
+          {level.title}
+        </span>
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-300">
+          詳細
+          <ChevronDown size={15} className={`transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+        </span>
+      </button>
+
+      <div className={`access-level-expand ${open ? 'is-open' : ''}`}>
+        <div className="overflow-hidden">
+          <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 dark:border-indigo-500/20 dark:bg-indigo-500/[0.06]">
+            <p className="text-xs leading-5 text-slate-600 dark:text-slate-300">{level.description}</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {level.capabilities.map((capability) => (
+                <span key={capability} className="rounded-md bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 shadow-sm dark:bg-slate-800 dark:text-slate-200">
+                  {capability}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AccessLevelSummary({
+  roles,
+  compact = false,
+}: {
+  roles: RoleOption[]
+  compact?: boolean
+}) {
+  const role = roles[0]
+  const level = role ? accessLevelGuide[role.name as keyof typeof accessLevelGuide] : undefined
+  const visual = role ? rolePresentation[role.name as keyof typeof rolePresentation] : undefined
+  const Icon = visual?.icon ?? ShieldCheck
+
+  if (!role || !level) {
+    return <span className="text-[11px] text-slate-400">未設定</span>
+  }
+
+  if (compact) {
+    return (
+      <span className="min-w-0 truncate font-semibold text-slate-700 dark:text-slate-300">
+        {level.title}
+      </span>
+    )
+  }
+
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-1.5">
+        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${visual?.iconClass ?? 'bg-slate-100 text-slate-500'}`}>
+          <Icon size={12} />
+        </span>
+        <span className="truncate text-[11px] font-bold text-slate-800 dark:text-slate-100">{level.title}</span>
+      </div>
+    </div>
   )
 }
 

@@ -34,6 +34,7 @@ export default function Sidebar() {
 
   const [isOpen, setIsOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isLogoutConfirmationOpen, setIsLogoutConfirmationOpen] = useState(false)
 
   const employeeName =
     user?.employee?.full_name ||
@@ -42,13 +43,16 @@ export default function Sidebar() {
     '社員'
 
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen && !isLogoutConfirmationOpen) return
 
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
 
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsOpen(false)
+      if (event.key === 'Escape') {
+        setIsLogoutConfirmationOpen(false)
+        setIsOpen(false)
+      }
     }
 
     window.addEventListener('keydown', handleEscape)
@@ -57,7 +61,7 @@ export default function Sidebar() {
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', handleEscape)
     }
-  }, [isOpen])
+  }, [isOpen, isLogoutConfirmationOpen])
 
   const handleLogout = async () => {
     if (isLoggingOut) return
@@ -69,6 +73,7 @@ export default function Sidebar() {
       // AuthContext vẫn xóa trạng thái đăng nhập
     } finally {
       setIsLoggingOut(false)
+      setIsLogoutConfirmationOpen(false)
       setIsOpen(false)
       navigate('/login', { replace: true })
     }
@@ -190,7 +195,7 @@ export default function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-1.5 overflow-y-auto overscroll-contain">
+        <nav className="flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto overscroll-contain">
           {menuItems.map((item) => {
             const Icon = item.icon
 
@@ -201,7 +206,7 @@ export default function Sidebar() {
                 end={item.path === '/'}
                 onClick={() => setIsOpen(false)}
                 className={({ isActive }) =>
-                  `flex w-full items-center gap-3.5 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
+                  `workspace-nav-link flex w-full items-center gap-3.5 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
                     isActive
                       ? 'bg-[#635BFF] text-white shadow-lg shadow-indigo-500/20'
                       : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-gray-300 dark:hover:bg-white/5 dark:hover:text-white'
@@ -248,7 +253,7 @@ export default function Sidebar() {
           {/* Logout */}
           <button
             type="button"
-            onClick={handleLogout}
+            onClick={() => setIsLogoutConfirmationOpen(true)}
             disabled={isLoggingOut}
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-600 transition hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20 dark:hover:text-red-200"
           >
@@ -262,6 +267,50 @@ export default function Sidebar() {
           </button>
         </div>
       </aside>
+
+      {isLogoutConfirmationOpen && (
+        <div
+          className="workspace-confirm-backdrop fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/55 p-4 backdrop-blur-sm sm:items-center"
+          onMouseDown={() => !isLoggingOut && setIsLogoutConfirmationOpen(false)}
+        >
+          <div
+            className="workspace-confirm-panel w-full max-w-sm rounded-3xl border border-white/15 bg-white p-5 shadow-2xl dark:bg-[#11182a] sm:p-6"
+            onMouseDown={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="logout-confirmation-title"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 shadow-sm dark:bg-rose-500/15 dark:text-rose-300">
+              <LogOut size={22} />
+            </div>
+            <h2 id="logout-confirmation-title" className="mt-4 text-lg font-bold text-slate-900 dark:text-white">
+              ログアウトしますか？
+            </h2>
+            <p className="mt-1.5 text-sm leading-6 text-slate-500 dark:text-slate-400">
+              現在のワークスペースから安全にログアウトします。未保存の入力がある場合は先に保存してください。
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={isLoggingOut}
+                onClick={() => setIsLogoutConfirmationOpen(false)}
+                className="workspace-action-button rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                disabled={isLoggingOut}
+                onClick={() => void handleLogout()}
+                className="workspace-action-button flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-rose-500/20 transition hover:bg-rose-500 disabled:opacity-60"
+              >
+                {isLoggingOut && <LoaderCircle size={16} className="animate-spin" />}
+                {isLoggingOut ? '処理中...' : 'ログアウト'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

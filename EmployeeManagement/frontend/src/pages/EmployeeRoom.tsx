@@ -604,6 +604,8 @@ export default function EmployeeRoom() {
   const [workStatus, setWorkStatus] = useState<WorkStatus>("working");
   const [isStartConfirmationOpen, setIsStartConfirmationOpen] =
     useState(false);
+  const [isStartConfirmationClosing, setIsStartConfirmationClosing] =
+    useState(false);
   const [isAttendanceReportPromptOpen, setIsAttendanceReportPromptOpen] =
     useState(false);
   const [isDownloadingAttendanceReport, setIsDownloadingAttendanceReport] =
@@ -640,6 +642,13 @@ export default function EmployeeRoom() {
   );
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] =
     useState(false);
+  const [isNotificationPanelClosing, setIsNotificationPanelClosing] =
+    useState(false);
+  const [isShowingAllNotifications, setIsShowingAllNotifications] =
+    useState(false);
+  const [isMarkingAllNotifications, setIsMarkingAllNotifications] =
+    useState(false);
+  const [isStatusModalClosing, setIsStatusModalClosing] = useState(false);
   const [toastNotification, setToastNotification] =
     useState<UserNotification | null>(null);
   const [assignedTasks, setAssignedTasks] = useState<AssignedTask[]>([]);
@@ -657,6 +666,9 @@ export default function EmployeeRoom() {
   const unreadNotificationCount = notifications.filter(
     (notification) => !notification.isRead,
   ).length;
+  const visibleNotifications = isShowingAllNotifications
+    ? notifications
+    : notifications.slice(0, 6);
 
   const statusLabels: Record<WorkStatus, string> = {
     working: "勤務中",
@@ -894,6 +906,8 @@ export default function EmployeeRoom() {
   };
 
   const markAllNotificationsAsRead = () => {
+    if (isMarkingAllNotifications) return;
+    setIsMarkingAllNotifications(true);
     const hasUnreadRemoteNotifications = notifications.some(
       (notification) => notification.serverId !== undefined && !notification.isRead,
     );
@@ -913,6 +927,28 @@ export default function EmployeeRoom() {
         void loadRemoteNotifications();
       });
     }
+
+    window.setTimeout(() => setIsMarkingAllNotifications(false), 1700);
+  };
+
+  const closeNotificationPanel = () => {
+    if (isNotificationPanelClosing) return;
+    setIsNotificationPanelClosing(true);
+    window.setTimeout(() => {
+      setIsNotificationPanelOpen(false);
+      setIsNotificationPanelClosing(false);
+      setIsShowingAllNotifications(false);
+    }, 300);
+  };
+
+  const toggleNotificationPanel = () => {
+    if (isNotificationPanelOpen) {
+      closeNotificationPanel();
+      return;
+    }
+
+    setIsNotificationPanelClosing(false);
+    setIsNotificationPanelOpen(true);
   };
 
   useEffect(() => {
@@ -1346,7 +1382,26 @@ export default function EmployeeRoom() {
     if (!employeeName || isWorkStarted || isSubmitting) return;
 
     setErrorMessage("");
+    setIsStartConfirmationClosing(false);
     setIsStartConfirmationOpen(true);
+  };
+
+  const closeStartConfirmation = (force = false) => {
+    if ((!force && isSubmitting) || isStartConfirmationClosing) return;
+    setIsStartConfirmationClosing(true);
+    window.setTimeout(() => {
+      setIsStartConfirmationOpen(false);
+      setIsStartConfirmationClosing(false);
+    }, 360);
+  };
+
+  const closeStatusModal = (force = false) => {
+    if ((!force && isSubmitting) || isStatusModalClosing) return;
+    setIsStatusModalClosing(true);
+    window.setTimeout(() => {
+      setPendingStatus(null);
+      setIsStatusModalClosing(false);
+    }, 360);
   };
 
   const handleConfirmStartWork = async () => {
@@ -1366,7 +1421,7 @@ export default function EmployeeRoom() {
       setWorkStatus(newAttendance.status);
       setIsWorkStarted(true);
       setActiveWorkSession(newAttendance.active_work_session ?? null);
-      setIsStartConfirmationOpen(false);
+      closeStartConfirmation(true);
       setSelectedOffice("themis");
       setActiveAttendances((current) => [
         ...current.filter((item) => item.id !== newAttendance.id),
@@ -1562,6 +1617,7 @@ export default function EmployeeRoom() {
       setOutsideExpectedEndTime(getJapanTimeInput(60));
     }
 
+    setIsStatusModalClosing(false);
     setPendingStatus(status);
   };
 
@@ -1607,7 +1663,7 @@ export default function EmployeeRoom() {
 
       setWorkStatus(updatedAttendance.status);
       setActiveWorkSession(updatedAttendance.active_work_session ?? null);
-      setPendingStatus(null);
+      closeStatusModal(true);
       void loadTimeline();
 
       setActiveAttendances((current) => {
@@ -1689,7 +1745,7 @@ export default function EmployeeRoom() {
   };
 
   const handleCancelStatus = () => {
-    setPendingStatus(null);
+    closeStatusModal();
   };
 
   return (
@@ -1712,12 +1768,10 @@ export default function EmployeeRoom() {
               type="button"
               aria-label="通知を表示"
               aria-expanded={isNotificationPanelOpen}
-              onClick={() =>
-                setIsNotificationPanelOpen((current) => !current)
-              }
-              className={`relative flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm transition hover:bg-gray-50 ${
+              onClick={toggleNotificationPanel}
+              className={`workspace-bell-button relative flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm transition hover:bg-gray-50 ${
                 isNotificationPanelOpen
-                  ? "text-indigo-600 ring-2 ring-indigo-100"
+                  ? "is-open text-indigo-600 ring-2 ring-indigo-100"
                   : "text-gray-600"
               }`}
             >
@@ -1732,8 +1786,8 @@ export default function EmployeeRoom() {
               )}
             </button>
 
-            {isNotificationPanelOpen && (
-              <div className="fixed inset-x-3 top-20 z-50 w-auto overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl shadow-slate-900/15 sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[min(24rem,calc(100vw-2rem))]">
+            {(isNotificationPanelOpen || isNotificationPanelClosing) && (
+              <div className={`workspace-notification-panel fixed inset-x-3 top-20 z-50 w-auto overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl shadow-slate-900/15 sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[min(24rem,calc(100vw-2rem))] ${isNotificationPanelClosing ? "is-closing" : ""}`}>
                 <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3.5">
                   <div>
                     <h2 className="font-bold text-gray-800">通知</h2>
@@ -1745,20 +1799,22 @@ export default function EmployeeRoom() {
                   </div>
 
                   <div className="flex items-center gap-1">
-                    {unreadNotificationCount > 0 && (
+                    {(unreadNotificationCount > 0 || isMarkingAllNotifications) && (
                       <button
                         type="button"
                         onClick={markAllNotificationsAsRead}
-                        className="rounded-lg px-2 py-1.5 text-[11px] font-semibold text-indigo-600 transition hover:bg-indigo-50 sm:px-2.5 sm:text-xs"
+                        disabled={isMarkingAllNotifications}
+                        className={`workspace-mark-all inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-default sm:px-2.5 sm:text-xs ${isMarkingAllNotifications ? "is-complete" : ""}`}
                       >
-                        すべて既読
+                        {isMarkingAllNotifications && <CheckCircle2 size={13} />}
+                        {isMarkingAllNotifications ? "既読にしました" : "すべて既読"}
                       </button>
                     )}
 
                     <button
                       type="button"
                       aria-label="通知パネルを閉じる"
-                      onClick={() => setIsNotificationPanelOpen(false)}
+                      onClick={closeNotificationPanel}
                       className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
                     >
                       <X size={17} />
@@ -1780,7 +1836,7 @@ export default function EmployeeRoom() {
                       </p>
                     </div>
                   ) : (
-                    notifications.map((notification) => (
+                    visibleNotifications.map((notification) => (
                       <button
                         key={notification.id}
                         type="button"
@@ -1829,16 +1885,25 @@ export default function EmployeeRoom() {
                       </button>
                     ))
                   )}
+                  {notifications.length > 6 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsShowingAllNotifications((current) => !current)}
+                      className="workspace-show-more flex w-full items-center justify-center gap-1.5 border-t border-gray-100 px-4 py-3 text-xs font-bold text-indigo-600 transition hover:bg-indigo-50"
+                    >
+                      {isShowingAllNotifications ? "閉じる" : `もっと見る（残り ${notifications.length - 6}件）`}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
           </div>
 
-          {isNotificationPanelOpen && (
+          {(isNotificationPanelOpen || isNotificationPanelClosing) && (
             <button
               type="button"
               aria-label="通知を閉じる"
-              onClick={() => setIsNotificationPanelOpen(false)}
+              onClick={closeNotificationPanel}
               className="fixed inset-0 z-40 cursor-default"
             />
           )}
@@ -1857,7 +1922,7 @@ export default function EmployeeRoom() {
             type="button"
             onClick={() => handleOfficeChange("themis")}
             aria-pressed={selectedOffice === "themis"}
-            className={`flex w-full min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition sm:w-auto sm:py-2 ${
+            className={`workspace-office-switch flex w-full min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition sm:w-auto sm:py-2 ${selectedOffice === "themis" ? "is-active" : ""} ${
               selectedOffice === "themis"
                 ? "border-indigo-200 bg-indigo-50 shadow-sm ring-2 ring-indigo-100"
                 : "border-transparent hover:border-gray-200 hover:bg-gray-50"
@@ -1892,7 +1957,7 @@ export default function EmployeeRoom() {
             type="button"
             onClick={() => handleOfficeChange("law")}
             aria-pressed={selectedOffice === "law"}
-            className={`flex w-full min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition sm:w-auto sm:py-2 ${
+            className={`workspace-office-switch flex w-full min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition sm:w-auto sm:py-2 ${selectedOffice === "law" ? "is-active" : ""} ${
               selectedOffice === "law"
                 ? "border-blue-200 bg-blue-50 shadow-sm ring-2 ring-blue-100"
                 : "border-transparent hover:border-gray-200 hover:bg-gray-50"
@@ -1941,7 +2006,7 @@ export default function EmployeeRoom() {
       {/* 4. Main Grid Section */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left Column */}
-        <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5 lg:col-span-2">
+        <div key={`office-scene-${selectedOffice}`} className="workspace-office-scene rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5 lg:col-span-2">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500">
@@ -2605,11 +2670,11 @@ export default function EmployeeRoom() {
       )}
 
       {/* Attendance Start Confirmation Modal */}
-      {isStartConfirmationOpen && (
+      {(isStartConfirmationOpen || isStartConfirmationClosing) && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
+          className={`workspace-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isStartConfirmationClosing ? "is-closing" : ""}`}
           onClick={() => {
-            if (!isSubmitting) setIsStartConfirmationOpen(false);
+            closeStartConfirmation();
           }}
         >
           <div
@@ -2617,7 +2682,7 @@ export default function EmployeeRoom() {
             aria-modal="true"
             aria-labelledby="attendance-start-confirmation-title"
             onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
+            className={`workspace-modal-panel w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl ${isStartConfirmationClosing ? "is-closing" : ""}`}
           >
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600">
               <Play size={27} />
@@ -2646,7 +2711,7 @@ export default function EmployeeRoom() {
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
-                onClick={() => setIsStartConfirmationOpen(false)}
+                onClick={() => closeStartConfirmation()}
                 disabled={isSubmitting}
                 className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -2899,9 +2964,9 @@ export default function EmployeeRoom() {
       )}
 
       {/* Status Confirmation Modal */}
-      {pendingStatus && (
+      {(pendingStatus || isStatusModalClosing) && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
+          className={`workspace-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isStatusModalClosing ? "is-closing" : ""}`}
           onClick={handleCancelStatus}
         >
           <div
@@ -2909,7 +2974,7 @@ export default function EmployeeRoom() {
             aria-modal="true"
             aria-labelledby="status-confirmation-title"
             onClick={(event) => event.stopPropagation()}
-            className={`max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ${
+            className={`workspace-modal-panel max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ${isStatusModalClosing ? "is-closing" : ""} ${
               pendingStatus === "outside" ? "max-w-md" : "max-w-sm"
             }`}
           >
@@ -2944,7 +3009,7 @@ export default function EmployeeRoom() {
                         : "text-indigo-600"
                   }`}
                 >
-                  「{statusLabels[pendingStatus]}」
+                  「{pendingStatus ? statusLabels[pendingStatus] : ""}」
                 </span>
                 に変更しますか？
               </p>
