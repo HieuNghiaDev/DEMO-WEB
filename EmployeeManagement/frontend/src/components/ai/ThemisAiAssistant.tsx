@@ -49,6 +49,82 @@ const pageContextFromPath = (pathname: string): AiPageContext => {
   return { page: 'employee_room' }
 }
 
+function AiCursorMascot({ compact = false }: { compact?: boolean }) {
+  const faceRef = useRef<HTMLDivElement | null>(null)
+  const leftPupilRef = useRef<HTMLSpanElement | null>(null)
+  const rightPupilRef = useRef<HTMLSpanElement | null>(null)
+  const [expression, setExpression] = useState<'normal' | 'curious' | 'sleepy' | 'sparkle'>('normal')
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+
+    const expressions: Array<'normal' | 'curious' | 'sleepy' | 'sparkle'> = ['normal', 'curious', 'normal', 'sleepy', 'normal', 'sparkle']
+    let current = 0
+    const expressionTimer = window.setInterval(() => {
+      current = (current + 1) % expressions.length
+      setExpression(expressions[current])
+    }, 3600)
+
+    return () => window.clearInterval(expressionTimer)
+  }, [])
+
+  useEffect(() => {
+    let animationFrame: number | null = null
+    let pointerX = window.innerWidth / 2
+    let pointerY = window.innerHeight / 2
+
+    const updateEyes = () => {
+      animationFrame = null
+      const face = faceRef.current
+      if (!face) return
+
+      const bounds = face.getBoundingClientRect()
+      const deltaX = pointerX - (bounds.left + bounds.width / 2)
+      const deltaY = pointerY - (bounds.top + bounds.height / 2)
+      const distance = Math.hypot(deltaX, deltaY) || 1
+      const strength = Math.min(2.6, distance / 45)
+      const eyeX = (deltaX / distance) * strength
+      const eyeY = (deltaY / distance) * strength
+      const transform = `translate3d(${eyeX}px, ${eyeY}px, 0)`
+
+      if (leftPupilRef.current) leftPupilRef.current.style.transform = transform
+      if (rightPupilRef.current) rightPupilRef.current.style.transform = transform
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      pointerX = event.clientX
+      pointerY = event.clientY
+      if (animationFrame === null) animationFrame = window.requestAnimationFrame(updateEyes)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: true })
+    updateEyes()
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      if (animationFrame !== null) window.cancelAnimationFrame(animationFrame)
+    }
+  }, [])
+
+  return (
+    <div
+      aria-hidden="true"
+      className={`ai-cursor-mascot ai-mascot-${expression} relative flex shrink-0 items-center justify-center rounded-[48%] border border-slate-950/20 bg-[radial-gradient(circle_at_35%_24%,#252a35_0%,#0b0e14_40%,#050609_100%)] ring-[3px] ring-white/75 transition duration-300 dark:border-white/35 dark:ring-white/10 ${compact ? 'h-12 w-12 shadow-[0_8px_24px_rgba(2,6,23,0.38),inset_0_1px_1px_rgba(255,255,255,0.18)]' : 'h-[52px] w-[52px] shadow-[0_11px_28px_rgba(2,6,23,0.42),inset_0_1px_1px_rgba(255,255,255,0.2)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_14px_34px_rgba(0,0,0,0.72),0_0_18px_rgba(129,140,248,0.15),inset_0_1px_2px_rgba(255,255,255,0.22)] group-hover:-rotate-3 group-hover:scale-110 group-active:scale-90'}`}
+      data-expression={expression}
+      ref={faceRef}
+    >
+      <span className={`ai-cursor-mascot-eye ai-cursor-mascot-eye-left absolute h-[14px] w-[10px] overflow-hidden rounded-full !bg-[#f8fafc] shadow-[0_0_8px_rgba(255,255,255,0.78)] ${compact ? 'left-[11px] top-[17px]' : 'left-[12px] top-[19px]'}`}>
+        <span className="ai-cursor-mascot-pupil absolute left-[2px] top-[4px] h-[5px] w-[5px] rounded-full !bg-[#111827] ring-1 ring-sky-300/45 will-change-transform" ref={leftPupilRef} />
+      </span>
+      <span className={`ai-cursor-mascot-eye ai-cursor-mascot-eye-right absolute h-[14px] w-[10px] overflow-hidden rounded-full !bg-[#f8fafc] shadow-[0_0_8px_rgba(255,255,255,0.78)] ${compact ? 'right-[11px] top-[17px]' : 'right-[12px] top-[19px]'}`}>
+        <span className="ai-cursor-mascot-pupil absolute left-[2px] top-[4px] h-[5px] w-[5px] rounded-full !bg-[#111827] ring-1 ring-sky-300/45 will-change-transform" ref={rightPupilRef} />
+      </span>
+      <span className={`ai-cursor-mascot-mouth absolute h-2.5 w-4 rounded-b-full border-b-2 border-white/95 ${compact ? 'top-[34px]' : 'top-[37px]'}`} />
+      <span className="absolute -bottom-0.5 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.9)] dark:border-[#0d1426]" />
+    </div>
+  )
+}
+
 function ThemisAiAssistant() {
   const { user } = useAuth()
   const location = useLocation()
@@ -69,8 +145,6 @@ function ThemisAiAssistant() {
   const closeTimerRef = useRef<number | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
-  const aiLogoUrl = `${import.meta.env.BASE_URL}images/AI.png`
-
   const selectedPersona = personas.find((persona) => persona.id === selectedPersonaId)
   const selectedSkill = selectedPersona
     ? (selectedSkills[selectedPersona.name] ?? selectedPersona.skills[0] ?? '')
@@ -215,12 +289,11 @@ function ThemisAiAssistant() {
           </span>
           <button
             aria-label="THEMIS AI に相談"
-            className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-[19px] border border-white/30 bg-indigo-700 text-white shadow-[0_16px_38px_rgba(49,46,129,0.38)] outline-none transition duration-300 hover:-translate-y-1 hover:shadow-[0_20px_46px_rgba(79,70,229,0.48)] focus-visible:ring-4 focus-visible:ring-indigo-300/50 active:translate-y-0 active:scale-95"
+            className="group relative flex h-14 w-14 items-center justify-center rounded-full outline-none transition duration-300 hover:-translate-y-1 focus-visible:ring-4 focus-visible:ring-indigo-300/50 active:translate-y-0"
             onClick={openPanel}
             type="button"
           >
-            <img alt="" className="h-full w-full object-cover" src={aiLogoUrl} />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border border-white/70 bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.9)]" />
+            <AiCursorMascot />
           </button>
         </div>
       )}
@@ -244,9 +317,7 @@ function ThemisAiAssistant() {
               <div className="pointer-events-none absolute -right-12 -top-16 h-40 w-40 rounded-full border border-indigo-300/20" />
               <div className="relative flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-white/10 shadow-lg shadow-indigo-950/30">
-                    <img alt="" className="h-full w-full object-cover" src={aiLogoUrl} />
-                  </div>
+                  <AiCursorMascot compact />
                   <div className="min-w-0">
                     <h2 className="truncate text-base font-black tracking-[0.08em]" id="themis-ai-panel-title">THEMIS AI</h2>
                     <p className="mt-0.5 text-xs font-medium text-indigo-200">AI秘書・クイックアシスト</p>
