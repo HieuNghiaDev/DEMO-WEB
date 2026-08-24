@@ -362,26 +362,30 @@ export default function OrganizationDesign() {
     <div className="mx-auto w-full max-w-[1600px] space-y-4 px-2.5 pb-10 pt-3 sm:px-4 sm:pt-5 lg:px-6">
 
       {/* Header */}
-      <header className="flex flex-col gap-3 rounded-2xl border border-slate-300 bg-white py-4 pl-16 pr-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <div>
-          <div className="mb-1.5 flex items-center gap-2 text-[9px] font-bold tracking-[0.16em] text-indigo-600 dark:text-indigo-400 sm:text-[10px]">
-            <Building2 size={13} />
-            THEMIS ORGANIZATION
+      <header className="relative overflow-hidden rounded-[26px] border border-slate-200 bg-white px-4 py-5 pl-16 shadow-[0_16px_42px_rgba(15,23,42,0.08)] dark:border-slate-700 dark:bg-[#111a2e] sm:px-7 sm:py-6">
+        <div className="pointer-events-none absolute -right-16 -top-24 h-80 w-80 rounded-full border border-indigo-100 dark:border-indigo-400/10" />
+        <div className="pointer-events-none absolute right-14 top-5 h-32 w-32 rounded-full bg-indigo-100/55 blur-3xl dark:bg-indigo-500/10" />
+        <div className="pointer-events-none absolute bottom-0 left-0 top-0 w-1.5 bg-gradient-to-b from-indigo-500 via-violet-500 to-sky-400" />
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-[9px] font-black tracking-[0.18em] text-indigo-600 dark:text-indigo-300 sm:text-[10px]">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-indigo-100 bg-indigo-50 text-indigo-600 shadow-sm dark:border-indigo-400/20 dark:bg-indigo-500/10 dark:text-indigo-300"><Building2 size={13} /></span>
+              THEMIS ORGANIZATION
+            </div>
+            <div className="flex flex-wrap items-end gap-x-2.5 gap-y-1"><h1 className="text-xl font-black tracking-tight text-slate-950 dark:text-white sm:text-2xl">組織設計</h1><span className="mb-0.5 rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[9px] font-bold tracking-wide text-indigo-600 dark:border-indigo-400/20 dark:bg-indigo-500/10 dark:text-indigo-300">TEAM DIRECTORY</span></div>
+            <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">社員・所属・勤務状況をひとつのダッシュボードで確認</p>
           </div>
 
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">組織設計</h1>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">社員・所属・勤務状況を確認</p>
+          <button
+            type="button"
+            disabled={refreshing}
+            onClick={() => void loadOrganization(true)}
+            className="inline-flex h-10 w-fit items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-indigo-500/40 dark:hover:bg-indigo-500/10"
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            更新
+          </button>
         </div>
-
-        <button
-          type="button"
-          disabled={refreshing}
-          onClick={() => void loadOrganization(true)}
-          className="inline-flex h-9 w-fit items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600 transition-all hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-indigo-500/40 dark:hover:bg-indigo-500/10"
-        >
-          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-          更新
-        </button>
       </header>
 
       {errorMessage && (
@@ -391,13 +395,13 @@ export default function OrganizationDesign() {
       )}
 
       {/* Summary */}
-      <section className="grid grid-cols-6 gap-2 sm:grid-cols-5 sm:gap-3">
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
         <SummaryCard
           title="全社員"
           value={summary.total}
           icon={<Users size={16} />}
           iconClass="bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"
-          className="col-span-2 sm:col-span-1"
+          className="col-span-1"
         />
 
         <SummaryCard
@@ -405,7 +409,7 @@ export default function OrganizationDesign() {
           value={summary.working}
           icon={<BriefcaseBusiness size={16} />}
           iconClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
-          className="col-span-2 sm:col-span-1"
+          className="col-span-1"
         />
 
         <SummaryCard
@@ -413,7 +417,7 @@ export default function OrganizationDesign() {
           value={summary.break}
           icon={<Coffee size={16} />}
           iconClass="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
-          className="col-span-2 sm:col-span-1"
+          className="col-span-1"
         />
 
         <SummaryCard
@@ -421,7 +425,7 @@ export default function OrganizationDesign() {
           value={summary.outside}
           icon={<MapPin size={16} />}
           iconClass="bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400"
-          className="col-span-3 sm:col-span-1"
+          className="col-span-1"
         />
 
         <SummaryCard
@@ -429,7 +433,7 @@ export default function OrganizationDesign() {
           value={summary.offline}
           icon={<UserRound size={16} />}
           iconClass="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-          className="col-span-3 sm:col-span-1"
+          className="col-span-2 sm:col-span-1"
         />
       </section>
 
@@ -540,12 +544,12 @@ export default function OrganizationDesign() {
       </section>
 
       {/* Employee list */}
-      <section className="overflow-hidden rounded-2xl border-[1.5px] border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <section className="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-[0_16px_42px_rgba(15,23,42,0.07)] dark:border-slate-700 dark:bg-slate-900">
 
-        <div className="flex items-center justify-between border-b border-slate-300 bg-slate-50/70 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/30 sm:px-5">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/70 px-4 py-4 dark:border-slate-700 dark:bg-[#0c1527] sm:px-5">
           <div>
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white">社員一覧</h2>
-            <p className="mt-0.5 text-[11px] text-slate-400">{visibleEmployees.length}名の社員</p>
+            <p className="text-[10px] font-black tracking-[.14em] text-indigo-500">TEAM DIRECTORY</p>
+            <h2 className="mt-1 text-sm font-black text-slate-900 dark:text-white">社員一覧 <span className="ml-1 text-xs font-bold text-slate-400">{visibleEmployees.length}名</span></h2>
           </div>
 
           {selectedOfficeId !== null && (

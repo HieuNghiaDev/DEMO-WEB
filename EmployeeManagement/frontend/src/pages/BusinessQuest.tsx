@@ -26,10 +26,13 @@ export default function BusinessQuest() {
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [availableCaseTypes, setAvailableCaseTypes] = useState<CaseTypeOption[]>([])
+  const [assignableEmployees, setAssignableEmployees] = useState<AssignableEmployee[]>([])
+  const [assigningCaseId, setAssigningCaseId] = useState<number | null>(null)
   const [isKanaManual, setIsKanaManual] = useState(false)
   const createCloseTimer = useRef<number | null>(null)
   const [newCase, setNewCase] = useState({ customerName: '', customerKana: '', clientType: 'individual', title: '', caseTypeId: '', caseTypeOther: '', status: 'intake' })
   const canCreateCase = user?.permission_names.includes('case.create') ?? false
+  const canAssignCase = user?.role_names.some((role) => role === 'level_4' || role === 'level_5') ?? false
 
   const loadCases = async () => {
     setIsLoading(true)
@@ -53,11 +56,23 @@ export default function BusinessQuest() {
     }
   }
 
+  const loadAssignableEmployees = async () => {
+    if (!canAssignCase) return
+
+    try {
+      const response = await api.get<{ employees: AssignableEmployee[] }>('/organization')
+      setAssignableEmployees(response.data.employees.filter((employee) => employee.employee_status === 'active'))
+    } catch {
+      setAssignableEmployees([])
+    }
+  }
+
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     const initialLoadTimer = window.setTimeout(() => {
       void loadCases()
       void loadCaseTypes()
+      void loadAssignableEmployees()
     }, 0)
 
     return () => {
@@ -151,16 +166,29 @@ export default function BusinessQuest() {
     setNewCase((current) => ({ ...current, customerKana }))
   }
 
+  const assignCase = async (caseId: number, employeeId: number | null) => {
+    setAssigningCaseId(caseId)
+    try {
+      const response = await api.patch<{ case_file: ApiCaseFile }>(`/case-files/${caseId}/assignee`, {
+        assigned_employee_id: employeeId,
+      })
+      setCases((current) => current.map((item) => item.id === caseId ? mapCaseFile(response.data.case_file) : item))
+    } finally {
+      setAssigningCaseId(null)
+    }
+  }
+
   if (selectedCase) return <CaseDetailPage caseFile={selectedCase} onBack={() => { setSelectedCase(null); void loadCases() }}/>
 
   return <>
-    <CaseListView cases={cases} filteredCases={filteredCases} loading={isLoading || isDetailLoading} error={loadError} keyword={keyword} status={status} caseType={caseType} quickFilter={quickFilter} caseTypes={caseTypes} canCreate={canCreateCase} onKeywordChange={setKeyword} onStatusChange={setStatus} onCaseTypeChange={setCaseType} onQuickFilterChange={setQuickFilter} onRefresh={() => { void loadCases(); void loadCaseTypes() }} onCreate={openCreateDialog} onOpen={(id) => void openCase(id)}/>
+    <CaseListView cases={cases} filteredCases={filteredCases} loading={isLoading || isDetailLoading} error={loadError} keyword={keyword} status={status} caseType={caseType} quickFilter={quickFilter} caseTypes={caseTypes} canCreate={canCreateCase} canAssign={canAssignCase} assignees={assignableEmployees} assigningCaseId={assigningCaseId} onKeywordChange={setKeyword} onStatusChange={setStatus} onCaseTypeChange={setCaseType} onQuickFilterChange={setQuickFilter} onRefresh={() => { void loadCases(); void loadCaseTypes(); void loadAssignableEmployees() }} onCreate={openCreateDialog} onOpen={(id) => void openCase(id)} onAssign={(caseId, employeeId) => { void assignCase(caseId, employeeId) }}/>
     {isCreateOpen && <CreateCaseDialog values={newCase} caseTypes={availableCaseTypes} error={createError} saving={isCreating} closing={isCreateClosing} onChange={setNewCase} onCustomerNameChange={updateCustomerName} onCustomerKanaChange={updateCustomerKana} onClose={closeCreateDialog} onSubmit={createCase}/>}
   </>
 }
 
 type NewCase = { customerName: string; customerKana: string; clientType: string; title: string; caseTypeId: string; caseTypeOther: string; status: string }
 type CaseTypeOption = { id: number; name: string; name_kana: string | null }
+type AssignableEmployee = { id: number; full_name: string; full_name_kana: string | null; position_title: string | null; employee_status: string }
 
 function CreateCaseDialog({ values, caseTypes, error, saving, closing, onChange, onCustomerNameChange, onCustomerKanaChange, onClose, onSubmit }: { values: NewCase; caseTypes: CaseTypeOption[]; error: string | null; saving: boolean; closing: boolean; onChange: (value: NewCase) => void; onCustomerNameChange: (value: string) => void; onCustomerKanaChange: (value: string) => void; onClose: () => void; onSubmit: (event: React.FormEvent<HTMLFormElement>) => void }) {
   const isLocked = saving || closing

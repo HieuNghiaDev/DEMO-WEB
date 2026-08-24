@@ -118,6 +118,10 @@ Route::middleware([
     Route::apiResource('case-files', CaseFileController::class)
         ->only(['update'])
         ->middleware('permission:case.update');
+    Route::patch('/case-files/{caseFile}/assignee', [
+        CaseFileController::class,
+        'assign',
+    ])->middleware('permission:case.assign');
     Route::apiResource('case-files', CaseFileController::class)
         ->only(['destroy'])
         ->middleware('permission:case.delete');

@@ -23,6 +23,7 @@ export type BusinessCase = {
   customerKana: string
   caseType: string
   assignee: string
+  assignedEmployeeId: number | null
   role: string
   status: CaseStatus
   memo: string
@@ -82,7 +83,7 @@ export type ApiCaseFile = {
   documents_count: number
   confirmed_documents_count: number
   client: { id: number; name: string; name_kana: string | null }
-  assigned_employee: { full_name: string; position_title: string | null } | null
+  assigned_employee: { id: number; full_name: string; position_title: string | null } | null
   created_by_employee?: { full_name: string } | null
 }
 

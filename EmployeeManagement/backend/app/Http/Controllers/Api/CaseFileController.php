@@ -65,10 +65,30 @@ class CaseFileController extends Controller
     public function update(Request $request, CaseFile $caseFile): JsonResponse
     {
         $data = $this->validated($request, true);
+
+        if (array_key_exists('assigned_employee_id', $data)) {
+            $this->ensureCanAssignCase($request);
+        }
+
         $this->resolveCaseType($data);
         $caseFile->update($data);
 
         return response()->json(['case_file' => $caseFile->load(['client', 'caseTypeOption', 'department', 'assignedEmployee', 'createdByEmployee'])]);
+    }
+
+    public function assign(Request $request, CaseFile $caseFile): JsonResponse
+    {
+        $this->ensureCanAssignCase($request);
+
+        $data = $request->validate([
+            'assigned_employee_id' => ['nullable', 'exists:employees,id'],
+        ]);
+
+        $caseFile->update($data);
+
+        return response()->json([
+            'case_file' => $caseFile->load(['client', 'caseTypeOption', 'department', 'assignedEmployee', 'createdByEmployee']),
+        ]);
     }
 
     public function destroy(CaseFile $caseFile): JsonResponse
@@ -115,5 +135,14 @@ class CaseFileController extends Controller
 
         $data['case_type'] = $caseType->name;
         $data['case_type_other'] = $caseType->name === 'その他' ? $other : null;
+    }
+
+    private function ensureCanAssignCase(Request $request): void
+    {
+        abort_unless(
+            $request->user()?->hasAnyRole(['level_4', 'level_5']),
+            403,
+            '案件の担当者を変更できるのはレベル4以上のユーザーのみです。'
+        );
     }
 }

@@ -85,7 +85,7 @@ class RolePermissionSeeder extends Seeder
                 'employee.view', 'attendance.view_own', 'attendance.update_own',
                 'attendance.export_own', 'task.view_own', 'task.view_all',
                 'task.create', 'task.assign', 'task.update', 'case.view',
-                'case.create', 'case.update', 'case.assign', 'document.view',
+                'case.create', 'case.update', 'document.view',
                 'document.create', 'document.update', 'ai.use',
             ],
             'level_4' => [

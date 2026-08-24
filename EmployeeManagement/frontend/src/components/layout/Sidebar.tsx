@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react'
 import {
-  Check,
-  FileText,
-  Grid,
+  BadgeCheck,
+  BookOpenText,
+  BotMessageSquare,
+  FolderKanban,
   Home,
   LoaderCircle,
   LogOut,
   Menu,
   Moon,
-  Sparkles,
-  SquareCode,
   Sun,
+  UsersRound,
   X,
 } from 'lucide-react'
 import { NavLink, useNavigate } from 'react-router-dom'
@@ -20,11 +20,11 @@ import { useTheme } from '../../contexts/ThemeContext'
 
 const menuItems = [
   { path: '/', name: '社員ルーム', icon: Home },
-  { path: '/organization', name: '組織設計', icon: Grid },
-  { path: '/quests', name: '業務クエスト', icon: SquareCode },
-  { path: '/manual', name: 'マニュアル工房', icon: FileText },
-  { path: '/ai', name: 'AI社員', icon: Sparkles },
-  { path: '/approvals', name: '承認室', icon: Check },
+  { path: '/organization', name: '組織設計', icon: UsersRound },
+  { path: '/quests', name: '業務クエスト', icon: FolderKanban },
+  { path: '/manual', name: 'マニュアル工房', icon: BookOpenText },
+  { path: '/ai', name: 'AI社員', icon: BotMessageSquare },
+  { path: '/approvals', name: '承認室', icon: BadgeCheck },
 ]
 
 export default function Sidebar() {

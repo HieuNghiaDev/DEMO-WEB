@@ -2,9 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\Employee;
+use App\Models\Office;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\CaseTypeSeeder;
+use Database\Seeders\OfficeSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -106,5 +109,45 @@ class CaseFileApiTest extends TestCase
         $this->actingAs($user, 'sanctum')
             ->getJson("/api/case-files/{$case['id']}")
             ->assertNotFound();
+    }
+
+    public function test_only_level_four_or_higher_can_assign_a_case_to_an_employee(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $this->seed(CaseTypeSeeder::class);
+        $this->seed(OfficeSeeder::class);
+
+        $levelFourUser = User::factory()->create();
+        $levelThreeUser = User::factory()->create();
+        $levelFourUser->roles()->sync([Role::query()->where('name', 'level_4')->value('id')]);
+        $levelThreeUser->roles()->sync([Role::query()->where('name', 'level_3')->value('id')]);
+
+        $assignee = Employee::query()->create([
+            'employee_code' => 'TEST-ASSIGNEE',
+            'full_name' => 'Assignment Test Employee',
+            'hire_date' => '2026-08-24',
+            'office_id' => Office::query()->where('office_code', 'THEMIS')->value('id'),
+            'status' => 'active',
+        ]);
+
+        $case = $this->actingAs($levelFourUser, 'sanctum')->postJson('/api/case-files', [
+            'title' => 'Assignment protected case',
+            'case_type_id' => 1,
+            'client' => ['name' => 'Assignment Client', 'client_type' => 'individual'],
+        ])->assertCreated()->json('case_file');
+
+        $this->actingAs($levelThreeUser, 'sanctum')
+            ->patchJson("/api/case-files/{$case['id']}", ['assigned_employee_id' => $assignee->id])
+            ->assertForbidden();
+
+        $this->actingAs($levelFourUser, 'sanctum')
+            ->patchJson("/api/case-files/{$case['id']}/assignee", ['assigned_employee_id' => $assignee->id])
+            ->assertOk()
+            ->assertJsonPath('case_file.assigned_employee.id', $assignee->id);
+
+        $this->assertDatabaseHas('case_files', [
+            'id' => $case['id'],
+            'assigned_employee_id' => $assignee->id,
+        ]);
     }
 }

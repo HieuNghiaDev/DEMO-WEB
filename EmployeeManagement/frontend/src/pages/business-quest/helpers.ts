@@ -70,6 +70,7 @@ export const mapCaseFile = (caseFile: ApiCaseFile): BusinessCase => {
       ? `その他：${caseFile.case_type_other}`
       : caseFile.case_type ?? '未分類',
     assignee: caseFile.assigned_employee?.full_name ?? '未割当',
+    assignedEmployeeId: caseFile.assigned_employee?.id ?? null,
     role: caseFile.assigned_employee?.position_title ?? '担当者',
     status: statusMap[caseFile.status],
     memo: total === 0 ? '資料を登録してください' : confirmed === total ? '資料確認済み' : `確認待ちの資料 ${Math.max(0, total - confirmed)}件`,

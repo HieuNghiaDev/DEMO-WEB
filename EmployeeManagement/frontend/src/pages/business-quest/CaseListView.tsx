@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   FolderOpen,
   LockKeyhole,
   Plus,
   RefreshCw,
   Scale,
   Search,
+  UserRoundCheck,
 } from 'lucide-react'
 import { safeProgress, statusConfig } from './helpers'
 import type { BusinessCase, CaseQuickFilter, CaseStatus } from './types'
@@ -24,6 +29,9 @@ type Props = {
   quickFilter: CaseQuickFilter
   caseTypes: string[]
   canCreate: boolean
+  canAssign: boolean
+  assignees: AssigneeOption[]
+  assigningCaseId: number | null
   onKeywordChange: (value: string) => void
   onStatusChange: (value: 'all' | CaseStatus) => void
   onCaseTypeChange: (value: string) => void
@@ -31,7 +39,10 @@ type Props = {
   onRefresh: () => void
   onCreate: () => void
   onOpen: (id: number) => void
+  onAssign: (caseId: number, employeeId: number | null) => void
 }
+
+type AssigneeOption = { id: number; full_name: string; full_name_kana: string | null; position_title: string | null }
 
 const PAGE_SIZE = 10
 const quickTabs: { id: CaseQuickFilter; label: string }[] = [
@@ -44,6 +55,12 @@ const quickTabs: { id: CaseQuickFilter; label: string }[] = [
 
 export default function CaseListView(props: Props) {
   const [page, setPage] = useState(1)
+  const activeCases = props.cases.filter((item) => item.status === 'in_progress').length
+  const attentionCases = props.cases.filter((item) => item.status === 'waiting' || item.status === 'reviewing').length
+  const completedCases = props.cases.filter((item) => item.status === 'completed').length
+  const documentProgress = props.cases.reduce((total, item) => total + item.documentsTotal, 0)
+  const confirmedDocuments = props.cases.reduce((total, item) => total + item.documentsDone, 0)
+  const documentRate = safeProgress(confirmedDocuments, documentProgress)
   const counts: Record<CaseQuickFilter, number> = {
     all: props.cases.length,
     in_progress: props.cases.filter((item) => item.status === 'in_progress').length,
@@ -70,33 +87,48 @@ export default function CaseListView(props: Props) {
 
   return (
     <div className="w-full min-w-0 max-w-full overflow-x-hidden px-3 pb-10 pt-3 sm:px-4 lg:px-6 lg:pt-5">
-      <header className="mb-5 flex flex-col gap-5 rounded-2xl border border-slate-200 bg-white px-5 py-6 shadow-sm dark:border-slate-700 dark:bg-[#111a2e] sm:px-7 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[10px] font-bold tracking-[0.16em] text-indigo-600 dark:text-indigo-400">
-            <Scale size={14} /> THEMIS CASE MANAGEMENT
+      <header className="case-command-header relative mb-4 overflow-hidden rounded-[24px] border border-slate-200 bg-white p-4 shadow-[0_16px_42px_rgba(15,23,42,0.07)] dark:border-slate-700 dark:bg-[#111a2e] sm:mb-5 sm:rounded-[26px] sm:p-7">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full border border-indigo-100 dark:border-indigo-400/10" />
+        <div className="pointer-events-none absolute right-16 top-7 h-24 w-24 rounded-full bg-indigo-100/55 blur-2xl dark:bg-indigo-500/10" />
+        <div className="pointer-events-none absolute bottom-0 left-0 top-0 w-1.5 bg-gradient-to-b from-indigo-500 via-violet-500 to-sky-400" />
+        <div className="relative flex flex-col gap-4 sm:gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-[10px] font-black tracking-[0.18em] text-indigo-600 dark:text-indigo-300">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-indigo-100 bg-indigo-50 text-indigo-600 shadow-sm dark:border-indigo-400/20 dark:bg-indigo-500/10 dark:text-indigo-300"><Scale size={13} /></span>
+              THEMIS LEGAL OPERATIONS
+            </div>
+            <div className="mt-3 flex flex-wrap items-end gap-x-2.5 gap-y-1 sm:mt-4 sm:gap-x-3">
+              <h1 className="text-xl font-black tracking-tight text-slate-950 dark:text-white sm:text-3xl">案件コマンドセンター</h1>
+              <span className="mb-0.5 rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[9px] font-extrabold text-indigo-600 dark:border-indigo-400/20 dark:bg-indigo-500/10 dark:text-indigo-300 sm:mb-1 sm:px-2.5 sm:py-1 sm:text-[10px]">CASE DESK</span>
+            </div>
+            <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400 sm:mt-2 sm:text-sm">顧客案件の状況、書類の進捗、次に必要な対応を一つの画面で把握します。</p>
           </div>
-          <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 dark:text-white sm:text-3xl">業務クエスト</h1>
-          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
-            顧客案件・必要書類・対応状況を一元管理
-          </p>
+          <div className="flex gap-2 lg:pt-1">
+            <button type="button" onClick={props.onRefresh} className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm transition hover:-translate-y-px hover:border-indigo-200 hover:bg-indigo-50 active:scale-[.98] dark:border-slate-700 dark:bg-[#111a2e] dark:text-slate-300 dark:hover:bg-indigo-500/10 sm:flex-none">
+              <RefreshCw size={15} /> 更新
+            </button>
+            <button type="button" disabled={!props.canCreate} onClick={props.onCreate} title={props.canCreate ? '新しい案件を登録' : 'レベル3以上の権限が必要です'} className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 bg-[length:180%_100%] px-4 text-xs font-bold text-white shadow-md shadow-indigo-500/25 transition hover:-translate-y-px hover:bg-right hover:shadow-lg active:scale-[.98] disabled:cursor-not-allowed disabled:from-slate-300 disabled:via-slate-300 disabled:to-slate-300 disabled:shadow-none dark:disabled:from-slate-700 dark:disabled:via-slate-700 dark:disabled:to-slate-700 sm:flex-none">
+              {props.canCreate ? <Plus size={16} /> : <LockKeyhole size={15} />} 新規案件
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button type="button" onClick={props.onRefresh} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 active:scale-[.98] dark:border-slate-700 dark:bg-[#111a2e] dark:text-slate-300 dark:hover:bg-indigo-500/10 sm:flex-none">
-            <RefreshCw size={15} /> 更新
-          </button>
-          <button type="button" disabled={!props.canCreate} onClick={props.onCreate} title={props.canCreate ? '新しい案件を登録' : 'レベル3以上の権限が必要です'} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 text-xs font-bold text-white shadow-md shadow-indigo-500/20 transition hover:-translate-y-px hover:shadow-lg active:scale-[.98] disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none dark:disabled:from-slate-700 dark:disabled:to-slate-700 sm:flex-none">
-            {props.canCreate ? <Plus size={16} /> : <LockKeyhole size={15} />} 新規案件
-          </button>
+        <div className="relative mt-4 grid grid-cols-2 gap-2 sm:mt-6 lg:grid-cols-4">
+          <CommandMetric icon={<ClipboardList size={16}/>} label="管理中の案件" value={`${props.cases.length}`} note="現在のポートフォリオ" tone="indigo" />
+          <CommandMetric icon={<Activity size={16}/>} label="対応中" value={`${activeCases}`} note="いま進行している案件" tone="sky" />
+          <CommandMetric icon={<AlertTriangle size={16}/>} label="要確認" value={`${attentionCases}`} note="書類待ち・確認中" tone="amber" />
+          <CommandMetric icon={<CheckCircle2 size={16}/>} label="書類の確認率" value={`${documentRate}%`} note={`${completedCases}件の案件を完了`} tone="emerald" />
         </div>
       </header>
 
-      <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_12px_35px_rgba(15,23,42,0.05)] dark:border-slate-700 dark:bg-[#111a2e]">
-        <div className="flex flex-wrap gap-2 border-b border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-[#0c1527]">
-          <label className="relative min-w-[260px] flex-1" style={{ flexBasis: '420px' }}>
+      <section className="min-w-0 overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-[0_16px_42px_rgba(15,23,42,0.06)] dark:border-slate-700 dark:bg-[#111a2e]">
+        <div className="border-b border-slate-200 bg-slate-50/70 px-3 py-3 dark:border-slate-700 dark:bg-[#0c1527] sm:px-4">
+          <div className="mb-2 flex items-center justify-between gap-3 px-1"><span className="text-[10px] font-black tracking-[0.15em] text-slate-400 dark:text-slate-500">CASE CONTROL</span><span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-300">{props.filteredCases.length}件を表示</span></div>
+          <div className="flex flex-wrap gap-2">
+          <label className="relative basis-full sm:min-w-[260px] sm:flex-1">
             <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input value={props.keyword} onChange={(event) => props.onKeywordChange(event.target.value)} placeholder="顧客名・案件番号・担当者を検索" className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-xs text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-[#111a2e] dark:text-slate-200 dark:focus:ring-indigo-500/20" />
+            <input value={props.keyword} onChange={(event) => props.onKeywordChange(event.target.value)} placeholder="顧客名・案件番号・担当者を検索" className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-xs text-slate-700 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-[#111a2e] dark:text-slate-200 dark:focus:ring-indigo-500/20" />
           </label>
-          <div className="grid min-w-[280px] flex-1 grid-cols-2 gap-2" style={{ flexBasis: '430px', flexGrow: 0 }}>
+          <div className="grid basis-full grid-cols-2 gap-2 sm:min-w-[280px] sm:flex-1 lg:max-w-[430px]">
             <Select value={props.status} onChange={(value) => props.onStatusChange(value as 'all' | CaseStatus)}>
               <option value="all">すべてのステータス</option>
               {Object.entries(statusConfig).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}
@@ -106,12 +138,13 @@ export default function CaseListView(props: Props) {
               {props.caseTypes.map((type) => <option key={type}>{type}</option>)}
             </Select>
           </div>
+          </div>
         </div>
 
-        <div className="overflow-x-auto border-b border-slate-200 dark:border-slate-700">
-          <div className="flex min-w-max sm:min-w-0">
+        <div className="overflow-x-auto border-b border-slate-200 bg-white px-2 py-2 dark:border-slate-700 dark:bg-[#111a2e] sm:px-3">
+          <div className="flex min-w-max gap-1 sm:min-w-0">
             {quickTabs.map((tab) => (
-              <button key={tab.id} type="button" onClick={() => props.onQuickFilterChange(tab.id)} className={`relative min-w-28 flex-1 px-4 py-3.5 text-xs font-bold transition sm:min-w-0 ${props.quickFilter === tab.id ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/20' : 'bg-white text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-[#111a2e] dark:text-slate-400 dark:hover:bg-indigo-500/[.08] dark:hover:text-indigo-300'}`}>
+              <button key={tab.id} type="button" onClick={() => props.onQuickFilterChange(tab.id)} className={`relative min-w-28 flex-1 rounded-xl px-4 py-2.5 text-xs font-bold transition sm:min-w-0 ${props.quickFilter === tab.id ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/20' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 dark:text-slate-400 dark:hover:bg-indigo-500/[.08] dark:hover:text-indigo-300'}`}>
                 {tab.label} <span className={`ml-1.5 ${props.quickFilter === tab.id ? 'text-white/80' : 'text-slate-400'}`}>({counts[tab.id]})</span>
               </button>
             ))}
@@ -126,10 +159,10 @@ export default function CaseListView(props: Props) {
           <>
             <div className="hidden overflow-x-auto md:block">
               <div className="min-w-[1080px]">
-                <div className="grid gap-3 border-b border-slate-200 bg-white px-5 py-3 text-[10px] font-bold text-slate-400 dark:border-slate-800 dark:bg-[#111a2e]" style={{ gridTemplateColumns: 'minmax(230px,1.35fr) minmax(150px,.8fr) minmax(170px,1fr) 110px minmax(170px,1fr) 110px 30px' }}>
-                  <span>顧客名 / 案件番号</span><span>案件種別</span><span>必要書類の進捗</span><span>ステータス</span><span>メモ（最新）</span><span>最終更新</span><span />
+                <div className="grid gap-3 border-b border-slate-200 bg-white px-5 py-3 text-[10px] font-bold text-slate-400 dark:border-slate-800 dark:bg-[#111a2e]" style={{ gridTemplateColumns: 'minmax(210px,1.25fr) minmax(130px,.7fr) minmax(150px,.8fr) minmax(155px,.9fr) 110px minmax(150px,.85fr) 110px 30px' }}>
+                  <span>顧客名 / 案件番号</span><span>案件種別</span><span>担当者</span><span>必要書類の進捗</span><span>ステータス</span><span>メモ（最新）</span><span>最終更新</span><span />
                 </div>
-                <div>{visibleCases.map((item) => <CaseRow key={item.id} item={item} onOpen={props.onOpen} />)}</div>
+                <div>{visibleCases.map((item) => <CaseRow key={item.id} item={item} canAssign={props.canAssign} assignees={props.assignees} assigning={props.assigningCaseId === item.id} onOpen={props.onOpen} onAssign={props.onAssign} />)}</div>
               </div>
             </div>
             <div className="grid gap-3 p-3 md:hidden">{visibleCases.map((item) => <CaseCard key={item.id} item={item} onOpen={props.onOpen} />)}</div>
@@ -152,23 +185,44 @@ export default function CaseListView(props: Props) {
   )
 }
 
-function CaseRow({ item, onOpen }: { item: BusinessCase; onOpen: (id: number) => void }) {
+function CaseRow({ item, canAssign, assignees, assigning, onOpen, onAssign }: { item: BusinessCase; canAssign: boolean; assignees: AssigneeOption[]; assigning: boolean; onOpen: (id: number) => void; onAssign: (caseId: number, employeeId: number | null) => void }) {
   const progress = safeProgress(item.documentsDone, item.documentsTotal)
   return (
-    <button type="button" onClick={() => onOpen(item.id)} className="case-file-card group relative grid w-full items-center gap-3 overflow-hidden border-b border-slate-100 px-5 py-3 text-left last:border-b-0 hover:bg-indigo-50/40 dark:border-slate-800 dark:hover:bg-indigo-500/[0.035]" style={{ gridTemplateColumns: 'minmax(230px,1.35fr) minmax(150px,.8fr) minmax(170px,1fr) 110px minmax(170px,1fr) 110px 30px' }}>
+    <div role="button" tabIndex={0} onClick={() => onOpen(item.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen(item.id) } }} className="case-file-card group relative grid w-full cursor-pointer items-center gap-3 overflow-hidden border-b border-slate-100 px-5 py-3 text-left outline-none last:border-b-0 hover:bg-indigo-50/40 focus-visible:bg-indigo-50/70 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 dark:border-slate-800 dark:hover:bg-indigo-500/[0.035] dark:focus-visible:bg-indigo-500/[0.07]" style={{ gridTemplateColumns: 'minmax(210px,1.25fr) minmax(130px,.7fr) minmax(150px,.8fr) minmax(155px,.9fr) 110px minmax(150px,.85fr) 110px 30px' }}>
       <span className="absolute bottom-2 left-0 top-2 w-[3px] scale-y-0 rounded-r-full bg-indigo-500 transition-transform duration-300 group-hover:scale-y-100" />
       <div className="flex min-w-0 items-center gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-sm font-black text-indigo-600 ring-1 ring-indigo-100 transition-transform duration-300 group-hover:scale-105 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-500/20">{item.customerName.charAt(0)}</span>
         <span className="min-w-0"><span className="block truncate text-xs font-bold text-slate-900 group-hover:text-indigo-700 dark:text-white dark:group-hover:text-indigo-300">{item.customerName}</span>{item.customerKana && <span className="mt-0.5 block truncate text-[9px] text-slate-400">{item.customerKana}</span>}<span className="mt-0.5 block truncate text-[9px] font-semibold text-slate-400">{item.code}</span></span>
       </div>
-      <div className="min-w-0"><p className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{item.caseType}</p><p className="mt-1 inline-flex max-w-full truncate rounded border border-indigo-100 bg-indigo-50 px-1.5 py-0.5 text-[8px] font-bold text-indigo-500 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300">{item.title}</p></div>
+      <div className="min-w-0"><p className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{item.caseType}</p></div>
+      <Assignee item={item} canAssign={canAssign} assignees={assignees} assigning={assigning} onAssign={onAssign} />
       <Progress done={item.documentsDone} total={item.documentsTotal} progress={progress} />
       <Status status={item.status} />
       <span className="truncate text-[11px] text-slate-500 dark:text-slate-400">{item.memo}</span>
       <span className="text-[9px] text-slate-400">{item.updatedAt}</span>
       <ChevronRight size={17} className="text-slate-300 transition-all duration-300 group-hover:translate-x-1 group-hover:text-indigo-500 dark:text-slate-700" />
-    </button>
+    </div>
   )
+}
+
+function Assignee({ item, canAssign, assignees, assigning, onAssign }: { item: BusinessCase; canAssign: boolean; assignees: AssigneeOption[]; assigning: boolean; onAssign: (caseId: number, employeeId: number | null) => void }) {
+  if (!canAssign) return <span className="flex min-w-0 items-center gap-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-black text-slate-500 dark:bg-slate-800 dark:text-slate-300">{item.assignee.charAt(0)}</span><span className="min-w-0"><span className="block truncate text-[10px] font-bold text-slate-700 dark:text-slate-200">{item.assignee}</span><span className="block truncate text-[9px] text-slate-400">{item.role}</span></span></span>
+
+  return <label className="relative block" onClick={(event) => event.stopPropagation()}><span className="sr-only">{item.customerName}の担当者</span><UserRoundCheck size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-indigo-400"/><select disabled={assigning} value={item.assignedEmployeeId ?? ''} onChange={(event) => onAssign(item.id, event.target.value ? Number(event.target.value) : null)} className="h-9 w-full appearance-none rounded-lg border border-slate-200 bg-white pl-7 pr-2 text-[10px] font-bold text-slate-600 outline-none transition hover:border-indigo-300 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-[#0c1527] dark:text-slate-200 dark:focus:ring-indigo-500/20"><option value="">未割当</option>{assignees.map((employee) => <option key={employee.id} value={employee.id}>{employee.full_name}</option>)}</select></label>
+}
+
+function CommandMetric({ icon, label, value, note, tone }: { icon: React.ReactNode; label: string; value: string; note: string; tone: 'indigo' | 'sky' | 'amber' | 'emerald' }) {
+  const tones = {
+    indigo: 'bg-indigo-50 text-indigo-600 ring-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-500/20',
+    sky: 'bg-sky-50 text-sky-600 ring-sky-100 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/20',
+    amber: 'bg-amber-50 text-amber-600 ring-amber-100 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20',
+    emerald: 'bg-emerald-50 text-emerald-600 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20',
+  } as const
+
+  return <div className="group flex min-w-0 items-center gap-2.5 rounded-xl border border-slate-100 bg-white/80 px-3 py-2.5 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md dark:border-slate-700/80 dark:bg-slate-950/20 dark:hover:border-indigo-500/35 sm:gap-3 sm:rounded-2xl sm:px-3.5 sm:py-3">
+    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 sm:h-9 sm:w-9 sm:rounded-xl ${tones[tone]}`}>{icon}</span>
+    <span className="min-w-0"><span className="block truncate text-[9px] font-bold text-slate-400 dark:text-slate-500 sm:text-[10px]">{label}</span><span className="mt-0.5 block text-lg font-black tracking-tight text-slate-900 dark:text-white sm:text-xl">{value}</span><span className="mt-0.5 hidden truncate text-[9px] font-medium text-slate-400 dark:text-slate-500 sm:block">{note}</span></span>
+  </div>
 }
 
 function CaseCard({ item, onOpen }: { item: BusinessCase; onOpen: (id: number) => void }) {
