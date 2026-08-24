@@ -3,12 +3,17 @@
 namespace App\AI\Tools;
 
 use App\Models\ApprovalRequest;
+use App\Services\ApprovalNotificationService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class RequestApprovalTool implements Tool
 {
-    public function __construct(private LogActionTool $logActionTool) {}
+    public function __construct(
+        private LogActionTool $logActionTool,
+        private ApprovalNotificationService $approvalNotificationService,
+    ) {}
 
     public function definition(): array
     {
@@ -41,11 +46,18 @@ class RequestApprovalTool implements Tool
             ]);
         }
 
-        $approval = ApprovalRequest::create([
-            ...$data,
-            'payload' => $this->normalizePayload($data['payload'] ?? null),
-            'status' => 'pending',
-        ]);
+        $approval = DB::transaction(function () use ($data): ApprovalRequest {
+            $approval = ApprovalRequest::create([
+                ...$data,
+                'payload' => $this->normalizePayload($data['payload'] ?? null),
+                'requested_by' => auth()->id(),
+                'status' => 'pending',
+            ]);
+
+            $this->approvalNotificationService->notify($approval);
+
+            return $approval;
+        });
 
         $result = [
             'approval_id' => $approval->id,

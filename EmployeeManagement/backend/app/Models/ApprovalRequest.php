@@ -17,6 +17,8 @@ class ApprovalRequest extends Model
         'approved_at',
         'rejected_by',
         'rejected_at',
+        'executed_by',
+        'executed_at',
     ];
 
     protected function casts(): array
@@ -25,6 +27,7 @@ class ApprovalRequest extends Model
             'payload' => 'array',
             'approved_at' => 'datetime',
             'rejected_at' => 'datetime',
+            'executed_at' => 'datetime',
         ];
     }
 
@@ -41,5 +44,10 @@ class ApprovalRequest extends Model
     public function rejectedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'rejected_by');
+    }
+
+    public function executedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'executed_by');
     }
 }

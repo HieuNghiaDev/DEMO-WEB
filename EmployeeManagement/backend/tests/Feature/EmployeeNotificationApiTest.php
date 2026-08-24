@@ -22,7 +22,12 @@ class EmployeeNotificationApiTest extends TestCase
             'kind' => 'info',
             'title' => '新しい業務が届きました',
             'message' => '契約書を確認してください。',
-            'data' => ['assigned_task_id' => 101],
+            'data' => [
+                'assigned_task_id' => 101,
+                'approval_id' => 12,
+                'action_type' => 'delete_task',
+                'target_path' => '/approvals',
+            ],
         ]);
 
         $theirs = EmployeeNotification::query()->create([
@@ -38,6 +43,9 @@ class EmployeeNotificationApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('notifications.0.id', $mine->id)
             ->assertJsonPath('notifications.0.assigned_task_id', 101)
+            ->assertJsonPath('notifications.0.approval_id', 12)
+            ->assertJsonPath('notifications.0.action_type', 'delete_task')
+            ->assertJsonPath('notifications.0.target_path', '/approvals')
             ->assertJsonCount(1, 'notifications');
 
         $this->patchJson("/api/notifications/{$mine->id}/read")

@@ -34,8 +34,11 @@ class CaseMeetingLogController extends Controller
     private function validated(Request $request, bool $partial = false): array
     {
         return $request->validate([
-            'meeting_date' => [$partial ? 'sometimes' : 'required', 'date'], 'attendees' => ['nullable', 'string', 'max:255'],
+            'meeting_date' => [$partial ? 'sometimes' : 'required', 'date'],
+            'interaction_type' => ['nullable', Rule::in(['meeting', 'phone', 'email', 'internal_note'])],
+            'attendees' => ['nullable', 'string', 'max:255'],
             'content' => [$partial ? 'sometimes' : 'required', 'string'], 'next_action' => ['nullable', 'string'],
+            'next_action_due_at' => ['nullable', 'date'],
             'status' => ['nullable', Rule::in(['draft', 'confirmed'])], 'created_by_employee_id' => ['nullable', 'exists:employees,id'],
             'created_by_ai_name' => ['nullable', 'string', 'max:255'], 'confirmed_by_employee_id' => ['nullable', 'exists:employees,id'], 'confirmed_at' => ['nullable', 'date'],
         ]);

@@ -11,11 +11,16 @@ class CaseFile extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['title', 'case_type', 'client_id', 'department_id', 'assigned_employee_id', 'status'];
+    protected $fillable = ['title', 'case_type', 'case_type_id', 'case_type_other', 'client_id', 'department_id', 'assigned_employee_id', 'created_by_employee_id', 'status'];
 
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    public function caseTypeOption(): BelongsTo
+    {
+        return $this->belongsTo(CaseType::class);
     }
 
     public function department(): BelongsTo
@@ -26,6 +31,11 @@ class CaseFile extends Model
     public function assignedEmployee(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'assigned_employee_id');
+    }
+
+    public function createdByEmployee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'created_by_employee_id');
     }
 
     public function documents(): HasMany

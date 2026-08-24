@@ -1,51 +1,22 @@
 import { Bot, LoaderCircle, SendHorizontal } from 'lucide-react'
 import { type FormEvent, type KeyboardEvent, useEffect, useState } from 'react'
-import axios from 'axios'
-import api from '../services/api'
-
-type Persona = {
-  id: number
-  name: string
-  display_name: string
-  skills: string[]
-}
-
-type ChatMessage = {
-  role: 'user' | 'assistant'
-  content: string
-}
-
-type ChatResponse = {
-  data: {
-    message: string
-  }
-}
-
-const friendlyErrorMessage = (error: unknown) => {
-  if (!axios.isAxiosError(error)) {
-    return 'メッセージを送信できませんでした。しばらくしてからもう一度お試しください。'
-  }
-
-  switch (error.response?.status) {
-    case 401:
-      return 'セッションの有効期限が切れました。もう一度ログインしてください。'
-    case 403:
-      return 'このAI社員は現在利用できません。'
-    case 422:
-      return 'リクエストを処理できませんでした。内容を確認してもう一度お試しください。'
-    case 502:
-      return 'AIサービスが一時的に利用できません。しばらくしてからもう一度お試しください。'
-    default:
-      return 'メッセージを送信できませんでした。しばらくしてからもう一度お試しください。'
-  }
-}
+import {
+  AI_CONVERSATION_HISTORY_LIMIT,
+  aiSkillLabels,
+  friendlyAiErrorMessage,
+  loadAiPersonas,
+  sendAiChatMessage,
+  type AiChatMessage,
+  type AiPersona,
+} from '../features/ai/aiChat'
 
 function AIEmployees() {
-  const [personas, setPersonas] = useState<Persona[]>([])
+  const [personas, setPersonas] = useState<AiPersona[]>([])
   const [selectedPersonaId, setSelectedPersonaId] = useState<number | null>(null)
+  const [selectedSkills, setSelectedSkills] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [messagesByPersona, setMessagesByPersona] = useState<Record<string, ChatMessage[]>>({})
+  const [messagesByPersona, setMessagesByPersona] = useState<Record<string, AiChatMessage[]>>({})
   const [errorsByPersona, setErrorsByPersona] = useState<Record<string, string | undefined>>({})
   const [messageInput, setMessageInput] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -53,8 +24,7 @@ function AIEmployees() {
   useEffect(() => {
     const loadPersonas = async () => {
       try {
-        const response = await api.get<{ personas: Persona[] }>('/personas')
-        const loadedPersonas = response.data.personas
+        const loadedPersonas = await loadAiPersonas()
 
         setPersonas(loadedPersonas)
         setSelectedPersonaId(loadedPersonas[0]?.id ?? null)
@@ -77,16 +47,20 @@ function AIEmployees() {
   const chatError = selectedPersona
     ? errorsByPersona[selectedPersona.name]
     : undefined
+  const selectedSkill = selectedPersona
+    ? (selectedSkills[selectedPersona.name] ?? selectedPersona.skills[0] ?? '')
+    : ''
 
   const sendMessage = async () => {
     const content = messageInput.trim()
 
-    if (!selectedPersona || !content || isSending) {
+    if (!selectedPersona || !selectedSkill || !content || isSending) {
       return
     }
 
     const personaName = selectedPersona.name
-    const userMessage: ChatMessage = { role: 'user', content }
+    const userMessage: AiChatMessage = { role: 'user', content }
+    const conversationHistory = chatMessages.slice(-AI_CONVERSATION_HISTORY_LIMIT)
 
     setMessagesByPersona((current) => ({
       ...current,
@@ -97,23 +71,24 @@ function AIEmployees() {
     setIsSending(true)
 
     try {
-      const response = await api.post<ChatResponse>('/ai/chat', {
+      const assistantMessage = await sendAiChatMessage({
         persona: personaName,
-        skill: 'task_management',
+        skill: selectedSkill,
         message: content,
+        messages: conversationHistory,
       })
 
       setMessagesByPersona((current) => ({
         ...current,
         [personaName]: [
           ...(current[personaName] ?? []),
-          { role: 'assistant', content: response.data.data.message },
+          { role: 'assistant', content: assistantMessage },
         ],
       }))
     } catch (requestError) {
       setErrorsByPersona((current) => ({
         ...current,
-        [personaName]: friendlyErrorMessage(requestError),
+        [personaName]: friendlyAiErrorMessage(requestError),
       }))
     } finally {
       setIsSending(false)
@@ -182,10 +157,34 @@ function AIEmployees() {
                     <h2 className="text-lg font-bold text-gray-800">
                       {selectedPersona.display_name}
                     </h2>
-                    <p className="mt-1 text-sm text-gray-500">タスク管理をお手伝いします。</p>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {selectedSkill === 'morning_briefing'
+                        ? '今日の優先事項を整理します。'
+                        : 'タスク管理をお手伝いします。'}
+                    </p>
                   </div>
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600">
-                    <Bot size={21} />
+                  <div className="flex items-center gap-3">
+                    {selectedPersona.skills.length > 1 && (
+                      <select
+                        aria-label="AIスキル"
+                        className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                        disabled={isSending}
+                        onChange={(event) => setSelectedSkills((current) => ({
+                          ...current,
+                          [selectedPersona.name]: event.target.value,
+                        }))}
+                        value={selectedSkill}
+                      >
+                        {selectedPersona.skills.map((skill) => (
+                          <option key={skill} value={skill}>
+                            {aiSkillLabels[skill] ?? skill}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600">
+                      <Bot size={21} />
+                    </div>
                   </div>
                 </div>
 

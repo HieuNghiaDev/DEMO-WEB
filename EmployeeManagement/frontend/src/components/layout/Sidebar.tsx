@@ -35,6 +35,7 @@ export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isLogoutConfirmationOpen, setIsLogoutConfirmationOpen] = useState(false)
+  const themisLogoUrl = `${import.meta.env.BASE_URL}images/logoTHEMIS.png`
 
   const employeeName =
     user?.employee?.full_name ||
@@ -112,8 +113,8 @@ export default function Sidebar() {
       >
         {/* Logo */}
         <div className="mb-4 flex items-center gap-3 px-2 py-1">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-xl font-bold text-white shadow-md">
-            T
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-md dark:border-white/10 dark:bg-white/95">
+            <img alt="" className="h-full w-full object-contain" src={themisLogoUrl} />
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col">

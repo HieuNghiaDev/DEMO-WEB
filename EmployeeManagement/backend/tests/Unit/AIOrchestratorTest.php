@@ -31,6 +31,30 @@ class AIOrchestratorTest extends TestCase
         $this->assertCount(1, $client->calls);
     }
 
+    public function test_it_includes_only_safe_page_identifiers_in_the_system_prompt(): void
+    {
+        [$orchestrator, $client] = $this->orchestrator([self::textResponse('Ready.')]);
+
+        $orchestrator->runSkill(
+            'secretary',
+            'task_management',
+            self::messages(),
+            [
+                'trigger_type' => 'chat',
+                'page_context' => [
+                    'page' => 'business_quest',
+                    'case_id' => 25,
+                    'customer_name' => 'must not reach the model',
+                ],
+            ],
+        );
+
+        $systemPrompt = $client->calls[0]['system'];
+        $this->assertStringContainsString('{"page":"business_quest","case_id":25}', $systemPrompt);
+        $this->assertStringNotContainsString('customer_name', $systemPrompt);
+        $this->assertStringNotContainsString('must not reach the model', $systemPrompt);
+    }
+
     public function test_it_executes_a_list_tasks_tool_and_sends_its_tool_result_back(): void
     {
         [$orchestrator, $client] = $this->orchestrator([
@@ -71,9 +95,9 @@ class AIOrchestratorTest extends TestCase
         ]);
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Claude requested tool [request_approval] which is not allowed by skill [task_management].');
+        $this->expectExceptionMessage('Claude requested tool [request_approval] which is not allowed by skill [morning_briefing].');
 
-        $orchestrator->runSkill('secretary', 'task_management', self::messages());
+        $orchestrator->runSkill('secretary', 'morning_briefing', self::messages());
     }
 
     public function test_it_blocks_an_unregistered_tool(): void

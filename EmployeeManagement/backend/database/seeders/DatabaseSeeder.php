@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             AdditionalEmployeeUserSeeder::class,
             PersonaSeeder::class,
             RolePermissionSeeder::class,
+            CaseTypeSeeder::class,
         ]);
 
         if (app()->environment('local')) {

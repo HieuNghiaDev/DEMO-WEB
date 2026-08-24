@@ -38,6 +38,10 @@ class AIOrchestrator
 
         $this->skillLoader->load($skillName);
         $systemPrompt = $this->systemPromptBuilder->build($personaName, $skillName);
+        $systemPrompt = $this->withPageContext(
+            $systemPrompt,
+            $triggerContext['page_context'] ?? null,
+        );
         $tools = $this->toolSchemaConverter->forSkill($skillName);
         $triggerType = $triggerContext['trigger_type'] ?? 'chat';
 
@@ -102,6 +106,41 @@ class AIOrchestrator
             ];
             $iterations++;
         }
+    }
+
+    private function withPageContext(string $systemPrompt, mixed $pageContext): string
+    {
+        if (! is_array($pageContext)) {
+            return $systemPrompt;
+        }
+
+        $supportedPages = [
+            'employee_room',
+            'organization',
+            'business_quest',
+            'manual_workshop',
+            'ai_workspace',
+            'approvals',
+        ];
+        $page = $pageContext['page'] ?? null;
+
+        if (! is_string($page) || ! in_array($page, $supportedPages, true)) {
+            return $systemPrompt;
+        }
+
+        $safeContext = ['page' => $page];
+
+        if ($page === 'business_quest' && isset($pageContext['case_id']) && is_int($pageContext['case_id'])) {
+            $safeContext['case_id'] = $pageContext['case_id'];
+        }
+
+        if ($page === 'approvals' && isset($pageContext['approval_id']) && is_int($pageContext['approval_id'])) {
+            $safeContext['approval_id'] = $pageContext['approval_id'];
+        }
+
+        return $systemPrompt."\n\nCurrent application context (identifiers only):\n"
+            .json_encode($safeContext, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)
+            ."\nTreat identifiers as context only. Authorization is still required before loading protected data.";
     }
 
     /**

@@ -14,7 +14,7 @@ class SkillLoaderTest extends TestCase
 
         $this->assertSame('task_management', $skill['name']);
         $this->assertSame('chat', $skill['trigger']);
-        $this->assertSame(['list_tasks', 'create_task', 'update_task'], $skill['tools']);
+        $this->assertSame(['list_tasks', 'create_task', 'update_task', 'request_approval'], $skill['tools']);
         $this->assertStringContainsString('Tạo task', $skill['instructions']);
     }
 

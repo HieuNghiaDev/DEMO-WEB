@@ -226,6 +226,15 @@ const questStatusLabel: Record<CurrentTask['status'], string> = {
   in_progress: '作業中',
 }
 
+const employmentTypeLabels: Record<string, string> = {
+  full_time: '正社員',
+  part_time: 'アルバイト',
+  contract: '契約社員',
+  intern: 'インターン',
+}
+
+const employmentTypeOptions = Object.entries(employmentTypeLabels)
+
 const taskHours = Array.from({ length: 24 }, (_, hour) => hour)
 const taskMinutes = Array.from({ length: 60 }, (_, minute) => minute)
 
@@ -585,6 +594,7 @@ export default function OrganizationDesign() {
           employee={selectedEmployee}
           canAssignTasks={user?.permission_names.includes('task.assign') ?? false}
           canManageRoles={user?.permission_names.includes('employee.manage_roles') ?? false}
+          canUpdateEmployment={user?.permission_names.includes('employee.update') ?? false}
           canEditRoles={selectedEmployee.user_id !== user?.id}
           isClosing={isEmployeeDetailClosing}
           availableRoles={availableRoles}
@@ -594,6 +604,14 @@ export default function OrganizationDesign() {
             )))
             setSelectedEmployee((current) => (
               current?.id === selectedEmployee.id ? { ...current, roles } : current
+            ))
+          }}
+          onEmploymentUpdated={(employment) => {
+            setEmployees((current) => current.map((item) => (
+              item.id === selectedEmployee.id ? { ...item, ...employment } : item
+            )))
+            setSelectedEmployee((current) => (
+              current?.id === selectedEmployee.id ? { ...current, ...employment } : current
             ))
           }}
           onClose={() => {
@@ -825,19 +843,23 @@ function EmployeeDetailModal({
   employee,
   canAssignTasks,
   canManageRoles,
+  canUpdateEmployment,
   canEditRoles,
   isClosing,
   availableRoles,
   onRolesUpdated,
+  onEmploymentUpdated,
   onClose,
 }: {
   employee: OrganizationEmployee
   canAssignTasks: boolean
   canManageRoles: boolean
+  canUpdateEmployment: boolean
   canEditRoles: boolean
   isClosing: boolean
   availableRoles: RoleOption[]
   onRolesUpdated: (roles: RoleOption[]) => void
+  onEmploymentUpdated: (employment: Pick<OrganizationEmployee, 'position_title' | 'employment_type'>) => void
   onClose: () => void
 }) {
   const [showEmail, setShowEmail] = useState(false)
@@ -847,6 +869,10 @@ function EmployeeDetailModal({
   const [savingRoles, setSavingRoles] = useState(false)
   const [rolesError, setRolesError] = useState('')
   const [rolesSuccess, setRolesSuccess] = useState('')
+  const [employmentType, setEmploymentType] = useState(employee.employment_type ?? 'full_time')
+  const [savingEmployment, setSavingEmployment] = useState(false)
+  const [employmentError, setEmploymentError] = useState('')
+  const [employmentSuccess, setEmploymentSuccess] = useState('')
   const [isLevelDetailOpen, setIsLevelDetailOpen] = useState(false)
   const status = statusConfig[employee.work_status]
   const initial = employee.full_name.trim().charAt(0).toUpperCase() || '?'
@@ -883,6 +909,30 @@ function EmployeeDetailModal({
       }
     } finally {
       setSavingRoles(false)
+    }
+  }
+
+  const saveEmployment = async () => {
+    if (savingEmployment || employmentType === employee.employment_type) return
+
+    try {
+      setSavingEmployment(true)
+      setEmploymentError('')
+      setEmploymentSuccess('')
+      const response = await api.put<{
+        employee: Pick<OrganizationEmployee, 'position_title' | 'employment_type'>
+      }>(`/employees/${employee.id}/employment`, {
+        employment_type: employmentType,
+      })
+      onEmploymentUpdated(response.data.employee)
+      setEmploymentSuccess('雇用区分を更新しました。')
+    } catch (error) {
+      const message = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '雇用区分を更新できませんでした。'
+        : '雇用区分を更新できませんでした。'
+      setEmploymentError(message)
+    } finally {
+      setSavingEmployment(false)
     }
   }
 
@@ -1026,8 +1076,48 @@ function EmployeeDetailModal({
 
               {employee.department && <InfoItem label="部署" value={employee.department.name} />}
 
-              <InfoItem label="役職" value={employee.position_title ?? '未登録'} />
-              <InfoItem label="雇用形態" value={employee.employment_type ?? '未登録'} />
+              {canUpdateEmployment ? (
+                <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50 sm:col-span-2">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                    <label className="min-w-0 flex-1">
+                      <span className="text-[11px] font-medium text-slate-400">雇用区分</span>
+                      <select
+                        value={employmentType}
+                        disabled={savingEmployment}
+                        onChange={(event) => {
+                          setEmploymentType(event.target.value)
+                          setEmploymentError('')
+                          setEmploymentSuccess('')
+                        }}
+                        className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                      >
+                        {employmentTypeOptions.map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      disabled={savingEmployment || employmentType === employee.employment_type}
+                      onClick={() => void saveEmployment()}
+                      className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {savingEmployment ? '更新中...' : '変更を保存'}
+                    </button>
+                  </div>
+                  {employmentError && (
+                    <p className="mt-2 text-xs font-medium text-rose-600 dark:text-rose-300">{employmentError}</p>
+                  )}
+                  {employmentSuccess && (
+                    <p className="mt-2 text-xs font-semibold text-emerald-600 dark:text-emerald-300">{employmentSuccess}</p>
+                  )}
+                </div>
+              ) : (
+                <InfoItem
+                  label="雇用区分"
+                  value={employmentTypeLabels[employee.employment_type ?? ''] ?? employee.position_title ?? '未登録'}
+                />
+              )}
               <InfoItem label="入社日" value={formatDate(employee.hire_date)} />
               <InfoItem label="在籍状態" value={employee.employee_status} />
 

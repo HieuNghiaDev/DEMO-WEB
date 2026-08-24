@@ -710,7 +710,52 @@ html.theme-switching .theme-mode-icon {
   animation: organization-modal-out 380ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
-.organization-employee-card {
+.business-quest-dialog-backdrop {
+  animation: business-quest-dialog-backdrop-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.business-quest-dialog-panel {
+  transform-origin: center bottom;
+  will-change: transform, opacity, filter;
+  animation: business-quest-dialog-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.business-quest-dialog-backdrop.is-closing {
+  pointer-events: none;
+  animation: business-quest-dialog-backdrop-out 320ms ease-in both;
+}
+
+.business-quest-dialog-panel.is-closing {
+  pointer-events: none;
+  animation: business-quest-dialog-out 320ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.case-document-modal-backdrop {
+  animation: case-document-modal-backdrop-in 360ms ease-out both;
+}
+
+.case-document-modal-panel {
+  will-change: transform, opacity, filter;
+  animation: case-document-modal-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.case-document-modal-backdrop.is-closing {
+  pointer-events: none;
+  animation: case-document-modal-backdrop-out 340ms ease-in both;
+}
+
+.case-document-modal-panel.is-closing {
+  pointer-events: none;
+  animation: case-document-modal-out 340ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.case-type-picker-menu {
+  transform-origin: top center;
+  animation: case-type-picker-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.organization-employee-card,
+.case-file-card {
   isolation: isolate;
   transition:
     border-color 440ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -719,7 +764,8 @@ html.theme-switching .theme-mode-icon {
     transform 440ms cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 
-.organization-employee-card::after {
+.organization-employee-card::after,
+.case-file-card::after {
   position: absolute;
   z-index: 0;
   top: -7rem;
@@ -743,7 +789,9 @@ html.theme-switching .theme-mode-icon {
 }
 
 .organization-employee-card:hover::after,
-.organization-employee-card:focus-visible::after {
+.organization-employee-card:focus-visible::after,
+.case-file-card:hover::after,
+.case-file-card:focus-visible::after {
   opacity: 1;
   transform: scale(1);
 }
@@ -754,6 +802,20 @@ html.theme-switching .theme-mode-icon {
 }
 
 .organization-employee-card:active {
+  transform: scale(0.992) !important;
+}
+
+.case-file-card > *:not(.absolute) {
+  position: relative;
+  z-index: 1;
+}
+
+.case-file-card:focus-visible {
+  outline: 2px solid rgb(99 102 241 / 0.72);
+  outline-offset: -2px;
+}
+
+.case-file-card:active {
   transform: scale(0.992) !important;
 }
 
@@ -1130,6 +1192,108 @@ html.theme-switching .theme-mode-icon {
   to {
     opacity: 1;
     backdrop-filter: blur(4px);
+  }
+}
+
+@keyframes business-quest-dialog-backdrop-in {
+  from { opacity: 0; backdrop-filter: blur(0); }
+  to { opacity: 1; backdrop-filter: blur(4px); }
+}
+
+@keyframes case-document-modal-backdrop-in {
+  from { opacity: 0; backdrop-filter: blur(0); }
+  to { opacity: 1; backdrop-filter: blur(5px); }
+}
+
+@keyframes case-document-modal-in {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(42px) scale(0.96);
+  }
+
+  72% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(-3px) scale(1.006);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes case-document-modal-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes case-document-modal-out {
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(22px) scale(0.975);
+  }
+}
+
+@keyframes case-type-picker-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateY(-8px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes business-quest-dialog-in {
+  from {
+    opacity: 0;
+    filter: blur(12px);
+    transform: translateY(42px) scale(0.96);
+  }
+
+  72% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(-3px) scale(1.006);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes business-quest-dialog-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes business-quest-dialog-out {
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    filter: blur(5px);
+    transform: translateY(22px) scale(0.975);
   }
 }
 

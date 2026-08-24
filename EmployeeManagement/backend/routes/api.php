@@ -1,12 +1,14 @@
 <?php
 
 use App\Http\Controllers\Api\AiChatController;
+use App\Http\Controllers\Api\ApprovalRequestController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CaseDocumentController;
 use App\Http\Controllers\Api\CaseFileController;
 use App\Http\Controllers\Api\CaseMeetingLogController;
 use App\Http\Controllers\Api\CasePrecedentController;
+use App\Http\Controllers\Api\CaseTypeController;
 use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\EmployeeNotificationController;
 use App\Http\Controllers\Api\EmployeeTaskController;
@@ -46,6 +48,11 @@ Route::middleware([
         'updateRoles',
     ])->middleware('permission:employee.manage_roles');
 
+    Route::put('/employees/{employee}/employment', [
+        OrganizationController::class,
+        'updateEmployment',
+    ])->middleware('permission:employee.update');
+
     Route::get('/notifications', [
         EmployeeNotificationController::class,
         'index',
@@ -69,6 +76,26 @@ Route::middleware([
         'store',
     ])->middleware('permission:ai.use');
 
+    Route::get('/approvals', [
+        ApprovalRequestController::class,
+        'index',
+    ])->middleware('permission:approval.view');
+
+    Route::patch('/approvals/{approval}/approve', [
+        ApprovalRequestController::class,
+        'approve',
+    ])->middleware('permission:approval.approve');
+
+    Route::patch('/approvals/{approval}/reject', [
+        ApprovalRequestController::class,
+        'reject',
+    ])->middleware('permission:approval.approve');
+
+    Route::post('/approvals/{approval}/execute', [
+        ApprovalRequestController::class,
+        'execute',
+    ])->middleware('permission:approval.approve');
+
     Route::apiResource('clients', ClientController::class)
         ->only(['index', 'show'])
         ->middleware('permission:case.view');
@@ -94,6 +121,9 @@ Route::middleware([
     Route::apiResource('case-files', CaseFileController::class)
         ->only(['destroy'])
         ->middleware('permission:case.delete');
+
+    Route::get('/case-types', [CaseTypeController::class, 'index'])
+        ->middleware('permission:case.view');
 
     Route::prefix('case-files/{caseFile}')->group(function () {
         Route::get('documents', [CaseDocumentController::class, 'index'])

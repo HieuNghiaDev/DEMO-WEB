@@ -76,6 +76,39 @@ class RbacTest extends TestCase
         $this->getJson('/api/organization')->assertOk();
     }
 
+    public function test_only_users_with_employee_update_permission_can_change_employment_type(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $manager = $this->makeUser('RBAC006');
+        $employee = $this->makeUser('RBAC007');
+        $regularUser = $this->makeUser('RBAC008');
+        $manager->roles()->sync($this->roleIds('level_4'));
+        $regularUser->roles()->sync($this->roleIds('level_2'));
+
+        $employee->employee()->update([
+            'position_title' => 'アルバイト',
+            'employment_type' => 'part_time',
+        ]);
+
+        Sanctum::actingAs($regularUser);
+        $this->putJson("/api/employees/{$employee->employee_id}/employment", [
+            'employment_type' => 'full_time',
+        ])->assertForbidden();
+
+        Sanctum::actingAs($manager);
+        $this->putJson("/api/employees/{$employee->employee_id}/employment", [
+            'employment_type' => 'full_time',
+        ])->assertOk()
+            ->assertJsonPath('employee.employment_type', 'full_time')
+            ->assertJsonPath('employee.position_title', '正社員');
+
+        $this->assertDatabaseHas('employees', [
+            'id' => $employee->employee_id,
+            'position_title' => '正社員',
+            'employment_type' => 'full_time',
+        ]);
+    }
+
     /** @return list<int> */
     private function roleIds(string ...$names): array
     {

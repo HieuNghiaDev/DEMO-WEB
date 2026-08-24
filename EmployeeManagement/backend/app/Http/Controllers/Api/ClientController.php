@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Client;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ClientController extends Controller
 {
@@ -35,9 +36,21 @@ class ClientController extends Controller
 
     public function destroy(Client $client): JsonResponse
     {
-        $client->delete();
+        $caseFiles = $client->caseFiles()->withTrashed()->get();
 
-        return response()->json(['message' => '依頼者を削除しました。']);
+        if ($caseFiles->isNotEmpty() && ! request()->boolean('delete_case_files')) {
+            return response()->json([
+                'message' => 'この依頼者には案件が紐づいています。案件も含めて削除する場合は確認してください。',
+                'case_files_count' => $caseFiles->count(),
+            ], 409);
+        }
+
+        DB::transaction(function () use ($client, $caseFiles): void {
+            $caseFiles->each->forceDelete();
+            $client->forceDelete();
+        });
+
+        return response()->json(['message' => '依頼者と関連する案件を削除しました。']);
     }
 
     private function validated(Request $request, bool $partial = false): array

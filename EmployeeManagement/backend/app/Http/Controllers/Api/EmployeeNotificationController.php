@@ -67,6 +67,9 @@ class EmployeeNotificationController extends Controller
             'created_at' => $notification->created_at?->toISOString(),
             'read_at' => $notification->read_at?->toISOString(),
             'assigned_task_id' => $notification->data['assigned_task_id'] ?? null,
+            'approval_id' => $notification->data['approval_id'] ?? null,
+            'action_type' => $notification->data['action_type'] ?? null,
+            'target_path' => $notification->data['target_path'] ?? null,
         ];
     }
 }

@@ -8,6 +8,7 @@ use App\Services\AIOrchestrator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use RuntimeException;
 use Throwable;
 
@@ -21,6 +22,35 @@ class AiChatController extends Controller
             'persona' => ['required', 'string', 'max:255'],
             'skill' => ['required', 'string', 'max:255'],
             'message' => ['required', 'string', 'max:4000'],
+            'messages' => ['sometimes', 'array', 'max:20'],
+            'messages.*' => ['required', 'array:role,content'],
+            'messages.*.role' => ['required', 'string', Rule::in(['user', 'assistant'])],
+            'messages.*.content' => ['required', 'string', 'max:4000'],
+            'context' => ['sometimes', 'array:page,case_id,approval_id', 'min:1'],
+            'context.page' => [
+                'required_with:context',
+                'string',
+                Rule::in([
+                    'employee_room',
+                    'organization',
+                    'business_quest',
+                    'manual_workshop',
+                    'ai_workspace',
+                    'approvals',
+                ]),
+            ],
+            'context.case_id' => [
+                'sometimes',
+                'integer',
+                'min:1',
+                'prohibited_unless:context.page,business_quest',
+            ],
+            'context.approval_id' => [
+                'sometimes',
+                'integer',
+                'min:1',
+                'prohibited_unless:context.page,approvals',
+            ],
         ]);
 
         $persona = Persona::query()
@@ -39,19 +69,28 @@ class AiChatController extends Controller
             ], 403);
         }
 
+        $messages = $validated['messages'] ?? [];
+        $messages[] = [
+            'role' => 'user',
+            'content' => $validated['message'],
+        ];
+
         try {
+            $triggerContext = [
+                'trigger_type' => 'chat',
+                'user_id' => $request->user()->id,
+                'role' => $request->user()->role,
+            ];
+
+            if (isset($validated['context'])) {
+                $triggerContext['page_context'] = $validated['context'];
+            }
+
             $result = $this->orchestrator->runSkill(
                 personaName: $validated['persona'],
                 skillName: $validated['skill'],
-                messages: [[
-                    'role' => 'user',
-                    'content' => $validated['message'],
-                ]],
-                triggerContext: [
-                    'trigger_type' => 'chat',
-                    'user_id' => $request->user()->id,
-                    'role' => $request->user()->role,
-                ],
+                messages: $messages,
+                triggerContext: $triggerContext,
             );
         } catch (RuntimeException $exception) {
             Log::warning('AI chat orchestration request failed.', [

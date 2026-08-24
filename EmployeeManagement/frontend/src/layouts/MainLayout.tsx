@@ -1,4 +1,5 @@
 import { Outlet } from 'react-router-dom'
+import ThemisAiAssistant from '../components/ai/ThemisAiAssistant'
 import Sidebar from '../components/layout/Sidebar'
 
 function MainLayout() {
@@ -9,6 +10,8 @@ function MainLayout() {
       <main className="min-w-0 flex-1">
         <Outlet />
       </main>
+
+      <ThemisAiAssistant />
     </div>
   )
 }

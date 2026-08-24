@@ -315,4 +315,55 @@ class OrganizationController extends Controller
             'roles' => $targetUser->roles,
         ]);
     }
+
+    public function updateEmployment(Request $request, Employee $employee): JsonResponse
+    {
+        $validated = $request->validate([
+            'employment_type' => ['required', 'string', 'in:full_time,part_time,contract,intern'],
+        ]);
+
+        $employmentType = $validated['employment_type'];
+        $employmentLabel = match ($employmentType) {
+            'full_time' => '正社員',
+            'part_time' => 'アルバイト',
+            'contract' => '契約社員',
+            'intern' => 'インターン',
+        };
+        $updates = ['employment_type' => $employmentType];
+
+        // Keep legacy generic titles in sync without overwriting professional titles.
+        if ($employee->position_title === null || in_array($employee->position_title, [
+            '社員',
+            '正社員',
+            'アルバイト',
+            '契約社員',
+            'インターン',
+        ], true)) {
+            $updates['position_title'] = $employmentLabel;
+        }
+
+        $employee->update($updates);
+
+        if ($employee->user) {
+            EmployeeNotification::query()->create([
+                'user_id' => $employee->user->id,
+                'kind' => 'info',
+                'title' => '雇用区分が更新されました',
+                'message' => "雇用区分が「{$employmentLabel}」に更新されました。",
+                'data' => [
+                    'employee_id' => $employee->id,
+                    'employment_type' => $employmentType,
+                ],
+            ]);
+        }
+
+        return response()->json([
+            'message' => '雇用区分を更新しました。',
+            'employee' => [
+                'id' => $employee->id,
+                'position_title' => $employee->position_title,
+                'employment_type' => $employee->employment_type,
+            ],
+        ]);
+    }
 }

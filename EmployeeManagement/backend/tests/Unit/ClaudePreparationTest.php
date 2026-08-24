@@ -82,9 +82,9 @@ class ClaudePreparationTest extends TestCase
     {
         $tools = app(ClaudeToolSchemaConverter::class)->forSkill('task_management');
 
-        $this->assertSame(['list_tasks', 'create_task', 'update_task'], array_column($tools, 'name'));
+        $this->assertSame(['list_tasks', 'create_task', 'update_task', 'request_approval'], array_column($tools, 'name'));
         $this->assertArrayHasKey('input_schema', $tools[0]);
-        $this->assertNotContains('request_approval', array_column($tools, 'name'));
+        $this->assertContains('request_approval', array_column($tools, 'name'));
     }
 
     public function test_converter_reports_a_skill_tool_that_is_not_registered(): void

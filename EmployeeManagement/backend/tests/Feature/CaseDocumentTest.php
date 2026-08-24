@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\CaseDocument;
 use App\Models\CaseFile;
 use App\Models\Client;
+use App\Models\Role;
 use App\Models\User;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -16,7 +18,7 @@ class CaseDocumentTest extends TestCase
 
     public function test_document_can_be_updated_and_deleted_from_its_case(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs($this->userWithCasePermissions());
         $client = Client::create(['name' => 'Test Client']);
         $caseFile = CaseFile::create([
             'client_id' => $client->id,
@@ -46,7 +48,7 @@ class CaseDocumentTest extends TestCase
 
     public function test_document_from_another_case_cannot_be_changed_or_deleted(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs($this->userWithCasePermissions());
         $client = Client::create(['name' => 'Test Client']);
         $firstCase = CaseFile::create([
             'client_id' => $client->id,
@@ -72,5 +74,14 @@ class CaseDocumentTest extends TestCase
         $this->deleteJson("/api/case-files/{$secondCase->id}/documents/{$document->id}")
             ->assertNotFound();
         $this->assertDatabaseHas('case_documents', ['id' => $document->id]);
+    }
+
+    private function userWithCasePermissions(): User
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $user = User::factory()->create();
+        $user->roles()->sync([Role::query()->where('name', 'level_5')->value('id')]);
+
+        return $user;
     }
 }

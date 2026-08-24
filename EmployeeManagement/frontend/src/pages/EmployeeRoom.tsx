@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -172,6 +173,8 @@ type UserNotification = {
   isRead: boolean;
   serverId?: number;
   assignedTaskId?: number;
+  approvalId?: number;
+  targetPath?: string;
 };
 
 type NewNotification = Pick<
@@ -187,6 +190,8 @@ type RemoteNotification = {
   created_at: string;
   read_at: string | null;
   assigned_task_id: number | null;
+  approval_id: number | null;
+  target_path: string | null;
 };
 
 const loadStoredNotifications = (storageKey: string): UserNotification[] => {
@@ -590,6 +595,7 @@ const resolveOfficeRoom = (officeCode?: string | null): OfficeId =>
 
 export default function EmployeeRoom() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const employeeName =
     user?.employee?.full_name?.trim() ||
@@ -806,6 +812,8 @@ export default function EmployeeRoom() {
           isRead: notification.read_at !== null,
           serverId: notification.id,
           assignedTaskId: notification.assigned_task_id ?? undefined,
+          approvalId: notification.approval_id ?? undefined,
+          targetPath: notification.target_path ?? undefined,
         }),
       );
 
@@ -949,6 +957,15 @@ export default function EmployeeRoom() {
 
     setIsNotificationPanelClosing(false);
     setIsNotificationPanelOpen(true);
+  };
+
+  const handleNotificationClick = (notification: UserNotification) => {
+    markNotificationAsRead(notification.id);
+
+    if (notification.targetPath) {
+      closeNotificationPanel();
+      navigate(notification.targetPath);
+    }
   };
 
   useEffect(() => {
@@ -1840,7 +1857,7 @@ export default function EmployeeRoom() {
                       <button
                         key={notification.id}
                         type="button"
-                        onClick={() => markNotificationAsRead(notification.id)}
+                        onClick={() => handleNotificationClick(notification)}
                         className={`flex w-full gap-3 border-b border-gray-50 px-4 py-3 text-left transition last:border-b-0 hover:bg-gray-50 ${
                           notification.isRead ? "bg-white" : "bg-indigo-50/45"
                         }`}
@@ -2625,12 +2642,12 @@ export default function EmployeeRoom() {
                 <button
                   type="button"
                   onClick={() => {
-                    markNotificationAsRead(toastNotification.id);
+                    handleNotificationClick(toastNotification);
                     setToastNotification(null);
                   }}
                   className="rounded-lg px-2 py-1 text-[11px] font-bold text-indigo-600 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-500/10"
                 >
-                  既読にする
+                  {toastNotification.targetPath ? "確認する" : "既読にする"}
                 </button>
               </div>
 
