@@ -14,7 +14,7 @@ import Login from "./pages/Login";
 import EmployeeRoom from "./pages/EmployeeRoom";
 import OrganizationDesign from "./pages/OrganizationDesign";
 import BusinessQuest from "./pages/BusinessQuest";
-import ManualWorkshop from "./pages/ManualWorkshop";
+import VisaProgress from "./pages/VisaProgress";
 import AIEmployees from "./pages/AI";
 import ApprovalRoom from "./pages/ApprovalRoom";
 
@@ -34,7 +34,7 @@ function App() {
                 element={<OrganizationDesign />}
               />
               <Route path="/quests" element={<BusinessQuest />} />
-              <Route path="/manual" element={<ManualWorkshop />} />
+              <Route path="/visa-progress" element={<VisaProgress />} />
               <Route path="/ai" element={<AIEmployees />} />
               <Route path="/approvals" element={<ApprovalRoom />} />
             </Route>

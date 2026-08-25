@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'google_drive' => [
+        'enabled' => env('GOOGLE_DRIVE_ENABLED', false),
+        'file_id' => env('GOOGLE_DRIVE_FILE_ID'),
+        'service_account_json' => env('GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON'),
+        'visa_progress_sheet' => env('GOOGLE_DRIVE_VISA_PROGRESS_SHEET'),
+        'visa_progress_cache_seconds' => env('GOOGLE_DRIVE_CACHE_SECONDS', 60),
+    ],
+
 ];

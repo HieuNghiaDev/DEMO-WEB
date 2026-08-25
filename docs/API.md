@@ -64,6 +64,53 @@ Payload đổi trạng thái:
 
 Chỉ `manager` và `admin` được giao việc. Mỗi task luôn gắn với đúng một `employee_id` từ URL `/employees/{employee}/tasks`, không có danh sách task dùng chung. Employee chỉ có thể cập nhật task của chính mình theo luồng `pending → accepted → in_progress → completed`. Đồng hồ bắt đầu đếm từ `accepted_at`, không tính từ lúc manager giao việc.
 
+## 在留申請進捗管理
+
+| Method & path | Khóa | Hành vi |
+| --- | --- | --- |
+| `GET /visa-progress` | Có, `case.view` | Đọc workbook Excel đã cấu hình trong Google Drive, chuẩn hoá và trả dashboard. Chỉ đọc, không ghi file hay database. |
+
+Gửi `?refresh=1` để bỏ cache ngắn và lấy workbook mới nhất. Khi Google Drive chưa cấu hình, endpoint trả `503` với `code: google_drive_not_configured`. File không truy cập được, lỗi nguồn hoặc file Excel không hợp lệ được trả về bằng message/code an toàn, không chứa credential hay exception stack trace.
+
+Ví dụ response (đã rút gọn):
+
+```json
+{
+  "data": {
+    "source": {
+      "name": "在留申請進捗管理.xlsx",
+      "modified_at": "2026-08-25T01:05:00+00:00",
+      "synced_at": "2026-08-25T01:06:00+00:00",
+      "sheet_name": "追加資料管理"
+    },
+    "summary": {
+      "total": 12,
+      "in_review": 3,
+      "additional_documents": 2,
+      "approved": 4,
+      "attention_required": 2
+    },
+    "applications": [
+      {
+        "id": "VISA-001",
+        "case_id": "VISA-001",
+        "applicant_name": "山田 太郎",
+        "case_type": "在留期間更新",
+        "status": "審査中",
+        "responsible_person": "鈴木",
+        "application_date": "2026-08-10",
+        "deadline": "2026-08-28",
+        "deadlines": [{ "label": "追加資料提出期限", "date": "2026-08-28" }],
+        "days_remaining": 3,
+        "deadline_level": "critical"
+      }
+    ]
+  }
+}
+```
+
+`deadline_level` là `overdue`, `critical` (0–5 ngày), `warning` (6–10 ngày), `normal` hoặc `none`. Status không có trong mapping vẫn được trả nguyên văn từ workbook.
+
 ## Dạng response và lỗi
 
 Response thành công thường bao bọc thực thể dưới các khóa `user`, `attendance`, `work_session`, `task`, `tasks`, hoặc `employees`. Response validation Laravel có mã `422` và trường `errors`; lỗi ownership là `403`, không có token là `401`, quá rate limit là `429`.

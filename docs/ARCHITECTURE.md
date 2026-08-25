@@ -8,6 +8,7 @@ flowchart LR
     Laravel --> Sanctum["Sanctum tokens"]
     Laravel --> DB[("Cơ sở dữ liệu")]
     Laravel --> Excel["attendance.xlsx / báo cáo cá nhân"]
+    Laravel --> Drive["Google Drive / 在留申請進捗管理.xlsx"]
     Laravel --> Audit["security_audit_logs"]
 ```
 
@@ -29,7 +30,8 @@ Frontend chỉ giữ token ở `sessionStorage` hoặc `localStorage`; mọi quy
 | `src/pages/Login.tsx` | Biểu mẫu email/mật khẩu/ghi nhớ; hiển thị lỗi API và quay lại route được yêu cầu sau đăng nhập. |
 | `src/pages/EmployeeRoom.tsx` | Màn hình nghiệp vụ chính: bắt đầu/kết thúc làm việc, nghỉ, ra ngoài, quản lý work session, tải Excel, danh sách đang hoạt động, việc được giao và thông báo cục bộ. `JapaneseTimePicker` là bộ chọn giờ dùng cho các modal. |
 | `src/pages/OrganizationDesign.tsx` | Tải tổ chức, lọc theo văn phòng, thống kê trạng thái, xem chi tiết nhân viên và giao việc. Các component ở cuối tệp là phần trình bày/modal nội bộ của trang. |
-| `src/pages/BusinessQuest.tsx`, `ManualWorkshop.tsx`, `AI.tsx`, `ApprovalRoom.tsx` | Các điểm đến placeholder/không gian làm việc đang được chuẩn bị. |
+| `src/pages/BusinessQuest.tsx`, `AI.tsx`, `ApprovalRoom.tsx` | Các không gian nghiệp vụ hiện có. |
+| `src/pages/VisaProgress.tsx`, `src/features/visa-progress/*` | Dashboard chỉ đọc cho tiến độ hồ sơ tại lưu trú: gọi API, lọc/search dữ liệu Excel, hiển thị nguồn, hạn xử lý và bảng responsive. |
 | `src/pages/ComingSoon.tsx` | Thành phần placeholder có tiêu đề truyền vào. |
 | `src/index.css`, `src/App.css` | Token giao diện, dark mode, animation và các style toàn cục. |
 | `src/assets/*`, `public/images/*`, `public/*.svg` | Ảnh minh họa, avatar, biểu tượng và favicon; không chứa logic chạy. |
@@ -46,7 +48,8 @@ Frontend chỉ giữ token ở `sessionStorage` hoặc `localStorage`; mọi quy
 | `/login` | Công khai | Đăng nhập. |
 | `/` | Có token hợp lệ | Employee Room. |
 | `/organization` | Có token hợp lệ | Organization Design. |
-| `/quests`, `/manual`, `/ai`, `/approvals` | Có token hợp lệ | Không gian placeholder. |
+| `/quests`, `/ai`, `/approvals` | Có token hợp lệ | Không gian nghiệp vụ. |
+| `/visa-progress` | Có token hợp lệ | 在留申請進捗管理; API còn yêu cầu `case.view`. |
 
 Mọi URL khác được chuyển về `/`. `BrowserRouter` dùng `import.meta.env.BASE_URL`, vì vậy đường dẫn vẫn hoạt động khi deploy dưới `/DEMO-WEB/`.
 
@@ -62,10 +65,13 @@ Mọi URL khác được chuyển về `/`. `BrowserRouter` dùng `import.meta.e
 | `app/Http/Controllers/Api/WorkSessionController.php` | Tạo/kết thúc phiên công việc; chỉ một phiên active trên một attendance tại cùng thời điểm. |
 | `app/Http/Controllers/Api/OrganizationController.php` | Trả về danh sách nhân viên, trạng thái hiện tại và thống kê; chỉ manager/admin nhận PII. |
 | `app/Http/Controllers/Api/EmployeeTaskController.php` | Giao việc (manager/admin), lấy việc của tôi, xác nhận, bắt đầu và hoàn tất công việc. |
+| `app/Http/Controllers/Api/VisaProgressController.php` | API read-only cho 在留申請進捗管理; cache dashboard ngắn, không lộ thông tin credential và trả lỗi cấu hình/nguồn/file theo contract. |
 | `app/Http/Middleware/SecurityHeaders.php` | Thêm cache-control, CSP, anti-frame, referrer, permissions và HSTS phù hợp cho API. |
 | `app/Http/Middleware/SecurityEventAudit.php` | Ghi các response 401/403/429, khử trùng lặp theo IP/method/path/người dùng trong một phút. |
 | `app/Services/AttendanceExcelService.php` | Đồng bộ attendance và work session vào workbook dùng chung `storage/app/attendance/attendance.xlsx`. |
 | `app/Services/PersonalAttendanceReportService.php` | Tạo workbook trong bộ nhớ chỉ gồm dữ liệu của nhân viên hiện tại, phục vụ download. |
+| `app/Services/GoogleDriveService.php` | Xác thực Service Account chỉ với scope `drive.readonly`, lấy metadata và tải workbook Google Drive vào temporary storage rồi xoá sau khi parse. |
+| `app/Services/VisaProgressSpreadsheetService.php` | Dò sheet/header Excel, chuẩn hoá ngày/giá trị, chọn deadline vận hành, giữ nguyên status lạ và dựng summary cho dashboard. |
 | `app/Services/SecurityAuditLogger.php` | Lưu audit log theo hướng fail-open, băm định danh và bỏ các khóa nhạy cảm trước khi ghi. |
 | `app/Models/*.php` | Eloquent model, mass-assignable fields, casts và các quan hệ được mô tả trong [mô hình dữ liệu](DATA_MODEL.md). |
 | `database/migrations/*.php` | Lịch sử tạo bảng/mở rộng schema; cần được chạy theo thứ tự thời gian. |
@@ -91,3 +97,7 @@ Mọi URL khác được chuyển về `/`. `BrowserRouter` dùng `import.meta.e
 Luồng chấm công: `working` → `break`/`outside`/`offline`; khi quay về `working`, thời điểm kết thúc nghỉ/ra ngoài được đóng. Chuyển sang `offline` tự kết thúc work session đang active. Khi mở work session mới, phiên active trước đó cũng tự hoàn tất trong transaction.
 
 Luồng giao việc: manager/admin tạo task `pending`; nhân viên xác nhận (`accepted`), bắt đầu (`in_progress`) và hoàn tất (`completed`).
+
+### 在留申請進捗管理 (Phase 1)
+
+Google Drive Excel là source of truth. `VisaProgressController` lấy dashboard từ cache 60 giây (hoặc bỏ cache bằng `?refresh=1`), `GoogleDriveService` tải file vào storage tạm, `VisaProgressSpreadsheetService` đọc xong rồi file tạm được xoá. Phase 1 không tạo bảng database, không ghi Excel/Google Drive và không chạy scheduler.

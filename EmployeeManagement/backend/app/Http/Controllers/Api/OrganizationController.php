@@ -11,6 +11,31 @@ use Illuminate\Http\Request;
 
 class OrganizationController extends Controller
 {
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'employee_code' => ['required', 'string', 'max:50', 'unique:employees,employee_code'],
+            'full_name' => ['required', 'string', 'max:255'],
+            'full_name_kana' => ['nullable', 'string', 'max:255'],
+            'office_id' => ['required', 'integer', 'exists:offices,id'],
+            'position_title' => ['nullable', 'string', 'max:255'],
+            'work_email' => ['nullable', 'email', 'max:255', 'unique:employees,work_email'],
+            'gender' => ['nullable', 'string', 'in:male,female,other'],
+            'hire_date' => ['required', 'date'],
+        ]);
+
+        $employee = Employee::create([
+            ...$validated,
+            'employment_type' => 'full_time',
+            'status' => 'active',
+        ]);
+
+        return response()->json([
+            'message' => '社員を登録しました。',
+            'employee' => $employee->load('office:id,office_code,name,address'),
+        ], 201);
+    }
+
     /**
      * Danh sách toàn bộ nhân viên + phòng ban + trạng thái làm việc hiện tại.
      */

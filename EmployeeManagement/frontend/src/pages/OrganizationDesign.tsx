@@ -11,6 +11,7 @@ import {
   Coffee,
   Mail,
   MapPin,
+  Plus,
   RefreshCw,
   Scale,
   ShieldCheck,
@@ -271,6 +272,7 @@ export default function OrganizationDesign() {
   const [selectedEmployee, setSelectedEmployee] = useState<OrganizationEmployee | null>(null)
   const [isEmployeeDetailClosing, setIsEmployeeDetailClosing] = useState(false)
   const [isAccessGuideOpen, setIsAccessGuideOpen] = useState(false)
+  const [isCreateEmployeeOpen, setIsCreateEmployeeOpen] = useState(false)
 
   const loadOrganization = useCallback(async (manual = false) => {
     if (manual) {
@@ -359,34 +361,48 @@ export default function OrganizationDesign() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-4 px-2.5 pb-10 pt-3 sm:px-4 sm:pt-5 lg:px-6">
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 pb-10 pt-5 sm:px-5 lg:px-6 xl:px-8">
 
       {/* Header */}
-      <header className="relative overflow-hidden rounded-[26px] border border-slate-200 bg-white px-4 py-5 pl-16 shadow-[0_16px_42px_rgba(15,23,42,0.08)] dark:border-slate-700 dark:bg-[#111a2e] sm:px-7 sm:py-6">
-        <div className="pointer-events-none absolute -right-16 -top-24 h-80 w-80 rounded-full border border-indigo-100 dark:border-indigo-400/10" />
-        <div className="pointer-events-none absolute right-14 top-5 h-32 w-32 rounded-full bg-indigo-100/55 blur-3xl dark:bg-indigo-500/10" />
-        <div className="pointer-events-none absolute bottom-0 left-0 top-0 w-1.5 bg-gradient-to-b from-indigo-500 via-violet-500 to-sky-400" />
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="mb-2 flex items-center gap-2 text-[9px] font-black tracking-[0.18em] text-indigo-600 dark:text-indigo-300 sm:text-[10px]">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-indigo-100 bg-indigo-50 text-indigo-600 shadow-sm dark:border-indigo-400/20 dark:bg-indigo-500/10 dark:text-indigo-300"><Building2 size={13} /></span>
-              THEMIS ORGANIZATION
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900" aria-labelledby="organization-title">
+        <header className="px-4 pb-4 pt-5 sm:px-5 lg:px-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 border-l-2 border-indigo-500 pl-4">
+              <div className="flex items-center gap-2 text-xs font-medium text-indigo-600 dark:text-indigo-300"><Building2 size={15} aria-hidden="true" />社員管理</div>
+              <h1 id="organization-title" className="mt-1.5 text-2xl font-semibold leading-tight tracking-tight text-slate-950 dark:text-slate-100 md:text-[28px]">組織設計</h1>
+              <p className="mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400">社員・所属・勤務状況・アクセスレベルを一元管理します。</p>
             </div>
-            <div className="flex flex-wrap items-end gap-x-2.5 gap-y-1"><h1 className="text-xl font-black tracking-tight text-slate-950 dark:text-white sm:text-2xl">組織設計</h1><span className="mb-0.5 rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[9px] font-bold tracking-wide text-indigo-600 dark:border-indigo-400/20 dark:bg-indigo-500/10 dark:text-indigo-300">TEAM DIRECTORY</span></div>
-            <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">社員・所属・勤務状況をひとつのダッシュボードで確認</p>
-          </div>
 
-          <button
-            type="button"
-            disabled={refreshing}
-            onClick={() => void loadOrganization(true)}
-            className="inline-flex h-10 w-fit items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-indigo-500/40 dark:hover:bg-indigo-500/10"
-          >
-            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-            更新
-          </button>
+            <div className="flex flex-wrap gap-2 sm:shrink-0">
+            <button
+              type="button"
+              disabled={refreshing}
+              onClick={() => void loadOrganization(true)}
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition-colors duration-150 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-indigo-400/50 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-200 sm:flex-none"
+            >
+              <RefreshCw size={15} className={refreshing ? 'animate-spin text-indigo-500' : 'text-indigo-500 dark:text-indigo-300'} />
+              {refreshing ? '更新中…' : '最新データを取得'}
+            </button>
+            <button
+              type="button"
+              disabled={!user?.permission_names.includes('employee.create')}
+              title={user?.permission_names.includes('employee.create') ? '新しい社員を登録' : '社員登録の権限がありません'}
+              onClick={() => setIsCreateEmployeeOpen(true)}
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-medium text-white transition-colors duration-150 hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-300 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:disabled:bg-slate-700 sm:flex-none"
+            >
+              <Plus size={15} /> 新規社員
+            </button>
+            </div>
+          </div>
+        </header>
+        <div className="grid grid-cols-2 border-t border-slate-200 bg-slate-50/55 dark:border-slate-700 dark:bg-slate-950/25 sm:grid-cols-5">
+          <SummaryCard title="全社員" value={summary.total} icon={<Users size={18} />} accentClass="bg-indigo-500" iconClass="bg-indigo-50 text-indigo-600 dark:bg-indigo-400/10 dark:text-indigo-300" className="border-b border-r border-slate-100 dark:border-slate-800 sm:border-b-0" />
+          <SummaryCard title="勤務中" value={summary.working} icon={<BriefcaseBusiness size={18} />} accentClass="bg-emerald-500" iconClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-300" className="border-b border-slate-100 dark:border-slate-800 sm:border-b-0 sm:border-r" />
+          <SummaryCard title="休憩中" value={summary.break} icon={<Coffee size={18} />} accentClass="bg-amber-500" iconClass="bg-amber-50 text-amber-600 dark:bg-amber-400/10 dark:text-amber-300" className="border-b border-r border-slate-100 dark:border-slate-800 sm:border-b-0" />
+          <SummaryCard title="外出中" value={summary.outside} icon={<MapPin size={18} />} accentClass="bg-sky-500" iconClass="bg-sky-50 text-sky-600 dark:bg-sky-400/10 dark:text-sky-300" className="border-b border-slate-100 dark:border-slate-800 sm:border-b-0 sm:border-r" />
+          <SummaryCard title="オフライン" value={summary.offline} icon={<UserRound size={18} />} accentClass="bg-slate-400" iconClass="bg-slate-100 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300" className="col-span-2 sm:col-span-1" />
         </div>
-      </header>
+      </section>
 
       {errorMessage && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
@@ -394,51 +410,8 @@ export default function OrganizationDesign() {
         </div>
       )}
 
-      {/* Summary */}
-      <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
-        <SummaryCard
-          title="全社員"
-          value={summary.total}
-          icon={<Users size={16} />}
-          iconClass="bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"
-          className="col-span-1"
-        />
-
-        <SummaryCard
-          title="勤務中"
-          value={summary.working}
-          icon={<BriefcaseBusiness size={16} />}
-          iconClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
-          className="col-span-1"
-        />
-
-        <SummaryCard
-          title="休憩中"
-          value={summary.break}
-          icon={<Coffee size={16} />}
-          iconClass="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
-          className="col-span-1"
-        />
-
-        <SummaryCard
-          title="外出中"
-          value={summary.outside}
-          icon={<MapPin size={16} />}
-          iconClass="bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400"
-          className="col-span-1"
-        />
-
-        <SummaryCard
-          title="オフライン"
-          value={summary.offline}
-          icon={<UserRound size={16} />}
-          iconClass="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-          className="col-span-2 sm:col-span-1"
-        />
-      </section>
-
       {/* Office selector */}
-      <section className="rounded-2xl border border-slate-300 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <section className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
 
           <div className="flex min-w-0 flex-1 flex-col gap-2 md:flex-row">
@@ -494,12 +467,12 @@ export default function OrganizationDesign() {
       </section>
 
       {/* Access-level guide */}
-      <section className="overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-sm dark:border-indigo-500/20 dark:bg-slate-900">
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
         <button
           type="button"
           aria-expanded={isAccessGuideOpen}
           onClick={() => setIsAccessGuideOpen((current) => !current)}
-          className="organization-tap flex w-full items-center justify-between gap-4 bg-gradient-to-r from-indigo-50/70 via-white to-white px-4 py-3 text-left transition hover:from-indigo-50 hover:to-indigo-50/40 dark:from-indigo-500/[0.08] dark:via-slate-900 dark:to-slate-900 dark:hover:from-indigo-500/[0.12] sm:px-5"
+          className="organization-tap flex w-full items-center justify-between gap-4 bg-slate-50/70 px-4 py-3 text-left transition-colors hover:bg-indigo-50/60 dark:bg-slate-900/70 dark:hover:bg-indigo-500/[0.08] sm:px-5"
         >
           <div>
             <span className="text-[10px] font-bold tracking-[0.14em] text-indigo-500">ACCESS LEVEL GUIDE</span>
@@ -544,12 +517,12 @@ export default function OrganizationDesign() {
       </section>
 
       {/* Employee list */}
-      <section className="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-[0_16px_42px_rgba(15,23,42,0.07)] dark:border-slate-700 dark:bg-slate-900">
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
 
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/70 px-4 py-4 dark:border-slate-700 dark:bg-[#0c1527] sm:px-5">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/70 px-4 py-3.5 dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
           <div>
-            <p className="text-[10px] font-black tracking-[.14em] text-indigo-500">TEAM DIRECTORY</p>
-            <h2 className="mt-1 text-sm font-black text-slate-900 dark:text-white">社員一覧 <span className="ml-1 text-xs font-bold text-slate-400">{visibleEmployees.length}名</span></h2>
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-white">社員一覧</h2>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{visibleEmployees.length}名の社員を表示</p>
           </div>
 
           {selectedOfficeId !== null && (
@@ -591,6 +564,17 @@ export default function OrganizationDesign() {
           </div>
         )}
       </section>
+
+      {isCreateEmployeeOpen && (
+        <CreateEmployeeModal
+          offices={offices}
+          onClose={() => setIsCreateEmployeeOpen(false)}
+          onCreated={() => {
+            setIsCreateEmployeeOpen(false)
+            void loadOrganization(true)
+          }}
+        />
+      )}
 
       {selectedEmployee && (
         <EmployeeDetailModal
@@ -636,28 +620,109 @@ function SummaryCard({
   title,
   value,
   icon,
+  accentClass,
   iconClass,
   className = '',
 }: {
   title: string
   value: number
   icon: ReactNode
+  accentClass: string
   iconClass: string
   className?: string
 }) {
   return (
-    <div className={`${className} flex min-h-[70px] items-center gap-2.5 rounded-xl border border-slate-300 bg-white px-2.5 py-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:hover:border-indigo-500/30 sm:min-h-[78px] sm:gap-3 sm:px-4`}>
-      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-9 sm:w-9 ${iconClass}`}>
+    <div className={`${className} relative px-4 py-3.5 sm:px-5`}>
+      <span className={`absolute inset-x-0 top-0 h-0.5 ${accentClass}`} aria-hidden="true" />
+      <div className="flex items-center gap-3">
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconClass}`} aria-hidden="true">
         {icon}
-      </div>
+        </span>
 
-      <div className="min-w-0">
-        <div className="text-lg font-bold leading-none text-slate-900 dark:text-white sm:text-xl">{value}</div>
-        <div className="mt-1.5 truncate text-[10px] font-semibold text-slate-500 dark:text-slate-300 sm:text-xs">{title}</div>
+        <div className="min-w-0">
+          <p className="text-2xl font-semibold tracking-tight tabular-nums text-slate-950 dark:text-white">{value}</p>
+          <p className="mt-0.5 truncate text-xs font-medium text-slate-500 dark:text-slate-400">{title}</p>
+        </div>
       </div>
     </div>
   )
 }
+
+function CreateEmployeeModal({
+  offices,
+  onClose,
+  onCreated,
+}: {
+  offices: Array<NonNullable<OrganizationEmployee['office']>>
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const [employeeCode, setEmployeeCode] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [fullNameKana, setFullNameKana] = useState('')
+  const [officeId, setOfficeId] = useState('')
+  const [positionTitle, setPositionTitle] = useState('')
+  const [workEmail, setWorkEmail] = useState('')
+  const [gender, setGender] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!officeId && offices[0]) setOfficeId(String(offices[0].id))
+  }, [officeId, offices])
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (saving) return
+
+    setSaving(true)
+    setError('')
+
+    try {
+      await api.post('/employees', {
+        employee_code: employeeCode.trim(),
+        full_name: fullName.trim(),
+        full_name_kana: fullNameKana.trim() || null,
+        office_id: Number(officeId),
+        position_title: positionTitle.trim() || null,
+        work_email: workEmail.trim() || null,
+        gender: gender || null,
+        hire_date: new Date().toISOString().slice(0, 10),
+      })
+      onCreated()
+    } catch (requestError) {
+      const responseError = axios.isAxiosError(requestError)
+        ? requestError.response?.data?.errors as Record<string, string[]> | undefined
+        : undefined
+      setError(responseError ? Object.values(responseError).flat()[0] : '社員を登録できませんでした。')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-3 backdrop-blur-sm sm:items-center sm:p-6" onMouseDown={onClose}>
+      <section onMouseDown={(event) => event.stopPropagation()} className="w-full max-w-xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.32)] dark:border-slate-700 dark:bg-[#111a2e]">
+        <header className="relative overflow-hidden border-b border-slate-200 bg-slate-50/80 px-5 py-5 dark:border-slate-700 dark:bg-[#0c1527]">
+          <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full border border-indigo-100 dark:border-indigo-400/10" />
+          <div className="relative flex items-start justify-between gap-4"><div><p className="text-[10px] font-black tracking-[.16em] text-indigo-500">TEAM DIRECTORY</p><h2 className="mt-1 text-lg font-black text-slate-900 dark:text-white">新規社員を登録</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">社員プロフィールを作成します。ログインアカウントは作成されません。</p></div><button type="button" onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white"><X size={18}/></button></div>
+        </header>
+        <form onSubmit={submit} className="space-y-4 p-5">
+          {error && <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs font-semibold text-rose-600 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">{error}</p>}
+          <div className="grid gap-4 sm:grid-cols-2"><CreateField label="社員コード *"><input required value={employeeCode} onChange={(event) => setEmployeeCode(event.target.value)} placeholder="例：TM005" className={createInputClass}/></CreateField><CreateField label="氏名 *"><input required value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="例：NGUYEN VAN A" className={createInputClass}/></CreateField></div>
+          <div className="grid gap-4 sm:grid-cols-2"><CreateField label="フリガナ"><input value={fullNameKana} onChange={(event) => setFullNameKana(event.target.value)} placeholder="例：グエン・ヴァン・ア" className={createInputClass}/></CreateField><CreateField label="所属事務所 *"><select required value={officeId} onChange={(event) => setOfficeId(event.target.value)} className={createInputClass}><option value="" disabled>事務所を選択</option>{offices.map((office) => <option key={office.id} value={office.id}>{office.name}</option>)}</select></CreateField></div>
+          <div className="grid gap-4 sm:grid-cols-2"><CreateField label="役職"><input value={positionTitle} onChange={(event) => setPositionTitle(event.target.value)} placeholder="例：社員" className={createInputClass}/></CreateField><CreateField label="性別"><select value={gender} onChange={(event) => setGender(event.target.value)} className={createInputClass}><option value="">選択しない</option><option value="male">男性</option><option value="female">女性</option><option value="other">その他</option></select></CreateField></div>
+          <CreateField label="業務用メールアドレス"><input type="email" value={workEmail} onChange={(event) => setWorkEmail(event.target.value)} placeholder="name@themis.local" className={createInputClass}/></CreateField>
+          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 dark:border-slate-700"><button type="button" disabled={saving} onClick={onClose} className="h-10 rounded-xl px-4 text-sm font-bold text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800">キャンセル</button><button type="submit" disabled={saving || offices.length === 0} className="inline-flex h-10 items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 text-sm font-bold text-white shadow-md shadow-indigo-500/20 transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-60"><Plus size={16}/>{saving ? '登録中…' : '社員を登録'}</button></div>
+        </form>
+      </section>
+    </div>
+  )
+}
+
+const createInputClass = 'h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-[#111a2e] dark:text-slate-100 dark:focus:ring-indigo-500/20'
+
+function CreateField({ label, children }: { label: string; children: ReactNode }) { return <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700 dark:text-slate-200">{label}</span>{children}</label> }
 
 function EmployeeRow({
   employee,

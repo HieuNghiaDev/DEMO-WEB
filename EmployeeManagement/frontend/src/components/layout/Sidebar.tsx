@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import {
   BadgeCheck,
-  BookOpenText,
   BotMessageSquare,
   FolderKanban,
+  FileSpreadsheet,
   Home,
   LoaderCircle,
   LogOut,
@@ -22,7 +22,7 @@ const menuItems = [
   { path: '/', name: '社員ルーム', icon: Home },
   { path: '/organization', name: '組織設計', icon: UsersRound },
   { path: '/quests', name: '業務クエスト', icon: FolderKanban },
-  { path: '/manual', name: 'マニュアル工房', icon: BookOpenText },
+  { path: '/visa-progress', name: '在留申請進捗管理', icon: FileSpreadsheet },
   { path: '/ai', name: 'AI社員', icon: BotMessageSquare },
   { path: '/approvals', name: '承認室', icon: BadgeCheck },
 ]

@@ -37,6 +37,10 @@ Migration giữ lịch sử thay đổi schema, không phải nơi để đặt 
 
 `PersonalAttendanceReportService` khác với workbook trên: nó dựng một file trong bộ nhớ và chỉ stream các record của người đang đăng nhập. Tên file có employee code đã được lọc ký tự an toàn. Nội dung text được xử lý để không biến dữ liệu người dùng thành Excel formula.
 
+### 在留申請進捗管理 (Phase 1)
+
+Không có bảng MySQL nào cho dữ liệu 在留申請 trong Phase 1. Workbook Excel cấu hình trên Google Drive là source of truth và chỉ được tải đọc tạm thời để tạo response API. Dữ liệu không được import, chỉnh sửa hay lưu cache lâu dài vào database.
+
 ## Bảo mật hiện có
 
 - Sanctum bearer token bảo vệ toàn bộ API ngoài `POST /login`.

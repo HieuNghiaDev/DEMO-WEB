@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\EmployeeNotificationController;
 use App\Http\Controllers\Api\EmployeeTaskController;
 use App\Http\Controllers\Api\OrganizationController;
 use App\Http\Controllers\Api\PersonaController;
+use App\Http\Controllers\Api\VisaProgressController;
 use App\Http\Controllers\Api\WorkSessionController;
 use Illuminate\Support\Facades\Route;
 
@@ -42,6 +43,11 @@ Route::middleware([
         OrganizationController::class,
         'index',
     ])->middleware('permission:employee.view');
+
+    Route::post('/employees', [
+        OrganizationController::class,
+        'store',
+    ])->middleware('permission:employee.create');
 
     Route::put('/employees/{employee}/roles', [
         OrganizationController::class,
@@ -127,6 +133,9 @@ Route::middleware([
         ->middleware('permission:case.delete');
 
     Route::get('/case-types', [CaseTypeController::class, 'index'])
+        ->middleware('permission:case.view');
+
+    Route::get('/visa-progress', [VisaProgressController::class, 'index'])
         ->middleware('permission:case.view');
 
     Route::prefix('case-files/{caseFile}')->group(function () {
