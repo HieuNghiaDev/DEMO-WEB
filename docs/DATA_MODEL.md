@@ -47,7 +47,7 @@ Không có bảng MySQL nào cho dữ liệu 在留申請 trong Phase 1. Workboo
 - Backend xác định employee từ token, không tin `employee_id` hay tên gửi từ client; attendance và work session luôn kiểm tra ownership.
 - Login chặn account không active hoặc employee profile không active, có throttle 5/phút; API đã xác thực throttle 60/phút.
 - Tài khoản dùng mật khẩu tạm thời bị chặn khỏi API nghiệp vụ cho đến khi đổi mật khẩu. Đổi mật khẩu thu hồi toàn bộ Sanctum token và bắt đăng nhập lại.
-- Seeder tài khoản nhân viên chỉ chạy ở `local/testing`. Migration bảo mật vô hiệu hóa tài khoản seed cũ còn giữ mật khẩu mặc định thay vì tiếp tục cho phép đăng nhập.
+- Seeder tài khoản nhân viên chỉ chạy ở `local/testing`. Nếu một dữ liệu seed cũ vẫn dùng mật khẩu tạm, tài khoản chỉ được phép đăng nhập để đổi mật khẩu; middleware chặn mọi API nghiệp vụ cho đến khi đổi xong.
 - CORS allowlist từ `FRONTEND_URL`, `http://localhost:5173` và GitHub Pages; không dùng credential cookie.
 - API có `Cache-Control: no-store, private`, CSP `default-src 'none'`, `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, Permissions Policy và HSTS khi production + HTTPS.
 - `SecurityAuditLogger` băm định danh bằng `APP_KEY`, loại bỏ metadata có các từ khóa authorization/cookie/password/secret/token, và fail-open để audit không làm gián đoạn app.

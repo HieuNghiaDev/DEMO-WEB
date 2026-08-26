@@ -116,7 +116,7 @@ class PasswordSecurityTest extends TestCase
         }
     }
 
-    public function test_security_migration_disables_only_seeded_accounts_still_using_default_password(): void
+    public function test_seeded_accounts_are_restored_as_temporary_password_accounts_after_credential_invalidation(): void
     {
         $vulnerable = $this->createEmployeeUser(
             mustChangePassword: true,
@@ -146,6 +146,21 @@ class PasswordSecurityTest extends TestCase
         ]);
 
         $this->assertTrue($alreadyRotated->is_active);
+        $this->assertTrue(Hash::check('AlreadySecure@123', $alreadyRotated->password));
+
+        $restoreMigration = require database_path('migrations/2026_08_26_130000_restore_seeded_accounts_for_required_password_change.php');
+        $restoreMigration->up();
+
+        $vulnerable->refresh();
+        $alreadyRotated->refresh();
+
+        $this->assertTrue($vulnerable->is_active);
+        $this->assertTrue($vulnerable->must_change_password);
+        $this->assertTrue(Hash::check('Themis@123456', $vulnerable->password));
+        $this->assertDatabaseMissing('personal_access_tokens', [
+            'tokenable_id' => $vulnerable->id,
+        ]);
+
         $this->assertTrue(Hash::check('AlreadySecure@123', $alreadyRotated->password));
     }
 
