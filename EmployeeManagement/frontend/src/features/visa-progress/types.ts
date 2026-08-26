@@ -8,6 +8,7 @@ export type VisaDeadlineLevel =
 export type VisaDeadline = {
   label: string
   date: string
+  category?: 'residence' | 'supplement' | 'general'
 }
 
 export type VisaProgressApplication = {
@@ -19,11 +20,14 @@ export type VisaProgressApplication = {
   responsible_person: string | null
   application_date: string | null
   deadline: string | null
+  deadline_label: string | null
+  deadline_category: 'residence' | 'supplement' | 'general' | null
   deadlines: VisaDeadline[]
   days_remaining: number | null
   deadline_level: VisaDeadlineLevel
   source_sheet: string
   source_row: number
+  message_link: string | null
 }
 
 export type VisaProgressSource = {

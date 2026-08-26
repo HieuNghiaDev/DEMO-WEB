@@ -4,7 +4,9 @@ namespace App\Providers;
 
 use App\Contracts\AIModelClient;
 use App\Services\ClaudeClient;
-use App\Services\FakeClaudeClient;
+use App\Services\FailoverAIModelClient;
+use App\Services\GeminiClient;
+use App\Services\GroqClient;
 use Illuminate\Support\ServiceProvider;
 use LogicException;
 
@@ -16,15 +18,34 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(AIModelClient::class, function ($app): AIModelClient {
-            $fakeMode = filter_var(config('ai.fake_mode'), FILTER_VALIDATE_BOOL);
+            $clients = [
+                'claude' => fn (): AIModelClient => $app->make(ClaudeClient::class),
+                'gemini' => fn (): AIModelClient => $app->make(GeminiClient::class),
+                'groq' => fn (): AIModelClient => $app->make(GroqClient::class),
+            ];
+            $primaryName = strtolower(trim((string) config('ai.provider')));
+            $fallbackName = strtolower(trim((string) config('ai.fallback_provider')));
 
-            if ($fakeMode && $app->environment('production')) {
-                throw new LogicException('AI_FAKE_MODE must not be enabled in production.');
+            if (! isset($clients[$primaryName])) {
+                throw new LogicException('AI_PROVIDER must be "claude", "gemini", or "groq".');
             }
 
-            return $fakeMode
-                ? $app->make(FakeClaudeClient::class)
-                : $app->make(ClaudeClient::class);
+            $primary = $clients[$primaryName]();
+
+            if ($fallbackName === '' || $fallbackName === $primaryName) {
+                return $primary;
+            }
+
+            if (! isset($clients[$fallbackName])) {
+                throw new LogicException('AI_FALLBACK_PROVIDER must be "claude", "gemini", or "groq".');
+            }
+
+            return new FailoverAIModelClient(
+                primary: $primary,
+                fallback: $clients[$fallbackName](),
+                primaryName: $primaryName,
+                fallbackName: $fallbackName,
+            );
         });
     }
 

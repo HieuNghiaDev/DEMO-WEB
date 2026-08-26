@@ -227,11 +227,15 @@ function ThemisAiAssistant() {
 
     const personaName = selectedPersona.name
     const userMessage: AiChatMessage = { role: 'user', content }
-    const conversationHistory = chatMessages.slice(-AI_CONVERSATION_HISTORY_LIMIT)
+    const validChatMessages = chatMessages.filter(({ content: itemContent }) => itemContent.trim() !== '')
+    const conversationHistory = validChatMessages.slice(-AI_CONVERSATION_HISTORY_LIMIT)
 
     setMessagesByPersona((current) => ({
       ...current,
-      [personaName]: [...(current[personaName] ?? []), userMessage],
+      [personaName]: [
+        ...(current[personaName] ?? []).filter(({ content: itemContent }) => itemContent.trim() !== ''),
+        userMessage,
+      ],
     }))
     setMessageInput('')
     setChatError(null)
@@ -245,6 +249,10 @@ function ThemisAiAssistant() {
         messages: conversationHistory,
         context: pageContextFromPath(location.pathname),
       })
+
+      if (assistantMessage.trim() === '') {
+        throw new Error('AI returned an empty message.')
+      }
 
       setMessagesByPersona((current) => ({
         ...current,

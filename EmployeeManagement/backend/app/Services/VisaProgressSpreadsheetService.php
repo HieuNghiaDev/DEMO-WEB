@@ -29,10 +29,15 @@ class VisaProgressSpreadsheetService
         'status' => ['全体ステータス', 'ステータス', '進捗状況', '申請状況', '状況'],
         'responsible_person' => ['担当者名', '担当者', '担当'],
         'application_date' => ['申請日', '申請予定日', '受付日', '申請年月日'],
+        'message_link' => ['メッセージリンク', 'メッセージURL', 'Messengerリンク'],
     ];
 
     /** @var list<string> */
     private const DEADLINE_HEADERS = ['期限', '対応期限', '提出期限', '追加資料期限', '回答期限', '締切'];
+
+    private const RESIDENCE_DEADLINE_STATUSES = ['新規受付', '申請準備完了'];
+
+    private const SUPPLEMENT_DEADLINE_STATUSES = ['審査中', '追加資料依頼①', '追加資料依頼②', '追加資料依頼③'];
 
     /**
      * @return array{applications: list<array<string, mixed>>, source_sheet: string}
@@ -46,6 +51,17 @@ class VisaProgressSpreadsheetService
         }
 
         try {
+            $personRecords = $this->parseNamedSheet($spreadsheet, '本人情報');
+            $materialRecords = $this->parseNamedSheet($spreadsheet, '資料管理');
+            $billingRecords = $this->parseNamedSheet($spreadsheet, '請求関係');
+
+            if ($personRecords !== [] && $materialRecords !== []) {
+                return [
+                    'applications' => $this->mergeOperationalRecords($personRecords, $materialRecords, $billingRecords),
+                    'source_sheet' => '本人情報 / 資料管理 / 請求関係',
+                ];
+            }
+
             $selection = $this->selectDataSheet($spreadsheet);
 
             if ($selection === null) {
@@ -61,6 +77,26 @@ class VisaProgressSpreadsheetService
         } finally {
             $spreadsheet->disconnectWorksheets();
         }
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function parseNamedSheet(Spreadsheet $spreadsheet, string $sheetName): array
+    {
+        $sheet = $spreadsheet->getSheetByName($sheetName);
+
+        if ($sheet === null) {
+            return [];
+        }
+
+        $structure = $this->findSheetStructure($sheet);
+
+        if ($structure === null) {
+            return [];
+        }
+
+        [, $headerRow, $columns, $deadlineColumns] = $structure;
+
+        return $this->parseRows($sheet, $headerRow, $columns, $deadlineColumns);
     }
 
     /** @param list<array<string, mixed>> $applications */
@@ -190,8 +226,8 @@ class VisaProgressSpreadsheetService
                 }
             }
 
-            $deadline = $this->selectOperationalDeadline($deadlines);
-            $deadlineState = $this->deadlineState($deadline);
+            $selectedDeadline = $this->selectOperationalDeadline($deadlines);
+            $deadlineState = $this->deadlineState($selectedDeadline['date'] ?? null);
             $caseId = $values['case_id'] ?? null;
 
             $applications[] = [
@@ -202,16 +238,154 @@ class VisaProgressSpreadsheetService
                 'status' => $values['status'] ?? null,
                 'responsible_person' => $values['responsible_person'] ?? null,
                 'application_date' => $values['application_date'] ?? null,
-                'deadline' => $deadline,
+                'deadline' => $selectedDeadline['date'] ?? null,
+                'deadline_label' => $selectedDeadline['label'] ?? null,
+                'deadline_category' => $selectedDeadline['category'] ?? 'general',
                 'deadlines' => $deadlines,
                 'days_remaining' => $deadlineState['days_remaining'],
                 'deadline_level' => $deadlineState['level'],
                 'source_sheet' => $sheet->getTitle(),
                 'source_row' => $row,
+                'message_link' => $this->normalizeMessageLink($values['message_link'] ?? null),
             ];
         }
 
         return $applications;
+    }
+
+    /**
+     * The workbook stores case facts across sheets. Only the operational
+     * status groups below make their corresponding date actionable:
+     * residence-expiry dates for intake/preparation and supplemental-document
+     * due dates for review/additional-document work.
+     *
+     * @param  list<array<string, mixed>>  $personRecords
+     * @param  list<array<string, mixed>>  $materialRecords
+     * @param  list<array<string, mixed>>  $billingRecords
+     * @return list<array<string, mixed>>
+     */
+    private function mergeOperationalRecords(array $personRecords, array $materialRecords, array $billingRecords): array
+    {
+        $peopleByCaseId = $this->recordsByCaseId($personRecords);
+        $materialsByCaseId = $this->recordsByCaseId($materialRecords);
+        $billingByCaseId = $this->recordsByCaseId($billingRecords);
+        $caseIds = array_values(array_unique([
+            ...array_keys($peopleByCaseId),
+            ...array_keys($materialsByCaseId),
+            ...array_keys($billingByCaseId),
+        ]));
+
+        return array_map(function (string $caseId) use ($peopleByCaseId, $materialsByCaseId, $billingByCaseId): array {
+            $person = $peopleByCaseId[$caseId] ?? [];
+            $material = $materialsByCaseId[$caseId] ?? [];
+            $billing = $billingByCaseId[$caseId] ?? [];
+            $status = $this->firstString($person['status'] ?? null, $material['status'] ?? null, $billing['status'] ?? null);
+            $deadlines = [
+                ...$this->eligibleResidenceDeadlines($person),
+                ...$this->eligibleSupplementDeadlines($material),
+            ];
+            $selectedDeadline = $this->selectOperationalDeadline($deadlines);
+            $deadlineState = $this->deadlineState($selectedDeadline['date'] ?? null);
+
+            return [
+                'id' => $caseId,
+                'case_id' => $caseId,
+                'applicant_name' => $this->firstString($person['applicant_name'] ?? null, $material['applicant_name'] ?? null, $billing['applicant_name'] ?? null),
+                'case_type' => $person['case_type'] ?? null,
+                'status' => $status,
+                'responsible_person' => $this->firstString($person['responsible_person'] ?? null, $material['responsible_person'] ?? null),
+                'application_date' => $person['application_date'] ?? null,
+                'deadline' => $selectedDeadline['date'] ?? null,
+                'deadline_label' => $selectedDeadline['label'] ?? null,
+                'deadline_category' => $selectedDeadline['category'] ?? null,
+                'deadlines' => $deadlines,
+                'days_remaining' => $deadlineState['days_remaining'],
+                'deadline_level' => $deadlineState['level'],
+                'source_sheet' => '本人情報 / 資料管理',
+                'source_row' => $person['source_row'] ?? $material['source_row'] ?? 0,
+                'message_link' => $this->normalizeMessageLink($billing['message_link'] ?? null),
+            ];
+        }, $caseIds);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $records
+     * @return array<string, array<string, mixed>>
+     */
+    private function recordsByCaseId(array $records): array
+    {
+        $indexed = [];
+
+        foreach ($records as $record) {
+            $caseId = $record['case_id'] ?? null;
+
+            if (is_string($caseId) && $caseId !== '') {
+                $indexed[$caseId] = $record;
+            }
+        }
+
+        return $indexed;
+    }
+
+    /** @param array<string, mixed> $record
+     * @return list<array{label: string, date: string, category: string}>
+     */
+    private function eligibleResidenceDeadlines(array $record): array
+    {
+        if (! in_array($record['status'] ?? null, self::RESIDENCE_DEADLINE_STATUSES, true)) {
+            return [];
+        }
+
+        return $this->matchingDeadlines($record['deadlines'] ?? [], '在留期限', 'residence');
+    }
+
+    /** @param array<string, mixed> $record
+     * @return list<array{label: string, date: string, category: string}>
+     */
+    private function eligibleSupplementDeadlines(array $record): array
+    {
+        if (! in_array($record['status'] ?? null, self::SUPPLEMENT_DEADLINE_STATUSES, true)) {
+            return [];
+        }
+
+        return $this->matchingDeadlines($record['deadlines'] ?? [], '追完期限', 'supplement');
+    }
+
+    /**
+     * @return list<array{label: string, date: string, category: string}>
+     */
+    private function matchingDeadlines(mixed $deadlines, string $headerNeedle, string $category): array
+    {
+        if (! is_array($deadlines)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(function (mixed $deadline) use ($headerNeedle, $category): ?array {
+            if (! is_array($deadline) || ! is_string($deadline['label'] ?? null) || ! is_string($deadline['date'] ?? null)) {
+                return null;
+            }
+
+            if (! str_contains($this->normalizeHeader($deadline['label']), $this->normalizeHeader($headerNeedle))) {
+                return null;
+            }
+
+            return [
+                'label' => $this->normalizeText($deadline['label']) ?? $headerNeedle,
+                'date' => $deadline['date'],
+                'category' => $category,
+            ];
+        }, $deadlines)));
+    }
+
+    private function firstString(mixed ...$values): ?string
+    {
+        foreach ($values as $value) {
+            if (is_string($value) && $value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
     }
 
     /** @param array<string, string|null> $values */
@@ -222,8 +396,10 @@ class VisaProgressSpreadsheetService
             || ($values['status'] ?? null) !== null;
     }
 
-    /** @param list<array{label: string, date: string}> $deadlines */
-    private function selectOperationalDeadline(array $deadlines): ?string
+    /** @param list<array{label: string, date: string, category?: string}> $deadlines
+     * @return array{label: string, date: string, category?: string}|null
+     */
+    private function selectOperationalDeadline(array $deadlines): ?array
     {
         if ($deadlines === []) {
             return null;
@@ -233,7 +409,7 @@ class VisaProgressSpreadsheetService
         usort($deadlines, fn (array $left, array $right): int => $left['date'] <=> $right['date']);
         $upcoming = array_values(array_filter($deadlines, fn (array $deadline): bool => Carbon::parse($deadline['date'], 'Asia/Tokyo')->greaterThanOrEqualTo($today)));
 
-        return ($upcoming[0] ?? $deadlines[array_key_last($deadlines)])['date'];
+        return $upcoming[0] ?? $deadlines[array_key_last($deadlines)];
     }
 
     /** @return array{days_remaining: int|null, level: string} */
@@ -317,6 +493,25 @@ class VisaProgressSpreadsheetService
         $value = trim((string) $value);
 
         return $value === '' ? null : Str::squish($value);
+    }
+
+    private function normalizeMessageLink(mixed $value): ?string
+    {
+        $url = $this->normalizeText($value);
+
+        if ($url === null || filter_var($url, FILTER_VALIDATE_URL) === false) {
+            return null;
+        }
+
+        $parts = parse_url($url);
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+
+        if ($scheme !== 'https' || ! in_array($host, ['facebook.com', 'www.facebook.com', 'm.me', 'messenger.com', 'www.messenger.com'], true)) {
+            return null;
+        }
+
+        return $url;
     }
 
     /** @param list<string> $aliases */

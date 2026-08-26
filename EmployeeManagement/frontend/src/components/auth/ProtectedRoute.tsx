@@ -1,12 +1,37 @@
+import { useEffect, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { useAuth } from "../../contexts/AuthContext";
 
 export default function ProtectedRoute() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, refreshUser } = useAuth();
   const location = useLocation();
+  const [verifiedPasswordStatusUserId, setVerifiedPasswordStatusUserId] =
+    useState<number | null>(null);
+  const userId = user?.id ?? null;
+  const mustChangePassword = user?.must_change_password === true;
+  const mustVerifyPasswordStatus =
+    mustChangePassword && verifiedPasswordStatusUserId !== userId;
 
-  if (isLoading) {
+  useEffect(() => {
+    if (!mustVerifyPasswordStatus || userId === null) {
+      return;
+    }
+
+    let isCurrent = true;
+
+    void refreshUser().finally(() => {
+      if (isCurrent) {
+        setVerifiedPasswordStatusUserId(userId);
+      }
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [mustVerifyPasswordStatus, refreshUser, userId]);
+
+  if (isLoading || mustVerifyPasswordStatus) {
     return (
       <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[linear-gradient(108deg,#080d1f_0%,#0d122c_42%,#24254c_60%,#777a9e_78%,#e7e9f3_100%)] text-white">
         <div className="pointer-events-none absolute inset-0 bg-slate-950/15 backdrop-blur-[2px]" />
@@ -53,6 +78,17 @@ export default function ProtectedRoute() {
         state={{ from: location.pathname }}
       />
     );
+  }
+
+  if (user.must_change_password && location.pathname !== "/change-password") {
+    return <Navigate to="/change-password" replace />;
+  }
+
+  // A redirect to login can retain /change-password as its original target.
+  // Never let that stale destination reopen the password screen after the
+  // server has confirmed that the user already completed the change.
+  if (!user.must_change_password && location.pathname === "/change-password") {
+    return <Navigate to="/" replace />;
   }
 
   return <Outlet />;

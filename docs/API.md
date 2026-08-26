@@ -13,9 +13,12 @@ Accept: application/json
 | --- | --- | --- | --- |
 | `POST /login` | Không | `email` (email), `password`, `remember` (boolean, tùy chọn) | Trả `user` và token mới. Rate limit 5 request/phút. |
 | `GET /me` | Có | — | Trả user hiện tại cùng `employee.office` và `employee.department`. |
+| `PUT /password` | Có | `current_password`, `password`, `password_confirmation` | Đổi mật khẩu, bỏ cờ bắt buộc đổi và thu hồi toàn bộ token. Rate limit 5 request/phút. |
 | `POST /logout` | Có | — | Xóa token hiện tại và trả thông báo. |
 
 Token không ghi nhớ hết hạn sau 12 giờ; token có `remember: true` hết hạn sau 30 ngày. Frontend lưu token vào `sessionStorage` hoặc `localStorage` tương ứng.
+
+Tài khoản có `must_change_password=true` chỉ được gọi `/me`, `/password` và `/logout`. Mọi API nghiệp vụ khác trả `403` với `code: password_change_required`. Mật khẩu mới phải có ít nhất 11 ký tự, gồm tối thiểu một chữ hoa và một ký hiệu. Sau khi đổi thành công, người dùng phải đăng nhập lại vì tất cả token cũ đã bị thu hồi.
 
 ## Chấm công và báo cáo
 
@@ -109,7 +112,7 @@ Ví dụ response (đã rút gọn):
 }
 ```
 
-`deadline_level` là `overdue`, `critical` (0–5 ngày), `warning` (6–10 ngày), `normal` hoặc `none`. Status không có trong mapping vẫn được trả nguyên văn từ workbook.
+`deadline_level` là `overdue`, `critical` (0–5 ngày), `warning` (6–10 ngày), `normal` hoặc `none`. Với workbook vận hành đầy đủ, cảnh báo chỉ được tính từ `在留期限` khi status là `新規受付` hoặc `申請準備完了`, và từ `追完期限 1回目〜3回目` khi status là `審査中` hoặc `追加資料依頼①〜③`. Response cũng có `deadline_label`, `deadline_category` (`residence`/`supplement`) và `message_link` khi `請求関係` có liên kết Messenger HTTPS hợp lệ. Status không có trong mapping vẫn được trả nguyên văn từ workbook.
 
 ## Dạng response và lỗi
 

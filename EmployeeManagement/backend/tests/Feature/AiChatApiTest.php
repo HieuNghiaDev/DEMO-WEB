@@ -7,6 +7,7 @@ use App\Models\Persona;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AIOrchestrator;
+use App\Services\AiProviderBusyException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use RuntimeException;
@@ -286,6 +287,22 @@ class AiChatApiTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('message', 'AI chat request could not be completed.')
             ->assertDontSee('secret-value');
+    }
+
+    public function test_chat_endpoint_returns_a_retryable_error_when_the_provider_is_busy(): void
+    {
+        $this->createPersona();
+        $orchestrator = Mockery::mock(AIOrchestrator::class);
+        $orchestrator->shouldReceive('runSkill')
+            ->once()
+            ->andThrow(new AiProviderBusyException('internal details'));
+        $this->app->instance(AIOrchestrator::class, $orchestrator);
+
+        $this->actingAs($this->createAiUser(), 'sanctum')
+            ->postJson('/api/ai/chat', $this->requestPayload())
+            ->assertStatus(503)
+            ->assertJsonPath('code', 'ai_provider_unavailable')
+            ->assertDontSee('internal details');
     }
 
     private function createPersona(bool $active = true): Persona

@@ -13,6 +13,12 @@ class AdditionalEmployeeUserSeeder extends Seeder
 {
     public function run(): void
     {
+        if (! app()->environment(['local', 'testing'])) {
+            $this->command?->warn('AdditionalEmployeeUserSeeder is restricted to local/testing environments.');
+
+            return;
+        }
+
         $offices = Office::query()
             ->whereIn('office_code', ['THEMIS', 'CHUKA_LAW'])
             ->get()

@@ -17,6 +17,7 @@ import BusinessQuest from "./pages/BusinessQuest";
 import VisaProgress from "./pages/VisaProgress";
 import AIEmployees from "./pages/AI";
 import ApprovalRoom from "./pages/ApprovalRoom";
+import ChangePassword from "./pages/ChangePassword";
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
           <Route path="/login" element={<Login />} />
 
           <Route element={<ProtectedRoute />}>
+            <Route path="/change-password" element={<ChangePassword />} />
             <Route element={<MainLayout />}>
               <Route path="/" element={<EmployeeRoom />} />
               <Route

@@ -39,13 +39,15 @@ Migration giữ lịch sử thay đổi schema, không phải nơi để đặt 
 
 ### 在留申請進捗管理 (Phase 1)
 
-Không có bảng MySQL nào cho dữ liệu 在留申請 trong Phase 1. Workbook Excel cấu hình trên Google Drive là source of truth và chỉ được tải đọc tạm thời để tạo response API. Dữ liệu không được import, chỉnh sửa hay lưu cache lâu dài vào database.
+Không có bảng MySQL nào cho dữ liệu 在留申請 trong Phase 1. Workbook Excel cấu hình trên Google Drive là source of truth và chỉ được tải đọc tạm thời để tạo response API. Dữ liệu không được import, chỉnh sửa hay lưu cache lâu dài vào database. Khi có các sheet `本人情報`, `資料管理`, `請求関係`, dữ liệu được ghép read-only theo `案件ID`; `メッセージリンク` chỉ được trả về khi là URL HTTPS thuộc Messenger/Facebook để tránh liên kết không an toàn từ workbook.
 
 ## Bảo mật hiện có
 
 - Sanctum bearer token bảo vệ toàn bộ API ngoài `POST /login`.
 - Backend xác định employee từ token, không tin `employee_id` hay tên gửi từ client; attendance và work session luôn kiểm tra ownership.
 - Login chặn account không active hoặc employee profile không active, có throttle 5/phút; API đã xác thực throttle 60/phút.
+- Tài khoản dùng mật khẩu tạm thời bị chặn khỏi API nghiệp vụ cho đến khi đổi mật khẩu. Đổi mật khẩu thu hồi toàn bộ Sanctum token và bắt đăng nhập lại.
+- Seeder tài khoản nhân viên chỉ chạy ở `local/testing`. Migration bảo mật vô hiệu hóa tài khoản seed cũ còn giữ mật khẩu mặc định thay vì tiếp tục cho phép đăng nhập.
 - CORS allowlist từ `FRONTEND_URL`, `http://localhost:5173` và GitHub Pages; không dùng credential cookie.
 - API có `Cache-Control: no-store, private`, CSP `default-src 'none'`, `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, Permissions Policy và HSTS khi production + HTTPS.
 - `SecurityAuditLogger` băm định danh bằng `APP_KEY`, loại bỏ metadata có các từ khóa authorization/cookie/password/secret/token, và fail-open để audit không làm gián đoạn app.
@@ -74,6 +76,10 @@ php artisan migrate --seed
 php artisan test
 php artisan config:clear
 
+# Khôi phục tài khoản đã bị vô hiệu hóa do còn mật khẩu seed mặc định.
+# Mật khẩu được nhập ẩn và không xuất hiện trong shell history.
+php artisan themis:user-password TM001 --activate
+
 # Frontend
 Set-Location ../frontend
 npm run lint
@@ -81,7 +87,7 @@ npm run build
 npm run preview
 ```
 
-`composer test` cũng xóa config cache trước khi chạy PHPUnit. `railway.json` chạy migration rồi seeder trước deploy; cấu hình service Railway phải dùng working directory có `artisan` (hiện là `EmployeeManagement/backend`).
+`composer test` cũng xóa config cache trước khi chạy PHPUnit. `railway.json` chạy migration rồi seeder trước deploy; production seeder chỉ tạo dữ liệu nền như office, role, persona và case type, không tạo tài khoản đăng nhập. Cấu hình service Railway phải dùng working directory có `artisan` (hiện là `EmployeeManagement/backend`).
 
 ## Bộ kiểm thử
 
@@ -91,5 +97,6 @@ npm run preview
 | `AttendanceOutsideStatusTest`, `WorkSessionTest` | Chuyển trạng thái ngoài văn phòng, quy tắc thời gian và vòng đời work session. |
 | `PersonalAttendanceReportTest`, `AttendanceExcelServiceTest` | Cô lập dữ liệu báo cáo cá nhân, chống Excel formula injection và layout workbook. |
 | `ApiSecurityTest`, `SecurityAuditLogTest` | CORS, security header, rate limit, audit và lọc dữ liệu nhạy cảm. |
+| `PasswordSecurityTest` | Bắt buộc đổi mật khẩu, thu hồi token, khóa credential seed cũ và lệnh khôi phục tài khoản. |
 
 Khi sửa API hoặc schema, hãy thêm test vào đúng nhóm và chạy toàn bộ `php artisan test` trước khi deploy.

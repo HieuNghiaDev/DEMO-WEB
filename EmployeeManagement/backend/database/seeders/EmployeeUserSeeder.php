@@ -12,6 +12,12 @@ class EmployeeUserSeeder extends Seeder
 {
     public function run(): void
     {
+        if (! app()->environment(['local', 'testing'])) {
+            $this->command?->warn('EmployeeUserSeeder is restricted to local/testing environments.');
+
+            return;
+        }
+
         $office = Office::query()
             ->where('office_code', 'THEMIS')
             ->firstOrFail();

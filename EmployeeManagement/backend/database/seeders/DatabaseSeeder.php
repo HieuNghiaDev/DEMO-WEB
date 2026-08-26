@@ -16,12 +16,17 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             OfficeSeeder::class,
-            EmployeeUserSeeder::class,
-            AdditionalEmployeeUserSeeder::class,
             PersonaSeeder::class,
             RolePermissionSeeder::class,
             CaseTypeSeeder::class,
         ]);
+
+        if (app()->environment(['local', 'testing'])) {
+            $this->call([
+                EmployeeUserSeeder::class,
+                AdditionalEmployeeUserSeeder::class,
+            ]);
+        }
 
         if (app()->environment('local')) {
             $this->call(ManagerTestUserSeeder::class);

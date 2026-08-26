@@ -13,6 +13,12 @@ class ManagerTestUserSeeder extends Seeder
 {
     public function run(): void
     {
+        if (! app()->environment('local')) {
+            $this->command?->warn('ManagerTestUserSeeder is restricted to the local environment.');
+
+            return;
+        }
+
         $office = Office::query()
             ->where('office_code', 'THEMIS')
             ->firstOrFail();

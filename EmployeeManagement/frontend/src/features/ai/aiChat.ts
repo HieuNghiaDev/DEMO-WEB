@@ -52,6 +52,8 @@ export const friendlyAiErrorMessage = (error: unknown) => {
       return 'リクエストを処理できませんでした。内容を確認してもう一度お試しください。'
     case 502:
       return 'AIサービスが一時的に利用できません。しばらくしてからもう一度お試しください。'
+    case 503:
+      return 'AIが混み合っています。数秒待ってからもう一度お試しください。'
     default:
       return 'メッセージを送信できませんでした。しばらくしてからもう一度お試しください。'
   }

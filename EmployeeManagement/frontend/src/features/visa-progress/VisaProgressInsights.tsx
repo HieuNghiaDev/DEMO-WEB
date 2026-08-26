@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Clock3 } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Clock3, MessageCircle } from 'lucide-react'
 import VisaStatusBadge from './VisaStatusBadge'
 import type { VisaProgressApplication } from './types'
 import { deadlineText, formatDate, getVisaStatusTone, isAttentionDeadline } from './visaProgressUi'
@@ -95,20 +95,33 @@ export default function VisaProgressInsights({ applications, onShowAttention }: 
         {visibleAttentionApplications.length > 0 ? (
           <div className="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
             {visibleAttentionApplications.map((application) => (
-              <div key={application.id} className="grid gap-2 py-3 first:pt-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+              <div key={application.id} className="group grid gap-2 py-3 first:pt-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                 <div className="min-w-0">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{application.applicant_name ?? '申請者名未登録'}</p>
                     <VisaStatusBadge status={application.status} />
+                    {application.message_link && (
+                      <a
+                        href={application.message_link}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`${application.applicant_name ?? '申請者'}のメッセージを開く`}
+                        title="メッセージを開く"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-indigo-200 text-indigo-600 opacity-100 transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-indigo-400/30 dark:text-indigo-300 dark:hover:bg-indigo-500/10 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                      >
+                        <MessageCircle size={15} aria-hidden="true" />
+                      </a>
+                    )}
                   </div>
                   <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
                     {application.case_type ?? '申請種別未登録'} · 担当：{application.responsible_person ?? '未設定'}
                   </p>
                 </div>
                 <div className="flex items-center justify-between gap-3 sm:block sm:text-right">
-                  <p className={`text-xs font-semibold ${deadlineTone(application.deadline_level)}`}>
-                    {deadlineText(application.days_remaining, application.deadline_level)}
-                  </p>
+                  <div>
+                    {application.deadline_label && <p className="text-[11px] text-slate-500 dark:text-slate-400">{application.deadline_label}</p>}
+                    <p className={`text-xs font-semibold ${deadlineTone(application.deadline_level)}`}>{deadlineText(application.days_remaining, application.deadline_level)}</p>
+                  </div>
                   <p className="mt-0.5 text-[11px] tabular-nums text-slate-400 dark:text-slate-500">{formatDate(application.deadline)}</p>
                 </div>
               </div>

@@ -23,7 +23,7 @@ Frontend chỉ giữ token ở `sessionStorage` hoặc `localStorage`; mọi quy
 | `src/services/api.ts` | Axios dùng `VITE_API_URL` hoặc ghép `VITE_BACKEND_URL/api`; tự chèn `Authorization: Bearer` và quản lý token. |
 | `src/contexts/AuthContext.tsx` | Kiểu dữ liệu người dùng, đăng nhập/đăng xuất, tải lại `/me` và trạng thái đang khởi tạo phiên. |
 | `src/contexts/ThemeContext.tsx`, `src/utils/theme.ts` | Chế độ sáng/tối, ưu tiên đã lưu hoặc theme hệ điều hành, lớp CSS `dark`. |
-| `src/components/auth/ProtectedRoute.tsx` | Hiện màn hình chờ trong lúc xác minh token; chuyển khách đến `/login`; các route hợp lệ render `Outlet`. |
+| `src/components/auth/ProtectedRoute.tsx` | Hiện màn hình chờ trong lúc xác minh token; chuyển khách đến `/login`; tài khoản dùng mật khẩu tạm được chuyển đến `/change-password`. |
 | `src/layouts/MainLayout.tsx` | Khung chung gồm sidebar và nội dung route con. |
 | `src/components/layout/Sidebar.tsx` | Điều hướng giữa các không gian làm việc, thông tin phiên và công tắc theme. |
 | `src/components/layout/Header.tsx` | Tiêu đề/đầu trang dùng lại cho các trang. |
@@ -46,6 +46,7 @@ Frontend chỉ giữ token ở `sessionStorage` hoặc `localStorage`; mọi quy
 | URL | Bảo vệ | Màn hình |
 | --- | --- | --- |
 | `/login` | Công khai | Đăng nhập. |
+| `/change-password` | Có token hợp lệ | Đổi mật khẩu tạm thời; thành công sẽ thu hồi token và yêu cầu đăng nhập lại. |
 | `/` | Có token hợp lệ | Employee Room. |
 | `/organization` | Có token hợp lệ | Organization Design. |
 | `/quests`, `/ai`, `/approvals` | Có token hợp lệ | Không gian nghiệp vụ. |
@@ -60,7 +61,8 @@ Mọi URL khác được chuyển về `/`. `BrowserRouter` dùng `import.meta.e
 | `bootstrap/app.php` | Khởi tạo Laravel, định nghĩa route API/web/console/health và gắn hai middleware bảo mật toàn cục. |
 | `routes/api.php` | Bề mặt REST API. Login giới hạn 5 lần/phút; các route còn lại dùng Sanctum và giới hạn 60 lần/phút. |
 | `routes/web.php`, `routes/console.php` | Route trang chào Laravel và điểm đăng ký lệnh console. |
-| `app/Http/Controllers/Api/AuthController.php` | Đăng nhập, `/me`, đăng xuất; cấp Sanctum token 12 giờ hoặc 30 ngày khi ghi nhớ. |
+| `app/Http/Controllers/Api/AuthController.php` | Đăng nhập, `/me`, đổi mật khẩu và đăng xuất; cấp Sanctum token 12 giờ hoặc 30 ngày khi ghi nhớ. |
+| `app/Http/Middleware/RequirePasswordChange.php` | Chặn API nghiệp vụ khi tài khoản còn cờ `must_change_password`; vẫn cho phép `/me`, đổi mật khẩu và đăng xuất. |
 | `app/Http/Controllers/Api/AttendanceController.php` | Bắt đầu ca, đổi trạng thái, liệt kê người đang hoạt động, tải báo cáo Excel cá nhân và kiểm soát ownership. |
 | `app/Http/Controllers/Api/WorkSessionController.php` | Tạo/kết thúc phiên công việc; chỉ một phiên active trên một attendance tại cùng thời điểm. |
 | `app/Http/Controllers/Api/OrganizationController.php` | Trả về danh sách nhân viên, trạng thái hiện tại và thống kê; chỉ manager/admin nhận PII. |
@@ -75,7 +77,7 @@ Mọi URL khác được chuyển về `/`. `BrowserRouter` dùng `import.meta.e
 | `app/Services/SecurityAuditLogger.php` | Lưu audit log theo hướng fail-open, băm định danh và bỏ các khóa nhạy cảm trước khi ghi. |
 | `app/Models/*.php` | Eloquent model, mass-assignable fields, casts và các quan hệ được mô tả trong [mô hình dữ liệu](DATA_MODEL.md). |
 | `database/migrations/*.php` | Lịch sử tạo bảng/mở rộng schema; cần được chạy theo thứ tự thời gian. |
-| `database/seeders/*.php` | Tạo hai office và các tài khoản/nhân viên demo qua `updateOrCreate`. |
+| `database/seeders/*.php` | Tạo dữ liệu nền; tài khoản/nhân viên demo chỉ được tạo trong `local/testing`, không chạy ở production. |
 | `database/factories/UserFactory.php` | Factory User phục vụ test. |
 | `tests/Feature/*.php` | Kiểm thử API, authorization, audit, báo cáo cá nhân, trạng thái ngoài văn phòng và work session. |
 | `tests/Unit/AttendanceExcelServiceTest.php` | Kiểm thử cấu trúc/nội dung hai sheet Excel trong storage tạm. |
@@ -100,4 +102,4 @@ Luồng giao việc: manager/admin tạo task `pending`; nhân viên xác nhận
 
 ### 在留申請進捗管理 (Phase 1)
 
-Google Drive Excel là source of truth. `VisaProgressController` lấy dashboard từ cache 60 giây (hoặc bỏ cache bằng `?refresh=1`), `GoogleDriveService` tải file vào storage tạm, `VisaProgressSpreadsheetService` đọc xong rồi file tạm được xoá. Phase 1 không tạo bảng database, không ghi Excel/Google Drive và không chạy scheduler.
+Google Drive Excel là source of truth. `VisaProgressController` lấy dashboard từ cache 60 giây (hoặc bỏ cache bằng `?refresh=1`), `GoogleDriveService` tải file vào storage tạm, `VisaProgressSpreadsheetService` đọc xong rồi file tạm được xoá. Khi workbook có đủ sheet vận hành, service ghép `本人情報` (thông tin và `在留期限`), `資料管理` (`追完期限 1回目〜3回目`) và `請求関係` (`メッセージリンク`) theo `案件ID`. Phase 1 không tạo bảng database, không ghi Excel/Google Drive và không chạy scheduler.

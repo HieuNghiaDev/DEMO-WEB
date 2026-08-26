@@ -84,7 +84,10 @@ function ApplicationTableRow({ application }: { application: VisaProgressApplica
         {application.responsible_person ?? '未設定'}
       </td>
       <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-slate-500 dark:text-slate-400">{formatDate(application.application_date)}</td>
-      <td className="whitespace-nowrap px-3 py-3 text-xs font-medium tabular-nums text-slate-700 dark:text-slate-200">{formatDate(application.deadline)}</td>
+      <td className="px-3 py-3">
+        <p className="whitespace-nowrap text-xs font-medium tabular-nums text-slate-700 dark:text-slate-200">{formatDate(application.deadline)}</p>
+        {application.deadline_label && <p className="mt-0.5 max-w-36 truncate text-[11px] text-slate-500 dark:text-slate-400" title={application.deadline_label}>{application.deadline_label}</p>}
+      </td>
       <td className="whitespace-nowrap px-3 py-3">
         <DeadlineRisk application={application} />
       </td>
@@ -108,7 +111,7 @@ function ApplicationMobileRow({ application }: { application: VisaProgressApplic
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
         <Info label="担当者" value={application.responsible_person ?? '未設定'} />
         <Info label="申請日" value={formatDate(application.application_date)} />
-        <Info label="期限" value={formatDate(application.deadline)} />
+        <Info label={application.deadline_label ?? '期限'} value={formatDate(application.deadline)} />
         <div>
           <dt className="text-[11px] text-slate-400 dark:text-slate-500">期限状況</dt>
           <dd className="mt-1"><DeadlineRisk application={application} /></dd>

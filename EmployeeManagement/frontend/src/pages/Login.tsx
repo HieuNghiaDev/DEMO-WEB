@@ -28,6 +28,7 @@ type LoginErrorResponse = {
 
 type LoginLocationState = {
   from?: string;
+  message?: string;
 };
 
 export default function Login() {
@@ -44,6 +45,7 @@ export default function Login() {
 
   const destination =
     (location.state as LoginLocationState | null)?.from || "/";
+  const successMessage = (location.state as LoginLocationState | null)?.message;
 
   useEffect(() => {
     if (!isLoading && user) {
@@ -281,6 +283,11 @@ export default function Login() {
             </div>
 
             <form className="space-y-4.5" onSubmit={handleSubmit}>
+              {successMessage && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium leading-5 text-emerald-700">
+                  {successMessage}
+                </div>
+              )}
               <div>
                 <label
                   htmlFor="email"

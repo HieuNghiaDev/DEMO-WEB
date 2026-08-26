@@ -26,7 +26,7 @@ export default function VisaProgress() {
   const [error, setError] = useState<string | null>(null)
   const [refreshError, setRefreshError] = useState<string | null>(null)
   const [keyword, setKeyword] = useState('')
-  const [status, setStatus] = useState('all')
+  const [statusesFilter, setStatusesFilter] = useState<string[]>([])
   const [responsiblePerson, setResponsiblePerson] = useState('all')
   const [deadlineLevel, setDeadlineLevel] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
@@ -52,33 +52,44 @@ export default function VisaProgress() {
   }
 
   useEffect(() => {
-    void loadDashboard()
+    let isActive = true
+
+    void getVisaProgress()
+      .then((nextDashboard) => {
+        if (isActive) setDashboard(nextDashboard)
+      })
+      .catch((requestError: unknown) => {
+        if (isActive) setError(getErrorMessage(requestError))
+      })
+      .finally(() => {
+        if (isActive) setIsLoading(false)
+      })
+
+    return () => {
+      isActive = false
+    }
   }, [])
 
-  const applications = dashboard?.applications ?? []
+  const applications = useMemo(() => dashboard?.applications ?? [], [dashboard])
   const statuses = useMemo(() => uniqueValues(applications, 'status'), [applications])
   const responsiblePeople = useMemo(() => uniqueValues(applications, 'responsible_person'), [applications])
   const filteredApplications = useMemo(
-    () => filterApplications(applications, keyword, status, responsiblePerson, deadlineLevel),
-    [applications, keyword, status, responsiblePerson, deadlineLevel],
+    () => filterApplications(applications, keyword, statusesFilter, responsiblePerson, deadlineLevel),
+    [applications, keyword, statusesFilter, responsiblePerson, deadlineLevel],
   )
   const totalPages = Math.max(1, Math.ceil(filteredApplications.length / pageSize))
   const validCurrentPage = Math.min(currentPage, totalPages)
   const pageStartIndex = (validCurrentPage - 1) * pageSize
   const visibleApplications = filteredApplications.slice(pageStartIndex, pageStartIndex + pageSize)
-  const hasActiveFilters = keyword.trim() !== '' || status !== 'all' || responsiblePerson !== 'all' || deadlineLevel !== 'all'
-
-  useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages)
-  }, [currentPage, totalPages])
+  const hasActiveFilters = keyword.trim() !== '' || statusesFilter.length > 0 || responsiblePerson !== 'all' || deadlineLevel !== 'all'
 
   const updateKeyword = (value: string) => {
     setKeyword(value)
     setCurrentPage(1)
   }
 
-  const updateStatus = (value: string) => {
-    setStatus(value)
+  const updateStatuses = (values: string[]) => {
+    setStatusesFilter(values)
     setCurrentPage(1)
   }
 
@@ -94,7 +105,7 @@ export default function VisaProgress() {
 
   const resetFilters = () => {
     setKeyword('')
-    setStatus('all')
+    setStatusesFilter([])
     setResponsiblePerson('all')
     setDeadlineLevel('all')
     setCurrentPage(1)
@@ -131,7 +142,7 @@ export default function VisaProgress() {
           <section id="visa-progress-workspace" className="mt-6 scroll-mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
             <VisaProgressFilters
               keyword={keyword}
-              status={status}
+              selectedStatuses={statusesFilter}
               responsiblePerson={responsiblePerson}
               deadlineLevel={deadlineLevel}
               statuses={statuses}
@@ -141,7 +152,7 @@ export default function VisaProgress() {
               visibleStart={filteredApplications.length > 0 ? pageStartIndex + 1 : 0}
               visibleEnd={Math.min(pageStartIndex + pageSize, filteredApplications.length)}
               onKeywordChange={updateKeyword}
-              onStatusChange={updateStatus}
+              onStatusesChange={updateStatuses}
               onResponsiblePersonChange={updateResponsiblePerson}
               onDeadlineLevelChange={updateDeadlineLevel}
               onReset={resetFilters}
@@ -171,14 +182,14 @@ export default function VisaProgress() {
   )
 }
 
-function filterApplications(applications: VisaProgressApplication[], keyword: string, status: string, responsiblePerson: string, deadlineLevel: string): VisaProgressApplication[] {
+function filterApplications(applications: VisaProgressApplication[], keyword: string, selectedStatuses: string[], responsiblePerson: string, deadlineLevel: string): VisaProgressApplication[] {
   const normalizedKeyword = keyword.trim().toLocaleLowerCase()
 
   return applications
     .filter((application) => {
       const matchesKeyword = !normalizedKeyword || [application.case_id, application.applicant_name]
         .some((value) => value?.toLocaleLowerCase().includes(normalizedKeyword))
-      const matchesStatus = status === 'all' || application.status === status
+      const matchesStatus = selectedStatuses.length === 0 || (application.status !== null && selectedStatuses.includes(application.status))
       const matchesResponsiblePerson = responsiblePerson === 'all' || application.responsible_person === responsiblePerson
       const matchesDeadline = deadlineLevel === 'all'
         || (deadlineLevel === 'attention' && isAttentionDeadline(application.deadline_level))

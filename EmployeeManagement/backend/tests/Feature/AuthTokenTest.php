@@ -61,7 +61,7 @@ class AuthTokenTest extends TestCase
             'password' => 'Themis@123456',
             'role' => 'employee',
             'is_active' => true,
-            'must_change_password' => true,
+            'must_change_password' => false,
         ]);
 
         $loginResponse = $this

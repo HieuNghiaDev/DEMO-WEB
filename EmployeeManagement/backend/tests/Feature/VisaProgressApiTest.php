@@ -85,6 +85,31 @@ class VisaProgressApiTest extends TestCase
         $this->assertCount(3, $response->json('data.applications'));
     }
 
+    public function test_visa_progress_merges_residence_supplement_and_message_link_data_from_operational_sheets(): void
+    {
+        $this->fakeGoogleDriveDownload($this->multiSheetWorkbookContents());
+
+        $response = $this->actingAs($this->userWithCaseViewPermission(), 'sanctum')
+            ->getJson('/api/visa-progress')
+            ->assertOk()
+            ->assertJsonPath('data.source.sheet_name', '本人情報 / 資料管理 / 請求関係')
+            ->assertJsonPath('data.summary.attention_required', 2);
+
+        $applications = collect($response->json('data.applications'))->keyBy('case_id');
+
+        $this->assertSame('2026-08-28', $applications['VISA-100']['deadline']);
+        $this->assertSame('在留期限', $applications['VISA-100']['deadline_label']);
+        $this->assertSame('residence', $applications['VISA-100']['deadline_category']);
+        $this->assertSame('critical', $applications['VISA-100']['deadline_level']);
+        $this->assertSame('https://www.facebook.com/messages/t/test-case', $applications['VISA-100']['message_link']);
+
+        $this->assertNull($applications['VISA-101']['deadline']);
+        $this->assertSame('2026-08-24', $applications['VISA-102']['deadline']);
+        $this->assertSame('追完期限 1回目', $applications['VISA-102']['deadline_label']);
+        $this->assertSame('supplement', $applications['VISA-102']['deadline_category']);
+        $this->assertSame('overdue', $applications['VISA-102']['deadline_level']);
+    }
+
     public function test_visa_progress_returns_a_controlled_workbook_error_when_the_download_is_not_an_excel_file(): void
     {
         $this->fakeGoogleDriveDownload('not an Excel workbook');
@@ -153,6 +178,49 @@ class VisaProgressApiTest extends TestCase
         $directory = storage_path('app/testing');
         File::ensureDirectoryExists($directory);
         $path = $directory.'/visa-progress-'.uniqid().'.xlsx';
+        IOFactory::createWriter($spreadsheet, 'Xlsx')->save($path);
+        $spreadsheet->disconnectWorksheets();
+        $contents = (string) file_get_contents($path);
+        File::delete($path);
+
+        return $contents;
+    }
+
+    private function multiSheetWorkbookContents(): string
+    {
+        $spreadsheet = new Spreadsheet;
+        $personSheet = $spreadsheet->getActiveSheet();
+        $personSheet->setTitle('本人情報');
+        $personSheet->fromArray([
+            ['案件ID', '申請者氏名', '申請種別', '全体ステータス', '在留期限'],
+            ['VISA-100', 'Applicant One', '更新', '新規受付', ExcelDate::PHPToExcel(new DateTimeImmutable('2026-08-28'))],
+            ['VISA-101', 'Applicant Two', '更新', '許可', ExcelDate::PHPToExcel(new DateTimeImmutable('2026-08-24'))],
+            ['VISA-102', 'Applicant Three', '変更', '審査中', null],
+        ]);
+        $personSheet->getStyle('E2:E3')->getNumberFormat()->setFormatCode('yyyy-mm-dd');
+
+        $materialSheet = $spreadsheet->createSheet();
+        $materialSheet->setTitle('資料管理');
+        $materialSheet->fromArray([
+            ['案件ID', '申請者氏名', '全体ステータス', '追完期限 1回目', '追完期限 2回目', '追完期限 3回目'],
+            ['VISA-100', 'Applicant One', '新規受付', null, null, null],
+            ['VISA-101', 'Applicant Two', '許可', null, null, null],
+            ['VISA-102', 'Applicant Three', '審査中', ExcelDate::PHPToExcel(new DateTimeImmutable('2026-08-24')), null, null],
+        ]);
+        $materialSheet->getStyle('D2:F4')->getNumberFormat()->setFormatCode('yyyy-mm-dd');
+
+        $billingSheet = $spreadsheet->createSheet();
+        $billingSheet->setTitle('請求関係');
+        $billingSheet->fromArray([
+            ['案件ID', '申請者氏名', '全体ステータス', 'メッセージリンク'],
+            ['VISA-100', 'Applicant One', '新規受付', 'https://www.facebook.com/messages/t/test-case'],
+            ['VISA-101', 'Applicant Two', '許可', 'javascript:alert(1)'],
+            ['VISA-102', 'Applicant Three', '審査中', null],
+        ]);
+
+        $directory = storage_path('app/testing');
+        File::ensureDirectoryExists($directory);
+        $path = $directory.'/visa-progress-multi-sheet-'.uniqid().'.xlsx';
         IOFactory::createWriter($spreadsheet, 'Xlsx')->save($path);
         $spreadsheet->disconnectWorksheets();
         $contents = (string) file_get_contents($path);

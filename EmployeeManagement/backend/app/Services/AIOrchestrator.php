@@ -180,11 +180,25 @@ class AIOrchestrator
                 'skill_name' => $skillName,
                 'trigger_type' => $triggerType,
                 'input' => $toolUse['input'],
-                'output' => ['error' => $exception->getMessage()],
+                'output' => ['error_class' => $exception::class],
                 'status' => 'failed',
             ]);
 
-            throw new RuntimeException("Tool [{$toolName}] execution failed: {$exception->getMessage()}", 0, $exception);
+            $toolExecutions[] = [
+                'tool_use_id' => $toolUse['id'],
+                'name' => $toolName,
+                'input' => $toolUse['input'],
+                'output' => null,
+                'status' => 'failed',
+            ];
+
+            return [
+                'type' => 'tool_result',
+                'tool_use_id' => $toolUse['id'],
+                'content' => json_encode([
+                    'error' => 'The requested action could not be completed with those parameters. Ask the user for any missing or invalid information before trying again.',
+                ], JSON_THROW_ON_ERROR),
+            ];
         }
 
         $toolExecutions[] = [

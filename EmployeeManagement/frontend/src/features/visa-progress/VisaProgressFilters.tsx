@@ -1,9 +1,9 @@
-import { ChevronDown, RotateCcw, Search } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { Check, ChevronDown, RotateCcw, Search } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 type Props = {
   keyword: string
-  status: string
+  selectedStatuses: string[]
   responsiblePerson: string
   deadlineLevel: string
   statuses: string[]
@@ -13,7 +13,7 @@ type Props = {
   visibleStart: number
   visibleEnd: number
   onKeywordChange: (value: string) => void
-  onStatusChange: (value: string) => void
+  onStatusesChange: (values: string[]) => void
   onResponsiblePersonChange: (value: string) => void
   onDeadlineLevelChange: (value: string) => void
   onReset: () => void
@@ -22,7 +22,7 @@ type Props = {
 export default function VisaProgressFilters(props: Props) {
   const activeFilterCount = [
     props.keyword.trim() !== '',
-    props.status !== 'all',
+    props.selectedStatuses.length > 0,
     props.responsiblePerson !== 'all',
     props.deadlineLevel !== 'all',
   ].filter(Boolean).length
@@ -65,10 +65,11 @@ export default function VisaProgressFilters(props: Props) {
             placeholder="申請者名・案件IDを検索"
           />
         </label>
-        <FilterSelect value={props.status} onChange={props.onStatusChange} label="ステータス">
-          <option value="all">すべてのステータス</option>
-          {props.statuses.map((value) => <option key={value} value={value}>{value}</option>)}
-        </FilterSelect>
+        <StatusMultiSelect
+          selectedStatuses={props.selectedStatuses}
+          statuses={props.statuses}
+          onChange={props.onStatusesChange}
+        />
         <FilterSelect value={props.responsiblePerson} onChange={props.onResponsiblePersonChange} label="担当者">
           <option value="all">すべての担当者</option>
           {props.responsiblePeople.map((value) => <option key={value} value={value}>{value}</option>)}
@@ -83,6 +84,76 @@ export default function VisaProgressFilters(props: Props) {
           <option value="none">期限なし</option>
         </FilterSelect>
       </div>
+    </div>
+  )
+}
+
+function StatusMultiSelect({ selectedStatuses, statuses, onChange }: { selectedStatuses: string[]; statuses: string[]; onChange: (values: string[]) => void }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const closeOnOutsidePointer = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setIsOpen(false)
+    }
+
+    document.addEventListener('mousedown', closeOnOutsidePointer)
+
+    return () => document.removeEventListener('mousedown', closeOnOutsidePointer)
+  }, [])
+
+  const toggleStatus = (status: string) => {
+    onChange(selectedStatuses.includes(status)
+      ? selectedStatuses.filter((value) => value !== status)
+      : [...selectedStatuses, status])
+  }
+  const label = selectedStatuses.length === 0
+    ? 'すべてのステータス'
+    : selectedStatuses.length === 1
+      ? selectedStatuses[0]
+      : `${selectedStatuses.length}件のステータスを選択`
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        onClick={() => setIsOpen((open) => !open)}
+        className="flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white px-3 text-left text-sm font-medium text-slate-700 outline-none transition-colors hover:border-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-600"
+      >
+        <span className="truncate">{label}</span>
+        <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+      </button>
+
+      {isOpen && (
+        <div role="listbox" aria-label="ステータスを複数選択" className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+          <button
+            type="button"
+            onClick={() => onChange([])}
+            className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-slate-600 transition-colors hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            <span className={`flex h-4 w-4 items-center justify-center rounded border ${selectedStatuses.length === 0 ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
+              {selectedStatuses.length === 0 && <Check size={12} strokeWidth={3} aria-hidden="true" />}
+            </span>
+            すべてのステータス
+          </button>
+          <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+          {statuses.map((status) => {
+            const isSelected = selectedStatuses.includes(status)
+
+            return (
+              <label key={status} className="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800">
+                <input type="checkbox" checked={isSelected} onChange={() => toggleStatus(status)} className="sr-only" />
+                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${isSelected ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
+                  {isSelected && <Check size={12} strokeWidth={3} aria-hidden="true" />}
+                </span>
+                <span className="min-w-0 truncate">{status}</span>
+              </label>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

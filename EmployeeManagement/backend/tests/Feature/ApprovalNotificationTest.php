@@ -11,6 +11,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\ApprovalNotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class ApprovalNotificationTest extends TestCase
@@ -19,7 +20,12 @@ class ApprovalNotificationTest extends TestCase
 
     public function test_ai_approval_request_notifies_only_active_approval_managers(): void
     {
-        config(['ai.fake_mode' => true]);
+        config([
+            'ai.provider' => 'gemini',
+            'gemini.api_key' => 'test-gemini-key',
+            'gemini.model' => 'test-gemini-model',
+            'gemini.fallback_model' => null,
+        ]);
         Persona::query()->create([
             'name' => 'secretary',
             'display_name' => 'AI 秘書',
@@ -41,6 +47,31 @@ class ApprovalNotificationTest extends TestCase
             'horizon' => 'short',
             'status' => 'pending',
             'source' => 'manual',
+        ]);
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence()
+                ->push([
+                    'candidates' => [[
+                        'content' => ['parts' => [[
+                            'functionCall' => [
+                                'id' => 'approval_call_1',
+                                'name' => 'request_approval',
+                                'args' => [
+                                    'action_type' => 'delete_task',
+                                    'tool_name' => 'delete_task',
+                                    'payload' => ['task_id' => $task->id],
+                                ],
+                            ],
+                        ]]],
+                        'finishReason' => 'STOP',
+                    ]],
+                ])
+                ->push([
+                    'candidates' => [[
+                        'content' => ['parts' => [['text' => '承認を申請しました。']]],
+                        'finishReason' => 'STOP',
+                    ]],
+                ]),
         ]);
 
         $response = $this->actingAs($requester, 'sanctum')

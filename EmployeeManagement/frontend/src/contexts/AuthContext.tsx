@@ -65,10 +65,17 @@ type LoginResponse = UserResponse & {
   token: string;
 };
 
+type ChangePasswordInput = {
+  currentPassword: string;
+  password: string;
+  passwordConfirmation: string;
+};
+
 type AuthContextValue = {
   user: AuthUser | null;
   isLoading: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
+  changePassword: (input: ChangePasswordInput) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 };
@@ -78,6 +85,16 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 type AuthProviderProps = {
   children: ReactNode;
 };
+
+const normalizeAuthUser = (user: AuthUser): AuthUser => ({
+  ...user,
+  // API should return a boolean, but route protection must never treat a
+  // serialized "0" as truthy and force a user back to password change.
+  must_change_password:
+    user.must_change_password === true ||
+    (user.must_change_password as unknown) === 1 ||
+    (user.must_change_password as unknown) === "1",
+});
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -91,7 +108,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     try {
       const response = await api.get<UserResponse>("/me");
-      setUser(response.data.user);
+      setUser(normalizeAuthUser(response.data.user));
     } catch {
       clearAuthToken();
       setUser(null);
@@ -118,7 +135,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const login = async (credentials: LoginCredentials) => {
     const response = await api.post<LoginResponse>("/login", credentials);
     storeAuthToken(response.data.token, credentials.remember);
-    setUser(response.data.user);
+
+    try {
+      // The post-login route must be based on the current server state, not a
+      // potentially stale login payload from before a password reset.
+      const userResponse = await api.get<UserResponse>("/me");
+      setUser(normalizeAuthUser(userResponse.data.user));
+    } catch (error) {
+      clearAuthToken();
+      setUser(null);
+      throw error;
+    }
+  };
+
+  const changePassword = async (input: ChangePasswordInput) => {
+    await api.put("/password", {
+      current_password: input.currentPassword,
+      password: input.password,
+      password_confirmation: input.passwordConfirmation,
+    });
+
+    clearAuthToken();
+    setUser(null);
   };
 
   const logout = async () => {
@@ -138,6 +176,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         user,
         isLoading,
         login,
+        changePassword,
         logout,
         refreshUser,
       }}

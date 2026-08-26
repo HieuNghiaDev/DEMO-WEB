@@ -8,6 +8,7 @@ use App\Services\SecurityAuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -144,6 +145,61 @@ class AuthController extends Controller
 
         return response()->json([
             'user' => $user,
+        ]);
+    }
+
+    /**
+     * Replace a temporary password and revoke every existing session.
+     */
+    public function changePassword(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => [
+                'required',
+                'string',
+                'confirmed',
+                Password::min(11)->symbols(),
+                'regex:/[A-Z]/',
+            ],
+        ], [
+            'password.regex' => '新しいパスワードには英大文字を1文字以上含めてください。',
+        ]);
+
+        $user = $request->user();
+
+        if (! Hash::check($validated['current_password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['現在のパスワードが正しくありません。'],
+            ]);
+        }
+
+        if (Hash::check($validated['password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'password' => ['新しいパスワードは現在のパスワードと異なるものを指定してください。'],
+            ]);
+        }
+
+        $user->forceFill([
+            'password' => Hash::make($validated['password']),
+            'must_change_password' => false,
+        ])->save();
+
+        // A temporary password may have been exposed. Revoke every session,
+        // including this one, and require a clean login with the new secret.
+        $user->tokens()->delete();
+
+        $this->securityAuditLogger->record(
+            request: $request,
+            event: 'auth.password.changed',
+            outcome: 'success',
+            user: $user,
+            metadata: ['all_tokens_revoked' => true]
+        );
+
+        return response()->json([
+            'message' => 'パスワードを変更しました。新しいパスワードで再度ログインしてください。',
+            'reauthentication_required' => true,
         ]);
     }
 

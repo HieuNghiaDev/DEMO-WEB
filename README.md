@@ -38,6 +38,8 @@ Yêu cầu: PHP 8.2+, Composer, Node.js 20+ và một cơ sở dữ liệu đư�
 
 3. Mở địa chỉ Vite (mặc định `http://localhost:5173`). Backend mặc định ở `http://localhost:8000`.
 
+Các tài khoản mẫu chỉ được seed ở môi trường `local/testing`; production không tạo tài khoản có mật khẩu mặc định. Nếu migration bảo mật vô hiệu hóa tài khoản seed cũ, đặt lại mật khẩu qua terminal backend bằng `php artisan themis:user-password <login_id> --activate`. Mật khẩu được nhập ẩn.
+
 Các biến môi trường, lệnh kiểm tra và lưu ý triển khai nằm trong [tài liệu vận hành](docs/DATA_MODEL.md).
 
 ## Kiểm tra chất lượng

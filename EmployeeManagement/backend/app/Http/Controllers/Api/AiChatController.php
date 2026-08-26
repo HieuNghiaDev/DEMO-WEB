@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Persona;
 use App\Services\AIOrchestrator;
+use App\Services\AiProviderBusyException;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -92,6 +95,15 @@ class AiChatController extends Controller
                 messages: $messages,
                 triggerContext: $triggerContext,
             );
+        } catch (AiProviderBusyException|RequestException|ConnectionException $exception) {
+            Log::warning('AI provider is temporarily unavailable.', [
+                'exception_class' => $exception::class,
+            ]);
+
+            return response()->json([
+                'message' => 'AI provider is busy. Please try again shortly.',
+                'code' => 'ai_provider_unavailable',
+            ], 503);
         } catch (RuntimeException $exception) {
             Log::warning('AI chat orchestration request failed.', [
                 'exception_class' => $exception::class,

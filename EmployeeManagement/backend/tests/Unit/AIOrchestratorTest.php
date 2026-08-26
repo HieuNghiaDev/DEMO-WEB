@@ -142,29 +142,27 @@ class AIOrchestratorTest extends TestCase
         $orchestrator->runSkill('secretary', 'task_management', self::messages());
     }
 
-    public function test_it_logs_and_reports_a_failed_tool_execution(): void
+    public function test_it_returns_a_safe_tool_error_to_the_model_when_execution_fails(): void
     {
         [$orchestrator] = $this->orchestrator([
             self::toolResponse('toolu_update', 'update_task', ['id' => 999]),
+            self::textResponse('I could not update that task. Please confirm the task ID.'),
         ]);
 
-        try {
-            $orchestrator->runSkill('secretary', 'task_management', self::messages());
-            $this->fail('Expected the failed tool execution to throw.');
-        } catch (RuntimeException $exception) {
-            $this->assertStringContainsString('Tool [update_task] execution failed', $exception->getMessage());
-        }
+        $result = $orchestrator->runSkill('secretary', 'task_management', self::messages());
 
         $this->assertDatabaseHas('secretary_logs', [
             'skill_name' => 'task_management',
             'status' => 'failed',
         ]);
+        $this->assertSame('failed', $result['tool_executions'][0]['status']);
+        $this->assertSame('I could not update that task. Please confirm the task ID.', $result['text']);
     }
 
-    /** @return array{0: AIOrchestrator, 1: FakeClaudeClient} */
+    /** @return array{0: AIOrchestrator, 1: SequencedClaudeClient} */
     private function orchestrator(array $responses, ?PersonaLoader $personaLoader = null): array
     {
-        $client = new FakeClaudeClient($responses);
+        $client = new SequencedClaudeClient($responses);
 
         return [
             new AIOrchestrator(
@@ -216,7 +214,7 @@ class AIOrchestratorTest extends TestCase
     }
 }
 
-class FakeClaudeClient extends ClaudeClient
+class SequencedClaudeClient extends ClaudeClient
 {
     /** @var list<array<string, mixed>> */
     public array $calls = [];

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\RequirePermission;
 use App\Http\Middleware\SecurityEventAudit;
 use App\Http\Middleware\SecurityHeaders;
@@ -20,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(SecurityEventAudit::class);
         $middleware->alias([
             'permission' => RequirePermission::class,
+            'password.changed' => RequirePasswordChange::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

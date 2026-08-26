@@ -27,17 +27,23 @@ Route::post('/login', [
 Route::middleware([
     'auth:sanctum',
     'throttle:60,1',
+    'password.changed',
 ])->group(function () {
 
     Route::get('/me', [
         AuthController::class,
         'me',
-    ]);
+    ])->withoutMiddleware('password.changed');
 
     Route::post('/logout', [
         AuthController::class,
         'logout',
-    ]);
+    ])->withoutMiddleware('password.changed');
+
+    Route::put('/password', [
+        AuthController::class,
+        'changePassword',
+    ])->middleware('throttle:5,1')->withoutMiddleware('password.changed');
 
     Route::get('/organization', [
         OrganizationController::class,
