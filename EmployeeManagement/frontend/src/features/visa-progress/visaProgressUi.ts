@@ -43,5 +43,5 @@ export const deadlineText = (days: number | null, level: VisaDeadlineLevel): str
 }
 
 export const isAttentionDeadline = (level: VisaDeadlineLevel): boolean => (
-  level === 'overdue' || level === 'critical' || level === 'warning'
+  level === 'overdue' || level === 'critical' || level === 'warning' || level === 'notice' || level === 'upcoming'
 )

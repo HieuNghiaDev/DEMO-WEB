@@ -2,6 +2,8 @@ export type VisaDeadlineLevel =
   | 'overdue'
   | 'critical'
   | 'warning'
+  | 'notice'
+  | 'upcoming'
   | 'normal'
   | 'none'
 
@@ -9,6 +11,12 @@ export type VisaDeadline = {
   label: string
   date: string
   category?: 'residence' | 'supplement' | 'general'
+}
+
+export type VisaOperationalDeadline = VisaDeadline & {
+  category: 'residence' | 'supplement' | 'general'
+  days_remaining: number | null
+  deadline_level: VisaDeadlineLevel
 }
 
 export type VisaProgressApplication = {
@@ -25,6 +33,8 @@ export type VisaProgressApplication = {
   deadlines: VisaDeadline[]
   days_remaining: number | null
   deadline_level: VisaDeadlineLevel
+  residence_deadline?: VisaOperationalDeadline | null
+  supplement_deadline?: VisaOperationalDeadline | null
   source_sheet: string
   source_row: number
   message_link: string | null

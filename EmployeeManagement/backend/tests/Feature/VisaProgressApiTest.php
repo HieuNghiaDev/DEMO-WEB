@@ -93,7 +93,7 @@ class VisaProgressApiTest extends TestCase
             ->getJson('/api/visa-progress')
             ->assertOk()
             ->assertJsonPath('data.source.sheet_name', '本人情報 / 資料管理 / 請求関係')
-            ->assertJsonPath('data.summary.attention_required', 2);
+            ->assertJsonPath('data.summary.attention_required', 4);
 
         $applications = collect($response->json('data.applications'))->keyBy('case_id');
 
@@ -101,6 +101,9 @@ class VisaProgressApiTest extends TestCase
         $this->assertSame('在留期限', $applications['VISA-100']['deadline_label']);
         $this->assertSame('residence', $applications['VISA-100']['deadline_category']);
         $this->assertSame('critical', $applications['VISA-100']['deadline_level']);
+        $this->assertSame('2026-08-28', $applications['VISA-100']['residence_deadline']['date']);
+        $this->assertSame('critical', $applications['VISA-100']['residence_deadline']['deadline_level']);
+        $this->assertNull($applications['VISA-100']['supplement_deadline']);
         $this->assertSame('https://www.facebook.com/messages/t/test-case', $applications['VISA-100']['message_link']);
 
         $this->assertNull($applications['VISA-101']['deadline']);
@@ -108,6 +111,13 @@ class VisaProgressApiTest extends TestCase
         $this->assertSame('追完期限 1回目', $applications['VISA-102']['deadline_label']);
         $this->assertSame('supplement', $applications['VISA-102']['deadline_category']);
         $this->assertSame('overdue', $applications['VISA-102']['deadline_level']);
+        $this->assertNull($applications['VISA-102']['residence_deadline']);
+        $this->assertSame('追完期限 1回目', $applications['VISA-102']['supplement_deadline']['label']);
+        $this->assertSame('overdue', $applications['VISA-102']['supplement_deadline']['deadline_level']);
+        $this->assertSame('notice', $applications['VISA-103']['deadline_level']);
+        $this->assertSame('15', (string) $applications['VISA-103']['days_remaining']);
+        $this->assertSame('upcoming', $applications['VISA-104']['deadline_level']);
+        $this->assertSame('30', (string) $applications['VISA-104']['days_remaining']);
     }
 
     public function test_visa_progress_returns_a_controlled_workbook_error_when_the_download_is_not_an_excel_file(): void
@@ -196,8 +206,10 @@ class VisaProgressApiTest extends TestCase
             ['VISA-100', 'Applicant One', '更新', '新規受付', ExcelDate::PHPToExcel(new DateTimeImmutable('2026-08-28'))],
             ['VISA-101', 'Applicant Two', '更新', '許可', ExcelDate::PHPToExcel(new DateTimeImmutable('2026-08-24'))],
             ['VISA-102', 'Applicant Three', '変更', '審査中', null],
+            ['VISA-103', 'Applicant Four', '更新', '新規受付', ExcelDate::PHPToExcel(new DateTimeImmutable('2026-09-09'))],
+            ['VISA-104', 'Applicant Five', '更新', '申請準備完了', ExcelDate::PHPToExcel(new DateTimeImmutable('2026-09-24'))],
         ]);
-        $personSheet->getStyle('E2:E3')->getNumberFormat()->setFormatCode('yyyy-mm-dd');
+        $personSheet->getStyle('E2:E6')->getNumberFormat()->setFormatCode('yyyy-mm-dd');
 
         $materialSheet = $spreadsheet->createSheet();
         $materialSheet->setTitle('資料管理');
@@ -206,8 +218,10 @@ class VisaProgressApiTest extends TestCase
             ['VISA-100', 'Applicant One', '新規受付', null, null, null],
             ['VISA-101', 'Applicant Two', '許可', null, null, null],
             ['VISA-102', 'Applicant Three', '審査中', ExcelDate::PHPToExcel(new DateTimeImmutable('2026-08-24')), null, null],
+            ['VISA-103', 'Applicant Four', '新規受付', null, null, null],
+            ['VISA-104', 'Applicant Five', '申請準備完了', null, null, null],
         ]);
-        $materialSheet->getStyle('D2:F4')->getNumberFormat()->setFormatCode('yyyy-mm-dd');
+        $materialSheet->getStyle('D2:F6')->getNumberFormat()->setFormatCode('yyyy-mm-dd');
 
         $billingSheet = $spreadsheet->createSheet();
         $billingSheet->setTitle('請求関係');
@@ -216,6 +230,8 @@ class VisaProgressApiTest extends TestCase
             ['VISA-100', 'Applicant One', '新規受付', 'https://www.facebook.com/messages/t/test-case'],
             ['VISA-101', 'Applicant Two', '許可', 'javascript:alert(1)'],
             ['VISA-102', 'Applicant Three', '審査中', null],
+            ['VISA-103', 'Applicant Four', '新規受付', null],
+            ['VISA-104', 'Applicant Five', '申請準備完了', null],
         ]);
 
         $directory = storage_path('app/testing');

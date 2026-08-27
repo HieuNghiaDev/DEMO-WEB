@@ -1,4 +1,5 @@
 import { FileSpreadsheet, RotateCcw } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import VisaStatusBadge from './VisaStatusBadge'
 import type { VisaDeadlineLevel, VisaProgressApplication } from './types'
 import { deadlineText, formatDate } from './visaProgressUi'
@@ -53,21 +54,21 @@ export default function VisaProgressTable({ applications, hasActiveFilters, onRe
             </tr>
           </thead>
           <tbody>
-            {applications.map((application) => <ApplicationTableRow key={application.id} application={application} />)}
+            {applications.map((application, index) => <ApplicationTableRow key={application.id} application={application} index={index} />)}
           </tbody>
         </table>
       </div>
 
       <div className="divide-y divide-slate-200 dark:divide-slate-800 md:hidden">
-        {applications.map((application) => <ApplicationMobileRow key={application.id} application={application} />)}
+        {applications.map((application, index) => <ApplicationMobileRow key={application.id} application={application} index={index} />)}
       </div>
     </>
   )
 }
 
-function ApplicationTableRow({ application }: { application: VisaProgressApplication }) {
+function ApplicationTableRow({ application, index }: { application: VisaProgressApplication; index: number }) {
   return (
-    <tr className="group border-t border-slate-100 transition-colors duration-150 first:border-t-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/45">
+    <RevealTableRow index={index} className="group border-t border-slate-100 transition-colors duration-150 first:border-t-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/45">
       <td className={`border-l-2 px-4 py-3 ${priorityBorder(application.deadline_level)}`}>
         <span className="text-xs font-medium tabular-nums text-slate-600 dark:text-slate-300">{application.case_id ?? `Excel 行 ${application.source_row}`}</span>
       </td>
@@ -91,13 +92,13 @@ function ApplicationTableRow({ application }: { application: VisaProgressApplica
       <td className="whitespace-nowrap px-3 py-3">
         <DeadlineRisk application={application} />
       </td>
-    </tr>
+    </RevealTableRow>
   )
 }
 
-function ApplicationMobileRow({ application }: { application: VisaProgressApplication }) {
+function ApplicationMobileRow({ application, index }: { application: VisaProgressApplication; index: number }) {
   return (
-    <article className={`border-l-2 px-4 py-4 ${priorityBorder(application.deadline_level)}`}>
+    <RevealMobileRow index={index} className={`border-l-2 px-4 py-4 ${priorityBorder(application.deadline_level)}`}>
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{application.applicant_name ?? '申請者名未登録'}</p>
@@ -117,8 +118,60 @@ function ApplicationMobileRow({ application }: { application: VisaProgressApplic
           <dd className="mt-1"><DeadlineRisk application={application} /></dd>
         </div>
       </dl>
+    </RevealMobileRow>
+  )
+}
+
+function RevealTableRow({ children, className, index }: { children: ReactNode; className: string; index: number }) {
+  const rowRef = useRef<HTMLTableRowElement>(null)
+  const isVisible = useRevealOnScroll(rowRef)
+
+  return (
+    <tr
+      ref={rowRef}
+      style={{ transitionDelay: `${Math.min(index, 6) * 55}ms` }}
+      className={`${className} transition-[opacity,transform,background-color] duration-500 ease-out motion-reduce:transition-none ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
+    >
+      {children}
+    </tr>
+  )
+}
+
+function RevealMobileRow({ children, className, index }: { children: ReactNode; className: string; index: number }) {
+  const rowRef = useRef<HTMLElement>(null)
+  const isVisible = useRevealOnScroll(rowRef)
+
+  return (
+    <article
+      ref={rowRef}
+      style={{ transitionDelay: `${Math.min(index, 6) * 55}ms` }}
+      className={`${className} transition-[opacity,transform,background-color] duration-500 ease-out motion-reduce:transition-none ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
+    >
+      {children}
     </article>
   )
+}
+
+function useRevealOnScroll<T extends Element>(elementRef: RefObject<T | null>): boolean {
+  const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    const element = elementRef.current
+
+    if (!element || !('IntersectionObserver' in window)) {
+      setIsVisible(true)
+      return undefined
+    }
+
+    const observer = new IntersectionObserver(([entry]) => {
+      setIsVisible(entry.isIntersecting)
+    }, { threshold: 0.08, rootMargin: '0px 0px -4% 0px' })
+
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [elementRef])
+
+  return isVisible
 }
 
 function DeadlineRisk({ application }: { application: VisaProgressApplication }) {
@@ -141,13 +194,15 @@ function Info({ label, value }: { label: string; value: string }) {
 function priorityBorder(level: VisaDeadlineLevel) {
   if (level === 'overdue') return 'border-l-rose-500'
   if (level === 'critical') return 'border-l-rose-300 dark:border-l-rose-400/70'
-  if (level === 'warning') return 'border-l-amber-400'
+  if (level === 'warning' || level === 'notice') return 'border-l-amber-400'
+  if (level === 'upcoming') return 'border-l-sky-400'
   return 'border-l-transparent'
 }
 
 function deadlineTone(level: VisaDeadlineLevel) {
   if (level === 'overdue' || level === 'critical') return 'text-rose-600 dark:text-rose-300'
-  if (level === 'warning') return 'text-amber-600 dark:text-amber-300'
+  if (level === 'warning' || level === 'notice') return 'text-amber-600 dark:text-amber-300'
+  if (level === 'upcoming') return 'text-sky-600 dark:text-sky-300'
   if (level === 'normal') return 'text-slate-700 dark:text-slate-200'
   return 'font-normal text-slate-400 dark:text-slate-500'
 }

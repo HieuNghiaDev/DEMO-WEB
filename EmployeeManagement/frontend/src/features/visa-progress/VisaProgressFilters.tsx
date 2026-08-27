@@ -76,10 +76,12 @@ export default function VisaProgressFilters(props: Props) {
         </FilterSelect>
         <FilterSelect value={props.deadlineLevel} onChange={props.onDeadlineLevelChange} label="期限">
           <option value="all">すべての期限</option>
-          <option value="attention">要対応（10日以内）</option>
+          <option value="attention">要対応（30日以内）</option>
           <option value="overdue">期限超過</option>
           <option value="critical">5日以内</option>
-          <option value="warning">10日以内</option>
+          <option value="warning">6〜10日</option>
+          <option value="notice">11〜15日</option>
+          <option value="upcoming">16〜30日</option>
           <option value="has_deadline">期限あり</option>
           <option value="none">期限なし</option>
         </FilterSelect>

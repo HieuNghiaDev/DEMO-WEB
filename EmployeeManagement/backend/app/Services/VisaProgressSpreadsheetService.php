@@ -107,7 +107,7 @@ class VisaProgressSpreadsheetService
             'in_review' => count(array_filter($applications, fn (array $application): bool => $this->isReviewStatus($application['status'] ?? null))),
             'additional_documents' => count(array_filter($applications, fn (array $application): bool => str_contains((string) ($application['status'] ?? ''), '追加資料'))),
             'approved' => count(array_filter($applications, fn (array $application): bool => $this->isApprovedStatus($application['status'] ?? null))),
-            'attention_required' => count(array_filter($applications, fn (array $application): bool => in_array($application['deadline_level'] ?? null, ['overdue', 'critical', 'warning'], true))),
+            'attention_required' => count(array_filter($applications, fn (array $application): bool => in_array($application['deadline_level'] ?? null, ['overdue', 'critical', 'warning', 'notice', 'upcoming'], true))),
         ];
     }
 
@@ -244,6 +244,10 @@ class VisaProgressSpreadsheetService
                 'deadlines' => $deadlines,
                 'days_remaining' => $deadlineState['days_remaining'],
                 'deadline_level' => $deadlineState['level'],
+                // A single-sheet workbook has no reliable separation between
+                // residence and supplemental-document deadlines.
+                'residence_deadline' => null,
+                'supplement_deadline' => null,
                 'source_sheet' => $sheet->getTitle(),
                 'source_row' => $row,
                 'message_link' => $this->normalizeMessageLink($values['message_link'] ?? null),
@@ -280,10 +284,9 @@ class VisaProgressSpreadsheetService
             $material = $materialsByCaseId[$caseId] ?? [];
             $billing = $billingByCaseId[$caseId] ?? [];
             $status = $this->firstString($person['status'] ?? null, $material['status'] ?? null, $billing['status'] ?? null);
-            $deadlines = [
-                ...$this->eligibleResidenceDeadlines($person),
-                ...$this->eligibleSupplementDeadlines($material),
-            ];
+            $residenceDeadline = $this->selectOperationalDeadline($this->eligibleResidenceDeadlines($person, $status));
+            $supplementDeadline = $this->selectOperationalDeadline($this->eligibleSupplementDeadlines($material, $status));
+            $deadlines = array_values(array_filter([$residenceDeadline, $supplementDeadline]));
             $selectedDeadline = $this->selectOperationalDeadline($deadlines);
             $deadlineState = $this->deadlineState($selectedDeadline['date'] ?? null);
 
@@ -301,6 +304,8 @@ class VisaProgressSpreadsheetService
                 'deadlines' => $deadlines,
                 'days_remaining' => $deadlineState['days_remaining'],
                 'deadline_level' => $deadlineState['level'],
+                'residence_deadline' => $this->deadlineDetails($residenceDeadline),
+                'supplement_deadline' => $this->deadlineDetails($supplementDeadline),
                 'source_sheet' => '本人情報 / 資料管理',
                 'source_row' => $person['source_row'] ?? $material['source_row'] ?? 0,
                 'message_link' => $this->normalizeMessageLink($billing['message_link'] ?? null),
@@ -330,9 +335,9 @@ class VisaProgressSpreadsheetService
     /** @param array<string, mixed> $record
      * @return list<array{label: string, date: string, category: string}>
      */
-    private function eligibleResidenceDeadlines(array $record): array
+    private function eligibleResidenceDeadlines(array $record, ?string $status = null): array
     {
-        if (! in_array($record['status'] ?? null, self::RESIDENCE_DEADLINE_STATUSES, true)) {
+        if (! in_array($status ?? $record['status'] ?? null, self::RESIDENCE_DEADLINE_STATUSES, true)) {
             return [];
         }
 
@@ -342,9 +347,9 @@ class VisaProgressSpreadsheetService
     /** @param array<string, mixed> $record
      * @return list<array{label: string, date: string, category: string}>
      */
-    private function eligibleSupplementDeadlines(array $record): array
+    private function eligibleSupplementDeadlines(array $record, ?string $status = null): array
     {
-        if (! in_array($record['status'] ?? null, self::SUPPLEMENT_DEADLINE_STATUSES, true)) {
+        if (! in_array($status ?? $record['status'] ?? null, self::SUPPLEMENT_DEADLINE_STATUSES, true)) {
             return [];
         }
 
@@ -412,6 +417,27 @@ class VisaProgressSpreadsheetService
         return $upcoming[0] ?? $deadlines[array_key_last($deadlines)];
     }
 
+    /**
+     * @param  array{label: string, date: string, category?: string}|null  $deadline
+     * @return array{label: string, date: string, category: string, days_remaining: int|null, deadline_level: string}|null
+     */
+    private function deadlineDetails(?array $deadline): ?array
+    {
+        if ($deadline === null) {
+            return null;
+        }
+
+        $state = $this->deadlineState($deadline['date']);
+
+        return [
+            'label' => $deadline['label'],
+            'date' => $deadline['date'],
+            'category' => $deadline['category'] ?? 'general',
+            'days_remaining' => $state['days_remaining'],
+            'deadline_level' => $state['level'],
+        ];
+    }
+
     /** @return array{days_remaining: int|null, level: string} */
     private function deadlineState(?string $deadline): array
     {
@@ -427,6 +453,8 @@ class VisaProgressSpreadsheetService
                 $daysRemaining < 0 => 'overdue',
                 $daysRemaining <= 5 => 'critical',
                 $daysRemaining <= 10 => 'warning',
+                $daysRemaining <= 15 => 'notice',
+                $daysRemaining <= 30 => 'upcoming',
                 default => 'normal',
             },
         ];

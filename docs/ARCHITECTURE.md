@@ -102,4 +102,4 @@ Luồng giao việc: manager/admin tạo task `pending`; nhân viên xác nhận
 
 ### 在留申請進捗管理 (Phase 1)
 
-Google Drive Excel là source of truth. `VisaProgressController` lấy dashboard từ cache 60 giây (hoặc bỏ cache bằng `?refresh=1`), `GoogleDriveService` tải file vào storage tạm, `VisaProgressSpreadsheetService` đọc xong rồi file tạm được xoá. Khi workbook có đủ sheet vận hành, service ghép `本人情報` (thông tin và `在留期限`), `資料管理` (`追完期限 1回目〜3回目`) và `請求関係` (`メッセージリンク`) theo `案件ID`. Phase 1 không tạo bảng database, không ghi Excel/Google Drive và không chạy scheduler.
+Google Drive Excel là source of truth. `VisaProgressController` lấy dashboard từ cache 60 giây (hoặc bỏ cache bằng `?refresh=1`), `GoogleDriveService` tải file vào storage tạm, `VisaProgressSpreadsheetService` đọc xong rồi file tạm được xoá. Khi workbook có đủ sheet vận hành, service ghép `本人情報` (thông tin và `在留期限`), `資料管理` (`追完期限 1回目〜3回目`) và `請求関係` (`メッセージリンク`) theo `案件ID`. Deadline lưu trú và deadline nộp bổ sung được trả độc lập, theo nhóm status nghiệp vụ, để dashboard hiển thị hai luồng cảnh báo riêng. Phase 1 không tạo bảng database, không ghi Excel/Google Drive và không chạy scheduler.

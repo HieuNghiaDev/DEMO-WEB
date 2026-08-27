@@ -105,14 +105,22 @@ Ví dụ response (đã rút gọn):
         "deadline": "2026-08-28",
         "deadlines": [{ "label": "追加資料提出期限", "date": "2026-08-28" }],
         "days_remaining": 3,
-        "deadline_level": "critical"
+        "deadline_level": "critical",
+        "residence_deadline": null,
+        "supplement_deadline": {
+          "label": "追完期限 1回目",
+          "date": "2026-08-28",
+          "category": "supplement",
+          "days_remaining": 3,
+          "deadline_level": "critical"
+        }
       }
     ]
   }
 }
 ```
 
-`deadline_level` là `overdue`, `critical` (0–5 ngày), `warning` (6–10 ngày), `normal` hoặc `none`. Với workbook vận hành đầy đủ, cảnh báo chỉ được tính từ `在留期限` khi status là `新規受付` hoặc `申請準備完了`, và từ `追完期限 1回目〜3回目` khi status là `審査中` hoặc `追加資料依頼①〜③`. Response cũng có `deadline_label`, `deadline_category` (`residence`/`supplement`) và `message_link` khi `請求関係` có liên kết Messenger HTTPS hợp lệ. Status không có trong mapping vẫn được trả nguyên văn từ workbook.
+`deadline_level` là `overdue`, `critical` (0–5 ngày), `warning` (6–10 ngày), `notice` (11–15 ngày), `upcoming` (16–30 ngày), `normal` hoặc `none`. Với workbook vận hành đầy đủ, `residence_deadline` chỉ được tính từ `在留期限` khi status là `新規受付` hoặc `申請準備完了`; `supplement_deadline` chỉ được tính từ `追完期限 1回目〜3回目` khi status là `審査中` hoặc `追加資料依頼①〜③`. Hai trường này giữ riêng trạng thái deadline để dashboard không trộn hai luồng nghiệp vụ. `deadline` vẫn được giữ làm deadline vận hành đại diện cho bảng/lọc tương thích. Response cũng có `deadline_label`, `deadline_category` (`residence`/`supplement`) và `message_link` khi `請求関係` có liên kết Messenger HTTPS hợp lệ. Status không có trong mapping vẫn được trả nguyên văn từ workbook.
 
 ## Dạng response và lỗi
 

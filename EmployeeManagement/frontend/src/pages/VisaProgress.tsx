@@ -6,6 +6,7 @@ import VisaProgressFilters from '../features/visa-progress/VisaProgressFilters'
 import VisaProgressHeader from '../features/visa-progress/VisaProgressHeader'
 import VisaProgressInsights from '../features/visa-progress/VisaProgressInsights'
 import VisaProgressPagination from '../features/visa-progress/VisaProgressPagination'
+import VisaScrollReveal from '../features/visa-progress/VisaScrollReveal'
 import VisaProgressSummary from '../features/visa-progress/VisaProgressSummary'
 import VisaProgressTable from '../features/visa-progress/VisaProgressTable'
 import type { VisaDeadlineLevel, VisaProgressApplication, VisaProgressDashboard } from '../features/visa-progress/types'
@@ -15,8 +16,10 @@ const deadlineOrder: Record<VisaDeadlineLevel, number> = {
   overdue: 0,
   critical: 1,
   warning: 2,
-  normal: 3,
-  none: 4,
+  notice: 3,
+  upcoming: 4,
+  normal: 5,
+  none: 6,
 }
 
 export default function VisaProgress() {
@@ -139,43 +142,45 @@ export default function VisaProgress() {
           {refreshError && <RefreshError message={refreshError} onRetry={() => void loadDashboard(true)} />}
           <VisaProgressInsights applications={applications} onShowAttention={showAttentionApplications} />
 
-          <section id="visa-progress-workspace" className="mt-6 scroll-mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-            <VisaProgressFilters
-              keyword={keyword}
-              selectedStatuses={statusesFilter}
-              responsiblePerson={responsiblePerson}
-              deadlineLevel={deadlineLevel}
-              statuses={statuses}
-              responsiblePeople={responsiblePeople}
-              totalCount={applications.length}
-              filteredCount={filteredApplications.length}
-              visibleStart={filteredApplications.length > 0 ? pageStartIndex + 1 : 0}
-              visibleEnd={Math.min(pageStartIndex + pageSize, filteredApplications.length)}
-              onKeywordChange={updateKeyword}
-              onStatusesChange={updateStatuses}
-              onResponsiblePersonChange={updateResponsiblePerson}
-              onDeadlineLevelChange={updateDeadlineLevel}
-              onReset={resetFilters}
-            />
-            <VisaProgressTable
-              applications={visibleApplications}
-              hasActiveFilters={hasActiveFilters}
-              onResetFilters={resetFilters}
-            />
-            {filteredApplications.length > 0 && (
-              <VisaProgressPagination
-                currentPage={validCurrentPage}
-                pageSize={pageSize}
-                totalItems={filteredApplications.length}
-                totalSourceItems={applications.length}
-                onPageChange={setCurrentPage}
-                onPageSizeChange={(size) => {
-                  setPageSize(size)
-                  setCurrentPage(1)
-                }}
+          <VisaScrollReveal id="visa-progress-workspace" className="mt-6 scroll-mt-5">
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white transition-[border-color,box-shadow] hover:border-indigo-200 hover:shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:hover:border-indigo-400/40">
+              <VisaProgressFilters
+                keyword={keyword}
+                selectedStatuses={statusesFilter}
+                responsiblePerson={responsiblePerson}
+                deadlineLevel={deadlineLevel}
+                statuses={statuses}
+                responsiblePeople={responsiblePeople}
+                totalCount={applications.length}
+                filteredCount={filteredApplications.length}
+                visibleStart={filteredApplications.length > 0 ? pageStartIndex + 1 : 0}
+                visibleEnd={Math.min(pageStartIndex + pageSize, filteredApplications.length)}
+                onKeywordChange={updateKeyword}
+                onStatusesChange={updateStatuses}
+                onResponsiblePersonChange={updateResponsiblePerson}
+                onDeadlineLevelChange={updateDeadlineLevel}
+                onReset={resetFilters}
               />
-            )}
-          </section>
+              <VisaProgressTable
+                applications={visibleApplications}
+                hasActiveFilters={hasActiveFilters}
+                onResetFilters={resetFilters}
+              />
+              {filteredApplications.length > 0 && (
+                <VisaProgressPagination
+                  currentPage={validCurrentPage}
+                  pageSize={pageSize}
+                  totalItems={filteredApplications.length}
+                  totalSourceItems={applications.length}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size)
+                    setCurrentPage(1)
+                  }}
+                />
+              )}
+            </section>
+          </VisaScrollReveal>
         </>
       )}
     </div>
