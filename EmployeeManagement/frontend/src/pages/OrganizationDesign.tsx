@@ -361,26 +361,28 @@ export default function OrganizationDesign() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 pb-10 pt-5 sm:px-5 lg:px-6 xl:px-8">
+    <div className="mx-auto w-full max-w-[1600px] space-y-8 px-4 pb-16 pt-6 sm:px-6 lg:px-8 xl:px-10">
 
       {/* Header */}
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900" aria-labelledby="organization-title">
-        <header className="px-4 pb-4 pt-5 sm:px-5 lg:px-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 border-l-2 border-indigo-500 pl-4">
-              <div className="flex items-center gap-2 text-xs font-medium text-indigo-600 dark:text-indigo-300"><Building2 size={15} aria-hidden="true" />社員管理</div>
-              <h1 id="organization-title" className="mt-1.5 text-2xl font-semibold leading-tight tracking-tight text-slate-950 dark:text-slate-100 md:text-[28px]">組織設計</h1>
-              <p className="mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400">社員・所属・勤務状況・アクセスレベルを一元管理します。</p>
+      <section aria-labelledby="organization-title">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
+              <Building2 size={13} aria-hidden="true" />
+              社員管理
             </div>
+            <h1 id="organization-title" className="mt-3 text-[28px] font-semibold leading-tight tracking-tight text-slate-950 dark:text-white md:text-[32px]">組織設計</h1>
+            <p className="mt-1.5 max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-400">社員・所属・勤務状況・アクセスレベルを一元管理します。</p>
+          </div>
 
-            <div className="flex flex-wrap gap-2 sm:shrink-0">
+          <div className="flex shrink-0 gap-2.5">
             <button
               type="button"
               disabled={refreshing}
               onClick={() => void loadOrganization(true)}
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition-colors duration-150 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-indigo-400/50 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-200 sm:flex-none"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-600 transition-colors duration-150 hover:border-indigo-300 hover:text-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-indigo-400/50 dark:hover:text-indigo-200"
             >
-              <RefreshCw size={15} className={refreshing ? 'animate-spin text-indigo-500' : 'text-indigo-500 dark:text-indigo-300'} />
+              <RefreshCw size={15} className={refreshing ? 'animate-spin text-indigo-500' : 'text-slate-400 dark:text-slate-500'} />
               {refreshing ? '更新中…' : '最新データを取得'}
             </button>
             <button
@@ -388,19 +390,19 @@ export default function OrganizationDesign() {
               disabled={!user?.permission_names.includes('employee.create')}
               title={user?.permission_names.includes('employee.create') ? '新しい社員を登録' : '社員登録の権限がありません'}
               onClick={() => setIsCreateEmployeeOpen(true)}
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-medium text-white transition-colors duration-150 hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-300 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:disabled:bg-slate-700 sm:flex-none"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-indigo-600 px-5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 transition-colors duration-150 hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
             >
               <Plus size={15} /> 新規社員
             </button>
-            </div>
           </div>
-        </header>
-        <div className="grid grid-cols-2 border-t border-slate-200 bg-slate-50/55 dark:border-slate-700 dark:bg-slate-950/25 sm:grid-cols-5">
-          <SummaryCard title="全社員" value={summary.total} icon={<Users size={18} />} accentClass="bg-indigo-500" iconClass="bg-indigo-50 text-indigo-600 dark:bg-indigo-400/10 dark:text-indigo-300" className="border-b border-r border-slate-100 dark:border-slate-800 sm:border-b-0" />
-          <SummaryCard title="勤務中" value={summary.working} icon={<BriefcaseBusiness size={18} />} accentClass="bg-emerald-500" iconClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-300" className="border-b border-slate-100 dark:border-slate-800 sm:border-b-0 sm:border-r" />
-          <SummaryCard title="休憩中" value={summary.break} icon={<Coffee size={18} />} accentClass="bg-amber-500" iconClass="bg-amber-50 text-amber-600 dark:bg-amber-400/10 dark:text-amber-300" className="border-b border-r border-slate-100 dark:border-slate-800 sm:border-b-0" />
-          <SummaryCard title="外出中" value={summary.outside} icon={<MapPin size={18} />} accentClass="bg-sky-500" iconClass="bg-sky-50 text-sky-600 dark:bg-sky-400/10 dark:text-sky-300" className="border-b border-slate-100 dark:border-slate-800 sm:border-b-0 sm:border-r" />
-          <SummaryCard title="オフライン" value={summary.offline} icon={<UserRound size={18} />} accentClass="bg-slate-400" iconClass="bg-slate-100 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300" className="col-span-2 sm:col-span-1" />
+        </div>
+
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <SummaryCard title="全社員" value={summary.total} icon={<Users size={18} />} iconClass="bg-indigo-50 text-indigo-600 dark:bg-indigo-400/10 dark:text-indigo-300" />
+          <SummaryCard title="勤務中" value={summary.working} icon={<BriefcaseBusiness size={18} />} iconClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-300" />
+          <SummaryCard title="休憩中" value={summary.break} icon={<Coffee size={18} />} iconClass="bg-amber-50 text-amber-600 dark:bg-amber-400/10 dark:text-amber-300" />
+          <SummaryCard title="外出中" value={summary.outside} icon={<MapPin size={18} />} iconClass="bg-sky-50 text-sky-600 dark:bg-sky-400/10 dark:text-sky-300" />
+          <SummaryCard title="オフライン" value={summary.offline} icon={<UserRound size={18} />} iconClass="bg-slate-100 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300" className="col-span-2 sm:col-span-1" />
         </div>
       </section>
 
@@ -411,97 +413,84 @@ export default function OrganizationDesign() {
       )}
 
       {/* Office selector */}
-      <section className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+      <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-slate-400 dark:text-slate-500">事務所</span>
 
-          <div className="flex min-w-0 flex-1 flex-col gap-2 md:flex-row">
-            {offices.map((office, index) => {
-              const selected = selectedOfficeId === office.id
+          <button
+            type="button"
+            onClick={() => setSelectedOfficeId(null)}
+            className={`organization-office-card rounded-full px-4 py-2 text-xs font-semibold transition-all ${
+              selectedOfficeId === null
+                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
+                : 'border border-slate-200 bg-white text-slate-500 hover:border-indigo-300 hover:text-indigo-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-indigo-500/40'
+            }`}
+          >
+            すべて
+          </button>
 
-              return (
-                <div key={office.id} className="flex min-w-0 flex-1 items-center gap-2">
-                  {index > 0 && <span className="hidden text-slate-300 dark:text-slate-700 md:block">×</span>}
+          {offices.map((office, index) => {
+            const selected = selectedOfficeId === office.id
 
-                  <button
-                    type="button"
-                    onClick={() => selectOffice(office.id)}
-                    className={`organization-office-card group flex min-w-0 flex-1 items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all ${selected ? 'is-selected' : ''} ${
-                      selected
-                        ? 'border-indigo-400 bg-indigo-50 shadow-sm ring-2 ring-indigo-500/10 dark:border-indigo-500/50 dark:bg-indigo-500/10'
-                        : 'border-slate-200 bg-slate-50 hover:border-indigo-300 hover:bg-white hover:shadow-sm dark:border-slate-800 dark:bg-slate-800/50 dark:hover:border-indigo-500/30 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold text-white ${index === 0 ? 'bg-indigo-600' : 'bg-blue-600'}`}>
-                      {index === 0 ? 'T' : <Scale size={17} />}
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="truncate text-sm font-bold text-slate-900 dark:text-white">{office.name}</div>
-
-                        {selected && (
-                          <span className="shrink-0 rounded-full bg-indigo-600 px-2 py-0.5 text-[9px] font-bold text-white">
-                            表示中
-                          </span>
-                        )}
-                      </div>
-
-                      {office.address && <div className="mt-0.5 truncate text-[10px] text-slate-400 sm:text-[11px]">{office.address}</div>}
-                    </div>
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-
-          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 pt-3 dark:border-slate-800 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
-            <span className="text-[11px] text-slate-400">
-              {selectedOfficeId === null ? '全事務所を表示中' : '選択した事務所を表示中'}
-            </span>
-
-            <span className="rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-              {visibleEmployees.length}名
-            </span>
-          </div>
+            return (
+              <button
+                key={office.id}
+                type="button"
+                onClick={() => selectOffice(office.id)}
+                title={office.address ?? undefined}
+                className={`organization-office-card flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition-all ${
+                  selected
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/25'
+                    : 'border border-slate-200 bg-white text-slate-500 hover:border-indigo-300 hover:text-indigo-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-indigo-500/40'
+                }`}
+              >
+                {index === 0 ? <Building2 size={13} /> : <Scale size={13} />}
+                {office.name}
+              </button>
+            )
+          })}
         </div>
+
+        <span className="shrink-0 text-xs text-slate-400 dark:text-slate-500">
+          {visibleEmployees.length}名を表示中
+        </span>
       </section>
 
       {/* Access-level guide */}
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
         <button
           type="button"
           aria-expanded={isAccessGuideOpen}
           onClick={() => setIsAccessGuideOpen((current) => !current)}
-          className="organization-tap flex w-full items-center justify-between gap-4 bg-slate-50/70 px-4 py-3 text-left transition-colors hover:bg-indigo-50/60 dark:bg-slate-900/70 dark:hover:bg-indigo-500/[0.08] sm:px-5"
+          className="organization-tap flex w-full items-center justify-between gap-4 bg-slate-50 px-5 py-3.5 text-left transition-colors hover:bg-indigo-50/60 dark:bg-slate-900 dark:hover:bg-indigo-500/[0.08]"
         >
-          <div>
-            <span className="text-[10px] font-bold tracking-[0.14em] text-indigo-500">ACCESS LEVEL GUIDE</span>
-            <h2 className="mt-0.5 text-sm font-bold text-slate-900 dark:text-white">アクセスレベルの概要</h2>
+          <div className="flex items-center gap-2.5">
+            <ShieldCheck size={16} className="text-indigo-500" />
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">アクセスレベルの概要</span>
           </div>
-          <span className="flex shrink-0 items-center gap-2 text-[11px] font-bold text-indigo-600 dark:text-indigo-300">
-            <ShieldCheck size={18} />
+          <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-300">
             <span className="hidden sm:inline">{isAccessGuideOpen ? '閉じる' : '確認する'}</span>
-            <ChevronDown size={17} className={`transition-transform duration-300 ${isAccessGuideOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown size={16} className={`transition-transform duration-300 ${isAccessGuideOpen ? 'rotate-180' : ''}`} />
           </span>
         </button>
 
         <div className={`access-level-expand ${isAccessGuideOpen ? 'is-open' : ''}`}>
           <div className="overflow-hidden">
-            <div className="grid border-t border-indigo-50 divide-y divide-slate-100 dark:border-indigo-500/10 dark:divide-slate-800 sm:grid-cols-2 sm:divide-x sm:divide-y lg:grid-cols-5 lg:divide-y-0">
+            <div className="grid border-t border-slate-100 divide-y divide-slate-100 bg-white dark:border-slate-800 dark:divide-slate-800 dark:bg-slate-900 sm:grid-cols-2 sm:divide-x sm:divide-y lg:grid-cols-5 lg:divide-y-0">
               {Object.entries(accessLevelGuide).map(([levelName, level]) => {
                 const visual = rolePresentation[levelName as keyof typeof rolePresentation]
                 const Icon = visual.icon
 
                 return (
-                  <div key={levelName} className="p-3 sm:p-3.5">
+                  <div key={levelName} className="p-4">
                     <div className="flex items-center gap-2">
                       <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${visual.iconClass}`}>
                         <Icon size={16} />
                       </span>
                       <p className="text-xs font-bold text-slate-900 dark:text-white">{level.title}</p>
                     </div>
-                    <p className="mt-2 min-h-8 text-[10px] leading-4 text-slate-500 dark:text-slate-400">{level.description}</p>
-                    <div className="mt-2 flex flex-wrap gap-1">
+                    <p className="mt-2.5 min-h-8 text-[11px] leading-5 text-slate-500 dark:text-slate-400">{level.description}</p>
+                    <div className="mt-2.5 flex flex-wrap gap-1">
                       {level.capabilities.map((capability) => (
                         <span key={capability} className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                           {capability}
@@ -517,9 +506,9 @@ export default function OrganizationDesign() {
       </section>
 
       {/* Employee list */}
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
 
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/70 px-4 py-3.5 dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
           <div>
             <h2 className="text-sm font-semibold text-slate-900 dark:text-white">社員一覧</h2>
             <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{visibleEmployees.length}名の社員を表示</p>
@@ -529,39 +518,58 @@ export default function OrganizationDesign() {
             <button
               type="button"
               onClick={() => setSelectedOfficeId(null)}
-              className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
+              className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
             >
               全事務所を表示
             </button>
           )}
         </div>
 
-        {/* Desktop column names */}
-        <div className="hidden grid-cols-[minmax(190px,1.15fr)_minmax(160px,1fr)_110px_minmax(175px,1.05fr)_120px_minmax(140px,0.8fr)_30px] gap-3 border-b border-slate-200 bg-slate-50 px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:border-slate-800 dark:bg-slate-950/40 lg:grid">
-          <div>社員</div>
-          <div>所属事務所</div>
-          <div>役職</div>
-          <div>アクセスレベル・権限</div>
-          <div>勤務状況</div>
-          <div>現在の作業</div>
-          <div />
-        </div>
-
         {visibleEmployees.length === 0 ? (
           <EmptyState />
         ) : (
-          <div className="space-y-2.5 bg-slate-50/40 p-2.5 dark:bg-slate-950/20 lg:space-y-0 lg:bg-transparent lg:p-0 dark:lg:bg-transparent">
-            {visibleEmployees.map((employee) => (
-              <EmployeeRow
-                key={employee.id}
-                employee={employee}
-                onClick={() => {
-                  setIsEmployeeDetailClosing(false)
-                  setSelectedEmployee(employee)
-                }}
-              />
-            ))}
-          </div>
+          <>
+            {/* Desktop table */}
+            <table className="hidden w-full text-left lg:table">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:border-slate-800 dark:bg-slate-950/30">
+                  <th scope="col" className="py-2.5 pl-5 pr-3 font-semibold">社員</th>
+                  <th scope="col" className="py-2.5 pr-3 font-semibold">所属事務所</th>
+                  <th scope="col" className="py-2.5 pr-3 font-semibold">役職</th>
+                  <th scope="col" className="py-2.5 pr-3 font-semibold">アクセスレベル・権限</th>
+                  <th scope="col" className="py-2.5 pr-3 font-semibold">勤務状況</th>
+                  <th scope="col" className="py-2.5 pr-3 font-semibold">現在の作業</th>
+                  <th scope="col" className="py-2.5 pr-5" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {visibleEmployees.map((employee) => (
+                  <EmployeeTableRow
+                    key={employee.id}
+                    employee={employee}
+                    onClick={() => {
+                      setIsEmployeeDetailClosing(false)
+                      setSelectedEmployee(employee)
+                    }}
+                  />
+                ))}
+              </tbody>
+            </table>
+
+            {/* Mobile cards */}
+            <div className="space-y-2.5 bg-slate-50/40 p-2.5 dark:bg-slate-950/20 lg:hidden">
+              {visibleEmployees.map((employee) => (
+                <EmployeeRow
+                  key={employee.id}
+                  employee={employee}
+                  onClick={() => {
+                    setIsEmployeeDetailClosing(false)
+                    setSelectedEmployee(employee)
+                  }}
+                />
+              ))}
+            </div>
+          </>
         )}
       </section>
 
@@ -620,29 +628,24 @@ function SummaryCard({
   title,
   value,
   icon,
-  accentClass,
   iconClass,
   className = '',
 }: {
   title: string
   value: number
   icon: ReactNode
-  accentClass: string
   iconClass: string
   className?: string
 }) {
   return (
-    <div className={`${className} relative px-4 py-3.5 sm:px-5`}>
-      <span className={`absolute inset-x-0 top-0 h-0.5 ${accentClass}`} aria-hidden="true" />
-      <div className="flex items-center gap-3">
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconClass}`} aria-hidden="true">
+    <div className={`${className} flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 dark:border-slate-800 dark:bg-slate-900`}>
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconClass}`} aria-hidden="true">
         {icon}
-        </span>
+      </span>
 
-        <div className="min-w-0">
-          <p className="text-2xl font-semibold tracking-tight tabular-nums text-slate-950 dark:text-white">{value}</p>
-          <p className="mt-0.5 truncate text-xs font-medium text-slate-500 dark:text-slate-400">{title}</p>
-        </div>
+      <div className="min-w-0">
+        <p className="text-2xl font-semibold tracking-tight tabular-nums text-slate-950 dark:text-white">{value}</p>
+        <p className="mt-0.5 truncate text-xs font-medium text-slate-500 dark:text-slate-400">{title}</p>
       </div>
     </div>
   )
@@ -724,6 +727,102 @@ const createInputClass = 'h-11 w-full rounded-xl border border-slate-200 bg-whit
 
 function CreateField({ label, children }: { label: string; children: ReactNode }) { return <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700 dark:text-slate-200">{label}</span>{children}</label> }
 
+function EmployeeTableRow({
+  employee,
+  onClick,
+}: {
+  employee: OrganizationEmployee
+  onClick: () => void
+}) {
+  const status = statusConfig[employee.work_status]
+
+  return (
+    <tr
+      tabIndex={0}
+      role="button"
+      aria-label={`${employee.full_name} の詳細を見る`}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onClick()
+        }
+      }}
+      className="group cursor-pointer outline-none transition-colors hover:bg-indigo-50/50 focus-visible:bg-indigo-50/50 dark:hover:bg-indigo-500/[0.06] dark:focus-visible:bg-indigo-500/[0.06]"
+    >
+      <td className="py-3 pl-5 pr-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <EmployeeAvatar employee={employee} />
+
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-slate-900 transition-colors group-hover:text-indigo-700 dark:text-slate-100 dark:group-hover:text-indigo-300">
+              {employee.full_name}
+            </div>
+
+            {employee.full_name_kana && (
+              <div className="mt-0.5 truncate text-[11px] text-slate-400">{employee.full_name_kana}</div>
+            )}
+          </div>
+        </div>
+      </td>
+
+      <td className="py-3 pr-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Building2 size={14} className="shrink-0 text-slate-400" />
+          <span className="truncate text-xs font-medium text-slate-600 dark:text-slate-300">
+            {employee.office?.name ?? '未登録'}
+          </span>
+        </div>
+      </td>
+
+      <td className="py-3 pr-3">
+        <span className="truncate text-xs font-medium text-slate-600 dark:text-slate-300">
+          {employee.position_title ?? '役職未登録'}
+        </span>
+      </td>
+
+      <td className="py-3 pr-3">
+        <AccessLevelSummary roles={employee.roles} />
+      </td>
+
+      <td className="py-3 pr-3">
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1 ring-inset ${status.badge}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
+          {status.label}
+        </span>
+
+        {employee.attendance && (
+          <div className="mt-1.5 flex items-center gap-1 text-[10px] text-slate-400">
+            <Clock3 size={11} />
+            {formatTime(employee.attendance.clock_in)}
+          </div>
+        )}
+      </td>
+
+      <td className="py-3 pr-3">
+        {employee.attendance?.current_task ? (
+          <div className="min-w-0 max-w-[180px]">
+            <div className="truncate text-xs font-medium text-slate-700 dark:text-slate-200">
+              {employee.attendance.current_task.task_description}
+            </div>
+
+            <div className="mt-1 flex items-center gap-1.5 text-[10px] font-medium text-emerald-500">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+              {questStatusLabel[employee.attendance.current_task.status]}
+            </div>
+          </div>
+        ) : (
+          <span className="text-xs text-slate-400">—</span>
+        )}
+      </td>
+
+      <td className="py-3 pr-5">
+        <ChevronRight size={16} className="text-slate-300 transition-all group-hover:translate-x-1 group-hover:text-indigo-500 dark:text-slate-700" />
+      </td>
+    </tr>
+  )
+}
+
 function EmployeeRow({
   employee,
   onClick,
@@ -737,143 +836,76 @@ function EmployeeRow({
     <button
       type="button"
       onClick={onClick}
-      className="organization-employee-card group relative w-full overflow-hidden rounded-xl border border-slate-300 bg-white px-3.5 py-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:hover:border-indigo-500/40 sm:px-4 lg:rounded-none lg:border-x-0 lg:border-t-0 lg:border-b lg:border-slate-200 lg:px-5 lg:shadow-none lg:hover:translate-y-0 lg:hover:bg-indigo-50/40 lg:hover:shadow-none dark:lg:border-slate-800 dark:lg:hover:bg-indigo-500/[0.035] last:lg:border-b-0"
+      className="organization-employee-card group relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-indigo-500/40"
     >
       <div className="absolute bottom-2 left-0 top-2 w-[3px] scale-y-0 rounded-r-full bg-indigo-500 transition-transform group-hover:scale-y-100" />
 
-      {/* Desktop */}
-      <div className="hidden grid-cols-[minmax(190px,1.15fr)_minmax(160px,1fr)_110px_minmax(175px,1.05fr)_120px_minmax(140px,0.8fr)_30px] items-center gap-3 lg:grid">
+      <div className="flex items-start gap-3">
 
-        <div className="flex min-w-0 items-center gap-3">
-          <EmployeeAvatar employee={employee} />
+        <EmployeeAvatar employee={employee} />
 
-          <div className="min-w-0">
-            <div className="truncate text-sm font-bold text-slate-900 transition-colors group-hover:text-indigo-700 dark:text-slate-100 dark:group-hover:text-indigo-300">
-              {employee.full_name}
-            </div>
+        <div className="min-w-0 flex-1">
 
-            {employee.full_name_kana && (
-              <div className="mt-1 truncate text-[10px] text-slate-400">{employee.full_name_kana}</div>
-            )}
-          </div>
-        </div>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-sm font-bold text-slate-900 dark:text-white">{employee.full_name}</h3>
 
-        <div className="flex min-w-0 items-center gap-2">
-          <Building2 size={14} className="shrink-0 text-slate-400" />
-          <span className="truncate text-xs font-semibold text-slate-700 dark:text-slate-300">
-            {employee.office?.name ?? '未登録'}
-          </span>
-        </div>
-
-        <div className="truncate text-xs font-semibold text-slate-700 dark:text-slate-300">
-          {employee.position_title ?? '役職未登録'}
-        </div>
-
-        <AccessLevelSummary roles={employee.roles} />
-
-        <div>
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ring-inset ${status.badge}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
-            {status.label}
-          </span>
-
-          {employee.attendance && (
-            <div className="mt-1.5 flex items-center gap-1 text-[10px] text-slate-400">
-              <Clock3 size={11} />
-              {formatTime(employee.attendance.clock_in)}
-            </div>
-          )}
-        </div>
-
-        <div className="min-w-0">
-          {employee.attendance?.current_task ? (
-            <>
-              <div className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">
-                {employee.attendance.current_task.task_description}
-              </div>
-
-              <div className="mt-1 flex items-center gap-1.5 text-[10px] font-medium text-emerald-500">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                {questStatusLabel[employee.attendance.current_task.status]}
-              </div>
-            </>
-          ) : (
-            <span className="text-xs text-slate-400">—</span>
-          )}
-        </div>
-
-        <ChevronRight size={17} className="text-slate-300 transition-all group-hover:translate-x-1 group-hover:text-indigo-500 dark:text-slate-700" />
-      </div>
-
-      {/* Mobile */}
-      <div className="lg:hidden">
-        <div className="flex items-start gap-3">
-
-          <EmployeeAvatar employee={employee} />
-
-          <div className="min-w-0 flex-1">
-
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <h3 className="truncate text-sm font-bold text-slate-900 dark:text-white">{employee.full_name}</h3>
-
-                {employee.full_name_kana && (
-                  <p className="mt-1 truncate text-[10px] text-slate-400">{employee.full_name_kana}</p>
-                )}
-              </div>
-
-              <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-bold ring-1 ring-inset ${status.badge}`}>
-                {status.label}
-              </span>
-            </div>
-
-            <div className="mt-3 space-y-2 border-t border-slate-100 pt-3 dark:border-slate-800">
-
-              <div className="flex min-w-0 items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                <Building2 size={13} className="shrink-0 text-slate-400" />
-                <span className="truncate">{employee.office?.name ?? '未登録'}</span>
-              </div>
-
-              <div className="flex min-w-0 items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                <BriefcaseBusiness size={13} className="shrink-0 text-slate-400" />
-                <span className="truncate">{employee.position_title ?? '役職未登録'}</span>
-              </div>
-
-              <div className="flex min-w-0 items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                <ShieldCheck size={13} className="shrink-0 text-indigo-400" />
-                <AccessLevelSummary roles={employee.roles} compact />
-              </div>
-
-              {employee.attendance && (
-                <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                  <Clock3 size={13} className="text-slate-400" />
-                  勤務開始
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">
-                    {formatTime(employee.attendance.clock_in)}
-                  </span>
-                </div>
+              {employee.full_name_kana && (
+                <p className="mt-1 truncate text-[10px] text-slate-400">{employee.full_name_kana}</p>
               )}
             </div>
 
-            {employee.attendance?.current_task && (
-              <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2.5 dark:border-indigo-500/10 dark:bg-indigo-500/[0.07]">
-                <div className="mb-1 flex items-center gap-1.5 text-[9px] font-bold text-indigo-500 dark:text-indigo-400">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                  {questStatusLabel[employee.attendance.current_task.status]}
-                </div>
+            <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-bold ring-1 ring-inset ${status.badge}`}>
+              {status.label}
+            </span>
+          </div>
 
-                <div className="truncate text-[11px] font-semibold text-slate-700 dark:text-slate-200">
-                  {employee.attendance.current_task.task_description}
-                </div>
-              </div>
-            )}
+          <div className="mt-3 space-y-2 border-t border-slate-100 pt-3 dark:border-slate-800">
 
-            <div className="mt-3 flex items-center justify-end gap-1 text-[10px] font-semibold text-slate-400 transition group-hover:text-indigo-500">
-              詳細を見る
-              <ChevronRight size={12} />
+            <div className="flex min-w-0 items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+              <Building2 size={13} className="shrink-0 text-slate-400" />
+              <span className="truncate">{employee.office?.name ?? '未登録'}</span>
             </div>
 
+            <div className="flex min-w-0 items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+              <BriefcaseBusiness size={13} className="shrink-0 text-slate-400" />
+              <span className="truncate">{employee.position_title ?? '役職未登録'}</span>
+            </div>
+
+            <div className="flex min-w-0 items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+              <ShieldCheck size={13} className="shrink-0 text-indigo-400" />
+              <AccessLevelSummary roles={employee.roles} compact />
+            </div>
+
+            {employee.attendance && (
+              <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                <Clock3 size={13} className="text-slate-400" />
+                勤務開始
+                <span className="font-semibold text-slate-700 dark:text-slate-200">
+                  {formatTime(employee.attendance.clock_in)}
+                </span>
+              </div>
+            )}
           </div>
+
+          {employee.attendance?.current_task && (
+            <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2.5 dark:border-indigo-500/10 dark:bg-indigo-500/[0.07]">
+              <div className="mb-1 flex items-center gap-1.5 text-[9px] font-bold text-indigo-500 dark:text-indigo-400">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                {questStatusLabel[employee.attendance.current_task.status]}
+              </div>
+
+              <div className="truncate text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                {employee.attendance.current_task.task_description}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-3 flex items-center justify-end gap-1 text-[10px] font-semibold text-slate-400 transition group-hover:text-indigo-500">
+            詳細を見る
+            <ChevronRight size={12} />
+          </div>
+
         </div>
       </div>
     </button>
@@ -901,9 +933,11 @@ function EmployeeAvatar({
 
 function EmptyState() {
   return (
-    <div className="py-14 text-center">
-      <Users size={34} className="mx-auto text-slate-300 dark:text-slate-700" />
-      <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">社員が登録されていません。</p>
+    <div className="py-16 text-center">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-50 dark:bg-slate-800/60">
+        <Users size={24} className="text-slate-300 dark:text-slate-600" />
+      </div>
+      <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">社員が登録されていません。</p>
     </div>
   )
 }
