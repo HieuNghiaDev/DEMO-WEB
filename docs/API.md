@@ -20,6 +20,12 @@ Token không ghi nhớ hết hạn sau 12 giờ; token có `remember: true` hế
 
 Tài khoản có `must_change_password=true` chỉ được gọi `/me`, `/password` và `/logout`. Mọi API nghiệp vụ khác trả `403` với `code: password_change_required`. Mật khẩu mới phải có ít nhất 11 ký tự, gồm tối thiểu một chữ hoa và một ký hiệu. Sau khi đổi thành công, người dùng phải đăng nhập lại vì tất cả token cũ đã bị thu hồi.
 
+## Hồ sơ khách hàng và案件
+
+Khách hàng (`clients`) lưu dữ liệu liên hệ: `phone`, `email`, `address`, `nationality`, cùng `name`, `name_kana` và `client_type` (`individual`/`corporate`). Khi tạo mới `case-files`, payload `client` có thể bao gồm các trường này; email hợp lệ, điện thoại tối đa 30 ký tự, địa chỉ tối đa 255 ký tự. `GET /case-files/{id}` trả toàn bộ thông tin liên hệ của khách hàng để hiển thị trong hồ sơ; `PUT /clients/{client}` cập nhật hồ sơ khi người gọi có `case.update`.
+
+Mỗi hồ sơ có thể có tab tự do ngoài ba tab mặc định. `POST /case-files/{caseFile}/custom-sections` tạo tab với `title` (bắt buộc, tối đa 80 ký tự) và `content` (tùy chọn). `PATCH` hoặc `DELETE /case-files/{caseFile}/custom-sections/{customSection}` cập nhật hoặc xóa tab; các thao tác này yêu cầu quyền `case.update`.
+
 ## Chấm công và báo cáo
 
 | Method & path | Khóa | Nội dung request | Hành vi |
@@ -64,6 +70,7 @@ Payload đổi trạng thái:
 | `GET /my/tasks` | Có | — | Các task của employee hiện tại có trạng thái `pending`, `accepted`, `in_progress`. |
 | `PATCH /tasks/{task}/accept` | Có | — | Chỉ nhân viên nhận task đó có thể chuyển `pending` sang `accepted`, và đặt `accepted_at`. |
 | `PATCH /tasks/{task}/status` | Có | `status`: `in_progress` hoặc `completed` | Nhân viên nhận task bắt đầu task đã xác nhận, hoặc hoàn tất task đang thực hiện. Khi bắt đầu, API tạo `work_session` liên kết với attendance đang mở để Current Task luôn đồng bộ. |
+| `PUT /employees/{employee}/password-reset` | Có, Level 4/5 | — | Hệ thống tự tạo mật khẩu tạm 12 ký tự và chỉ trả về một lần trong phản hồi để quản trị viên sao chép gửi cho nhân viên. Thu hồi token và bắt buộc đổi mật khẩu ở lần đăng nhập tiếp theo. Level 4 không thể đặt lại mật khẩu Level 5. |
 
 Chỉ `manager` và `admin` được giao việc. Mỗi task luôn gắn với đúng một `employee_id` từ URL `/employees/{employee}/tasks`, không có danh sách task dùng chung. Employee chỉ có thể cập nhật task của chính mình theo luồng `pending → accepted → in_progress → completed`. Đồng hồ bắt đầu đếm từ `accepted_at`, không tính từ lúc manager giao việc.
 

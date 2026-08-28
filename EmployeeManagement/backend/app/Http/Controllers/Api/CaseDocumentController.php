@@ -18,7 +18,9 @@ class CaseDocumentController extends Controller
 
     public function store(Request $request, CaseFile $caseFile): JsonResponse
     {
-        $document = $caseFile->documents()->create($this->validated($request));
+        $data = $this->validated($request);
+        $data['version'] = '1';
+        $document = $caseFile->documents()->create($data);
 
         return response()->json(['document' => $document], 201);
     }
@@ -26,7 +28,9 @@ class CaseDocumentController extends Controller
     public function update(Request $request, CaseFile $caseFile, CaseDocument $document): JsonResponse
     {
         abort_unless($document->case_file_id === $caseFile->id, 404);
-        $document->update($this->validated($request, true));
+        $data = $this->validated($request, true);
+        $data['version'] = (string) ($this->versionNumber($document->version) + 1);
+        $document->update($data);
 
         return response()->json(['document' => $document]);
     }
@@ -43,10 +47,17 @@ class CaseDocumentController extends Controller
     {
         return $request->validate([
             'category' => [$partial ? 'sometimes' : 'required', 'string', 'max:50'], 'title' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
-            'file_url' => ['nullable', 'url', 'max:2048'], 'version' => ['nullable', 'string', 'max:20'],
+            'file_url' => ['nullable', 'url', 'max:2048'],
             'status' => ['nullable', Rule::in(['draft', 'confirmed', 'submitted'])], 'created_by_employee_id' => ['nullable', 'exists:employees,id'],
             'created_by_ai_name' => ['nullable', 'string', 'max:255'], 'confirmed_by_employee_id' => ['nullable', 'exists:employees,id'],
             'confirmed_at' => ['nullable', 'date'], 'note' => ['nullable', 'string'],
         ]);
+    }
+
+    private function versionNumber(?string $version): int
+    {
+        return preg_match('/^v?(\d+)$/i', (string) $version, $matches) === 1
+            ? (int) $matches[1]
+            : 1;
     }
 }

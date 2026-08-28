@@ -71,6 +71,15 @@ export type CaseMeetingLog = {
   updated_at?: string
 }
 
+export type CaseCustomSection = {
+  id: number
+  title: string
+  content: string | null
+  sort_order: number
+  created_at?: string
+  updated_at?: string
+}
+
 export type ApiCaseFile = {
   id: number
   title: string
@@ -82,15 +91,27 @@ export type ApiCaseFile = {
   updated_at: string
   documents_count: number
   confirmed_documents_count: number
-  client: { id: number; name: string; name_kana: string | null }
+  client: ClientProfile
   assigned_employee: { id: number; full_name: string; position_title: string | null } | null
   created_by_employee?: { full_name: string } | null
+}
+
+export type ClientProfile = {
+  id: number
+  name: string
+  name_kana: string | null
+  client_type: 'individual' | 'corporate' | null
+  phone: string | null
+  email: string | null
+  address: string | null
+  nationality: string | null
 }
 
 export type CaseDetail = ApiCaseFile & {
   documents: CaseDocument[]
   precedents: CasePrecedent[]
   meeting_logs: CaseMeetingLog[]
+  custom_sections: CaseCustomSection[]
 }
 
 export type CaseQuickFilter = 'all' | 'in_progress' | 'waiting' | 'reviewing' | 'documents_complete'

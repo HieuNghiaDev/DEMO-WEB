@@ -69,14 +69,10 @@ export default function ChangePassword() {
         password,
         passwordConfirmation,
       });
-      navigate("/login", {
-        replace: true,
-        state: {
-          from: "/",
-          message:
-            "パスワードを変更しました。新しいパスワードでログインしてください。",
-        },
-      });
+      // Password reset revokes the current token. Reloading the login page
+      // clears the in-memory route guard state too, so an old
+      // must_change_password value cannot send the user back here.
+      window.location.replace(`${import.meta.env.BASE_URL}login`);
     } catch (error) {
       if (axios.isAxiosError<PasswordErrorResponse>(error)) {
         const errors = error.response?.data?.errors;
@@ -108,6 +104,7 @@ export default function ChangePassword() {
   const currentPasswordType = showCurrentPassword ? "text" : "password";
   const inputType = showPasswords ? "text" : "password";
   const displayName = user?.employee?.full_name ?? user?.name ?? "社員";
+  const isRequiredPasswordChange = user?.must_change_password === true;
 
   return (
     <main className="themis-login relative min-h-screen overflow-hidden bg-[#080d1f] lg:flex lg:bg-[linear-gradient(108deg,#080d1f_0%,#0b1027_43%,#17183e_53%,#6f7196_65%,#d9ddeb_78%,#f7f8fc_91%,#f6f3ff_100%)]">
@@ -173,7 +170,7 @@ export default function ChangePassword() {
           </h2>
 
           <p className="mt-6 max-w-xl text-sm leading-7 text-slate-400 xl:text-[15px]">
-            一時パスワードの利用を終了し、新しいパスワードへ更新。
+            現在のパスワードを確認し、新しい安全なパスワードへ更新。
             <br />
             安全な社員アカウントで仕事を続けましょう。
           </p>
@@ -290,7 +287,7 @@ export default function ChangePassword() {
               </div>
               <span className="hidden items-center gap-1.5 rounded-full border border-emerald-100/80 bg-emerald-50/80 px-2.5 py-1.5 text-[9px] font-bold text-emerald-600 sm:inline-flex">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                REQUIRED
+                {isRequiredPasswordChange ? "REQUIRED" : "SECURE"}
               </span>
             </div>
 
@@ -302,7 +299,9 @@ export default function ChangePassword() {
                 パスワードを変更
               </h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                {displayName}さん、一時パスワードを新しいパスワードへ更新してください。
+                {isRequiredPasswordChange
+                  ? `${displayName}さん、一時パスワードを新しいパスワードへ更新してください。`
+                  : `${displayName}さん、現在のパスワードを確認して新しいパスワードを設定してください。`}
               </p>
             </div>
 

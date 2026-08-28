@@ -52,4 +52,9 @@ class CaseFile extends Model
     {
         return $this->hasMany(CaseMeetingLog::class);
     }
+
+    public function customSections(): HasMany
+    {
+        return $this->hasMany(CaseCustomSection::class)->orderBy('sort_order');
+    }
 }

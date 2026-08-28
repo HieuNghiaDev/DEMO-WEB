@@ -58,7 +58,7 @@ class CaseFileController extends Controller
 
         return response()->json(['case_file' => $caseFile->load([
             'client', 'caseTypeOption', 'department', 'assignedEmployee', 'createdByEmployee', 'documents.createdByEmployee',
-            'precedents.createdByEmployee', 'meetingLogs.createdByEmployee',
+            'precedents.createdByEmployee', 'meetingLogs.createdByEmployee', 'customSections.createdByEmployee',
         ])]);
     }
 
@@ -110,6 +110,11 @@ class CaseFileController extends Controller
             'client.name' => ['required_with:client', 'string', 'max:255'],
             'client.name_kana' => ['nullable', 'string', 'max:255'],
             'client.client_type' => ['nullable', Rule::in(['individual', 'corporate'])],
+            'client.phone' => ['nullable', 'string', 'max:30'],
+            'client.email' => ['nullable', 'email', 'max:255'],
+            'client.address' => ['nullable', 'string', 'max:255'],
+            'client.nationality' => ['nullable', 'string', 'max:50'],
+            'client.notes' => ['nullable', 'string'],
             'department_id' => ['nullable', 'exists:departments,id'],
             'assigned_employee_id' => ['nullable', 'exists:employees,id'],
             'status' => ['nullable', Rule::in([

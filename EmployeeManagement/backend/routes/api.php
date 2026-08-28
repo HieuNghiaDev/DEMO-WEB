@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\ApprovalRequestController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CaseDocumentController;
+use App\Http\Controllers\Api\CaseCustomSectionController;
 use App\Http\Controllers\Api\CaseFileController;
 use App\Http\Controllers\Api\CaseMeetingLogController;
 use App\Http\Controllers\Api\CasePrecedentController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\Api\CaseTypeController;
 use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\EmployeeNotificationController;
 use App\Http\Controllers\Api\EmployeeTaskController;
+use App\Http\Controllers\Api\DocumentNameCatalogController;
 use App\Http\Controllers\Api\OrganizationController;
 use App\Http\Controllers\Api\PersonaController;
 use App\Http\Controllers\Api\VisaProgressController;
@@ -64,6 +66,10 @@ Route::middleware([
         OrganizationController::class,
         'updateEmployment',
     ])->middleware('permission:employee.update');
+    Route::put('/employees/{employee}/password-reset', [
+        OrganizationController::class,
+        'resetPassword',
+    ])->middleware('permission:employee.update', 'throttle:5,1');
 
     Route::get('/notifications', [
         EmployeeNotificationController::class,
@@ -140,11 +146,19 @@ Route::middleware([
 
     Route::get('/case-types', [CaseTypeController::class, 'index'])
         ->middleware('permission:case.view');
+    Route::get('/document-name-catalog', [DocumentNameCatalogController::class, 'index'])
+        ->middleware('permission:document.view');
 
     Route::get('/visa-progress', [VisaProgressController::class, 'index'])
         ->middleware('permission:case.view');
 
     Route::prefix('case-files/{caseFile}')->group(function () {
+        Route::post('custom-sections', [CaseCustomSectionController::class, 'store'])
+            ->middleware('permission:case.update');
+        Route::patch('custom-sections/{customSection}', [CaseCustomSectionController::class, 'update'])
+            ->middleware('permission:case.update');
+        Route::delete('custom-sections/{customSection}', [CaseCustomSectionController::class, 'destroy'])
+            ->middleware('permission:case.update');
         Route::get('documents', [CaseDocumentController::class, 'index'])
             ->middleware('permission:document.view');
         Route::post('documents', [CaseDocumentController::class, 'store'])

@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Clock3,
   Coffee,
+  Copy,
   Mail,
   MapPin,
   Plus,
@@ -583,6 +584,7 @@ export default function OrganizationDesign() {
           canAssignTasks={user?.permission_names.includes('task.assign') ?? false}
           canManageRoles={user?.permission_names.includes('employee.manage_roles') ?? false}
           canUpdateEmployment={user?.permission_names.includes('employee.update') ?? false}
+          canResetPassword={user?.role_names.some((role) => role === 'level_4' || role === 'level_5') ?? false}
           canEditRoles={selectedEmployee.user_id !== user?.id}
           isClosing={isEmployeeDetailClosing}
           availableRoles={availableRoles}
@@ -913,6 +915,7 @@ function EmployeeDetailModal({
   canAssignTasks,
   canManageRoles,
   canUpdateEmployment,
+  canResetPassword,
   canEditRoles,
   isClosing,
   availableRoles,
@@ -924,6 +927,7 @@ function EmployeeDetailModal({
   canAssignTasks: boolean
   canManageRoles: boolean
   canUpdateEmployment: boolean
+  canResetPassword: boolean
   canEditRoles: boolean
   isClosing: boolean
   availableRoles: RoleOption[]
@@ -943,6 +947,10 @@ function EmployeeDetailModal({
   const [employmentError, setEmploymentError] = useState('')
   const [employmentSuccess, setEmploymentSuccess] = useState('')
   const [isLevelDetailOpen, setIsLevelDetailOpen] = useState(false)
+  const [temporaryPassword, setTemporaryPassword] = useState('')
+  const [resetError, setResetError] = useState('')
+  const [resetSuccess, setResetSuccess] = useState('')
+  const [resettingPassword, setResettingPassword] = useState(false)
   const status = statusConfig[employee.work_status]
   const initial = employee.full_name.trim().charAt(0).toUpperCase() || '?'
   const isEmployeeOnline = employee.work_status !== 'offline' && employee.attendance !== null
@@ -1002,6 +1010,30 @@ function EmployeeDetailModal({
       setEmploymentError(message)
     } finally {
       setSavingEmployment(false)
+    }
+  }
+
+  const resetPassword = async () => {
+    if (resettingPassword || !employee.user_id) return
+    try {
+      setResettingPassword(true)
+      setResetError('')
+      setResetSuccess('')
+      setTemporaryPassword('')
+      const response = await api.put<{ message: string; temporary_password: string }>(`/employees/${employee.id}/password-reset`)
+      setTemporaryPassword(response.data.temporary_password)
+      setResetSuccess(response.data.message)
+    } catch (error) { setResetError(axios.isAxiosError(error) ? error.response?.data?.message ?? 'パスワードをリセットできませんでした。' : 'パスワードをリセットできませんでした。') } finally { setResettingPassword(false) }
+  }
+
+  const copyTemporaryPassword = async () => {
+    if (!temporaryPassword) return
+    try {
+      await navigator.clipboard.writeText(temporaryPassword)
+      setResetError('')
+      setResetSuccess('仮パスワードをコピーしました。安全な方法で本人へ共有してください。')
+    } catch {
+      setResetError('コピーできませんでした。仮パスワードを選択してコピーしてください。')
     }
   }
 
@@ -1258,6 +1290,41 @@ function EmployeeDetailModal({
               )}
 
             </DetailSection>
+          )}
+
+          {canResetPassword && employee.user_id && (
+            <section className="border-t border-slate-200 pt-5 dark:border-slate-800">
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/35">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">ログインパスワードをリセット</p>
+                    <p className="mt-1 max-w-lg text-xs leading-5 text-slate-500 dark:text-slate-400">新しい仮パスワードを自動生成します。現在のログイン状態は終了し、本人は次回ログイン後に必ず変更します。</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={resettingPassword}
+                    onClick={() => void resetPassword()}
+                    className="shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-800 transition hover:border-amber-400 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-500/35 dark:bg-amber-500/10 dark:text-amber-200 dark:hover:bg-amber-500/20"
+                  >
+                    {resettingPassword ? '生成中…' : '仮パスワードを生成'}
+                  </button>
+                </div>
+
+                {temporaryPassword && (
+                  <div className="mt-4 rounded-lg border border-amber-200 bg-white p-3 dark:border-amber-500/25 dark:bg-slate-900">
+                    <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">仮パスワード（この画面でのみ表示）</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <code className="min-w-0 flex-1 select-all overflow-x-auto rounded-md bg-slate-100 px-3 py-2 font-mono text-sm font-bold tracking-wide text-slate-800 dark:bg-slate-800 dark:text-slate-100">{temporaryPassword}</code>
+                      <button type="button" onClick={() => void copyTemporaryPassword()} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+                        <Copy size={14} /> コピー
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {resetError && <p className="mt-3 text-xs font-medium text-rose-600 dark:text-rose-300">{resetError}</p>}
+                {resetSuccess && <p className="mt-3 text-xs font-medium text-emerald-700 dark:text-emerald-300">{resetSuccess}</p>}
+              </div>
+            </section>
           )}
 
         </div>

@@ -3,9 +3,11 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
+import axios from "axios";
 
 import api, {
   clearAuthToken,
@@ -74,6 +76,7 @@ type ChangePasswordInput = {
 type AuthContextValue = {
   user: AuthUser | null;
   isLoading: boolean;
+  sessionRestoreError: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
   changePassword: (input: ChangePasswordInput) => Promise<void>;
   logout: () => Promise<void>;
@@ -99,19 +102,45 @@ const normalizeAuthUser = (user: AuthUser): AuthUser => ({
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionRestoreError, setSessionRestoreError] = useState(false);
+  const authRevisionRef = useRef(0);
 
   const refreshUser = useCallback(async () => {
+    const revision = authRevisionRef.current;
+
     if (!hasAuthToken()) {
-      setUser(null);
+      if (revision === authRevisionRef.current) {
+        setUser(null);
+        setSessionRestoreError(false);
+      }
       return;
     }
 
     try {
-      const response = await api.get<UserResponse>("/me");
-      setUser(normalizeAuthUser(response.data.user));
-    } catch {
-      clearAuthToken();
-      setUser(null);
+      const response = await api.get<UserResponse>("/me", {
+        params: { _fresh: Date.now() },
+      });
+
+      if (revision === authRevisionRef.current) {
+        setUser(normalizeAuthUser(response.data.user));
+        setSessionRestoreError(false);
+      }
+    } catch (error) {
+      // A stale /me request may finish after a successful login. It must not
+      // remove the newer token or overwrite the newly authenticated user.
+      if (revision === authRevisionRef.current) {
+        // Only an explicit unauthenticated response proves that the token is
+        // invalid or expired. A timeout, 429, or 5xx response must not log an
+        // employee out simply because the server is temporarily unavailable.
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+          clearAuthToken();
+          setUser(null);
+          setSessionRestoreError(false);
+          return;
+        }
+
+        setSessionRestoreError(true);
+      }
     }
   }, []);
 
@@ -133,40 +162,45 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [refreshUser]);
 
   const login = async (credentials: LoginCredentials) => {
+    const revision = ++authRevisionRef.current;
     const response = await api.post<LoginResponse>("/login", credentials);
-    storeAuthToken(response.data.token, credentials.remember);
 
-    try {
-      // The post-login route must be based on the current server state, not a
-      // potentially stale login payload from before a password reset.
-      const userResponse = await api.get<UserResponse>("/me");
-      setUser(normalizeAuthUser(userResponse.data.user));
-    } catch (error) {
-      clearAuthToken();
-      setUser(null);
-      throw error;
-    }
+    if (revision !== authRevisionRef.current) return;
+
+    storeAuthToken(response.data.token, credentials.remember);
+    // The login response is generated from a fresh database query. Reusing it
+    // avoids a cached /me response restoring an old password-change flag.
+    setUser(normalizeAuthUser(response.data.user));
+    setSessionRestoreError(false);
   };
 
   const changePassword = async (input: ChangePasswordInput) => {
+    const revision = ++authRevisionRef.current;
     await api.put("/password", {
       current_password: input.currentPassword,
       password: input.password,
       password_confirmation: input.passwordConfirmation,
     });
 
+    if (revision !== authRevisionRef.current) return;
+
     clearAuthToken();
     setUser(null);
+    setSessionRestoreError(false);
   };
 
   const logout = async () => {
+    const revision = ++authRevisionRef.current;
     try {
       if (hasAuthToken()) {
         await api.post("/logout");
       }
     } finally {
-      clearAuthToken();
-      setUser(null);
+      if (revision === authRevisionRef.current) {
+        clearAuthToken();
+        setUser(null);
+        setSessionRestoreError(false);
+      }
     }
   };
 
@@ -175,6 +209,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       value={{
         user,
         isLoading,
+        sessionRestoreError,
         login,
         changePassword,
         logout,

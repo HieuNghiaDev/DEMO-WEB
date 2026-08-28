@@ -34,11 +34,16 @@ class CaseDocumentTest extends TestCase
 
         $this->patchJson("/api/case-files/{$caseFile->id}/documents/{$document->id}", [
             'title' => 'Updated title',
-            'version' => '2',
         ])
             ->assertOk()
             ->assertJsonPath('document.title', 'Updated title')
             ->assertJsonPath('document.version', '2');
+
+        $this->postJson("/api/case-files/{$caseFile->id}/documents", [
+            'category' => '申請書',
+            'title' => 'New document',
+            'version' => '99',
+        ])->assertCreated()->assertJsonPath('document.version', '1');
 
         $this->deleteJson("/api/case-files/{$caseFile->id}/documents/{$document->id}")
             ->assertOk();

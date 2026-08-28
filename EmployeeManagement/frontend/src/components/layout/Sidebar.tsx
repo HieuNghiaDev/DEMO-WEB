@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import {
   BadgeCheck,
   BotMessageSquare,
+  ChevronRight,
   FolderKanban,
   FileSpreadsheet,
   Home,
+  KeyRound,
   LoaderCircle,
   LogOut,
   Menu,
@@ -250,6 +252,22 @@ export default function Sidebar() {
               </p>
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(false)
+              navigate('/change-password')
+            }}
+            className="group mb-2 flex h-11 w-full items-center gap-2.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-left shadow-sm shadow-indigo-500/10 transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-300 hover:bg-indigo-100 hover:shadow-md hover:shadow-indigo-500/20 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-indigo-400/30 dark:bg-indigo-500/15 dark:shadow-indigo-950/30 dark:hover:border-indigo-300/50 dark:hover:bg-indigo-500/25"
+            title="アカウントのセキュリティ設定"
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 shadow-sm transition-transform duration-200 group-hover:scale-110 group-hover:rotate-[-4deg] dark:bg-indigo-400/20 dark:text-indigo-200">
+              <KeyRound size={15} aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-indigo-700 dark:text-indigo-200">パスワードを変更</span>
+            <ChevronRight size={16} className="shrink-0 text-indigo-400 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-indigo-600 dark:text-indigo-300 dark:group-hover:text-indigo-100" aria-hidden="true" />
+          </button>
 
           {/* Logout */}
           <button

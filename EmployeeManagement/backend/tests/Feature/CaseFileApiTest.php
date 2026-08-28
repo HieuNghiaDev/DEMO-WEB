@@ -29,6 +29,10 @@ class CaseFileApiTest extends TestCase
                 'name' => 'DEMO API Client',
                 'name_kana' => 'デモ・クライアント',
                 'client_type' => 'individual',
+                'phone' => '090-1234-5678',
+                'email' => 'demo.client@example.test',
+                'address' => '東京都千代田区1-2-3',
+                'nationality' => 'VN',
             ],
             'status' => 'active',
         ])->assertCreated()->json('case_file');
@@ -40,7 +44,21 @@ class CaseFileApiTest extends TestCase
             'next_action' => 'Prepare documents.',
             'next_action_due_at' => '2026-08-22 10:00:00',
         ])->assertCreated()->assertJsonPath('meeting_log.interaction_type', 'phone');
-        $this->actingAs($user, 'sanctum')->getJson("/api/case-files/{$case['id']}")->assertOk()->assertJsonPath('case_file.client.name', 'DEMO API Client')->assertJsonCount(1, 'case_file.documents')->assertJsonCount(1, 'case_file.meeting_logs');
+        $section = $this->actingAs($user, 'sanctum')->postJson("/api/case-files/{$case['id']}/custom-sections", [
+            'title' => '追加確認',
+            'content' => '自由記載の確認事項',
+        ])->assertCreated()->assertJsonPath('custom_section.title', '追加確認')->json('custom_section');
+        $this->actingAs($user, 'sanctum')->patchJson("/api/case-files/{$case['id']}/custom-sections/{$section['id']}", [
+            'title' => '追加確認',
+            'content' => '更新済みメモ',
+        ])->assertOk()->assertJsonPath('custom_section.content', '更新済みメモ');
+        $this->actingAs($user, 'sanctum')->getJson("/api/case-files/{$case['id']}")->assertOk()->assertJsonPath('case_file.custom_sections.0.title', '追加確認');
+        $this->actingAs($user, 'sanctum')->getJson("/api/case-files/{$case['id']}")->assertOk()->assertJsonPath('case_file.client.name', 'DEMO API Client')->assertJsonPath('case_file.client.phone', '090-1234-5678')->assertJsonPath('case_file.client.email', 'demo.client@example.test')->assertJsonPath('case_file.client.address', '東京都千代田区1-2-3')->assertJsonCount(1, 'case_file.documents')->assertJsonCount(1, 'case_file.meeting_logs');
+
+        $this->actingAs($user, 'sanctum')->putJson("/api/clients/{$case['client']['id']}", [
+            'phone' => '080-9999-8888',
+            'address' => '大阪府大阪市4-5-6',
+        ])->assertOk()->assertJsonPath('client.phone', '080-9999-8888')->assertJsonPath('client.address', '大阪府大阪市4-5-6');
     }
 
     public function test_authenticated_user_can_view_the_active_case_type_catalog(): void

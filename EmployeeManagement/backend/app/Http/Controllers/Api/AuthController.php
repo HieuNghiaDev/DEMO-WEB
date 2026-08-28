@@ -129,7 +129,7 @@ class AuthController extends Controller
             'message' => 'ログインしました。',
             'user' => $user,
             'token' => $token,
-        ]);
+        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     }
 
     /**
@@ -145,7 +145,7 @@ class AuthController extends Controller
 
         return response()->json([
             'user' => $user,
-        ]);
+        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     }
 
     /**
@@ -200,7 +200,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'パスワードを変更しました。新しいパスワードで再度ログインしてください。',
             'reauthentication_required' => true,
-        ]);
+        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     }
 
     /**

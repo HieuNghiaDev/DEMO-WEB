@@ -8,9 +8,30 @@ use App\Models\EmployeeNotification;
 use App\Models\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use App\Services\SecurityAuditLogger;
 
 class OrganizationController extends Controller
 {
+    public function resetPassword(Request $request, Employee $employee, SecurityAuditLogger $auditLogger): JsonResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor?->hasAnyRole(['level_4', 'level_5']), 403, 'Level 4以上の権限が必要です。');
+
+        $targetUser = $employee->user;
+        abort_unless($targetUser !== null, 422, 'この社員にはログインアカウントがありません。');
+        abort_if($actor->id === $targetUser->id, 403, '自分のパスワードはパスワード変更画面から更新してください。');
+        abort_if($targetUser->hasRole('level_5') && ! $actor->hasRole('level_5'), 403, 'Level 5のパスワードをリセットできるのはLevel 5のみです。');
+
+        $temporaryPassword = Str::upper(Str::random(4)).Str::lower(Str::random(4)).Str::random(3).'!';
+
+        $targetUser->forceFill(['password' => Hash::make($temporaryPassword), 'must_change_password' => true])->save();
+        $targetUser->tokens()->delete();
+        $auditLogger->record($request, 'auth.password.reset_by_manager', 'success', $actor, $actor->employee, $targetUser->login_id, ['target_employee_id' => $employee->id]);
+
+        return response()->json(['message' => '仮パスワードを生成しました。本人は次回ログイン時に変更が必要です。', 'temporary_password' => $temporaryPassword]);
+    }
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([

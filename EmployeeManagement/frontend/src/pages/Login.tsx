@@ -43,8 +43,11 @@ export default function Login() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const destination =
+  const requestedDestination =
     (location.state as LoginLocationState | null)?.from || "/";
+  const destination = ["/login", "/change-password"].includes(requestedDestination)
+    ? "/"
+    : requestedDestination;
   const successMessage = (location.state as LoginLocationState | null)?.message;
 
   useEffect(() => {
@@ -75,8 +78,9 @@ export default function Login() {
         "themis_login_notification",
         JSON.stringify({ createdAt: new Date().toISOString() }),
       );
-
-      navigate(destination, { replace: true });
+      // Auth state is committed asynchronously. The effect above performs the
+      // navigation only after `user` is available, preventing ProtectedRoute
+      // from observing a transient null user and returning to this page.
     } catch (error) {
       if (axios.isAxiosError<LoginErrorResponse>(error)) {
         if (!error.response) {
