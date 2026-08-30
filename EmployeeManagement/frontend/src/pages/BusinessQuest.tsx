@@ -3,7 +3,7 @@ import axios from 'axios'
 import { Check, ChevronDown, X } from 'lucide-react'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
-import CaseDetailPage from './business-quest/CaseDetailPage'
+import CaseWorkspacePage from '../features/case-workspace/CaseWorkspacePage'
 import CaseListView from './business-quest/CaseListView'
 import { mapCaseFile } from './business-quest/helpers'
 import type { ApiCaseFile, BusinessCase, CaseDetail, CaseQuickFilter, CaseStatus } from './business-quest/types'
@@ -66,7 +66,6 @@ export default function BusinessQuest() {
     }
   }
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     const initialLoadTimer = window.setTimeout(() => {
       void loadCases()
@@ -78,6 +77,8 @@ export default function BusinessQuest() {
       window.clearTimeout(initialLoadTimer)
       if (createCloseTimer.current !== null) window.clearTimeout(createCloseTimer.current)
     }
+    // The initial catalogs are intentionally loaded once; explicit refresh handles later updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const caseTypes = useMemo(() => Array.from(new Set(cases.map((item) => item.caseType))), [cases])
@@ -179,7 +180,7 @@ export default function BusinessQuest() {
     }
   }
 
-  if (selectedCase) return <CaseDetailPage caseFile={selectedCase} onBack={() => { setSelectedCase(null); void loadCases() }}/>
+  if (selectedCase) return <CaseWorkspacePage caseId={selectedCase.id} onBack={() => { setSelectedCase(null); void loadCases() }}/>
 
   return <>
     <CaseListView cases={cases} filteredCases={filteredCases} loading={isLoading || isDetailLoading} error={loadError} keyword={keyword} status={status} caseType={caseType} quickFilter={quickFilter} caseTypes={caseTypes} canCreate={canCreateCase} canAssign={canAssignCase} assignees={assignableEmployees} assigningCaseId={assigningCaseId} onKeywordChange={setKeyword} onStatusChange={setStatus} onCaseTypeChange={setCaseType} onQuickFilterChange={setQuickFilter} onRefresh={() => { void loadCases(); void loadCaseTypes(); void loadAssignableEmployees() }} onCreate={openCreateDialog} onOpen={(id) => void openCase(id)} onAssign={(caseId, employeeId) => { void assignCase(caseId, employeeId) }}/>
@@ -188,7 +189,14 @@ export default function BusinessQuest() {
 }
 
 type NewCase = { customerName: string; customerKana: string; clientType: string; phone: string; email: string; address: string; nationality: string; notes: string; title: string; caseTypeId: string; caseTypeOther: string; status: string }
-type CaseTypeOption = { id: number; name: string; name_kana: string | null }
+type CaseTypeOption = {
+  id: number
+  parent_id?: number | null
+  name: string
+  name_kana: string | null
+  parent?: { id: number; name: string } | null
+  children?: CaseTypeOption[]
+}
 type AssignableEmployee = { id: number; full_name: string; full_name_kana: string | null; position_title: string | null; employee_status: string }
 
 function CreateCaseDialog({ values, caseTypes, error, saving, closing, onChange, onCustomerNameChange, onCustomerKanaChange, onClose, onSubmit }: { values: NewCase; caseTypes: CaseTypeOption[]; error: string | null; saving: boolean; closing: boolean; onChange: (value: NewCase) => void; onCustomerNameChange: (value: string) => void; onCustomerKanaChange: (value: string) => void; onClose: () => void; onSubmit: (event: React.FormEvent<HTMLFormElement>) => void }) {
@@ -216,13 +224,16 @@ function CreateCaseDialog({ values, caseTypes, error, saving, closing, onChange,
 
 function CaseTypePicker({ value, options, disabled, onChange }: { value: string; options: CaseTypeOption[]; disabled: boolean; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false)
-  const selected = options.find((item) => String(item.id) === value)
+  const selectable = options.flatMap((item) => item.children?.length ? item.children : [item]).filter((item, index, items) => items.findIndex((candidate) => candidate.id === item.id) === index)
+  const selected = selectable.find((item) => String(item.id) === value)
+  const groups = options.filter((item) => !item.parent_id)
 
   return <div className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false) }}>
     <button type="button" disabled={disabled} onClick={() => setOpen((current) => !current)} aria-haspopup="listbox" aria-expanded={open} className={`${inputClass} flex items-center justify-between text-left disabled:opacity-50`}><span className={selected ? '' : 'text-slate-400'}>{selected?.name ?? '案件種別を選択'}</span><ChevronDown size={17} className={`shrink-0 text-slate-400 transition duration-300 ${open ? 'rotate-180 text-indigo-500' : ''}`}/></button>
-    {open && <div role="listbox" className="case-type-picker-menu relative z-30 mt-2 max-h-52 overflow-y-auto rounded-2xl border border-indigo-100 bg-white p-1.5 shadow-[0_18px_45px_rgba(15,23,42,.18)] dark:border-indigo-500/25 dark:bg-[#111a2e]">{options.map((option) => { const selectedOption = String(option.id) === value; return <button key={option.id} type="button" role="option" aria-selected={selectedOption} onMouseDown={(event) => event.preventDefault()} onClick={() => { onChange(String(option.id)); setOpen(false) }} className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${selectedOption ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200' : 'text-slate-600 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800'}`}><span>{option.name}</span>{selectedOption && <Check size={16}/>}</button> })}</div>}
+    {open && <div role="listbox" className="case-type-picker-menu relative z-30 mt-2 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-900">{groups.map((group) => group.children?.length ? <div key={group.id} className="py-1"><p className="px-3 py-1.5 text-[11px] font-semibold text-slate-400">{group.name}</p>{group.children.map((option) => <CaseTypeOptionButton key={option.id} option={option} selected={String(option.id) === value} onSelect={() => { onChange(String(option.id)); setOpen(false) }}/>)}</div> : <CaseTypeOptionButton key={group.id} option={group} selected={String(group.id) === value} onSelect={() => { onChange(String(group.id)); setOpen(false) }}/>)}</div>}
   </div>
 }
+function CaseTypeOptionButton({ option, selected, onSelect }: { option: CaseTypeOption; selected: boolean; onSelect: () => void }) { return <button type="button" role="option" aria-selected={selected} onMouseDown={(event) => event.preventDefault()} onClick={onSelect} className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${selected ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' : 'text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800'}`}><span>{option.name}</span>{selected && <Check size={16}/>}</button> }
 function SectionLabel({ step, title, description }: { step: string; title: string; description: string }) { const helper = title === '依頼者の基本情報' ? '担当者が依頼者の情報を入力します。フリガナも必要に応じて入力してください。' : description; return <div><div className="flex items-center gap-2"><span className="text-[10px] font-bold tracking-[.14em] text-indigo-600 dark:text-indigo-300">{step}</span><h3 className="text-sm font-semibold text-slate-900 dark:text-white">{title}</h3></div><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{helper}</p></div> }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { if (label === '案件名・依頼内容 *') return null; return <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-700 dark:text-slate-200">{label}</span>{children}</label> }
 
@@ -236,7 +247,7 @@ function getApiError(error: unknown, fallback: string) {
   return firstValidationError ?? error.response?.data?.message ?? fallback
 }
 
-export function toVietnameseFurigana(name: string) {
+function toVietnameseFurigana(name: string) {
   if (!name.trim() || /[\u3040-\u30ff\u3400-\u9fff]/.test(name)) return ''
 
   const wordMap: Record<string, string> = {

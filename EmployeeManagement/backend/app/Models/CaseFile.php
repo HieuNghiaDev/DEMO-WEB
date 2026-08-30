@@ -11,7 +11,16 @@ class CaseFile extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['title', 'case_type', 'case_type_id', 'case_type_other', 'client_id', 'department_id', 'assigned_employee_id', 'created_by_employee_id', 'status'];
+    protected $fillable = [
+        'title', 'reference_number', 'case_type', 'case_type_id', 'case_type_other', 'client_id',
+        'department_id', 'assigned_employee_id', 'created_by_employee_id', 'status', 'priority',
+        'summary', 'opened_at', 'target_completion_at',
+    ];
+
+    protected function casts(): array
+    {
+        return ['opened_at' => 'date', 'target_completion_at' => 'date'];
+    }
 
     public function client(): BelongsTo
     {
@@ -56,5 +65,25 @@ class CaseFile extends Model
     public function customSections(): HasMany
     {
         return $this->hasMany(CaseCustomSection::class)->orderBy('sort_order');
+    }
+
+    public function parties(): HasMany
+    {
+        return $this->hasMany(CaseParty::class)->latest();
+    }
+
+    public function deadlines(): HasMany
+    {
+        return $this->hasMany(CaseDeadline::class)->orderBy('due_at');
+    }
+
+    public function caseTasks(): HasMany
+    {
+        return $this->hasMany(CaseTask::class)->orderByRaw("status = 'completed'")->orderBy('due_at');
+    }
+
+    public function activities(): HasMany
+    {
+        return $this->hasMany(CaseActivity::class)->latest('occurred_at');
     }
 }

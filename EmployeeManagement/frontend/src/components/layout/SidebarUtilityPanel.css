@@ -1,0 +1,55 @@
+.sidebar-workspace-pill,
+.sidebar-utility-panel .theme-toggle {
+  background-color: var(--color-slate-50);
+  border-color: color-mix(in srgb, var(--color-slate-300) 55%, transparent);
+  box-shadow: none;
+  transition: background-color 180ms ease-out, border-color 180ms ease-out, transform 130ms ease-out;
+}
+
+.dark .sidebar-workspace-pill,
+.dark .sidebar-utility-panel .theme-toggle {
+  background-color: rgb(255 255 255 / 0.025);
+  border-color: rgb(255 255 255 / 0.06);
+}
+
+/* Only one workspace exists; keep its indicator non-actionable. */
+.sidebar-workspace-pill:disabled { cursor: default; opacity: 1; }
+
+/* Compact sidebar variant; the shared theme/reveal behavior stays untouched. */
+.sidebar-utility-panel .theme-toggle {
+  width: 38px;
+  height: 38px;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 12px;
+}
+
+.sidebar-utility-panel .theme-toggle::after { display: none; }
+
+.sidebar-utility-panel .theme-toggle .theme-icon-shell {
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.sidebar-utility-panel .theme-night-sparkle { width: 6px; height: 6px; }
+
+@media (hover: hover) {
+  .sidebar-workspace-pill:hover,
+  .sidebar-utility-panel .theme-toggle:hover {
+    background-color: var(--color-slate-100);
+    border-color: var(--color-slate-300);
+  }
+
+  .dark .sidebar-workspace-pill:hover,
+  .dark .sidebar-utility-panel .theme-toggle:hover {
+    background-color: rgb(255 255 255 / 0.045);
+    border-color: rgb(255 255 255 / 0.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-workspace-pill { transition: none; }
+}

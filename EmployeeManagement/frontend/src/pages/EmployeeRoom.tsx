@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
+import OfficeSwitcher from "../components/employee-room/OfficeSwitcher";
 import {
   Sparkles,
   Plus,
@@ -1932,80 +1933,13 @@ export default function EmployeeRoom() {
         </div>
       </div>
 
-      {/* 2. Companies Banner Card */}
-      <div className="mb-3 flex flex-col justify-between gap-3 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm sm:mb-4 sm:gap-4 sm:p-4 lg:flex-row lg:items-center">
-        <div className="flex min-w-0 flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4">
-          <button
-            type="button"
-            onClick={() => handleOfficeChange("themis")}
-            aria-pressed={selectedOffice === "themis"}
-            className={`workspace-office-switch flex w-full min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition sm:w-auto sm:py-2 ${selectedOffice === "themis" ? "is-active" : ""} ${
-              selectedOffice === "themis"
-                ? "border-indigo-200 bg-indigo-50 shadow-sm ring-2 ring-indigo-100"
-                : "border-transparent hover:border-gray-200 hover:bg-gray-50"
-            }`}
-          >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-sm font-bold text-white">
-              T
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center justify-between gap-2 text-sm font-bold text-gray-800 sm:justify-start">
-                <span className="truncate">THEMIS株式会社</span>
-
-                {selectedOffice === "themis" && (
-                  <span className="shrink-0 rounded-full bg-indigo-600 px-2 py-0.5 text-[9px] font-bold text-white">
-                    表示中
-                  </span>
-                )}
-              </div>
-
-              <div className="truncate text-[11px] text-gray-400">
-                大阪府松原市北新町2-5-13
-              </div>
-            </div>
-          </button>
-
-          <span className="hidden text-sm font-light text-gray-300 sm:block">
-            ×
-          </span>
-
-          <button
-            type="button"
-            onClick={() => handleOfficeChange("law")}
-            aria-pressed={selectedOffice === "law"}
-            className={`workspace-office-switch flex w-full min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition sm:w-auto sm:py-2 ${selectedOffice === "law" ? "is-active" : ""} ${
-              selectedOffice === "law"
-                ? "border-blue-200 bg-blue-50 shadow-sm ring-2 ring-blue-100"
-                : "border-transparent hover:border-gray-200 hover:bg-gray-50"
-            }`}
-          >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-900 text-sm font-bold text-white">
-              法
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center justify-between gap-2 text-sm font-bold text-gray-800 sm:justify-start">
-                <span className="truncate">中華総合法律事務所</span>
-
-                {selectedOffice === "law" && (
-                  <span className="shrink-0 rounded-full bg-blue-900 px-2 py-0.5 text-[9px] font-bold text-white">
-                    表示中
-                  </span>
-                )}
-              </div>
-
-              <div className="truncate text-[11px] text-gray-400">
-                大阪府松原市天美東1-80-22
-              </div>
-            </div>
-          </button>
-        </div>
-
-        <span className="w-fit self-end rounded-full bg-gray-100 px-3 py-1 text-[11px] font-medium text-gray-600 sm:text-xs lg:self-auto">
-          2法人・1チーム
-        </span>
-      </div>
+      {/* 2. Office selector — selection/data handling remains in this page. */}
+      <OfficeSwitcher
+        offices={Object.values(offices)}
+        selectedOfficeId={selectedOffice}
+        onSelectOffice={handleOfficeChange}
+        summary="2法人・1チーム"
+      />
 
       {/* 3. Notification Banner */}
       <div className="mb-5 flex flex-col justify-between gap-2.5 rounded-2xl border border-indigo-100/80 bg-indigo-50/70 px-3.5 py-3 text-xs text-indigo-900 sm:mb-6 sm:flex-row sm:items-center sm:gap-3 sm:px-4">

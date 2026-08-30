@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../contexts/AuthContext";
+import { getLoginDestination } from "../utils/authNavigation";
 
 type LoginErrorResponse = {
   message?: string;
@@ -45,9 +46,7 @@ export default function Login() {
 
   const requestedDestination =
     (location.state as LoginLocationState | null)?.from || "/";
-  const destination = ["/login", "/change-password"].includes(requestedDestination)
-    ? "/"
-    : requestedDestination;
+  const destination = getLoginDestination(requestedDestination, user?.must_change_password);
   const successMessage = (location.state as LoginLocationState | null)?.message;
 
   useEffect(() => {

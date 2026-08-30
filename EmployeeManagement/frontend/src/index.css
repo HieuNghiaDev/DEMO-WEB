@@ -22,7 +22,6 @@ body {
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  transition: background-color 1700ms cubic-bezier(0.22, 0.8, 0.24, 1);
 }
 
 html {
@@ -35,9 +34,6 @@ html.dark {
 
 .themis-app {
   color: #1f2937;
-  transition:
-    background-color 1700ms cubic-bezier(0.22, 0.8, 0.24, 1),
-    color 1100ms ease;
 }
 
 .dark .themis-app {
@@ -203,149 +199,171 @@ html.dark {
   color-scheme: dark;
 }
 
-html.theme-switching .themis-app,
-html.theme-switching .themis-app * {
-  transition-property: background-color, border-color, color, box-shadow, opacity, transform;
-  transition-duration: 1700ms;
+/* Theme motion is scoped to color-bearing surfaces; layout never animates. */
+html.theme-colors-changing,
+html.theme-colors-changing body,
+html.theme-colors-changing .themis-app,
+html.theme-colors-changing .themis-app :where([class*="bg-"], [class*="text-"], [class*="border-"], svg):not(.theme-toggle *) {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 260ms;
   transition-timing-function: cubic-bezier(0.22, 0.8, 0.24, 1);
 }
 
-html.theme-switching::after {
-  position: fixed;
-  z-index: 9999;
-  inset: -24%;
+.theme-toggle {
+  --theme-shell-bg: color-mix(in srgb, var(--color-amber-50) 35%, white);
+  --theme-shell-border: color-mix(in srgb, var(--color-slate-400) 16%, transparent);
+  --theme-shell-ink: var(--color-amber-600);
+  --theme-shell-highlight: color-mix(in srgb, var(--color-amber-500) 30%, transparent);
+  --theme-activation-color: var(--color-slate-400);
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--color-slate-100) 45%, transparent);
+  transition: transform 130ms ease-out;
+}
+.dark .theme-toggle {
+  --theme-shell-bg: var(--color-slate-800);
+  --theme-shell-border: rgb(255 255 255 / 0.08);
+  --theme-shell-ink: var(--color-slate-100);
+  --theme-shell-highlight: color-mix(in srgb, var(--color-slate-300) 30%, transparent);
+  --theme-activation-color: var(--color-amber-200);
+  background: color-mix(in srgb, var(--color-slate-950) 28%, transparent);
+}
+.theme-toggle:active { transform: scale(0.93); }
+.theme-toggle::after {
+  position: absolute;
+  inset: -4px;
+  border: 1px solid var(--theme-activation-color);
+  border-radius: 50%;
   content: "";
   pointer-events: none;
-  background: linear-gradient(
-    108deg,
-    transparent 28%,
-    rgb(255 255 255 / 0.38) 43%,
-    rgb(224 231 255 / 0.58) 51%,
-    rgb(255 255 255 / 0.22) 61%,
-    transparent 76%
-  );
-  animation: themis-theme-sweep 1700ms cubic-bezier(0.22, 0.8, 0.24, 1) both;
-}
-
-html.dark.theme-switching::after {
-  background: linear-gradient(
-    108deg,
-    transparent 25%,
-    rgb(15 23 42 / 0.42) 42%,
-    rgb(49 46 129 / 0.48) 51%,
-    rgb(15 23 42 / 0.3) 62%,
-    transparent 77%
-  );
-}
-
-.theme-mode-pill-knob {
-  left: 0.125rem;
-  transition-duration: 1250ms;
-  transition-timing-function: cubic-bezier(0.65, 0, 0.22, 1);
-}
-
-.theme-mode-pill-knob::before {
-  position: absolute;
-  top: 0.28rem;
-  left: 0.4rem;
-  width: 1rem;
-  height: 0.36rem;
-  border-radius: 999px;
-  content: "";
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.9), rgb(255 255 255 / 0));
-  filter: blur(0.5px);
-}
-
-.theme-mode-label {
-  transition-duration: 1250ms;
-  transition-timing-function: cubic-bezier(0.65, 0, 0.22, 1);
-}
-
-.theme-mode-pill-light .theme-mode-pill-knob {
-  left: calc(100% - 2.125rem);
-}
-
-.theme-mode-pill-flash {
   opacity: 0;
-  background: radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.55), transparent 55%);
+  transform: scale(0.85);
+  transition: opacity 180ms ease-out, transform 180ms ease-out;
+}
+.theme-toggle:active::after {
+  opacity: 0.16;
+  transform: scale(1);
+  transition-duration: 80ms;
+}
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--color-indigo-500);
+  outline-offset: 3px;
+}
+.theme-icon-shell {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--theme-shell-border);
+  color: var(--theme-shell-ink);
+  background-color: var(--theme-shell-bg);
+  box-shadow: 0 1px 3px rgb(120 80 20 / 0.08), inset 0 1px 0 rgb(255 255 255 / 0.6);
+  transition: background-color 300ms ease-out, border-color 300ms ease-out,
+    color 260ms ease-out, box-shadow 300ms ease-out;
+}
+.dark .theme-icon-shell { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), inset 0 -1px 2px rgb(2 6 23 / 0.12); }
+.theme-icon-stack {
+  position: relative;
+  display: block;
+  width: 18px;
+  height: 18px;
+  view-transition-name: themis-theme-icon;
+  transition: transform 180ms ease-out;
+}
+.theme-glyph {
+  position: absolute;
+  inset: 0;
+  transition: opacity 240ms ease-out, transform 260ms cubic-bezier(0.22, 0.8, 0.24, 1);
+  transition-delay: 50ms;
+}
+.theme-glyph-sun { inset: 1px; opacity: 1; transform: rotate(0deg) scale(1); }
+.theme-glyph-moon { opacity: 0; transform: rotate(-20deg) scale(0.75); }
+.dark .theme-glyph-sun { opacity: 0; transform: rotate(-30deg) scale(0.7); }
+.dark .theme-glyph-moon { opacity: 1; transform: rotate(0deg) scale(1); }
+.theme-night-moon { position: absolute; left: 0; bottom: 0; }
+.theme-night-sparkle {
+  position: absolute;
+  right: -1px;
+  top: -1px;
+  color: var(--color-slate-300);
+  opacity: 0;
+  transform: scale(0);
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+}
+.dark .theme-night-sparkle { opacity: 0.65; transform: scale(0.8); }
+@media (hover: hover) {
+  .theme-toggle:hover .theme-icon-shell {
+    border-color: var(--theme-shell-highlight);
+    box-shadow: 0 1px 4px rgb(120 80 20 / 0.12);
+  }
+  .dark .theme-toggle:hover .theme-icon-shell { box-shadow: inset 0 1px 3px rgb(2 6 23 / 0.12); }
+  .theme-toggle:hover .theme-icon-stack { transform: rotate(6deg); }
+  .dark .theme-toggle:hover .theme-night-sparkle { opacity: 1; transform: scale(1); }
 }
 
-html.theme-switching .theme-mode-pill-flash {
-  animation: themis-toggle-flash 1250ms ease-out both;
+/* Snapshots must capture final colors, not an intermediate CSS transition. */
+html.theme-revealing,
+html.theme-revealing body,
+html.theme-revealing .themis-app,
+html.theme-revealing .themis-app * {
+  transition-duration: 0s !important;
 }
-
-html.theme-switching .theme-mode-pill-knob {
-  transition-duration: 1250ms;
-  transition-timing-function: cubic-bezier(0.65, 0, 0.22, 1);
-  animation: themis-toggle-pop 1250ms cubic-bezier(0.22, 1.2, 0.36, 1) both;
+html.theme-revealing::view-transition { pointer-events: none; }
+html.theme-revealing::view-transition-group(root),
+html.theme-revealing::view-transition-group(themis-theme-icon) { animation-duration: 0s; }
+html.theme-revealing::view-transition-old(root),
+html.theme-revealing::view-transition-new(root) {
+  mix-blend-mode: normal;
+  animation: none;
 }
-
-html.theme-switching .theme-mode-icon {
-  animation: themis-toggle-icon 1250ms ease-out both;
+html.theme-revealing::view-transition-old(root) { z-index: 1; }
+html.theme-revealing::view-transition-new(root) {
+  z-index: 2;
+  /* 60ms reaction, then 580ms spread. A gentler start keeps the edge legible. */
+  animation: themis-theme-reveal 580ms cubic-bezier(0.32, 0.72, 0.3, 1) 60ms both;
 }
-
-@keyframes themis-toggle-flash {
-  0%,
-  100% {
-    opacity: 0;
-    transform: scale(0.82);
-  }
-
-  42% {
-    opacity: 0.34;
-    transform: scale(1);
-  }
+html.theme-revealing::view-transition-old(themis-theme-icon) {
+  animation: themis-theme-icon-out 220ms ease-out 50ms both;
 }
-
-@keyframes themis-toggle-pop {
-  0% {
-    transform: scale(1) rotate(0deg);
-  }
-
-  45% {
-    transform: scale(0.82) rotate(-10deg);
-  }
-
-  76% {
-    transform: scale(1.08) rotate(7deg);
-  }
-
-  100% {
-    transform: scale(1) rotate(0deg);
-  }
+html.theme-revealing::view-transition-new(themis-theme-icon) {
+  animation: themis-theme-icon-in 280ms cubic-bezier(0.22, 1, 0.36, 1) 70ms both;
 }
-
-@keyframes themis-toggle-icon {
-  0% {
-    filter: drop-shadow(0 0 0 transparent);
-    transform: rotate(0deg);
-  }
-
-  55% {
-    filter: drop-shadow(0 0 5px rgb(129 140 248 / 0.75));
-    transform: rotate(24deg);
-  }
-
-  100% {
-    filter: drop-shadow(0 0 0 transparent);
-    transform: rotate(0deg);
-  }
+@keyframes themis-theme-reveal {
+  from { clip-path: circle(0px at var(--theme-reveal-x) var(--theme-reveal-y)); }
+  to { clip-path: circle(var(--theme-reveal-radius) at var(--theme-reveal-x) var(--theme-reveal-y)); }
 }
-
-@keyframes themis-theme-sweep {
-  0% {
-    opacity: 0;
-    transform: translate3d(-48%, 0, 0) skewX(-8deg);
-  }
-
-  44% {
-    opacity: 0.92;
-  }
-
-  100% {
-    opacity: 0;
-    transform: translate3d(48%, 0, 0) skewX(-8deg);
-  }
+@keyframes themis-theme-icon-out {
+  to { opacity: 0; transform: rotate(-20deg) scale(0.75); }
+}
+@keyframes themis-theme-icon-in {
+  from { opacity: 0; transform: rotate(-30deg) scale(0.7); }
+  to { opacity: 1; transform: rotate(0deg) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle,
+  .theme-toggle *,
+  html.theme-colors-changing,
+  html.theme-colors-changing body,
+  html.theme-colors-changing .themis-app,
+  html.theme-colors-changing .themis-app * { transition-duration: 0.01ms !important; }
+  .theme-toggle:active,
+  .theme-toggle:hover .theme-icon-stack,
+  .theme-glyph,
+  .theme-night-sparkle { transform: none !important; }
+  .theme-toggle::after { display: none; }
+  .theme-glyph { transition-delay: 0ms; }
+  html.theme-revealing::view-transition-group(*),
+  html.theme-revealing::view-transition-old(*),
+  html.theme-revealing::view-transition-new(*) { animation: none !important; }
 }
 
 .quest-notification-toast {
@@ -370,13 +388,6 @@ html.theme-switching .theme-mode-icon {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html.theme-switching .theme-mode-icon,
-  html.theme-switching .theme-mode-pill-flash,
-  html.theme-switching .theme-mode-pill-knob,
-  html.theme-switching::after {
-    animation: none;
-  }
-
   .quest-notification-toast {
     animation: none;
   }

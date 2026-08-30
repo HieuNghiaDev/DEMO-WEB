@@ -7,6 +7,8 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CaseDocumentController;
 use App\Http\Controllers\Api\CaseCustomSectionController;
 use App\Http\Controllers\Api\CaseFileController;
+use App\Http\Controllers\Api\CaseWorkspaceController;
+use App\Http\Controllers\Api\CaseWorkspaceItemController;
 use App\Http\Controllers\Api\CaseMeetingLogController;
 use App\Http\Controllers\Api\CasePrecedentController;
 use App\Http\Controllers\Api\CaseTypeController;
@@ -153,6 +155,20 @@ Route::middleware([
         ->middleware('permission:case.view');
 
     Route::prefix('case-files/{caseFile}')->group(function () {
+        Route::get('workspace', [CaseWorkspaceController::class, 'show'])
+            ->middleware('permission:case.view');
+        Route::post('apply-document-template', [CaseWorkspaceController::class, 'applyTemplate'])
+            ->middleware('permission:document.create');
+        Route::post('parties', [CaseWorkspaceItemController::class, 'storeParty'])->middleware('permission:case.update');
+        Route::patch('parties/{party}', [CaseWorkspaceItemController::class, 'updateParty'])->middleware('permission:case.update');
+        Route::delete('parties/{party}', [CaseWorkspaceItemController::class, 'destroyParty'])->middleware('permission:case.update');
+        Route::post('deadlines', [CaseWorkspaceItemController::class, 'storeDeadline'])->middleware('permission:case.update');
+        Route::patch('deadlines/{deadline}', [CaseWorkspaceItemController::class, 'updateDeadline'])->middleware('permission:case.update');
+        Route::delete('deadlines/{deadline}', [CaseWorkspaceItemController::class, 'destroyDeadline'])->middleware('permission:case.update');
+        Route::post('case-tasks', [CaseWorkspaceItemController::class, 'storeTask'])->middleware('permission:case.update');
+        Route::patch('case-tasks/{task}', [CaseWorkspaceItemController::class, 'updateTask'])->middleware('permission:case.update');
+        Route::delete('case-tasks/{task}', [CaseWorkspaceItemController::class, 'destroyTask'])->middleware('permission:case.update');
+        Route::post('activities', [CaseWorkspaceItemController::class, 'storeActivity'])->middleware('permission:case.update');
         Route::post('custom-sections', [CaseCustomSectionController::class, 'store'])
             ->middleware('permission:case.update');
         Route::patch('custom-sections/{customSection}', [CaseCustomSectionController::class, 'update'])

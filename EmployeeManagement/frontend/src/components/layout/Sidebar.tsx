@@ -1,24 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
-  BadgeCheck,
-  BotMessageSquare,
-  ChevronRight,
-  FolderKanban,
-  FileSpreadsheet,
-  Home,
-  KeyRound,
-  LoaderCircle,
-  LogOut,
-  Menu,
-  Moon,
-  Sun,
-  UsersRound,
-  X,
+  BadgeCheck, BotMessageSquare, ChevronRight, FileSpreadsheet, FolderKanban,
+  Home, Menu, Settings, UsersRound, X, type LucideIcon,
 } from 'lucide-react'
-import { NavLink, useNavigate } from 'react-router-dom'
-
+import { NavLink } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { useTheme } from '../../contexts/ThemeContext'
+import SidebarUtilityPanel from './SidebarUtilityPanel'
 
 const menuItems = [
   { path: '/', name: '社員ルーム', icon: Home },
@@ -29,307 +16,109 @@ const menuItems = [
   { path: '/approvals', name: '承認室', icon: BadgeCheck },
 ]
 
+function SidebarItem({ path, name, icon: Icon, onSelect }: {
+  path: string
+  name: string
+  icon: LucideIcon
+  onSelect: () => void
+}) {
+  return (
+    <NavLink to={path} end={path === '/'} onClick={onSelect}
+      className={({ isActive }) => `group flex min-h-12 items-center gap-3 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${isActive
+        ? 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-400/25 dark:bg-indigo-500/10 dark:text-indigo-200'
+        : 'border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white'}`}>
+      {({ isActive }) => <>
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors duration-200 ${isActive ? 'bg-indigo-600 text-white dark:bg-indigo-500' : 'text-slate-500 group-hover:text-indigo-600 dark:text-slate-400 dark:group-hover:text-indigo-300'}`}>
+          <Icon size={19} strokeWidth={1.8} aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">{name}</span>
+        {isActive && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-500 dark:bg-indigo-300" aria-hidden="true" />}
+      </>}
+    </NavLink>
+  )
+}
+
 export default function Sidebar() {
-  const navigate = useNavigate()
-  const { user, logout } = useAuth()
-  const { isDark, toggleTheme } = useTheme()
-
+  const { user } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const [isLogoutConfirmationOpen, setIsLogoutConfirmationOpen] = useState(false)
-  const themisLogoUrl = `${import.meta.env.BASE_URL}images/logoTHEMIS.png`
-
-  const employeeName =
-    user?.employee?.full_name ||
-    user?.name ||
-    user?.login_id ||
-    '社員'
+  const sidebarRef = useRef<HTMLElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const employeeName = user?.employee?.full_name || user?.name || user?.login_id || '社員'
 
   useEffect(() => {
-    if (!isOpen && !isLogoutConfirmationOpen) return
-
+    if (!isOpen) return
+    const trigger = triggerRef.current
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsLogoutConfirmationOpen(false)
-        setIsOpen(false)
+    const desktop = window.matchMedia('(min-width: 768px)')
+    const closeOnDesktop = () => { if (desktop.matches) setIsOpen(false) }
+    const focusable = () => Array.from(sidebarRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? [])
+      .filter((element) => element.getClientRects().length > 0)
+    focusable()[0]?.focus()
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false)
+      if (event.key !== 'Tab') return
+      const elements = focusable()
+      const first = elements[0]
+      const last = elements[elements.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last?.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first?.focus()
       }
     }
-
-    window.addEventListener('keydown', handleEscape)
-
+    window.addEventListener('keydown', handleKey)
+    desktop.addEventListener('change', closeOnDesktop)
     return () => {
       document.body.style.overflow = previousOverflow
-      window.removeEventListener('keydown', handleEscape)
+      window.removeEventListener('keydown', handleKey)
+      desktop.removeEventListener('change', closeOnDesktop)
+      if (!desktop.matches) trigger?.focus()
     }
-  }, [isOpen, isLogoutConfirmationOpen])
+  }, [isOpen])
 
-  const handleLogout = async () => {
-    if (isLoggingOut) return
+  const closeMenu = () => setIsOpen(false)
 
-    try {
-      setIsLoggingOut(true)
-      await logout()
-    } catch {
-      // AuthContext vẫn xóa trạng thái đăng nhập
-    } finally {
-      setIsLoggingOut(false)
-      setIsLogoutConfirmationOpen(false)
-      setIsOpen(false)
-      navigate('/login', { replace: true })
-    }
-  }
-
-  return (
-    <>
-      {/* Mobile menu button */}
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="fixed left-4 top-4 z-40 flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-lg transition hover:bg-slate-50 dark:border-white/10 dark:bg-[#0d1020] dark:text-white dark:hover:bg-[#171b34] md:hidden"
-        aria-label="メニューを開く"
-        aria-expanded={isOpen}
-        aria-controls="main-sidebar"
-      >
-        <Menu size={22} />
-      </button>
-
-      {/* Mobile overlay */}
-      {isOpen && (
-        <button
-          type="button"
-          className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-sm md:hidden"
-          onClick={() => setIsOpen(false)}
-          aria-label="メニューを閉じる"
-        />
-      )}
-
-      <aside
-        id="main-sidebar"
-        className={`fixed inset-y-0 left-0 z-50 flex h-dvh w-72 max-w-[88vw] shrink-0 flex-col border-r border-slate-200 bg-white p-3 text-slate-700 shadow-2xl transition-all duration-300 ease-out dark:border-white/[0.06] dark:bg-[#0d1020] dark:text-white md:sticky md:top-0 md:h-screen md:max-w-none md:translate-x-0 md:shadow-none ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-        aria-label="メインメニュー"
-      >
-        {/* Logo */}
-        <div className="mb-4 flex items-center gap-3 px-2 py-1">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-md dark:border-white/10 dark:bg-white/95">
-            <img alt="" className="h-full w-full object-contain" src={themisLogoUrl} />
-          </div>
-
-          <div className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate font-bold tracking-wide text-slate-900 dark:text-white">
-              THEMIS HQ
-            </span>
-
-            <span className="truncate text-xs text-slate-400 dark:text-gray-400">
-              合同AI事務所
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setIsOpen(false)}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white md:hidden"
-            aria-label="メニューを閉じる"
-          >
-            <X size={20} />
-          </button>
+  return <>
+    <button ref={triggerRef} type="button" onClick={() => setIsOpen(true)} aria-label="メニューを開く" aria-expanded={isOpen} aria-controls="main-sidebar"
+      className="fixed left-4 top-4 z-40 flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 md:hidden">
+      <Menu size={20} />
+    </button>
+    {isOpen && <button type="button" onClick={closeMenu} aria-label="メニューを閉じる" className="fixed inset-0 z-40 bg-slate-950/50 md:hidden" />}
+    <aside ref={sidebarRef} id="main-sidebar" aria-label="メインメニュー"
+      className={`fixed inset-y-0 left-0 z-50 flex h-dvh w-72 max-w-[88vw] shrink-0 flex-col border-r border-slate-200 bg-white p-4 text-slate-700 transition-[transform,visibility] duration-200 motion-reduce:transition-none dark:border-slate-800 dark:bg-slate-900 md:sticky md:top-0 md:visible md:max-w-none md:translate-x-0 ${isOpen ? 'visible translate-x-0' : 'invisible -translate-x-full'}`}>
+      <div className="flex shrink-0 items-center gap-3 px-1 py-2">
+        <img src={`${import.meta.env.BASE_URL}images/logoTHEMIS.png`} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-slate-200 bg-slate-50 p-1.5 dark:border-slate-700" />
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-semibold tracking-wide text-slate-900 dark:text-slate-100">THEMIS HQ</p>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">合同AI事務所</p>
         </div>
-
-        {/* Workspace + theme */}
-        <div className="mb-6 flex items-center gap-2">
-          <div className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-[10px] text-slate-600 dark:border-gray-800 dark:bg-[#161b30]/60 dark:text-gray-300">
-            <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-emerald-400" />
-            <span className="truncate font-medium">合同ワークスペース</span>
-          </div>
-
-          {/* Theme switch */}
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className={`theme-mode-pill group relative block h-9 w-28 shrink-0 overflow-hidden rounded-full border transition duration-300 hover:-translate-y-px hover:scale-[1.02] active:translate-y-0 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${
-              isDark
-                ? 'border-[#151923] bg-gradient-to-b from-[#424754] via-[#333844] to-[#242934] shadow-[inset_0_3px_3px_rgba(255,255,255,0.09),inset_0_-3px_5px_rgba(2,6,23,0.28),0_2px_0_rgba(255,255,255,0.08),0_7px_16px_rgba(2,6,23,0.3)] hover:border-indigo-300/30'
-                : 'border-slate-300 bg-gradient-to-b from-white via-slate-100 to-slate-200 shadow-[inset_0_2px_3px_rgba(255,255,255,1),0_4px_10px_rgba(15,23,42,0.12)] hover:border-indigo-300'
-            }`}
-            aria-label={isDark ? 'ライトモードに切り替える' : 'ダークモードに切り替える'}
-            title={isDark ? 'ライトモード' : 'ダークモード'}
-          >
-            <span
-              className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-left text-[8px] font-black leading-[0.6rem] tracking-[0.04em] transition-all ${
-                isDark ? 'left-[2.8rem] text-slate-200' : 'left-2.5 text-slate-600'
-              }`}
-            >
-              {isDark ? (
-                <>
-                  DARK
-                  <br />
-                  MODE
-                </>
-              ) : (
-                <>
-                  LIGHT
-                  <br />
-                  MODE
-                </>
-              )}
-            </span>
-
-            <span className="pointer-events-none absolute inset-[2px] rounded-full border-t border-white/25 opacity-70" />
-
-            <span
-              className={`absolute top-0.5 flex h-8 w-8 items-center justify-center rounded-full border-2 bg-gradient-to-br from-white via-slate-100 to-slate-300 shadow-md transition-all duration-300 ${
-                isDark
-                  ? 'left-0.5 border-slate-400 text-slate-500'
-                  : 'left-[4.75rem] border-amber-200 text-amber-500'
-              }`}
-              aria-hidden="true"
-            >
-              {isDark ? (
-                <Moon size={18} strokeWidth={1.7} />
-              ) : (
-                <Sun size={18} strokeWidth={1.7} />
-              )}
-            </span>
-          </button>
+        <button type="button" onClick={closeMenu} aria-label="メニューを閉じる" className="rounded-md p-2 text-slate-500 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-slate-800 md:hidden"><X size={18} /></button>
+      </div>
+      <SidebarUtilityPanel />
+      <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain" aria-label="ワークスペースとシステム">
+        <div className="mb-2 flex items-baseline justify-between gap-2 px-3 text-[10px] font-medium text-slate-500 dark:text-slate-400">
+          <span>ワークスペース</span><span className="tracking-widest">WORKSPACE</span>
         </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto overscroll-contain">
-          {menuItems.map((item) => {
-            const Icon = item.icon
-
-            return (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                end={item.path === '/'}
-                onClick={() => setIsOpen(false)}
-                className={({ isActive }) =>
-                  `workspace-nav-link flex w-full items-center gap-3.5 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
-                    isActive
-                      ? 'bg-[#635BFF] text-white shadow-lg shadow-indigo-500/20'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-gray-300 dark:hover:bg-white/5 dark:hover:text-white'
-                  }`
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    <Icon
-                      size={18}
-                      className={
-                        isActive
-                          ? 'shrink-0 text-white'
-                          : 'shrink-0 text-slate-400 dark:text-gray-400'
-                      }
-                    />
-
-                    <span className="truncate">{item.name}</span>
-                  </>
-                )}
-              </NavLink>
-            )
-          })}
-        </nav>
-
-        {/* Logged user */}
-        <div className="mt-4 border-t border-slate-200 pt-4 dark:border-white/10">
-          <div className="mb-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-white/[0.05] dark:bg-white/5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-sm font-bold text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300">
-              {employeeName.charAt(0).toUpperCase()}
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-bold text-slate-900 dark:text-white">
-                {employeeName}
-              </p>
-
-              <p className="mt-0.5 truncate text-[10px] text-slate-400 dark:text-gray-500">
-                {user?.login_id}
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(false)
-              navigate('/change-password')
-            }}
-            className="group mb-2 flex h-11 w-full items-center gap-2.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-left shadow-sm shadow-indigo-500/10 transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-300 hover:bg-indigo-100 hover:shadow-md hover:shadow-indigo-500/20 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-indigo-400/30 dark:bg-indigo-500/15 dark:shadow-indigo-950/30 dark:hover:border-indigo-300/50 dark:hover:bg-indigo-500/25"
-            title="アカウントのセキュリティ設定"
-          >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 shadow-sm transition-transform duration-200 group-hover:scale-110 group-hover:rotate-[-4deg] dark:bg-indigo-400/20 dark:text-indigo-200">
-              <KeyRound size={15} aria-hidden="true" />
-            </span>
-            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-indigo-700 dark:text-indigo-200">パスワードを変更</span>
-            <ChevronRight size={16} className="shrink-0 text-indigo-400 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-indigo-600 dark:text-indigo-300 dark:group-hover:text-indigo-100" aria-hidden="true" />
-          </button>
-
-          {/* Logout */}
-          <button
-            type="button"
-            onClick={() => setIsLogoutConfirmationOpen(true)}
-            disabled={isLoggingOut}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-600 transition hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20 dark:hover:text-red-200"
-          >
-            {isLoggingOut ? (
-              <LoaderCircle size={18} className="animate-spin" />
-            ) : (
-              <LogOut size={18} />
-            )}
-
-            {isLoggingOut ? 'ログアウト中...' : 'ログアウト'}
-          </button>
+        <div className="space-y-1">{menuItems.map((item) => <SidebarItem key={item.path} {...item} onSelect={closeMenu} />)}</div>
+        <div className="mb-2 mt-6 flex items-baseline justify-between gap-2 border-t border-slate-200 px-3 pt-5 text-[10px] font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400">
+          <span>システム</span><span className="tracking-widest">SYSTEM</span>
         </div>
-      </aside>
-
-      {isLogoutConfirmationOpen && (
-        <div
-          className="workspace-confirm-backdrop fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/55 p-4 backdrop-blur-sm sm:items-center"
-          onMouseDown={() => !isLoggingOut && setIsLogoutConfirmationOpen(false)}
-        >
-          <div
-            className="workspace-confirm-panel w-full max-w-sm rounded-3xl border border-white/15 bg-white p-5 shadow-2xl dark:bg-[#11182a] sm:p-6"
-            onMouseDown={(event) => event.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="logout-confirmation-title"
-          >
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 shadow-sm dark:bg-rose-500/15 dark:text-rose-300">
-              <LogOut size={22} />
-            </div>
-            <h2 id="logout-confirmation-title" className="mt-4 text-lg font-bold text-slate-900 dark:text-white">
-              ログアウトしますか？
-            </h2>
-            <p className="mt-1.5 text-sm leading-6 text-slate-500 dark:text-slate-400">
-              現在のワークスペースから安全にログアウトします。未保存の入力がある場合は先に保存してください。
-            </p>
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                disabled={isLoggingOut}
-                onClick={() => setIsLogoutConfirmationOpen(false)}
-                className="workspace-action-button rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                キャンセル
-              </button>
-              <button
-                type="button"
-                disabled={isLoggingOut}
-                onClick={() => void handleLogout()}
-                className="workspace-action-button flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-rose-500/20 transition hover:bg-rose-500 disabled:opacity-60"
-              >
-                {isLoggingOut && <LoaderCircle size={16} className="animate-spin" />}
-                {isLoggingOut ? '処理中...' : 'ログアウト'}
-              </button>
-            </div>
+        <SidebarItem path="/system" name="設定" icon={Settings} onSelect={closeMenu} />
+      </nav>
+      <div className="mt-4 shrink-0 border-t border-slate-200 pt-4 dark:border-slate-800">
+        <NavLink to="/system?section=account" onClick={closeMenu} aria-label={`${employeeName} のアカウント設定`}
+          className="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5 transition-colors duration-200 hover:border-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:border-indigo-400/50">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-sm font-semibold text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200">{employeeName.charAt(0).toUpperCase()}</span>
+          <div className="min-w-0 flex-1">
+            <p title={employeeName} className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100">{employeeName}</p>
+            <p className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">{user?.login_id}</p>
           </div>
-        </div>
-      )}
-    </>
-  )
+          <ChevronRight size={16} className="shrink-0 text-slate-400 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transform-none" aria-hidden="true" />
+        </NavLink>
+      </div>
+    </aside>
+  </>
 }

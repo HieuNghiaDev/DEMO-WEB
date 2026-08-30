@@ -18,6 +18,7 @@ import VisaProgress from "./pages/VisaProgress";
 import AIEmployees from "./pages/AI";
 import ApprovalRoom from "./pages/ApprovalRoom";
 import ChangePassword from "./pages/ChangePassword";
+import SystemSettings from "./pages/system/SystemSettings";
 
 function App() {
   return (
@@ -29,6 +30,8 @@ function App() {
 
           <Route element={<ProtectedRoute />}>
             <Route path="/change-password" element={<ChangePassword />} />
+            {/* Reuse the password screen without changing the mandatory-reset route guard. */}
+            <Route path="/system/password" element={<ChangePassword />} />
             <Route element={<MainLayout />}>
               <Route path="/" element={<EmployeeRoom />} />
               <Route
@@ -39,6 +42,7 @@ function App() {
               <Route path="/visa-progress" element={<VisaProgress />} />
               <Route path="/ai" element={<AIEmployees />} />
               <Route path="/approvals" element={<ApprovalRoom />} />
+              <Route path="/system" element={<SystemSettings />} />
             </Route>
           </Route>
 

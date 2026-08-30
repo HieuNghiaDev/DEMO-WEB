@@ -12,6 +12,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Services\CaseDocumentChecklistService;
 
 class CaseFileController extends Controller
 {
@@ -20,14 +21,14 @@ class CaseFileController extends Controller
         return response()->json(['case_files' => CaseFile::query()
             ->with(['client', 'caseTypeOption', 'department', 'assignedEmployee', 'createdByEmployee'])
             ->withCount([
-                'documents',
+                'documents' => fn ($query) => $query->where('status', '!=', 'not_required'),
                 'documents as confirmed_documents_count' => fn ($query) => $query
-                    ->where('status', 'confirmed'),
+                    ->whereIn('status', ['confirmed', 'submitted']),
             ])
             ->latest()->get()]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, CaseDocumentChecklistService $checklistService): JsonResponse
     {
         $data = $this->validated($request);
 
@@ -45,15 +46,17 @@ class CaseFileController extends Controller
             return CaseFile::query()->create($data);
         });
 
-        return response()->json(['case_file' => $caseFile->load(['client', 'caseTypeOption', 'department', 'assignedEmployee', 'createdByEmployee'])], 201);
+        $checklistService->applyDefaultTemplate($caseFile);
+
+        return response()->json(['case_file' => $caseFile->load(['client', 'caseTypeOption.parent', 'department', 'assignedEmployee', 'createdByEmployee'])->loadCount(['documents' => fn ($query) => $query->where('status', '!=', 'not_required'), 'documents as confirmed_documents_count' => fn ($query) => $query->whereIn('status', ['confirmed', 'submitted'])])], 201);
     }
 
     public function show(CaseFile $caseFile): JsonResponse
     {
         $caseFile->loadCount([
-            'documents',
+            'documents' => fn ($query) => $query->where('status', '!=', 'not_required'),
             'documents as confirmed_documents_count' => fn ($query) => $query
-                ->where('status', 'confirmed'),
+                ->whereIn('status', ['confirmed', 'submitted']),
         ]);
 
         return response()->json(['case_file' => $caseFile->load([
@@ -120,6 +123,10 @@ class CaseFileController extends Controller
             'status' => ['nullable', Rule::in([
                 'intake', 'active', 'waiting_documents', 'reviewing', 'waiting_payment', 'on_hold', 'closed',
             ])],
+            'priority' => ['nullable', Rule::in(['low', 'normal', 'high', 'critical'])],
+            'summary' => ['nullable', 'string', 'max:10000'],
+            'opened_at' => ['nullable', 'date'],
+            'target_completion_at' => ['nullable', 'date'],
         ]);
     }
 

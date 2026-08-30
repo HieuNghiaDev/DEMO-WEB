@@ -48,7 +48,7 @@ class CaseDocumentTest extends TestCase
         $this->deleteJson("/api/case-files/{$caseFile->id}/documents/{$document->id}")
             ->assertOk();
 
-        $this->assertDatabaseMissing('case_documents', ['id' => $document->id]);
+        $this->assertSoftDeleted('case_documents', ['id' => $document->id]);
     }
 
     public function test_document_from_another_case_cannot_be_changed_or_deleted(): void

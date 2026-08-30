@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>THEMIS — Office selector test</title>
+    <style>
+      .office-qa-layout { display: flex; min-height: 100vh; }
+      .office-qa-sidebar { display: none; }
+      .office-qa-content { min-width: 0; flex: 1; padding: 24px 12px; }
+      @media(min-width:768px) { .office-qa-sidebar { display: block; width: 288px; flex-shrink: 0; border-right: 1px solid #64748b33; } .office-qa-content { padding:24px; } }
+    </style>
+  </head>
+  <body><div id="root"></div><script type="module" src="./office-switcher.tsx"></script></body>
+</html>

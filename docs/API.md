@@ -26,6 +26,19 @@ Khách hàng (`clients`) lưu dữ liệu liên hệ: `phone`, `email`, `address
 
 Mỗi hồ sơ có thể có tab tự do ngoài ba tab mặc định. `POST /case-files/{caseFile}/custom-sections` tạo tab với `title` (bắt buộc, tối đa 80 ký tự) và `content` (tùy chọn). `PATCH` hoặc `DELETE /case-files/{caseFile}/custom-sections/{customSection}` cập nhật hoặc xóa tab; các thao tác này yêu cầu quyền `case.update`.
 
+### Workspace hồ sơ và checklist
+
+| Method & path | Quyền | Hành vi |
+| --- | --- | --- |
+| `GET /case-files/{id}/workspace` | `case.view` | Trả hồ sơ, checklist, bên liên quan, deadline, task, timeline và summary tiến độ. |
+| `POST /case-files/{id}/apply-document-template` | `document.create` | Áp dụng template đang hiệu lực; chạy lại không tạo trùng checklist. |
+| `POST/PATCH/DELETE /case-files/{id}/parties/...` | `case.update` | Quản lý gia đình, công ty, đối phương, bảo hiểm, bệnh viện và bên liên quan khác. |
+| `POST/PATCH/DELETE /case-files/{id}/deadlines/...` | `case.update` | Quản lý hạn lưu trú, nộp hồ sơ, bổ sung, thời hiệu và hạn nội bộ. |
+| `POST/PATCH/DELETE /case-files/{id}/case-tasks/...` | `case.update` | Quản lý task gắn trực tiếp với hồ sơ. |
+| `POST /case-files/{id}/activities` | `case.update` | Ghi lịch sử liên lạc, sự kiện, nộp hồ sơ, y tế, tai nạn hoặc ghi chú nội bộ. |
+
+Tài liệu hỗ trợ `requirement_level`: `required`, `conditional`, `optional`; và trạng thái nghiệp vụ: `not_requested`, `requested`, `waiting`, `received`, `reviewing`, `deficient`, `resubmission_requested`, `confirmed`, `submitted`, `not_required`. Tài liệu thêm thủ công không phụ thuộc template. Xóa tài liệu dùng soft delete để phục hồi/audit về sau.
+
 ## Chấm công và báo cáo
 
 | Method & path | Khóa | Nội dung request | Hành vi |

@@ -3,9 +3,12 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
+import { flushSync } from "react-dom";
+import { createThemeTransition } from "../utils/themeTransition";
 
 import {
   applyTheme,
@@ -19,12 +22,11 @@ export type { ThemeMode } from "../utils/theme";
 type ThemeContextValue = {
   theme: ThemeMode;
   isDark: boolean;
-  setTheme: (theme: ThemeMode) => void;
-  toggleTheme: () => void;
+  setTheme: (theme: ThemeMode, origin?: HTMLElement) => void;
+  toggleTheme: (origin?: HTMLElement) => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
-let themeTransitionTimer: number | undefined;
 
 type ThemeProviderProps = {
   children: ReactNode;
@@ -34,6 +36,10 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   const [theme, setThemeState] = useState<ThemeMode>(() =>
     document.documentElement.classList.contains("dark") ? "dark" : "light",
   );
+  const requestedTheme = useRef(theme);
+  const [transition] = useState(createThemeTransition);
+
+  useEffect(() => () => transition.cancel(), [transition]);
 
   useLayoutEffect(() => {
     applyTheme(theme);
@@ -44,36 +50,28 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
     const handleSystemThemeChange = (event: MediaQueryListEvent) => {
       if (getStoredTheme()) return;
-      setThemeState(event.matches ? "dark" : "light");
+      transition.cancel();
+      requestedTheme.current = event.matches ? "dark" : "light";
+      setThemeState(requestedTheme.current);
     };
 
     mediaQuery.addEventListener("change", handleSystemThemeChange);
     return () => mediaQuery.removeEventListener("change", handleSystemThemeChange);
-  }, []);
+  }, [transition]);
 
-  const setTheme = (nextTheme: ThemeMode) => {
+  const setTheme = (nextTheme: ThemeMode, origin?: HTMLElement) => {
     window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
-
-    if (themeTransitionTimer) {
-      window.clearTimeout(themeTransitionTimer);
-    }
-
-    // Bấm đổi chế độ liên tiếp vẫn phải khởi động lại animation từ đầu.
-    const root = document.documentElement;
-    root.classList.remove("theme-switching");
-    void root.offsetWidth;
-    root.classList.add("theme-switching");
-    applyTheme(nextTheme);
-
-    themeTransitionTimer = window.setTimeout(() => {
-      root.classList.remove("theme-switching");
-    }, 1760);
-
-    setThemeState(nextTheme);
+    if (requestedTheme.current === nextTheme) return;
+    requestedTheme.current = nextTheme;
+    transition.run(() => {
+      // Snapshot the committed React state and the root class together.
+      flushSync(() => setThemeState(nextTheme));
+      applyTheme(nextTheme);
+    }, origin);
   };
 
-  const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
+  const toggleTheme = (origin?: HTMLElement) => {
+    setTheme(requestedTheme.current === "dark" ? "light" : "dark", origin);
   };
 
   return (

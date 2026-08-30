@@ -31,6 +31,7 @@ Frontend chỉ giữ token ở `sessionStorage` hoặc `localStorage`; mọi quy
 | `src/pages/EmployeeRoom.tsx` | Màn hình nghiệp vụ chính: bắt đầu/kết thúc làm việc, nghỉ, ra ngoài, quản lý work session, tải Excel, danh sách đang hoạt động, việc được giao và thông báo cục bộ. `JapaneseTimePicker` là bộ chọn giờ dùng cho các modal. |
 | `src/pages/OrganizationDesign.tsx` | Tải tổ chức, lọc theo văn phòng, thống kê trạng thái, xem chi tiết nhân viên và giao việc. Các component ở cuối tệp là phần trình bày/modal nội bộ của trang. |
 | `src/pages/BusinessQuest.tsx`, `AI.tsx`, `ApprovalRoom.tsx` | Các không gian nghiệp vụ hiện có. |
+| `src/features/case-workspace/*` | Workspace hồ sơ theo 6 tab: tổng quan, checklist tài liệu, task, deadline, bên liên quan và timeline. Tất cả thao tác dùng API hiện có, hỗ trợ light/dark và responsive. |
 | `src/pages/VisaProgress.tsx`, `src/features/visa-progress/*` | Dashboard chỉ đọc cho tiến độ hồ sơ tại lưu trú: gọi API, lọc/search dữ liệu Excel, hiển thị nguồn, hạn xử lý và bảng responsive. |
 | `src/pages/ComingSoon.tsx` | Thành phần placeholder có tiêu đề truyền vào. |
 | `src/index.css`, `src/App.css` | Token giao diện, dark mode, animation và các style toàn cục. |
@@ -66,6 +67,9 @@ Mọi URL khác được chuyển về `/`. `BrowserRouter` dùng `import.meta.e
 | `app/Http/Controllers/Api/AttendanceController.php` | Bắt đầu ca, đổi trạng thái, liệt kê người đang hoạt động, tải báo cáo Excel cá nhân và kiểm soát ownership. |
 | `app/Http/Controllers/Api/WorkSessionController.php` | Tạo/kết thúc phiên công việc; chỉ một phiên active trên một attendance tại cùng thời điểm. |
 | `app/Http/Controllers/Api/OrganizationController.php` | Trả về danh sách nhân viên, trạng thái hiện tại và thống kê; chỉ manager/admin nhận PII. |
+| `app/Http/Controllers/Api/CaseWorkspaceController.php` | Trả dữ liệu tổng hợp, tiến độ, thiếu tài liệu và áp dụng template tài liệu có phiên bản cho một hồ sơ. |
+| `app/Http/Controllers/Api/CaseWorkspaceItemController.php` | CRUD các bên liên quan, deadline, task và ghi timeline của hồ sơ. |
+| `app/Services/CaseDocumentChecklistService.php` | Sao chép template đang hiệu lực thành checklist riêng của hồ sơ theo cách idempotent. |
 | `app/Http/Controllers/Api/EmployeeTaskController.php` | Giao việc (manager/admin), lấy việc của tôi, xác nhận, bắt đầu và hoàn tất công việc. |
 | `app/Http/Controllers/Api/VisaProgressController.php` | API read-only cho 在留申請進捗管理; cache dashboard ngắn, không lộ thông tin credential và trả lỗi cấu hình/nguồn/file theo contract. |
 | `app/Http/Middleware/SecurityHeaders.php` | Thêm cache-control, CSP, anti-frame, referrer, permissions và HSTS phù hợp cho API. |

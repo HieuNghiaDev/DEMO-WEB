@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             PersonaSeeder::class,
             RolePermissionSeeder::class,
             CaseTypeSeeder::class,
+            CaseWorkspaceTemplateSeeder::class,
         ]);
 
         if (app()->environment(['local', 'testing'])) {
@@ -30,6 +31,7 @@ class DatabaseSeeder extends Seeder
 
         if (app()->environment('local')) {
             $this->call(ManagerTestUserSeeder::class);
+            $this->call(CaseWorkspaceDemoSeeder::class);
         }
     }
 }
