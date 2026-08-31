@@ -31,4 +31,9 @@ class CaseType extends Model
     {
         return $this->hasMany(DocumentTemplate::class);
     }
+
+    public function documentRules(): HasMany
+    {
+        return $this->hasMany(CaseTypeDocumentRule::class)->orderBy('sort_order');
+    }
 }

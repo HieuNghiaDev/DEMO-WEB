@@ -52,6 +52,11 @@ class CaseFile extends Model
         return $this->hasMany(CaseDocument::class);
     }
 
+    public function receivedDocuments(): HasMany
+    {
+        return $this->hasMany(ReceivedDocument::class);
+    }
+
     public function precedents(): HasMany
     {
         return $this->hasMany(CasePrecedent::class);

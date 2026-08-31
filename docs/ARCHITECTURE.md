@@ -90,6 +90,16 @@ Mọi URL khác được chuyển về `/`. `BrowserRouter` dùng `import.meta.e
 | `resources/js/*`, `resources/css/app.css`, `public/index.php` | Entry assets/trang mặc định của Laravel; API hiện không dựa vào các asset này. |
 | `railway.json` | Trước deploy chạy `php artisan migrate --force && php artisan db:seed --force`. |
 
+## Nền tảng thu thập tài liệu theo loại hồ sơ (Phase 1A)
+
+Miền chuẩn là `clients → case_files → case_documents ↔ received_documents`: client là khách hàng, case_file là 案件, case_document là một mục checklist, received_document là metadata của tài liệu/file/phiên bản thực nhận. Pivot `case_document_received_documents` hỗ trợ quan hệ nhiều–nhiều với liên kết duy nhất cho từng cặp.
+
+Danh mục mới đi theo `case_types → case_type_document_rules → document_types`. Rule mô tả tài liệu ứng viên, không khẳng định nghĩa vụ pháp lý; mặc định `conditional`. DocumentType có code ổn định và document_group độc lập prefix. Model mới khai báo quan hệ với case, checklist, rule, prerequisite và employee; chưa có UI/API, seed master hoàn chỉnh hay tự sinh checklist theo rule mới.
+
+CaseDocument có bốn trục varchar độc lập: necessity, collection, fulfillment, review; trạng thái ban đầu lần lượt là undetermined/not_started/undetermined/unreviewed. Constants nằm trong model để dùng khi triển khai validation ở phase sau. Trạng thái legacy và `file_url` vẫn phục vụ API/UI hiện tại; không tự chuyển URL sang received_documents và không tự đồng bộ các trạng thái. Template engine hiện tại không thay đổi.
+
+`matters/tasks` vẫn là hệ AI/demo legacy, không dùng cho tính năng này và chưa migrate. Employee tasks, AI tools và approval execution giữ nguyên. Phase 1A không upload file, gửi yêu cầu ra ngoài, OCR hay gọi Google Drive. Chi tiết cột, FK và chính sách tương thích nằm trong [DATA_MODEL.md](DATA_MODEL.md).
+
 ## Quy ước trạng thái
 
 | Miền | Giá trị |

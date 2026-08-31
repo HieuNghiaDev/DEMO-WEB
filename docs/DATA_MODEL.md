@@ -30,7 +30,11 @@ erDiagram
 | `case_custom_sections` / `CaseCustomSection` | Tab nghiệp vụ tự do theo `case_file`: tiêu đề, nội dung ghi chú, thứ tự hiển thị và nhân viên tạo. Dùng cho thông tin phát sinh ngoài ba khu vực mặc định. |
 | `case_types` / `CaseType` | Nhóm hồ sơ và subtype theo quan hệ cha-con; case thực tế liên kết vào subtype để chọn đúng checklist. |
 | `document_templates`, `document_template_items` | Template tài liệu có version, khoảng hiệu lực, nguồn tham chiếu, thứ tự và mức `required/conditional/optional`. |
-| `case_documents` / `CaseDocument` | Checklist và tài liệu thực của từng hồ sơ: trạng thái thu thập, hạn nộp, ngày nhận, ngày hết hạn, link file, version và soft delete. Có thể sinh từ template hoặc thêm tự do. |
+| `case_documents` / `CaseDocument` | Mục thu thập/checklist theo hồ sơ; có thể sinh từ template hoặc thêm tự do. Giữ toàn bộ cột legacy (status, file_url, version...), bổ sung các trục necessity/collection/fulfillment/review độc lập ở Phase 1A. |
+| `document_types` / `DocumentType` | Master định nghĩa tài liệu: code duy nhất, name_ja/name_vi, description, document_group, version và is_active; chưa seed master C/D/W/T/A. |
+| `case_type_document_rules` / `CaseTypeDocumentRule` | Ứng viên tài liệu theo case type, mục đích/điều kiện/nguồn/đối tượng/kỳ thu thập, tài liệu tiên quyết, ưu tiên, version và hiệu lực. Mặc định conditional, không tự xác định bắt buộc về pháp lý. |
+| `received_documents` / `ReceivedDocument` | File/tài liệu/phiên bản thực nhận theo case: metadata lưu trữ, URL, ngày nhận/hết hạn, bản gốc/bản sao, yêu cầu trả lại và nhân viên đăng ký. Có soft delete. |
+| `case_document_received_documents` | Liên kết nhiều–nhiều checklist ↔ file nhận, relationship_type và timestamps; unique cặp case_document_id + received_document_id. |
 | `case_parties` / `CaseParty` | Gia đình, công ty, đối phương, bảo hiểm, bệnh viện, người hỗ trợ và các bên phát sinh. |
 | `case_deadlines` / `CaseDeadline` | Hạn lưu trú, nộp hồ sơ, bổ sung, thời hiệu, hạn tài liệu và hạn nội bộ. |
 | `case_tasks` / `CaseTask` | Task vận hành gắn với hồ sơ, người phụ trách, ưu tiên, deadline và trạng thái. |
@@ -41,6 +45,42 @@ erDiagram
 Migration giữ lịch sử thay đổi schema, không phải nơi để đặt nghiệp vụ mới. Mọi quan hệ được khai báo trong model; khi thêm cột mới cần đồng thời cập nhật migration, `$fillable`, casts (nếu cần), validation/controller, factory/seeder/test và tài liệu API.
 
 Khi tạo hồ sơ với subtype có template đang hiệu lực, `CaseDocumentChecklistService` sao chép template thành checklist riêng trong `case_documents`. Template mới không làm thay đổi hồ sơ đang xử lý; thao tác áp dụng lại là idempotent và chỉ bổ sung item còn thiếu.
+
+### 事件類型別資料収集 — Phase 1A (database/model foundation)
+
+`clients` là khách hàng/依頼者; `case_files` là thực thể legal 案件 chuẩn. `matters` và `tasks` thuộc hệ AI/demo legacy, không được sửa hoặc migrate trong phase này. `employee_tasks` và `case_tasks` cũng không thay đổi.
+
+```mermaid
+erDiagram
+    CLIENTS ||--o{ CASE_FILES : owns
+    CASE_TYPES ||--o{ CASE_FILES : classifies
+    CASE_TYPES ||--o{ CASE_TYPE_DOCUMENT_RULES : candidates
+    DOCUMENT_TYPES ||--o{ CASE_TYPE_DOCUMENT_RULES : defines
+    CASE_FILES ||--o{ CASE_DOCUMENTS : checklist
+    CASE_TYPE_DOCUMENT_RULES o|--o{ CASE_DOCUMENTS : optional_origin
+    DOCUMENT_TYPES o|--o{ CASE_DOCUMENTS : optional_type
+    CASE_FILES ||--o{ RECEIVED_DOCUMENTS : receives
+    DOCUMENT_TYPES o|--o{ RECEIVED_DOCUMENTS : optional_type
+    CASE_DOCUMENTS ||--o{ CASE_DOCUMENT_RECEIVED_DOCUMENTS : links
+    RECEIVED_DOCUMENTS ||--o{ CASE_DOCUMENT_RECEIVED_DOCUMENTS : satisfies
+```
+
+Các cột mới của `case_documents` gồm FK nullable `document_type_id`, `case_type_document_rule_id`; ngữ cảnh `target_person`, `collection_source`, `target_period_from/to`, `target_scope`; quyết định cần thiết với lý do, người quyết định và thời điểm; người phụ trách, requested_at, response_deadline, collection_priority và preservation_reason.
+
+| Trục | Mặc định | Giá trị được khai báo trong constants của CaseDocument |
+| --- | --- | --- |
+| necessity_status | undetermined | undetermined, required, not_required |
+| collection_status | not_started | not_started, preparing, requested, partially_received, received, difficult, closed |
+| fulfillment_status | undetermined | undetermined, insufficient, satisfied, satisfied_by_alternative |
+| review_status | unreviewed | unreviewed, reviewing, reviewed, returned |
+
+Các giá trị dùng varchar để mở rộng về sau; constants là danh sách cho validation ở các phase API tiếp theo, chưa có API mới hoặc state machine. Không có tự động đồng bộ giữa bốn trục này và legacy `status`/`requirement_level`. Một file đã nhận không tự đồng nghĩa đã đủ hay đã kiểm tra. Rule là ứng viên; mặc định `conditional`, priority `normal`, preservation_priority `false`; chưa có cơ chế sinh checklist từ rule mới. `document_group` là metadata tường minh (C/D/W/T/A), không suy ra nghiệp vụ từ prefix của code. Cho phép nhiều rule cùng cặp case type/document type để phục vụ các mục đích/điều kiện khác nhau; version chưa có cơ chế tự tăng.
+
+Legacy `case_documents.file_url` tiếp tục phục vụ API/UI cũ. Kiến trúc mới lưu file thực nhận ở `received_documents` và nối qua pivot; không tự chuyển URL cũ, không dual-write, không seed master hoàn chỉnh. Một checklist có nhiều file, một file có thể liên kết nhiều checklist. `storage_type` có constants upload/google_drive/external_link; phase này chỉ lưu metadata, không upload, gọi Drive hay kiểm tra nội dung file. Version là số metadata mặc định 1, chưa triển khai lịch sử phiên bản tự động. Trong phase API tiếp theo phải kiểm tra cùng case khi gắn pivot, tính nhất quán document type/rule/case type, điều kiện ngày và quyền của nhân viên; FK hiện chỉ xác minh ID tồn tại.
+
+FK chính của rule dùng RESTRICT khi hard-delete case type/document type; nên vô hiệu hóa master bằng is_active. FK nullable tới rule/type/employee/prerequisite dùng SET NULL để giữ checklist/file khi hard-delete tham chiếu. received_documents.case_file_id và hai FK pivot dùng CASCADE khi hard-delete cha, phù hợp workspace hiện có. Soft-delete case hoặc file không chạy cascade DB; pivot được giữ, quan hệ Eloquent mặc định ẩn file/checklist đã soft-delete và có thể hiện lại khi restore. Không có thao tác xóa storage bên ngoài.
+
+Migration `2026_08_31_100000`–`100400` chỉ thêm schema khi chạy `up`; không sửa/xóa dữ liệu legacy. `down` chỉ tháo phần Phase 1A nhưng sẽ mất dữ liệu mới, vì vậy không rollback trên dữ liệu vận hành nếu chưa backup và được duyệt. Phase này không thay đổi template/API/workspace/AI/approval execution; không tạo collection history, OCR hay rule pháp lý đầy đủ.
 
 ## Excel
 
@@ -109,5 +149,7 @@ npm run preview
 | `PersonalAttendanceReportTest`, `AttendanceExcelServiceTest` | Cô lập dữ liệu báo cáo cá nhân, chống Excel formula injection và layout workbook. |
 | `ApiSecurityTest`, `SecurityAuditLogTest` | CORS, security header, rate limit, audit và lọc dữ liệu nhạy cảm. |
 | `PasswordSecurityTest` | Bắt buộc đổi mật khẩu, thu hồi token, khóa credential seed cũ và lệnh khôi phục tài khoản. |
+| `CaseCollectionFoundationTest`, `CaseCollectionMigrationTest` | Phase 1A: master/rule, trạng thái độc lập, FK, pivot nhiều–nhiều và soft delete; nâng cấp có dữ liệu legacy bằng migrate additive trên SQLite :memory:, không tự chuyển file_url. |
+| `CaseDocumentTest`, `CaseWorkspaceApiTest`, `CaseFileApiTest` | Hồi quy API tài liệu, workspace/template, khách hàng và hồ sơ hiện có. |
 
 Khi sửa API hoặc schema, hãy thêm test vào đúng nhóm và chạy toàn bộ `php artisan test` trước khi deploy.
