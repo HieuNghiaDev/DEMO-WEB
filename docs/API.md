@@ -28,6 +28,8 @@ Mỗi hồ sơ có thể có tab tự do ngoài ba tab mặc định. `POST /cas
 
 ### Workspace hồ sơ và checklist
 
+Phase 1D bổ sung application service `CaseDocumentChecklistGenerator::generateForCase`, **không có endpoint mới và chưa tự gọi khi POST tạo CaseFile**. API hiện vẫn dùng template engine cũ; rule generator được giữ riêng vì template item chưa ánh xạ document_type, gọi cả hai sẽ tạo mục trùng. Caller backend tương lai phải kiểm tra quyền trước khi gọi service. Xem [PHASE_1D_CHECKLIST_GENERATOR.md](PHASE_1D_CHECKLIST_GENERATOR.md) về transaction, inheritance và snapshot.
+
 | Method & path | Quyền | Hành vi |
 | --- | --- | --- |
 | `GET /case-files/{id}/workspace` | `case.view` | Trả hồ sơ, checklist, bên liên quan, deadline, task, timeline và summary tiến độ. |

@@ -120,6 +120,8 @@ Nguồn và điều kiện, 4 rule nhiều purpose, 3 rule bảo toàn chứng c
 
 ### Phase 1D-0 — snapshot ngữ cảnh rule theo hồ sơ
 
+Phần này ghi nhận nền tảng tại thời điểm Phase 1D-0; generator backend sau đó đã triển khai ở Phase 1D bên dưới, chưa tự nối vào luồng tạo hồ sơ.
+
 Migration additive `2026_08_31_140000_add_rule_snapshots_to_case_documents` thêm ba cột nullable; không backfill, không tạo checklist hoặc thay đổi rule/master:
 
 | Cột trên `case_documents` | Kiểu | Nguồn sao chép khi Phase 1D triển khai generator sau này |
@@ -147,6 +149,16 @@ Tài liệu nhập tay hoặc dữ liệu trước migration giữ snapshot null
 Kiểm thử: `CaseDocumentRuleSnapshotTest` xác minh nullable, cast, tính độc lập với version tài liệu/master, master đổi/xóa không sửa snapshot và không tự gắn purpose. `CaseDocumentRuleSnapshotMigrationTest` nâng cấp từ trước migration với dữ liệu cũ + 103 rule chính thức, xác minh chỉ thêm ba cột null và giữ nguyên nội dung master/pivot.
 
 Xác minh Phase 1D-0 ngày 2026-08-31: 7 test mới / 104 assertions PASS; toàn bộ backend 192 tests / 1.314 assertions PASS (gồm workspace/API regression); frontend production build PASS với cảnh báo bundle >500 kB đã có. Local `127.0.0.1 / employee_management` đã áp dụng riêng migration bổ sung, không seed/reset: 48 bảng / 56 migration rows, master giữ nguyên checksum và số lượng 78/11/103/107; clients/case_files/case_documents đều 0. Ngoài lịch sử migration, nội dung mọi bảng giữ nguyên; MySQL xác nhận unsigned integer/text/varchar(100), cả ba nullable. Không triển khai generator hoặc deploy.
+
+### Phase 1D — generator backend (gọi tường minh)
+
+`CaseDocumentChecklistGenerator::generateForCase(CaseFile)` chạy trong transaction và khóa CaseFile bằng `FOR UPDATE`; đọc lại case type hiện tại, duyệt lineage với phát hiện cycle/missing parent. Rule active và hiệu lực tại `today()` được chọn: version cao nhất hợp lệ tại mỗi cấp, cấp gần nhất thắng metadata, union purpose của các rule thắng ở từng cấp. Một candidate tự động cho mỗi document type; không thêm global unique hay migration mới.
+
+Item mới giữ `necessity_status=undetermined` và ba trục mặc định khác; snapshot version/condition/master_source và sao chép purpose vào pivot độc lập. `standard_source/standard_target_person` là gợi ý nguồn/đối tượng; `standard_period_rule` là mô tả `target_scope`, không chuyển thành ngày. Priority được giữ, không tự tạo preservation reason.
+
+Generator không bao giờ cập nhật/sync/restore item đã có, kể cả quyết định cần/không cần, snapshot, purpose, các trục trạng thái và soft-delete. Item mới chỉ được thêm nếu chưa có candidate generated cùng document/rule; manual item cùng loại vẫn hợp lệ khi nguồn/đối tượng/kỳ/phạm vi khác. Chỉ skip manual duplicate có ngữ cảnh khớp hẹp, không tự chuyển manual thành generated.
+
+Service là application action riêng, chưa tự gọi trong `CaseFileController::store`: template engine cũ chưa có document_type mapping, chạy hai engine sẽ tạo checklist chồng nhau. Không thay đổi API/frontend hoặc tự reconcile khi đổi loại hồ sơ. Chi tiết precedence, hạn chế duplicate/locking và kiểm chứng **213 tests / 1.465 assertions** ở [PHASE_1D_CHECKLIST_GENERATOR.md](PHASE_1D_CHECKLIST_GENERATOR.md).
 
 ## Excel
 

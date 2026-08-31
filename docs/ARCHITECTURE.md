@@ -102,7 +102,11 @@ V2 đã bỏ model/tool runtime của `matters/tasks`; B2 local đã hoàn tất
 
 ### Phase 1C — official candidate rules
 
-Master JSON và `CaseTypeDocumentRuleMasterSeeder` cung cấp 103 rule ứng viên cho hai root canonical 労災/交通事故, liên kết 107 purpose. Rule identity được unique ở DB; `master_source` phân biệt rule seed với custom. Seed chỉ cập nhật metadata thuộc nguồn chính thức và bổ sung purpose, không sửa hồ sơ/checklist hoặc đánh giá điều kiện. Chi tiết mapping, provenance và kiểm thử: [PHASE_1C_RULE_MASTER.md](PHASE_1C_RULE_MASTER.md). Phase 1D/generator chưa triển khai.
+Master JSON và `CaseTypeDocumentRuleMasterSeeder` cung cấp 103 rule ứng viên cho hai root canonical 労災/交通事故, liên kết 107 purpose. Rule identity được unique ở DB; `master_source` phân biệt rule seed với custom. Seed chỉ cập nhật metadata thuộc nguồn chính thức và bổ sung purpose, không sửa hồ sơ/checklist hoặc đánh giá điều kiện. Chi tiết mapping, provenance và kiểm thử: [PHASE_1C_RULE_MASTER.md](PHASE_1C_RULE_MASTER.md). Generator backend Phase 1D nằm trong service riêng mô tả bên dưới.
+
+### Phase 1D — explicit checklist generation action
+
+`app/Services/CaseDocumentChecklistGenerator.php` tạo candidate từ rule của selected type và lineage: nearest rule metadata, latest effective version mỗi cấp, union purpose, snapshot ngữ cảnh và necessity undetermined. Transaction khóa CaseFile, chỉ thêm mục thiếu, không ghi đè quyết định hoặc snapshot cũ. Chưa tự nối vào creation API vì template engine legacy chưa có document_type mapping, cần quyết định coexistence riêng để tránh checklist trùng. Không thay thế `CaseDocumentChecklistService`. Xem [PHASE_1D_CHECKLIST_GENERATOR.md](PHASE_1D_CHECKLIST_GENERATOR.md).
 
 ## Quy ước trạng thái
 
