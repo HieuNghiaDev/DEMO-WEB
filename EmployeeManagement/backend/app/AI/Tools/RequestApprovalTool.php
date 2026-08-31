@@ -40,6 +40,12 @@ class RequestApprovalTool implements Tool
             'payload' => ['nullable'],
         ]);
 
+        if (($data['action_type'] ?? null) === 'delete_task' || ($data['tool_name'] ?? null) === 'delete_task') {
+            throw ValidationException::withMessages([
+                'action_type' => ['Legacy task execution is unavailable in THEMIS V2.'],
+            ]);
+        }
+
         if (isset($data['payload']) && ! is_array($data['payload']) && ! is_object($data['payload'])) {
             throw ValidationException::withMessages([
                 'payload' => ['The payload field must be an array or object.'],

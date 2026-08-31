@@ -29,7 +29,7 @@ class CaseFile extends Model
 
     public function caseTypeOption(): BelongsTo
     {
-        return $this->belongsTo(CaseType::class);
+        return $this->belongsTo(CaseType::class, 'case_type_id');
     }
 
     public function department(): BelongsTo

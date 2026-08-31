@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\Office;
 use App\Models\User;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
@@ -15,6 +16,13 @@ use Tests\TestCase;
 class PersonalAttendanceReportTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->seed(RolePermissionSeeder::class);
+    }
 
     public function test_guest_cannot_download_a_personal_attendance_report(): void
     {
@@ -70,7 +78,7 @@ class PersonalAttendanceReportTest extends TestCase
         ]);
         $this->createAttendance($otherEmployee, '2026-08-12');
 
-        Sanctum::actingAs(User::factory()->create([
+        Sanctum::actingAs(User::factory()->withRole('level_2')->create([
             'employee_id' => $employee->id,
         ]));
 

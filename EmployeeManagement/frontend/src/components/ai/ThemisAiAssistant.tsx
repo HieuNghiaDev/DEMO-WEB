@@ -22,6 +22,7 @@ import ThemisAIFloatingButton from './ThemisAIFloatingButton'
 import { useMascotFeedback } from './useMascotFeedback'
 import {
   AI_CONVERSATION_HISTORY_LIMIT,
+  AI_SKILLS_PAUSED_MESSAGE,
   aiSkillLabels,
   friendlyAiErrorMessage,
   loadAiPersonas,
@@ -76,7 +77,7 @@ function ThemisAiAssistant() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const selectedPersona = personas.find((persona) => persona.id === selectedPersonaId)
   const selectedSkill = selectedPersona
-    ? (selectedSkills[selectedPersona.name] ?? selectedPersona.skills[0] ?? '')
+    ? (selectedPersona.skills.includes(selectedSkills[selectedPersona.name]) ? selectedSkills[selectedPersona.name] : selectedPersona.skills[0] ?? '')
     : ''
   const chatMessages = useMemo(
     () => selectedPersona ? (messagesByPersona[selectedPersona.name] ?? []) : [],
@@ -277,14 +278,14 @@ function ThemisAiAssistant() {
                   <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-slate-800 dark:text-white">{selectedPersona.display_name}</p>
-                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-600 dark:text-emerald-400">● Online</p>
+                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-600 dark:text-emerald-400">{selectedSkill ? '● Online' : '一時停止中'}</p>
                     </div>
                     {selectedPersona.skills.length > 1 && (
                       <label className="relative">
                         <span className="sr-only">AIスキル</span>
                         <select
                           className="h-9 appearance-none rounded-xl border border-slate-200 bg-slate-50 py-0 pl-3 pr-8 text-xs font-bold text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:ring-indigo-500/20"
-                          disabled={isSending}
+                          disabled={isSending || !selectedSkill}
                           onChange={(event) => setSelectedSkills((current) => ({ ...current, [selectedPersona.name]: event.target.value }))}
                           value={selectedSkill}
                         >
@@ -296,7 +297,9 @@ function ThemisAiAssistant() {
                   </div>
 
                   <div aria-live="polite" className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-5">
-                    {chatMessages.length === 0 ? (
+                    {!selectedSkill ? (
+                      <p role="status" className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">{AI_SKILLS_PAUSED_MESSAGE}</p>
+                    ) : chatMessages.length === 0 ? (
                       <div className="flex min-h-full flex-col items-center justify-center px-5 text-center">
                         <div className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-gradient-to-br from-indigo-100 to-violet-100 text-indigo-600 shadow-inner dark:from-indigo-500/15 dark:to-violet-500/15 dark:text-indigo-300">
                           <Bot size={27} />
@@ -326,7 +329,7 @@ function ThemisAiAssistant() {
                       <label className="sr-only" htmlFor="floating-ai-message">メッセージ</label>
                       <textarea
                         className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:border-indigo-500 dark:focus:bg-slate-800 dark:focus:ring-indigo-500/20"
-                        disabled={isSending}
+                        disabled={isSending || !selectedSkill}
                         id="floating-ai-message"
                         maxLength={4000}
                         onChange={(event) => setMessageInput(event.target.value)}
@@ -336,7 +339,7 @@ function ThemisAiAssistant() {
                         rows={1}
                         value={messageInput}
                       />
-                      <button aria-label="メッセージを送信" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/20 transition hover:-translate-y-0.5 hover:shadow-indigo-500/30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 dark:focus-visible:ring-indigo-500/30" disabled={isSending || messageInput.trim() === ''} type="submit">
+                      <button aria-label="メッセージを送信" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/20 transition hover:-translate-y-0.5 hover:shadow-indigo-500/30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 dark:focus-visible:ring-indigo-500/30" disabled={isSending || !selectedSkill || messageInput.trim() === ''} type="submit">
                         {isSending ? <LoaderCircle className="animate-spin" size={18} /> : <SendHorizontal size={18} />}
                       </button>
                     </form>

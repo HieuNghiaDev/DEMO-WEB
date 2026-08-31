@@ -8,6 +8,7 @@ use App\Models\Office;
 use App\Models\User;
 use App\Services\AttendanceExcelService;
 use Carbon\Carbon;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -21,6 +22,8 @@ class AttendanceOutsideStatusTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->seed(RolePermissionSeeder::class);
 
         $office = Office::create([
             'office_code' => 'THEMIS',
@@ -37,7 +40,7 @@ class AttendanceOutsideStatusTest extends TestCase
             'status' => 'active',
         ]);
 
-        $user = User::factory()->create([
+        $user = User::factory()->withRole('level_2')->create([
             'employee_id' => $this->employee->id,
         ]);
 

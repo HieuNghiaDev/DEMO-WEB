@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Persona;
 use App\Services\AIOrchestrator;
 use App\Services\AiProviderBusyException;
+use App\Services\SkillLoader;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
@@ -70,6 +71,14 @@ class AiChatController extends Controller
             return response()->json([
                 'message' => 'AI persona is not active.',
             ], 403);
+        }
+
+        if (in_array($validated['skill'], SkillLoader::DISABLED_SKILLS, true)
+            || ! in_array($validated['skill'], $persona->skills ?? [], true)) {
+            return response()->json([
+                'message' => '旧タスク管理・朝会ブリーフィングはV2移行のため一時停止中です。',
+                'code' => 'ai_skill_unavailable',
+            ], 422);
         }
 
         $messages = $validated['messages'] ?? [];

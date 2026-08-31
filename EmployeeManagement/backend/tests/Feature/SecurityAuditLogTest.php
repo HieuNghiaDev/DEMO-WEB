@@ -8,6 +8,7 @@ use App\Models\SecurityAuditLog;
 use App\Models\User;
 use App\Services\AttendanceExcelService;
 use App\Services\SecurityAuditLogger;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Laravel\Sanctum\Sanctum;
@@ -16,6 +17,13 @@ use Tests\TestCase;
 class SecurityAuditLogTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->seed(RolePermissionSeeder::class);
+    }
 
     public function test_failed_login_is_logged_without_plaintext_credentials(): void
     {
@@ -152,7 +160,7 @@ class SecurityAuditLogTest extends TestCase
             'status' => 'active',
         ]);
 
-        $user = User::create([
+        $user = User::factory()->withRole('level_2')->create([
             'employee_id' => $employee->id,
             'login_id' => 'TM001',
             'name' => $employee->full_name,

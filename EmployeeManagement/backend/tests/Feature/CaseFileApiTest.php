@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\CaseType;
 use App\Models\Employee;
 use App\Models\Office;
 use App\Models\Role;
@@ -24,7 +25,7 @@ class CaseFileApiTest extends TestCase
         $user->roles()->sync([Role::query()->where('name', 'level_5')->value('id')]);
         $case = $this->actingAs($user, 'sanctum')->postJson('/api/case-files', [
             'title' => 'DEMO API Case',
-            'case_type_id' => 1,
+            'case_type_id' => CaseType::where('name', '在留期間更新')->sole()->id,
             'client' => [
                 'name' => 'DEMO API Client',
                 'name_kana' => 'デモ・クライアント',
@@ -71,7 +72,7 @@ class CaseFileApiTest extends TestCase
         $this->actingAs($user, 'sanctum')
             ->getJson('/api/case-types')
             ->assertOk()
-            ->assertJsonPath('case_types.0.name', '在留期間更新');
+            ->assertJsonFragment(['name' => '在留期間更新']);
     }
 
     public function test_other_case_type_requires_and_saves_its_detail(): void
@@ -83,7 +84,7 @@ class CaseFileApiTest extends TestCase
 
         $payload = [
             'title' => 'Other case type',
-            'case_type_id' => 10,
+            'case_type_id' => CaseType::where('name', 'その他')->sole()->id,
             'client' => [
                 'name' => 'Demo Client',
                 'client_type' => 'individual',

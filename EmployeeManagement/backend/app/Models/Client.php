@@ -15,11 +15,6 @@ class Client extends Model
         'email', 'language', 'nationality', 'notes',
     ];
 
-    public function matters(): HasMany
-    {
-        return $this->hasMany(Matter::class);
-    }
-
     public function caseFiles(): HasMany
     {
         return $this->hasMany(CaseFile::class);

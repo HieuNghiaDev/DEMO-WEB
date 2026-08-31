@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { AlertTriangle, Check, CheckCircle2, Clock3, Play, RefreshCw, ShieldCheck, X, XCircle } from 'lucide-react'
+import { Check, CheckCircle2, Clock3, Play, RefreshCw, ShieldCheck, X, XCircle } from 'lucide-react'
 import api from '../services/api'
 
 type ApprovalStatus = 'pending' | 'approved' | 'rejected'
-type ApprovalAction = 'approve' | 'reject' | 'execute'
+type ApprovalAction = 'approve' | 'reject'
 type ApprovalUser = { id: number; name: string }
 type ApprovalRequest = {
   id: number
@@ -69,7 +69,6 @@ function ApprovalRoom() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeAction, setActiveAction] = useState<{ id: number; action: ApprovalAction } | null>(null)
-  const [executionCandidate, setExecutionCandidate] = useState<ApprovalRequest | null>(null)
 
   const loadApprovals = useCallback(async () => {
     setIsLoading(true)
@@ -105,24 +104,6 @@ function ApprovalRoom() {
     }
   }
 
-  const executeApproval = async (approvalId: number) => {
-    setActiveAction({ id: approvalId, action: 'execute' })
-    setError(null)
-    try {
-      const response = await api.post<{ approval: ApprovalRequest }>(`/approvals/${approvalId}/execute`)
-      setApprovals((current) => current.map((approval) =>
-        approval.id === approvalId ? response.data.approval : approval,
-      ))
-      setExecutionCandidate(null)
-    } catch {
-      setExecutionCandidate(null)
-      await loadApprovals()
-      setError('承認済み操作を実行できませんでした。申請状態と対象データを確認してください。')
-    } finally {
-      setActiveAction(null)
-    }
-  }
-
   const pendingCount = approvals.filter((approval) => approval.status === 'pending').length
   const approvedCount = approvals.filter((approval) => approval.status === 'approved').length
   const rejectedCount = approvals.filter((approval) => approval.status === 'rejected').length
@@ -139,7 +120,7 @@ function ApprovalRoom() {
                 承認管理
               </div>
               <h1 id="approval-room-title" className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 md:text-[28px]">承認室</h1>
-              <p className="mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400">AI社員から届いた操作申請を確認し、安全に判断・実行します。</p>
+              <p className="mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400">AI社員から届いた操作申請を確認し、安全に承認・却下します。</p>
             </div>
             <button
               type="button"
@@ -181,12 +162,7 @@ function ApprovalRoom() {
               const meta = statusMeta[approval.status]
               const isApproving = activeAction?.id === approval.id && activeAction.action === 'approve'
               const isRejecting = activeAction?.id === approval.id && activeAction.action === 'reject'
-              const isExecuting = activeAction?.id === approval.id && activeAction.action === 'execute'
               const isActing = activeAction?.id === approval.id
-              const canExecute = approval.status === 'approved'
-                && approval.executed_at === null
-                && approval.action_type === 'delete_task'
-                && approval.tool_name === 'delete_task'
               return (
                 <article key={approval.id} className="group relative px-4 py-4 transition-colors duration-150 hover:bg-slate-50 dark:hover:bg-slate-800/35 sm:px-5">
                   <span className={`absolute bottom-4 left-0 top-4 w-0.5 ${approval.status === 'pending' ? 'bg-amber-400' : approval.status === 'approved' ? 'bg-emerald-500' : 'bg-rose-400'}`} aria-hidden="true" />
@@ -212,8 +188,6 @@ function ApprovalRoom() {
                         <button type="button" disabled={isActing} onClick={() => void transitionApproval(approval.id, 'reject')} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-4 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:cursor-wait disabled:opacity-50 dark:border-rose-400/25 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-400/10">{isRejecting ? <RefreshCw size={15} className="animate-spin" /> : <X size={16} />} 却下</button>
                         <button type="button" disabled={isActing} onClick={() => void transitionApproval(approval.id, 'approve')} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-wait disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400">{isApproving ? <RefreshCw size={15} className="animate-spin" /> : <Check size={16} />} 承認</button>
                       </div>
-                    ) : canExecute ? (
-                      <button type="button" disabled={isActing} onClick={() => setExecutionCandidate(approval)} className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-rose-600 px-5 text-sm font-medium text-white transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:cursor-wait disabled:opacity-50">{isExecuting ? <RefreshCw size={15} className="animate-spin" /> : <Play size={16} />} 実行</button>
                     ) : (
                       <div className="flex shrink-0 items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">{approval.executed_at ? <CheckCircle2 size={18} className="text-indigo-500" /> : approval.status === 'approved' ? <CheckCircle2 size={18} className="text-emerald-500" /> : <XCircle size={18} className="text-rose-500" />}<span>{approval.executed_at ? '実行済み' : statusMeta[approval.status].label}<span className="ml-2 text-xs font-normal tabular-nums">{formatDate(approval.executed_at ?? approval.approved_at ?? approval.rejected_at)}</span></span></div>
                     )}
@@ -225,25 +199,6 @@ function ApprovalRoom() {
         )}
       </section>
 
-      {executionCandidate && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="execute-approval-title">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-6">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-400/10 dark:text-rose-300"><AlertTriangle size={21} /></span>
-              <h2 id="execute-approval-title" className="text-lg font-semibold">承認済み操作の実行確認</h2>
-            </div>
-            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">承認済みのタスク削除を実行しますか？この操作は元に戻せません。</p>
-            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-800/60">
-              <span className="text-slate-500 dark:text-slate-400">対象：</span>
-              <strong>Task #{String(executionCandidate.payload?.task_id ?? '不明')}</strong>
-            </div>
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button type="button" disabled={activeAction !== null} onClick={() => setExecutionCandidate(null)} className="h-10 rounded-lg border border-slate-300 text-sm font-medium transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:hover:bg-slate-800">キャンセル</button>
-              <button type="button" disabled={activeAction !== null} onClick={() => void executeApproval(executionCandidate.id)} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-rose-600 text-sm font-medium text-white transition-colors hover:bg-rose-700 disabled:cursor-wait disabled:opacity-50">{activeAction?.action === 'execute' ? <RefreshCw size={15} className="animate-spin" /> : <Play size={16} />} 削除を実行</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

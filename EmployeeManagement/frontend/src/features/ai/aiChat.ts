@@ -32,6 +32,8 @@ type ChatResponse = {
 }
 
 export const AI_CONVERSATION_HISTORY_LIMIT = 20
+export const AI_SKILLS_PAUSED_MESSAGE = '旧タスク管理・朝会ブリーフィングはV2移行のため一時停止中です。'
+const disabledSkills = ['task_management', 'morning_briefing']
 
 export const aiSkillLabels: Record<string, string> = {
   task_management: 'タスク管理',
@@ -62,7 +64,7 @@ export const friendlyAiErrorMessage = (error: unknown) => {
 export const loadAiPersonas = async () => {
   const response = await api.get<{ personas: AiPersona[] }>('/personas')
 
-  return response.data.personas
+  return response.data.personas.map((persona) => ({ ...persona, skills: persona.skills.filter((skill) => !disabledSkills.includes(skill)) }))
 }
 
 export const sendAiChatMessage = async ({
@@ -78,6 +80,7 @@ export const sendAiChatMessage = async ({
   messages: AiChatMessage[]
   context?: AiPageContext
 }) => {
+  if (!skill || disabledSkills.includes(skill)) throw new Error(AI_SKILLS_PAUSED_MESSAGE)
   const response = await api.post<ChatResponse>('/ai/chat', {
     persona,
     skill,

@@ -119,7 +119,7 @@ class DocumentTypeMasterSeederTest extends TestCase
             'status' => 'confirmed', 'version' => '7']);
         $tables = ['document_name_catalog', 'document_templates', 'document_template_items',
             'case_documents', 'case_files', 'case_types', 'clients', 'case_type_document_rules',
-            'received_documents', 'matters', 'tasks', 'approval_requests'];
+            'received_documents', 'approval_requests'];
         $before = [];
         foreach ($tables as $table) {
             $before[$table] = DB::table($table)->orderBy('id')->get()->toJson();

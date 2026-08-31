@@ -3,12 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\ApprovalRequest;
+use App\Models\CaseFile;
+use App\Models\Client;
 use App\Models\Permission;
 use App\Models\Role;
-use App\Models\SecretaryLog;
-use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class ApprovalManagementApiTest extends TestCase
@@ -73,8 +74,7 @@ class ApprovalManagementApiTest extends TestCase
 
     public function test_authorized_user_can_approve_a_pending_request_without_executing_delete_task(): void
     {
-        $task = $this->createTask();
-        $approval = $this->deleteTaskApproval($task);
+        $approval = ApprovalRequest::create(['action_type' => 'review_document', 'status' => 'pending']);
         $approver = $this->authorizedUser(['approval.approve']);
 
         $this->actingAs($approver, 'sanctum')
@@ -88,7 +88,6 @@ class ApprovalManagementApiTest extends TestCase
             'status' => 'approved',
             'approved_by' => $approver->id,
         ]);
-        $this->assertDatabaseHas('tasks', ['id' => $task->id]);
     }
 
     public function test_authorized_user_can_reject_a_pending_request(): void
@@ -138,135 +137,33 @@ class ApprovalManagementApiTest extends TestCase
             ->assertJsonPath('current_status', 'rejected');
     }
 
-    public function test_approved_delete_task_can_be_executed_and_is_audited(): void
+    public function test_legacy_execution_is_gone_for_every_state_without_touching_v2_tasks(): void
     {
-        $task = $this->createTask();
-        $approval = $this->deleteTaskApproval($task, 'approved');
+        $client = Client::create(['name' => 'V2 client']);
+        $case = CaseFile::create(['title' => 'V2 case', 'client_id' => $client->id]);
+        $task = $case->caseTasks()->create(['title' => 'Keep canonical task']);
         $executor = $this->authorizedUser(['approval.approve']);
-
-        $this->actingAs($executor, 'sanctum')
-            ->postJson("/api/approvals/{$approval->id}/execute")
-            ->assertOk()
-            ->assertJsonPath('approval.executed_by.id', $executor->id)
-            ->assertJsonPath('execution.approval_id', $approval->id)
-            ->assertJsonPath('execution.action_type', 'delete_task')
-            ->assertJsonPath('execution.task_id', $task->id);
-
-        $this->assertDatabaseMissing('tasks', ['id' => $task->id]);
-        $this->assertDatabaseHas('approval_requests', [
-            'id' => $approval->id,
-            'executed_by' => $executor->id,
-        ]);
-
-        $log = SecretaryLog::query()->where('trigger_type', 'approval_execution')->firstOrFail();
-        $this->assertSame('success', $log->status);
-        $this->assertSame($approval->id, $log->input['approval_id']);
-        $this->assertSame($task->id, $log->input['task_id']);
-        $this->assertSame($executor->id, $log->input['triggered_by']);
-        $this->assertSame($task->id, $log->output['deleted_task']['id']);
-    }
-
-    public function test_pending_and_rejected_approvals_cannot_execute(): void
-    {
-        $executor = $this->authorizedUser(['approval.approve']);
-
-        foreach (['pending', 'rejected'] as $status) {
-            $task = $this->createTask("{$status} task");
-            $approval = $this->deleteTaskApproval($task, $status);
-
+        foreach (['pending', 'approved', 'rejected'] as $status) {
+            $approval = ApprovalRequest::create([
+                'action_type' => 'delete_task', 'tool_name' => 'delete_task',
+                'payload' => ['task_id' => $task->id], 'status' => $status,
+            ]);
             $this->actingAs($executor, 'sanctum')
-                ->postJson("/api/approvals/{$approval->id}/execute")
-                ->assertStatus(409);
-            $this->assertDatabaseHas('tasks', ['id' => $task->id]);
+                ->postJson("/api/approvals/{$approval->id}/execute", ['task_id' => $task->id])
+                ->assertStatus(410)->assertJsonPath('code', 'legacy_execution_unavailable');
+            $this->assertNull($approval->fresh()->executed_at);
         }
-    }
-
-    public function test_an_approval_cannot_execute_twice(): void
-    {
-        $task = $this->createTask();
-        $approval = $this->deleteTaskApproval($task, 'approved');
-        $executor = $this->authorizedUser(['approval.approve']);
-
-        $this->actingAs($executor, 'sanctum')
-            ->postJson("/api/approvals/{$approval->id}/execute")
-            ->assertOk();
-        $this->actingAs($executor, 'sanctum')
-            ->postJson("/api/approvals/{$approval->id}/execute")
-            ->assertStatus(409);
-
-        $this->assertDatabaseCount('tasks', 0);
-        $this->assertDatabaseCount('approval_requests', 1);
-    }
-
-    public function test_execution_uses_only_the_approved_task_id_and_ignores_override_input(): void
-    {
-        $approvedTask = $this->createTask('Approved task');
-        $otherTask = $this->createTask('Other task');
-        $approval = $this->deleteTaskApproval($approvedTask, 'approved');
-
-        $this->actingAs($this->authorizedUser(['approval.approve']), 'sanctum')
-            ->postJson("/api/approvals/{$approval->id}/execute", [
-                'task_id' => $otherTask->id,
-            ])
-            ->assertOk()
-            ->assertJsonPath('execution.task_id', $approvedTask->id);
-
-        $this->assertDatabaseMissing('tasks', ['id' => $approvedTask->id]);
-        $this->assertDatabaseHas('tasks', ['id' => $otherTask->id]);
-    }
-
-    public function test_unsupported_action_cannot_execute(): void
-    {
-        $task = $this->createTask();
-        $approval = ApprovalRequest::create([
-            'action_type' => 'send_email',
-            'tool_name' => 'send_email',
-            'payload' => ['task_id' => $task->id],
-            'status' => 'approved',
-        ]);
-
-        $this->actingAs($this->authorizedUser(['approval.approve']), 'sanctum')
-            ->postJson("/api/approvals/{$approval->id}/execute")
-            ->assertUnprocessable();
-        $this->assertDatabaseHas('tasks', ['id' => $task->id]);
-    }
-
-    public function test_missing_or_nonexistent_approved_task_is_handled_safely(): void
-    {
-        $executor = $this->authorizedUser(['approval.approve']);
-        $missingPayload = ApprovalRequest::create([
-            'action_type' => 'delete_task',
-            'tool_name' => 'delete_task',
-            'payload' => [],
-            'status' => 'approved',
-        ]);
-        $nonexistentTask = ApprovalRequest::create([
-            'action_type' => 'delete_task',
-            'tool_name' => 'delete_task',
-            'payload' => ['task_id' => 999999],
-            'status' => 'approved',
-        ]);
-
-        $this->actingAs($executor, 'sanctum')
-            ->postJson("/api/approvals/{$missingPayload->id}/execute")
-            ->assertUnprocessable();
-        $this->actingAs($executor, 'sanctum')
-            ->postJson("/api/approvals/{$nonexistentTask->id}/execute")
-            ->assertNotFound();
+        $this->assertDatabaseHas('case_tasks', ['id' => $task->id]);
+        $this->assertFalse(Schema::hasTable('tasks'));
+        $this->assertFalse(Schema::hasTable('matters'));
     }
 
     public function test_execution_requires_authentication_and_approval_permission(): void
     {
-        $task = $this->createTask();
-        $approval = $this->deleteTaskApproval($task, 'approved');
-
-        $this->postJson("/api/approvals/{$approval->id}/execute")
-            ->assertUnauthorized();
+        $approval = ApprovalRequest::create(['action_type' => 'delete_task', 'status' => 'approved']);
+        $this->postJson("/api/approvals/{$approval->id}/execute")->assertUnauthorized();
         $this->actingAs($this->authorizedUser(['approval.view']), 'sanctum')
-            ->postJson("/api/approvals/{$approval->id}/execute")
-            ->assertForbidden();
-
-        $this->assertDatabaseHas('tasks', ['id' => $task->id]);
+            ->postJson("/api/approvals/{$approval->id}/execute")->assertForbidden();
     }
 
     /** @param list<string> $permissions */
@@ -285,25 +182,5 @@ class ApprovalManagementApiTest extends TestCase
         $user->roles()->sync([$role->id]);
 
         return $user;
-    }
-
-    private function createTask(string $title = 'Protected task'): Task
-    {
-        return Task::create([
-            'title' => $title,
-            'horizon' => 'short',
-            'status' => 'pending',
-            'source' => 'manual',
-        ]);
-    }
-
-    private function deleteTaskApproval(Task $task, string $status = 'pending'): ApprovalRequest
-    {
-        return ApprovalRequest::create([
-            'action_type' => 'delete_task',
-            'tool_name' => 'delete_task',
-            'payload' => ['task_id' => $task->id],
-            'status' => $status,
-        ]);
     }
 }

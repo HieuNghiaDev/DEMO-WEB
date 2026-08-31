@@ -10,10 +10,13 @@ use App\Services\ToolRegistry;
 use Illuminate\Support\Facades\Http;
 use Mockery;
 use RuntimeException;
+use Tests\Support\AiTestDefinitions;
 use Tests\TestCase;
 
 class ClaudePreparationTest extends TestCase
 {
+    use AiTestDefinitions;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -80,9 +83,9 @@ class ClaudePreparationTest extends TestCase
 
     public function test_converter_exposes_only_tools_declared_by_skill(): void
     {
-        $tools = app(ClaudeToolSchemaConverter::class)->forSkill('task_management');
+        $tools = app(ClaudeToolSchemaConverter::class)->forSkill('test_assistance');
 
-        $this->assertSame(['list_tasks', 'create_task', 'update_task', 'request_approval'], array_column($tools, 'name'));
+        $this->assertSame(['test_probe', 'request_approval'], array_column($tools, 'name'));
         $this->assertArrayHasKey('input_schema', $tools[0]);
         $this->assertContains('request_approval', array_column($tools, 'name'));
     }
@@ -104,10 +107,10 @@ class ClaudePreparationTest extends TestCase
 
     public function test_prompt_builder_combines_persona_and_skill_instructions(): void
     {
-        $prompt = app(SystemPromptBuilder::class)->build('secretary', 'task_management');
+        $prompt = app(SystemPromptBuilder::class)->build('secretary', 'test_assistance');
 
         $this->assertStringContainsString('Bạn là AI Thư ký của THEMIS HQ.', $prompt);
-        $this->assertStringContainsString('# Active skill: task_management', $prompt);
+        $this->assertStringContainsString('# Active skill: test_assistance', $prompt);
         $this->assertStringContainsString('Nếu thiếu thông tin quan trọng', $prompt);
     }
 }

@@ -8,23 +8,16 @@ use Tests\TestCase;
 
 class SkillLoaderTest extends TestCase
 {
-    public function test_it_loads_task_management(): void
+    public function test_legacy_skills_are_disabled(): void
     {
-        $skill = app(SkillLoader::class)->load('task_management');
-
-        $this->assertSame('task_management', $skill['name']);
-        $this->assertSame('chat', $skill['trigger']);
-        $this->assertSame(['list_tasks', 'create_task', 'update_task', 'request_approval'], $skill['tools']);
-        $this->assertStringContainsString('Tạo task', $skill['instructions']);
-    }
-
-    public function test_it_loads_morning_briefing(): void
-    {
-        $skill = app(SkillLoader::class)->load('morning_briefing');
-
-        $this->assertSame('cron', $skill['trigger']);
-        $this->assertSame('0 8 * * 1-5', $skill['schedule']);
-        $this->assertSame(['list_tasks'], $skill['tools']);
+        foreach (SkillLoader::DISABLED_SKILLS as $name) {
+            try {
+                app(SkillLoader::class)->load($name);
+                $this->fail('Disabled skill was loaded');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('temporarily unavailable', $exception->getMessage());
+            }
+        }
     }
 
     public function test_it_reports_a_missing_skill(): void

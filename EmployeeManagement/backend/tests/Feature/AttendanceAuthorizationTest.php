@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\Office;
 use App\Models\User;
 use App\Services\AttendanceExcelService;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -21,6 +22,8 @@ class AttendanceAuthorizationTest extends TestCase
     {
         parent::setUp();
 
+        $this->seed(RolePermissionSeeder::class);
+
         $this->office = Office::create([
             'office_code' => 'THEMIS',
             'name' => 'THEMIS株式会社',
@@ -33,7 +36,7 @@ class AttendanceAuthorizationTest extends TestCase
         $employee = $this->createEmployee('TM001', 'LE HIEU NGHIA');
         $otherEmployee = $this->createEmployee('TM002', 'TRINH THI THU HUONG');
 
-        Sanctum::actingAs(User::factory()->create([
+        Sanctum::actingAs(User::factory()->withRole('level_2')->create([
             'employee_id' => $employee->id,
         ]));
 
@@ -64,7 +67,7 @@ class AttendanceAuthorizationTest extends TestCase
         $employee = $this->createEmployee('TM001', 'LE HIEU NGHIA');
         $otherEmployee = $this->createEmployee('TM002', 'TRINH THI THU HUONG');
 
-        Sanctum::actingAs(User::factory()->create([
+        Sanctum::actingAs(User::factory()->withRole('level_2')->create([
             'employee_id' => $employee->id,
         ]));
 
@@ -93,7 +96,7 @@ class AttendanceAuthorizationTest extends TestCase
     {
         $employee = $this->createEmployee('TM001', 'LE HIEU NGHIA');
 
-        Sanctum::actingAs(User::factory()->create([
+        Sanctum::actingAs(User::factory()->withRole('level_2')->create([
             'employee_id' => $employee->id,
         ]));
 
@@ -123,7 +126,7 @@ class AttendanceAuthorizationTest extends TestCase
         $employee = $this->createEmployee('TM001', 'DUPLICATE NAME');
         $this->createEmployee('TM002', 'DUPLICATE NAME');
 
-        Sanctum::actingAs(User::factory()->create([
+        Sanctum::actingAs(User::factory()->withRole('level_2')->create([
             'employee_id' => $employee->id,
         ]));
 
@@ -155,6 +158,22 @@ class AttendanceAuthorizationTest extends TestCase
                 'message',
                 'このアカウントには有効な社員情報がありません。'
             );
+    }
+
+    public function test_legacy_role_string_without_rbac_cannot_start_attendance(): void
+    {
+        $employee = $this->createEmployee('TM001', 'TEST EMPLOYEE');
+        $user = User::factory()->create(['employee_id' => $employee->id]);
+        $this->assertSame('employee', $user->role);
+        $this->assertSame([], $user->role_names);
+        $this->assertSame([], $user->permission_names);
+        Sanctum::actingAs($user);
+
+        $this->mock(AttendanceExcelService::class)->shouldNotReceive('sync');
+        $this->postJson('/api/attendances/start')
+            ->assertForbidden()
+            ->assertJsonPath('message', 'この操作を行う権限がありません。');
+        $this->assertDatabaseCount('attendances', 0);
     }
 
     private function createEmployee(string $code, string $name): Employee

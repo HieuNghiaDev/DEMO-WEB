@@ -21,7 +21,7 @@ class AiChatApiTest extends TestCase
     {
         $this->postJson('/api/ai/chat', [
             'persona' => 'secretary',
-            'skill' => 'task_management',
+            'skill' => 'test_assistance',
             'message' => '今日のタスクを見せて',
         ])->assertUnauthorized();
     }
@@ -38,7 +38,7 @@ class AiChatApiTest extends TestCase
         $this->actingAs($this->createAiUser(), 'sanctum')
             ->postJson('/api/ai/chat', [
                 'persona' => 'secretary',
-                'skill' => 'task_management',
+                'skill' => 'test_assistance',
             ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('message');
@@ -63,7 +63,7 @@ class AiChatApiTest extends TestCase
             ->once()
             ->withArgs(function (string $persona, string $skill, array $messages, array $context) use ($user): bool {
                 return $persona === 'secretary'
-                    && $skill === 'task_management'
+                    && $skill === 'test_assistance'
                     && $messages === [['role' => 'user', 'content' => '今日のタスクを見せて']]
                     && $context === [
                         'trigger_type' => 'chat',
@@ -73,11 +73,11 @@ class AiChatApiTest extends TestCase
             })
             ->andReturn([
                 'persona' => 'secretary',
-                'skill' => 'task_management',
+                'skill' => 'test_assistance',
                 'text' => 'タスクはありません。',
                 'tool_executions' => [[
                     'tool_use_id' => 'toolu_1',
-                    'name' => 'list_tasks',
+                    'name' => 'test_probe',
                     'status' => 'success',
                 ]],
                 'stop_reason' => 'end_turn',
@@ -90,11 +90,11 @@ class AiChatApiTest extends TestCase
             ->assertExactJson([
                 'data' => [
                     'persona' => 'secretary',
-                    'skill' => 'task_management',
+                    'skill' => 'test_assistance',
                     'message' => 'タスクはありません。',
                     'tool_executions' => [[
                         'tool_use_id' => 'toolu_1',
-                        'name' => 'list_tasks',
+                        'name' => 'test_probe',
                         'status' => 'success',
                     ]],
                 ],
@@ -114,7 +114,7 @@ class AiChatApiTest extends TestCase
             ->once()
             ->withArgs(function (string $persona, string $skill, array $messages) use ($history): bool {
                 return $persona === 'secretary'
-                    && $skill === 'task_management'
+                    && $skill === 'test_assistance'
                     && $messages === [
                         ...$history,
                         ['role' => 'user', 'content' => 'その中の1番を完了にして'],
@@ -122,7 +122,7 @@ class AiChatApiTest extends TestCase
             })
             ->andReturn([
                 'persona' => 'secretary',
-                'skill' => 'task_management',
+                'skill' => 'test_assistance',
                 'text' => 'ご依頼を確認しました。',
                 'tool_executions' => [],
                 'stop_reason' => 'end_turn',
@@ -147,7 +147,7 @@ class AiChatApiTest extends TestCase
             ->once()
             ->withArgs(function (string $persona, string $skill, array $messages, array $context) use ($user): bool {
                 return $persona === 'secretary'
-                    && $skill === 'task_management'
+                    && $skill === 'test_assistance'
                     && $messages === [['role' => 'user', 'content' => 'この案件について教えて']]
                     && $context === [
                         'trigger_type' => 'chat',
@@ -161,7 +161,7 @@ class AiChatApiTest extends TestCase
             })
             ->andReturn([
                 'persona' => 'secretary',
-                'skill' => 'task_management',
+                'skill' => 'test_assistance',
                 'text' => '案件ページからのご相談を確認しました。',
                 'tool_executions' => [],
                 'stop_reason' => 'end_turn',
@@ -262,7 +262,7 @@ class AiChatApiTest extends TestCase
         $orchestrator = Mockery::mock(AIOrchestrator::class);
         $orchestrator->shouldReceive('runSkill')
             ->once()
-            ->andThrow(new RuntimeException('Persona [secretary] does not allow skill [task_management].'));
+            ->andThrow(new RuntimeException('Persona [secretary] does not allow skill [test_assistance].'));
         $this->app->instance(AIOrchestrator::class, $orchestrator);
 
         $this->actingAs($this->createAiUser(), 'sanctum')
@@ -310,7 +310,7 @@ class AiChatApiTest extends TestCase
         return Persona::create([
             'name' => 'secretary',
             'display_name' => 'AI 秘書',
-            'skills' => ['task_management'],
+            'skills' => ['test_assistance'],
             'active' => $active,
         ]);
     }
@@ -339,7 +339,7 @@ class AiChatApiTest extends TestCase
     {
         return [
             'persona' => 'secretary',
-            'skill' => 'task_management',
+            'skill' => 'test_assistance',
             'message' => '今日のタスクを見せて',
         ];
     }

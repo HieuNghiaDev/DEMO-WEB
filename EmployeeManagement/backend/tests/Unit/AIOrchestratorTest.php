@@ -13,17 +13,19 @@ use App\Services\ToolRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use RuntimeException;
+use Tests\Support\AiTestDefinitions;
 use Tests\TestCase;
 
 class AIOrchestratorTest extends TestCase
 {
+    use AiTestDefinitions;
     use RefreshDatabase;
 
     public function test_it_returns_a_final_text_response_without_tools(): void
     {
         [$orchestrator, $client] = $this->orchestrator([self::textResponse('Ready.')]);
 
-        $result = $orchestrator->runSkill('secretary', 'task_management', self::messages());
+        $result = $orchestrator->runSkill('secretary', 'test_assistance', self::messages());
 
         $this->assertSame('Ready.', $result['text']);
         $this->assertSame('secretary', $result['persona']);
@@ -37,7 +39,7 @@ class AIOrchestratorTest extends TestCase
 
         $orchestrator->runSkill(
             'secretary',
-            'task_management',
+            'test_assistance',
             self::messages(),
             [
                 'trigger_type' => 'chat',
@@ -55,36 +57,36 @@ class AIOrchestratorTest extends TestCase
         $this->assertStringNotContainsString('must not reach the model', $systemPrompt);
     }
 
-    public function test_it_executes_a_list_tasks_tool_and_sends_its_tool_result_back(): void
+    public function test_it_executes_a_test_tool_and_sends_its_tool_result_back(): void
     {
         [$orchestrator, $client] = $this->orchestrator([
-            self::toolResponse('toolu_list', 'list_tasks', ['horizon' => 'short']),
+            self::toolResponse('toolu_list', 'test_probe', ['horizon' => 'short']),
             self::textResponse('No short tasks found.'),
         ]);
 
-        $result = $orchestrator->runSkill('secretary', 'task_management', self::messages());
+        $result = $orchestrator->runSkill('secretary', 'test_assistance', self::messages());
 
         $this->assertSame('No short tasks found.', $result['text']);
-        $this->assertSame('list_tasks', $result['tool_executions'][0]['name']);
+        $this->assertSame('test_probe', $result['tool_executions'][0]['name']);
         $toolResult = $client->calls[1]['messages'][2]['content'][0];
         $this->assertSame('tool_result', $toolResult['type']);
         $this->assertSame('toolu_list', $toolResult['tool_use_id']);
-        $this->assertDatabaseHas('secretary_logs', ['skill_name' => 'task_management', 'status' => 'success']);
+        $this->assertDatabaseHas('secretary_logs', ['skill_name' => 'test_assistance', 'status' => 'success']);
     }
 
-    public function test_it_creates_a_task_and_handles_multiple_consecutive_tool_iterations(): void
+    public function test_it_handles_multiple_consecutive_tool_iterations(): void
     {
         [$orchestrator] = $this->orchestrator([
-            self::toolResponse('toolu_list', 'list_tasks', []),
-            self::toolResponse('toolu_create', 'create_task', ['title' => 'File petition', 'horizon' => 'short']),
+            self::toolResponse('toolu_list', 'test_probe', []),
+            self::toolResponse('toolu_create', 'test_probe', ['title' => 'File petition', 'horizon' => 'short']),
             self::textResponse('Task created.'),
         ]);
 
-        $result = $orchestrator->runSkill('secretary', 'task_management', self::messages());
+        $result = $orchestrator->runSkill('secretary', 'test_assistance', self::messages());
 
         $this->assertSame('Task created.', $result['text']);
         $this->assertCount(2, $result['tool_executions']);
-        $this->assertDatabaseHas('tasks', ['title' => 'File petition', 'source' => 'ai_generated']);
+        $this->assertSame('File petition', $result['tool_executions'][1]['output']['title']);
         $this->assertDatabaseCount('secretary_logs', 2);
     }
 
@@ -95,9 +97,9 @@ class AIOrchestratorTest extends TestCase
         ]);
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Claude requested tool [request_approval] which is not allowed by skill [morning_briefing].');
+        $this->expectExceptionMessage('Claude requested tool [request_approval] which is not allowed by skill [test_briefing].');
 
-        $orchestrator->runSkill('secretary', 'morning_briefing', self::messages());
+        $orchestrator->runSkill('secretary', 'test_briefing', self::messages());
     }
 
     public function test_it_blocks_an_unregistered_tool(): void
@@ -109,7 +111,7 @@ class AIOrchestratorTest extends TestCase
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Claude requested unregistered tool [missing_tool].');
 
-        $orchestrator->runSkill('secretary', 'task_management', self::messages());
+        $orchestrator->runSkill('secretary', 'test_assistance', self::messages());
     }
 
     public function test_it_blocks_a_skill_not_allowed_by_the_persona(): void
@@ -123,36 +125,36 @@ class AIOrchestratorTest extends TestCase
         [$orchestrator] = $this->orchestrator([], $personaLoader);
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Persona [restricted] does not allow skill [task_management].');
+        $this->expectExceptionMessage('Persona [restricted] does not allow skill [test_assistance].');
 
-        $orchestrator->runSkill('restricted', 'task_management', self::messages());
+        $orchestrator->runSkill('restricted', 'test_assistance', self::messages());
     }
 
     public function test_it_blocks_when_max_tool_iterations_is_exceeded(): void
     {
         config(['ai.orchestrator.max_iterations' => 1]);
         [$orchestrator] = $this->orchestrator([
-            self::toolResponse('toolu_one', 'list_tasks', []),
-            self::toolResponse('toolu_two', 'list_tasks', []),
+            self::toolResponse('toolu_one', 'test_probe', []),
+            self::toolResponse('toolu_two', 'test_probe', []),
         ]);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('AI orchestrator exceeded the maximum of 1 tool iterations.');
 
-        $orchestrator->runSkill('secretary', 'task_management', self::messages());
+        $orchestrator->runSkill('secretary', 'test_assistance', self::messages());
     }
 
     public function test_it_returns_a_safe_tool_error_to_the_model_when_execution_fails(): void
     {
         [$orchestrator] = $this->orchestrator([
-            self::toolResponse('toolu_update', 'update_task', ['id' => 999]),
+            self::toolResponse('toolu_update', 'test_probe', ['fail' => true]),
             self::textResponse('I could not update that task. Please confirm the task ID.'),
         ]);
 
-        $result = $orchestrator->runSkill('secretary', 'task_management', self::messages());
+        $result = $orchestrator->runSkill('secretary', 'test_assistance', self::messages());
 
         $this->assertDatabaseHas('secretary_logs', [
-            'skill_name' => 'task_management',
+            'skill_name' => 'test_assistance',
             'status' => 'failed',
         ]);
         $this->assertSame('failed', $result['tool_executions'][0]['status']);

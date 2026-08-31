@@ -144,6 +144,13 @@ Ví dụ response (đã rút gọn):
 
 ## Dạng response và lỗi
 
+### V2: tạm ngừng AI task legacy và execution cũ
+
+- `GET /api/personas` không trả `task_management` hoặc `morning_briefing` trong danh sách skills, kể cả khi DB vẫn lưu cấu hình cũ.
+- `POST /api/ai/chat` trả `422`, `code: ai_skill_unavailable` nếu yêu cầu skill bị tắt hoặc không thuộc persona. Không gọi provider/tool trong trường hợp này. Các kiểm tra đăng nhập/quyền vẫn giữ.
+- Endpoint execution cũ của approval trả `410`, `code: legacy_execution_unavailable` sau middleware xác thực/phân quyền. Không đọc Task hoặc thực thi payload cũ; không chuyển `task_id` sang `case_tasks`.
+- Approval list/approve/reject và thông báo vẫn giữ. `request_approval` từ chối `action_type` hoặc `tool_name` là `delete_task`; frontend bỏ nút execution. AI page/mascot hiển thị thông báo tạm dừng khi không còn skill khả dụng.
+
 Response thành công thường bao bọc thực thể dưới các khóa `user`, `attendance`, `work_session`, `task`, `tasks`, hoặc `employees`. Response validation Laravel có mã `422` và trường `errors`; lỗi ownership là `403`, không có token là `401`, quá rate limit là `429`.
 
 Ví dụ đăng nhập thành công (đã rút gọn):

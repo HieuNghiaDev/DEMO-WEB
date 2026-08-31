@@ -2,12 +2,9 @@
 
 namespace App\Services;
 
-use App\AI\Tools\CreateTaskTool;
-use App\AI\Tools\ListTasksTool;
 use App\AI\Tools\LogActionTool;
 use App\AI\Tools\RequestApprovalTool;
 use App\AI\Tools\Tool;
-use App\AI\Tools\UpdateTaskTool;
 use RuntimeException;
 
 class ToolRegistry
@@ -16,13 +13,10 @@ class ToolRegistry
     private array $tools = [];
 
     public function __construct(
-        ListTasksTool $listTasksTool,
-        CreateTaskTool $createTaskTool,
-        UpdateTaskTool $updateTaskTool,
         LogActionTool $logActionTool,
         RequestApprovalTool $requestApprovalTool,
     ) {
-        foreach ([$listTasksTool, $createTaskTool, $updateTaskTool, $logActionTool, $requestApprovalTool] as $tool) {
+        foreach ([$logActionTool, $requestApprovalTool] as $tool) {
             $this->register($tool);
         }
     }

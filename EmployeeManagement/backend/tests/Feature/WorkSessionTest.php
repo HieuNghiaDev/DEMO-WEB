@@ -9,6 +9,7 @@ use App\Models\Office;
 use App\Models\User;
 use App\Services\AttendanceExcelService;
 use Carbon\Carbon;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -22,6 +23,8 @@ class WorkSessionTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->seed(RolePermissionSeeder::class);
 
         $office = Office::create([
             'office_code' => 'THEMIS',
@@ -38,7 +41,7 @@ class WorkSessionTest extends TestCase
             'status' => 'active',
         ]);
 
-        Sanctum::actingAs(User::factory()->create([
+        Sanctum::actingAs(User::factory()->withRole('level_2')->create([
             'employee_id' => $this->employee->id,
         ]));
     }

@@ -7,15 +7,16 @@ use App\Models\EmployeeNotification;
 use App\Models\Permission;
 use App\Models\Persona;
 use App\Models\Role;
-use App\Models\Task;
 use App\Models\User;
 use App\Services\ApprovalNotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Tests\Support\AiTestDefinitions;
 use Tests\TestCase;
 
 class ApprovalNotificationTest extends TestCase
 {
+    use AiTestDefinitions;
     use RefreshDatabase;
 
     public function test_ai_approval_request_notifies_only_active_approval_managers(): void
@@ -29,7 +30,7 @@ class ApprovalNotificationTest extends TestCase
         Persona::query()->create([
             'name' => 'secretary',
             'display_name' => 'AI 秘書',
-            'skills' => ['task_management'],
+            'skills' => ['test_assistance'],
             'active' => true,
         ]);
 
@@ -42,12 +43,6 @@ class ApprovalNotificationTest extends TestCase
             false,
         );
         $ordinaryUser = User::factory()->create(['is_active' => true]);
-        $task = Task::query()->create([
-            'title' => '削除前に承認が必要なタスク',
-            'horizon' => 'short',
-            'status' => 'pending',
-            'source' => 'manual',
-        ]);
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::sequence()
                 ->push([
@@ -57,9 +52,9 @@ class ApprovalNotificationTest extends TestCase
                                 'id' => 'approval_call_1',
                                 'name' => 'request_approval',
                                 'args' => [
-                                    'action_type' => 'delete_task',
-                                    'tool_name' => 'delete_task',
-                                    'payload' => ['task_id' => $task->id],
+                                    'action_type' => 'send_email',
+                                    'tool_name' => 'send_email',
+                                    'payload' => ['subject' => 'Test approval'],
                                 ],
                             ],
                         ]]],
@@ -77,8 +72,8 @@ class ApprovalNotificationTest extends TestCase
         $response = $this->actingAs($requester, 'sanctum')
             ->postJson('/api/ai/chat', [
                 'persona' => 'secretary',
-                'skill' => 'task_management',
-                'message' => "Task {$task->id} を削除して",
+                'skill' => 'test_assistance',
+                'message' => '承認を申請してください',
             ]);
 
         $response
@@ -94,9 +89,9 @@ class ApprovalNotificationTest extends TestCase
         $this->assertSame('pending', $approval->status);
         $this->assertSame('warning', $notification->kind);
         $this->assertSame('承認待ちの申請があります', $notification->title);
-        $this->assertStringContainsString('タスク削除', $notification->message);
+        $this->assertStringContainsString('send_email', $notification->message);
         $this->assertSame($approval->id, $notification->data['approval_id']);
-        $this->assertSame('delete_task', $notification->data['action_type']);
+        $this->assertSame('send_email', $notification->data['action_type']);
         $this->assertSame($requester->id, $notification->data['requester_id']);
         $this->assertSame('/approvals', $notification->data['target_path']);
         $this->assertNull($notification->read_at);
@@ -107,9 +102,8 @@ class ApprovalNotificationTest extends TestCase
             $inactiveApprover->id,
             $ordinaryUser->id,
         ])->exists());
-        $this->assertDatabaseHas('tasks', ['id' => $task->id]);
         $this->assertDatabaseHas('secretary_logs', [
-            'skill_name' => 'task_management',
+            'skill_name' => 'test_assistance',
             'trigger_type' => 'chat',
             'status' => 'success',
         ]);
@@ -119,8 +113,8 @@ class ApprovalNotificationTest extends TestCase
     {
         $approver = $this->userWithPermission('approval.approve', 'Approval Manager');
         $approval = ApprovalRequest::query()->create([
-            'action_type' => 'delete_task',
-            'tool_name' => 'delete_task',
+            'action_type' => 'send_email',
+            'tool_name' => 'send_email',
             'payload' => ['task_id' => 99],
             'status' => 'pending',
         ]);

@@ -14,24 +14,6 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call([
-            OfficeSeeder::class,
-            PersonaSeeder::class,
-            RolePermissionSeeder::class,
-            CaseTypeSeeder::class,
-            CaseWorkspaceTemplateSeeder::class,
-        ]);
-
-        if (app()->environment(['local', 'testing'])) {
-            $this->call([
-                EmployeeUserSeeder::class,
-                AdditionalEmployeeUserSeeder::class,
-            ]);
-        }
-
-        if (app()->environment('local')) {
-            $this->call(ManagerTestUserSeeder::class);
-            $this->call(CaseWorkspaceDemoSeeder::class);
-        }
+        $this->call(CleanV2MasterSeeder::class);
     }
 }

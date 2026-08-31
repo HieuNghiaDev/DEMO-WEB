@@ -14,7 +14,7 @@ class PersonaLoaderTest extends TestCase
 
         $this->assertSame('secretary', $persona['name']);
         $this->assertSame('AI 秘書', $persona['display_name']);
-        $this->assertSame(['task_management', 'morning_briefing'], $persona['skills']);
+        $this->assertSame([], $persona['skills']);
         $this->assertStringContainsString('AI Thư ký', $persona['instructions']);
     }
 

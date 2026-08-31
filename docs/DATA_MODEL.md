@@ -51,7 +51,7 @@ Khi tạo hồ sơ với subtype có template đang hiệu lực, `CaseDocumentC
 
 ### 事件類型別資料収集 — Phase 1A (database/model foundation)
 
-`clients` là khách hàng/依頼者; `case_files` là thực thể legal 案件 chuẩn. `matters` và `tasks` thuộc hệ AI/demo legacy, không được sửa hoặc migrate trong phase này. `employee_tasks` và `case_tasks` cũng không thay đổi.
+`clients` là khách hàng/依頼者; `case_files` là thực thể legal 案件 chuẩn. Phase 1A không thay đổi `matters/tasks`. Bản chuẩn bị cleanup V2 bỏ phụ thuộc runtime legacy và bổ sung migration có kiểm tra môi trường để drop `tasks` trước `matters`. Migration lịch sử vẫn giữ nguyên. Database local đang dùng chỉ được cleanup sau khi B1 đạt; trạng thái thực tế xem [V2_LOCAL_CLEANUP.md](V2_LOCAL_CLEANUP.md). `employee_tasks` và cấu trúc `case_tasks` được giữ.
 
 ```mermaid
 erDiagram
@@ -91,7 +91,7 @@ Nguồn: **事件類型別 資料収集マスター**, bản 1.0 ngày 2026-08-3
 
 Có 18 mã lặp: C-002 xuất hiện 3 lần, D-001–D-014, D-016, D-017 và A-003 xuất hiện 2 lần. Không có xung đột tên; nguồn không định nghĩa D-015 nên không tạo mã này. Tên Nhật giữ nguyên; description giữ nguyên mục đích/điều kiện cùng nhãn chương nguồn, bao gồm các ngữ cảnh khác nhau của cùng mã. Đây chỉ là mô tả, không tự sinh rule, nghĩa vụ bắt buộc hay thời hạn theo case.
 
-Chạy riêng `php artisan db:seed --class=DocumentTypeMasterSeeder` từ backend. Seeder dùng transaction và updateOrCreate theo code, version=1, is_active=true; không xóa mã custom, không truncate. name_vi của bản ghi mới để null; bản dịch đã có trong database được giữ khi seed lại. Seeder này không được tự thêm vào DatabaseSeeder; không thay đổi document_name_catalog, document_templates, document_template_items, case_documents, matters/tasks hoặc các luồng nghiệp vụ.
+Chạy riêng `php artisan db:seed --class=DocumentTypeMasterSeeder` từ backend. Seeder dùng transaction và updateOrCreate theo code, version=1, is_active=true; không xóa mã custom, không truncate. name_vi của bản ghi mới để null; bản dịch đã có trong database được giữ khi seed lại. Trong bản chuẩn bị V2, `DatabaseSeeder` gọi `CleanV2MasterSeeder`, bao gồm master 78 document types và 11 purposes, case types và persona cấu hình. Office/RBAC và template chỉ bootstrap khi danh mục tương ứng rỗng; không seed khách hàng, hồ sơ, nhân viên, tài khoản hay AI demo. Các workspace template/catalog và `case_documents.status/file_url` vẫn giữ.
 
 ### Phase 1C-0 — nhiều mục đích cho cùng tài liệu
 

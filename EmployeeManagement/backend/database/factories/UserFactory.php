@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -44,5 +45,13 @@ class UserFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
         ]);
+    }
+
+    /** Attach an explicitly selected role from the seeded permission master. */
+    public function withRole(string $name): static
+    {
+        return $this->afterCreating(function (User $user) use ($name): void {
+            $user->roles()->attach(Role::query()->where('name', $name)->sole()->id);
+        });
     }
 }
