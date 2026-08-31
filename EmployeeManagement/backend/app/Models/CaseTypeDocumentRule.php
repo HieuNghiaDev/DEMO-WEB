@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CaseTypeDocumentRule extends Model
@@ -45,5 +46,12 @@ class CaseTypeDocumentRule extends Model
     public function caseDocuments(): HasMany
     {
         return $this->hasMany(CaseDocument::class, 'case_type_document_rule_id');
+    }
+
+    public function purposes(): BelongsToMany
+    {
+        // New workflows use this relation; purpose_category remains legacy metadata.
+        return $this->belongsToMany(DocumentPurpose::class, 'case_type_document_rule_purposes')
+            ->withTimestamps()->orderBy('document_purposes.sort_order');
     }
 }

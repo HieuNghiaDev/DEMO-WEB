@@ -33,6 +33,9 @@ erDiagram
 | `case_documents` / `CaseDocument` | Mục thu thập/checklist theo hồ sơ; có thể sinh từ template hoặc thêm tự do. Giữ toàn bộ cột legacy (status, file_url, version...), bổ sung các trục necessity/collection/fulfillment/review độc lập ở Phase 1A. |
 | `document_types` / `DocumentType` | Master định nghĩa tài liệu: code duy nhất, name_ja/name_vi, description, document_group, version và is_active. Phase 1B cung cấp 78 mã chính thức C/D/W/T/A qua seeder riêng. |
 | `case_type_document_rules` / `CaseTypeDocumentRule` | Ứng viên tài liệu theo case type, mục đích/điều kiện/nguồn/đối tượng/kỳ thu thập, tài liệu tiên quyết, ưu tiên, version và hiệu lực. Mặc định conditional, không tự xác định bắt buộc về pháp lý. |
+| `document_purposes` / `DocumentPurpose` | Master mục đích xác nhận: code duy nhất, tên Nhật theo tiêu đề nguồn, description nullable, sort_order và is_active. 11 mục chính thức: COMMON, W1–W5, T1–T5. |
+| `case_type_document_rule_purposes` | Quan hệ nhiều–nhiều rule ↔ purpose; unique cặp rule/purpose, timestamps. |
+| `case_document_purposes` | Quan hệ nhiều–nhiều checklist ↔ purpose, độc lập với rule; unique cặp checklist/purpose, timestamps. |
 | `received_documents` / `ReceivedDocument` | File/tài liệu/phiên bản thực nhận theo case: metadata lưu trữ, URL, ngày nhận/hết hạn, bản gốc/bản sao, yêu cầu trả lại và nhân viên đăng ký. Có soft delete. |
 | `case_document_received_documents` | Liên kết nhiều–nhiều checklist ↔ file nhận, relationship_type và timestamps; unique cặp case_document_id + received_document_id. |
 | `case_parties` / `CaseParty` | Gia đình, công ty, đối phương, bảo hiểm, bệnh viện, người hỗ trợ và các bên phát sinh. |
@@ -74,7 +77,7 @@ Các cột mới của `case_documents` gồm FK nullable `document_type_id`, `c
 | fulfillment_status | undetermined | undetermined, insufficient, satisfied, satisfied_by_alternative |
 | review_status | unreviewed | unreviewed, reviewing, reviewed, returned |
 
-Các giá trị dùng varchar để mở rộng về sau; constants là danh sách cho validation ở các phase API tiếp theo, chưa có API mới hoặc state machine. Không có tự động đồng bộ giữa bốn trục này và legacy `status`/`requirement_level`. Một file đã nhận không tự đồng nghĩa đã đủ hay đã kiểm tra. Rule là ứng viên; mặc định `conditional`, priority `normal`, preservation_priority `false`; chưa có cơ chế sinh checklist từ rule mới. `document_group` là metadata tường minh (C/D/W/T/A), không suy ra nghiệp vụ từ prefix của code. Cho phép nhiều rule cùng cặp case type/document type để phục vụ các mục đích/điều kiện khác nhau; version chưa có cơ chế tự tăng.
+Các giá trị dùng varchar để mở rộng về sau; constants là danh sách cho validation ở các phase API tiếp theo, chưa có API mới hoặc state machine. Không có tự động đồng bộ giữa bốn trục này và legacy `status`/`requirement_level`. Một file đã nhận không tự đồng nghĩa đã đủ hay đã kiểm tra. Rule là ứng viên; mặc định `conditional`, priority `normal`, preservation_priority `false`; chưa có cơ chế sinh checklist từ rule mới. `document_group` là metadata tường minh (C/D/W/T/A), không suy ra nghiệp vụ từ prefix của code. Từ Phase 1C-0, nhiều mục đích được gắn vào cùng rule qua pivot, không phải lý do tạo rule trùng cùng case type/document type/version; version chưa có cơ chế tự tăng.
 
 Legacy `case_documents.file_url` tiếp tục phục vụ API/UI cũ. Kiến trúc mới lưu file thực nhận ở `received_documents` và nối qua pivot; không tự chuyển URL cũ, không dual-write. Phase 1A chưa seed master; dữ liệu chính thức được bổ sung riêng ở Phase 1B bên dưới. Một checklist có nhiều file, một file có thể liên kết nhiều checklist. `storage_type` có constants upload/google_drive/external_link; phase này chỉ lưu metadata, không upload, gọi Drive hay kiểm tra nội dung file. Version là số metadata mặc định 1, chưa triển khai lịch sử phiên bản tự động. Trong phase API tiếp theo phải kiểm tra cùng case khi gắn pivot, tính nhất quán document type/rule/case type, điều kiện ngày và quyền của nhân viên; FK hiện chỉ xác minh ID tồn tại.
 
@@ -89,6 +92,23 @@ Nguồn: **事件類型別 資料収集マスター**, bản 1.0 ngày 2026-08-3
 Có 18 mã lặp: C-002 xuất hiện 3 lần, D-001–D-014, D-016, D-017 và A-003 xuất hiện 2 lần. Không có xung đột tên; nguồn không định nghĩa D-015 nên không tạo mã này. Tên Nhật giữ nguyên; description giữ nguyên mục đích/điều kiện cùng nhãn chương nguồn, bao gồm các ngữ cảnh khác nhau của cùng mã. Đây chỉ là mô tả, không tự sinh rule, nghĩa vụ bắt buộc hay thời hạn theo case.
 
 Chạy riêng `php artisan db:seed --class=DocumentTypeMasterSeeder` từ backend. Seeder dùng transaction và updateOrCreate theo code, version=1, is_active=true; không xóa mã custom, không truncate. name_vi của bản ghi mới để null; bản dịch đã có trong database được giữ khi seed lại. Seeder này không được tự thêm vào DatabaseSeeder; không thay đổi document_name_catalog, document_templates, document_template_items, case_documents, matters/tasks hoặc các luồng nghiệp vụ.
+
+### Phase 1C-0 — nhiều mục đích cho cùng tài liệu
+
+```mermaid
+erDiagram
+    DOCUMENT_TYPES ||--o{ CASE_TYPE_DOCUMENT_RULES : defines
+    CASE_TYPE_DOCUMENT_RULES }o--o{ DOCUMENT_PURPOSES : purposes
+    CASE_DOCUMENTS }o--o{ DOCUMENT_PURPOSES : purposes
+```
+
+`CaseTypeDocumentRule.purposes()` và `CaseDocument.purposes()` dùng hai pivot riêng. `DocumentPurpose.rules()`/`caseDocuments()` cung cấp quan hệ ngược để lọc theo mục đích. Cả hai pivot có FK, unique cặp và timestamps; index ngược theo document_purpose_id hỗ trợ lọc. Detach chỉ xóa liên kết, không xóa master. Hard-delete cha xóa pivot bằng cascade; soft-delete checklist giữ liên kết để restore và quan hệ ngược mặc định ẩn checklist đã soft-delete.
+
+**Nhiều mục đích không đồng nghĩa nhiều checklist item.** Định danh logic của rule là `(case_type_id, document_type_id, version)`; seeder/generator ở phase tiếp theo phải hợp nhất mục đích trên cùng định danh. Ví dụ C-002 phục vụ COMMON và W4 vẫn là một mục thu thập khi case, đối tượng, nguồn và phạm vi thu thập giống nhau. Những đối tượng/nguồn/kỳ thu thập khác nhau vẫn có thể cần các item riêng. Phase 1C-0 ghi nhận invariant này nhưng chưa thêm unique vào bảng rule legacy, chưa seed rule và chưa triển khai generator.
+
+Khi có generator sau này, mục đích của rule được sao chép thành liên kết riêng của case item; việc điều chỉnh trên case không được sửa rule master. Hiện không có tự động sao chép/sync, không chuyển dữ liệu từ `purpose_category`, không gắn mục đích vào checklist đang có. `purpose_category` và `applicability_condition` vẫn giữ nguyên cho tương thích; code mới dùng normalized purposes. Yêu cầu tương lai: mỗi case_document hỗ trợ nhiều điều kiện áp dụng (適用条件), tách biệt với nhiều mục đích; phase này chưa tạo condition engine hoặc mô hình điều kiện mới.
+
+`DocumentPurposeSeeder` chạy riêng qua `php artisan db:seed --class=DocumentPurposeSeeder`, updateOrCreate theo code trong transaction; giữ mục custom và description hiện có. Tên Nhật lấy chính xác tiêu đề nguồn v1.0 ngày 2026-08-30, bỏ tiền tố đánh số: COMMON = 事件共通の資料; W1–W5 và T1–T5 giữ tên các tiểu mục tương ứng. Chỉ seed 11 purpose, không gọi DocumentTypeMasterSeeder, không tạo rule hoặc pivot. Ba migration `2026_08_31_110000`–`110200` chỉ tạo bảng mới khi up; 78 document_types và dữ liệu legacy không được sửa.
 
 ## Excel
 
@@ -160,5 +180,6 @@ npm run preview
 | `CaseCollectionFoundationTest`, `CaseCollectionMigrationTest` | Phase 1A: master/rule, trạng thái độc lập, FK, pivot nhiều–nhiều và soft delete; nâng cấp có dữ liệu legacy bằng migrate additive trên SQLite :memory:, không tự chuyển file_url. |
 | `CaseDocumentTest`, `CaseWorkspaceApiTest`, `CaseFileApiTest` | Hồi quy API tài liệu, workspace/template, khách hàng và hồ sơ hiện có. |
 | `DocumentTypeMasterSeederTest` | Phase 1B: đủ 78 mã nguồn, phân nhóm, tên đại diện, mã lặp/unique, seed lặp an toàn, giữ bản dịch/mã custom và dữ liệu legacy. |
+| `DocumentPurposeTest` | Phase 1C-0: 11 purpose, seed lặp, quan hệ nhiều–nhiều độc lập, unique/FK, detach/soft delete và bảo toàn 78 document_types/dữ liệu cũ. |
 
 Khi sửa API hoặc schema, hãy thêm test vào đúng nhóm và chạy toàn bộ `php artisan test` trước khi deploy.

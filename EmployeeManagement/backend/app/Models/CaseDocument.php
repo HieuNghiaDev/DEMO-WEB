@@ -91,4 +91,11 @@ class CaseDocument extends Model
     {
         return $this->belongsTo(Employee::class, 'necessity_decided_by_employee_id');
     }
+
+    public function purposes(): BelongsToMany
+    {
+        // Case purposes are independent of rule purposes, not a live inherited list.
+        return $this->belongsToMany(DocumentPurpose::class, 'case_document_purposes')
+            ->withTimestamps()->orderBy('document_purposes.sort_order');
+    }
 }
