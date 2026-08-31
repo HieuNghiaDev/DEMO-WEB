@@ -1,0 +1,251 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Http\Resources\CaseDocumentCollectionDetailResource;
+use App\Http\Resources\CaseDocumentCollectionResource;
+use App\Models\CaseDocument;
+use App\Models\CaseFile;
+use App\Models\DocumentType;
+use App\Models\Employee;
+use App\Services\CaseWorkspaceAuditService;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+
+class CaseDocumentCollectionController extends Controller
+{
+    private const RELATIONS = ['documentType:id,code,name_ja,description', 'purposes:id,code,name_ja,sort_order', 'assignedEmployee:id,full_name'];
+
+    public function index(Request $request, CaseFile $caseFile): JsonResponse
+    {
+        $filters = $request->validate([
+            'search' => ['sometimes', 'string', 'max:255'],
+            'purpose' => ['sometimes', 'string', 'max:30'],
+            'source' => ['sometimes', 'string', 'max:255'],
+            'assignee_id' => ['sometimes', 'integer', 'min:1'],
+            ...$this->statusRules(),
+            'overdue' => ['sometimes', Rule::in(['true', 'false', '1', '0'])],
+            'preservation_priority' => ['sometimes', Rule::in(['true', 'false', '1', '0'])],
+            'priority' => ['sometimes', Rule::in(CaseDocument::COLLECTION_PRIORITIES)],
+            'deadline_from' => ['sometimes', 'date_format:Y-m-d'],
+            'deadline_to' => ['sometimes', 'date_format:Y-m-d', ...($request->filled('deadline_from') ? ['after_or_equal:deadline_from'] : [])],
+            'sort' => ['sometimes', Rule::in(['document_code', 'document_name', 'deadline', 'assignee', 'priority', 'updated_at'])],
+            'direction' => ['sometimes', Rule::in(['asc', 'desc'])],
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'between:1,100'],
+        ]);
+        $now = now();
+        $base = CaseDocument::query()->where('case_file_id', $caseFile->id);
+        // Aggregates are case-wide and independent of the filtered/paginated list.
+        $counts = (clone $base)->selectRaw("COUNT(*) AS total,
+            COALESCE(SUM(CASE WHEN necessity_status = 'undetermined' THEN 1 ELSE 0 END), 0) AS undetermined,
+            COALESCE(SUM(CASE WHEN necessity_status = 'required' THEN 1 ELSE 0 END), 0) AS required_count,
+            COALESCE(SUM(CASE WHEN necessity_status = 'not_required' THEN 1 ELSE 0 END), 0) AS not_required,
+            COALESCE(SUM(CASE WHEN response_deadline < ? AND collection_status NOT IN ('received', 'closed') THEN 1 ELSE 0 END), 0) AS overdue,
+            COALESCE(SUM(CASE WHEN preservation_priority = 1 THEN 1 ELSE 0 END), 0) AS preservation_count,
+            COALESCE(SUM(CASE WHEN collection_result IS NOT NULL THEN 1 ELSE 0 END), 0) AS exception_count", [$now])->first();
+
+        $query = $this->filter($base, $filters, $now);
+        $this->sort($query, $filters);
+        $page = $query->with(self::RELATIONS)->withCount([
+            'receivedDocuments' => fn ($q) => $q->where('received_documents.case_file_id', $caseFile->id),
+        ])->paginate($filters['per_page'] ?? 25);
+
+        return response()->json([
+            'documents' => CaseDocumentCollectionResource::collection($page->getCollection())->resolve($request),
+            'pagination' => ['current_page' => $page->currentPage(), 'per_page' => $page->perPage(),
+                'last_page' => $page->lastPage(), 'total' => $page->total(), 'from' => $page->firstItem(), 'to' => $page->lastItem()],
+            'summary' => ['total' => (int) $counts->total,
+                'necessity' => ['undetermined' => (int) $counts->undetermined, 'required' => (int) $counts->required_count,
+                    'not_required' => (int) $counts->not_required],
+                'overdue' => (int) $counts->overdue, 'preservation_priority' => (int) $counts->preservation_count,
+                'collection_result_count' => (int) $counts->exception_count, 'filtered_count' => $page->total()],
+        ]);
+    }
+
+    public function show(Request $request, CaseFile $caseFile, CaseDocument $caseDocument): JsonResponse
+    {
+        abort_unless($caseDocument->case_file_id === $caseFile->id, 404);
+
+        return $this->detail($request, $caseDocument);
+    }
+
+    public function update(Request $request, CaseFile $caseFile, CaseDocument $caseDocument, CaseWorkspaceAuditService $audit): JsonResponse
+    {
+        abort_unless($caseDocument->case_file_id === $caseFile->id, 404);
+
+        return $caseFile->getConnection()->transaction(function () use ($request, $caseFile, $caseDocument, $audit) {
+            // Same lock order as checklist generation; validate against the latest stored state.
+            $case = CaseFile::whereKey($caseFile->id)->lockForUpdate()->firstOrFail();
+            $document = $case->documents()->whereKey($caseDocument->id)->lockForUpdate()->firstOrFail();
+            $data = $this->validatedPatch($request, $document);
+            if (isset($data['necessity_status']) && $data['necessity_status'] !== $document->necessity_status) {
+                $decided = $data['necessity_status'] !== 'undetermined';
+                $actor = $request->user()->employee;
+                abort_if($decided && ! $actor, 403, '判断を記録するには社員情報が必要です。');
+                $data['necessity_decided_by_employee_id'] = $decided ? $actor->id : null;
+                $data['necessity_decided_at'] = $decided ? now() : null;
+                if (! $decided) {
+                    $data['necessity_reason'] = null;
+                }
+            }
+            $before = $document->getRawOriginal();
+            $document->fill($data);
+            $changes = [];
+            foreach ($document->getDirty() as $field => $value) {
+                $changes[$field] = ['before' => $before[$field] ?? null, 'after' => $value];
+            }
+            if ($changes !== []) {
+                $document->save();
+                $audit->record($case, $request, '資料収集項目を更新', $document->title, [
+                    'event' => 'document_collection.updated', 'document_id' => $document->id,
+                    'actor_user_id' => $request->user()->id, 'changes' => $changes,
+                ]);
+            }
+
+            return $this->detail($request, $document);
+        });
+    }
+
+    private function detail(Request $request, CaseDocument $document): JsonResponse
+    {
+        // A corrupt cross-case pivot must not leak file metadata or even its count.
+        $files = fn ($q) => $q->where('received_documents.case_file_id', $document->case_file_id);
+        $document->load([...self::RELATIONS, 'necessityDecidedBy:id,full_name',
+            'receivedDocuments' => fn ($q) => $files($q)->orderBy('received_documents.id'),
+            'receivedDocuments.registeredByEmployee:id,full_name'])
+            ->loadCount(['receivedDocuments' => $files]);
+
+        return response()->json(['document' => (new CaseDocumentCollectionDetailResource($document))->resolve($request)]);
+    }
+
+    private function statusRules(): array
+    {
+        return [
+            'necessity_status' => ['sometimes', Rule::in(CaseDocument::NECESSITY_STATUSES)],
+            'collection_status' => ['sometimes', Rule::in(CaseDocument::COLLECTION_STATUSES)],
+            'collection_result' => ['sometimes', 'nullable', Rule::in(CaseDocument::COLLECTION_RESULTS)],
+            'fulfillment_status' => ['sometimes', Rule::in(CaseDocument::FULFILLMENT_STATUSES)],
+            'review_status' => ['sometimes', Rule::in(CaseDocument::REVIEW_STATUSES)],
+        ];
+    }
+
+    private function validatedPatch(Request $request, CaseDocument $document): array
+    {
+        $rules = [
+            ...$this->statusRules(),
+            'target_person' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'collection_source' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'collection_method' => ['sometimes', 'nullable', 'string', 'max:10000'],
+            'target_scope' => ['sometimes', 'nullable', 'string', 'max:10000'],
+            'target_period_from' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+            'target_period_to' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+            'assigned_employee_id' => ['sometimes', 'nullable', 'integer', Rule::exists('employees', 'id')->whereNull('deleted_at')],
+            'requested_at' => ['sometimes', 'nullable', 'date'],
+            'response_deadline' => ['sometimes', 'nullable', 'date'],
+            'collection_priority' => ['sometimes', Rule::in(CaseDocument::COLLECTION_PRIORITIES)],
+            'preservation_priority' => ['sometimes', 'boolean'],
+            'preservation_reason' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            'necessity_reason' => ['sometimes', 'nullable', 'string', 'max:5000'],
+        ];
+        // Reject all non-contract fields, including provenance and client-supplied actor/time.
+        $unknown = array_diff(array_keys($request->all()), array_keys($rules));
+        if ($unknown) {
+            throw ValidationException::withMessages(array_fill_keys($unknown, 'この項目は変更できません。'));
+        }
+        $data = $request->validate($rules);
+        $from = array_key_exists('target_period_from', $data) ? $data['target_period_from'] : $document->target_period_from?->toDateString();
+        $to = array_key_exists('target_period_to', $data) ? $data['target_period_to'] : $document->target_period_to?->toDateString();
+        if ($from !== null && $to !== null && $to < $from) {
+            throw ValidationException::withMessages(['target_period_to' => '終了日は開始日以降にしてください。']);
+        }
+        if (array_key_exists('necessity_status', $data) || array_key_exists('necessity_reason', $data)) {
+            $reason = array_key_exists('necessity_reason', $data) ? $data['necessity_reason'] : $document->necessity_reason;
+            if (($data['necessity_status'] ?? $document->necessity_status) === 'not_required'
+                && preg_match('/[^\s\p{Z}]/u', (string) $reason) !== 1) {
+                throw ValidationException::withMessages(['necessity_reason' => '不要と判断した理由を入力してください。']);
+            }
+        }
+        foreach (['requested_at', 'response_deadline'] as $field) {
+            if (isset($data[$field])) {
+                $data[$field] = Carbon::parse($data[$field], config('app.timezone'))->setTimezone(config('app.timezone'))->format('Y-m-d H:i:s');
+            }
+        }
+
+        return $data;
+    }
+
+    private function filter(Builder $query, array $filters, Carbon $now): Builder
+    {
+        if (isset($filters['search'])) {
+            // Escape LIKE wildcards so search text is literal; LOWER is portable to SQLite/MySQL.
+            $term = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower($filters['search'])).'%';
+            $query->where(fn ($q) => $q->whereHas('documentType', fn ($type) => $type
+                ->whereRaw("LOWER(code) LIKE ? ESCAPE '!'", [$term])
+                ->orWhereRaw("LOWER(name_ja) LIKE ? ESCAPE '!'", [$term]))
+                ->orWhereRaw("LOWER(title) LIKE ? ESCAPE '!'", [$term]));
+        }
+        if (isset($filters['purpose'])) {
+            $query->whereHas('purposes', fn ($q) => $q->where('code', $filters['purpose']));
+        }
+        if (isset($filters['source'])) {
+            $query->where('collection_source', $filters['source']);
+        }
+        foreach (['necessity_status', 'collection_status', 'collection_result', 'fulfillment_status', 'review_status'] as $field) {
+            if (array_key_exists($field, $filters)) {
+                $query->where($field, $filters[$field]);
+            }
+        }
+        foreach (['assignee_id' => 'assigned_employee_id', 'priority' => 'collection_priority'] as $filter => $column) {
+            if (isset($filters[$filter])) {
+                $query->where($column, $filters[$filter]);
+            }
+        }
+        if (isset($filters['preservation_priority'])) {
+            $query->where('preservation_priority', filter_var($filters['preservation_priority'], FILTER_VALIDATE_BOOLEAN));
+        }
+        foreach (['deadline_from' => '>=', 'deadline_to' => '<='] as $field => $operator) {
+            if (isset($filters[$field])) {
+                $query->whereDate('response_deadline', $operator, $filters[$field]);
+            }
+        }
+        if (isset($filters['overdue'])) {
+            if (filter_var($filters['overdue'], FILTER_VALIDATE_BOOLEAN)) {
+                $query->where('response_deadline', '<', $now)->whereNotIn('collection_status', ['received', 'closed']);
+            } else {
+                $query->where(fn ($q) => $q->whereNull('response_deadline')->orWhere('response_deadline', '>=', $now)
+                    ->orWhereIn('collection_status', ['received', 'closed']));
+            }
+        }
+
+        return $query;
+    }
+
+    private function sort(Builder $query, array $filters): void
+    {
+        $query->select('case_documents.*');
+        $sort = $filters['sort'] ?? null;
+        if ($sort === null) {
+            $query->orderBy('sort_order')->orderBy('id');
+
+            return;
+        }
+        if (in_array($sort, ['document_code', 'document_name'], true)) {
+            $query->addSelect(['collection_sort' => DocumentType::select($sort === 'document_code' ? 'code' : 'name_ja')
+                ->whereColumn('document_types.id', 'case_documents.document_type_id')]);
+        } elseif ($sort === 'assignee') {
+            $query->addSelect(['collection_sort' => Employee::select('full_name')->whereColumn('employees.id', 'case_documents.assigned_employee_id')]);
+        } elseif ($sort === 'priority') {
+            $query->selectRaw("CASE collection_priority WHEN 'low' THEN 0 WHEN 'normal' THEN 1 WHEN 'high' THEN 2 WHEN 'critical' THEN 3 END AS collection_sort");
+        } else {
+            $column = $sort === 'deadline' ? 'response_deadline' : 'updated_at';
+            $query->addSelect("{$column} as collection_sort");
+        }
+        $query->orderByRaw('collection_sort IS NULL')->orderBy('collection_sort', $filters['direction'] ?? 'asc')->orderBy('id');
+    }
+}

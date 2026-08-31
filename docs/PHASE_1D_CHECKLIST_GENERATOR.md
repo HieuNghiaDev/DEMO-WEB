@@ -2,6 +2,8 @@
 
 Verified 2026-08-31. Backend service only; no frontend or automatic deployment.
 
+Phase 1E-B update: the historical verification below describes Phase 1D. Explicit preview/initialize HTTP endpoints now wrap the same generator; see [API.md](API.md#v2-checklist-initialization--phase-1e-b). `previewForCase()` and generation share private `plan()` for resolution and duplicate/safety checks. Planning errors use `ChecklistPlanningException` (a RuntimeException subtype) so HTTP callers can return a safe 422. Metadata is checked before inserting missing candidates. Generation locking/defaults/idempotency remain unchanged; Phase 1E-A0 additionally copies primary-rule preservation_priority on new items. CaseFile creation is still not connected to V2 generation.
+
 ## Entry point and initialization boundary
 
 `EmployeeManagement/backend/app/Services/CaseDocumentChecklistGenerator.php` exposes:

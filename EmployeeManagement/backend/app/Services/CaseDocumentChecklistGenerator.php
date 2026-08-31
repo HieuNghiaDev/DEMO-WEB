@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Exceptions\ChecklistPlanningException;
 use App\Models\CaseDocument;
 use App\Models\CaseFile;
 use App\Models\CaseType;
 use App\Models\CaseTypeDocumentRule;
+use App\Models\DocumentPurpose;
 use Illuminate\Support\Collection;
 use RuntimeException;
 
@@ -36,51 +38,15 @@ class CaseDocumentChecklistGenerator
                 return $result;
             }
 
-            $lineage = $this->lineage((int) $case->case_type_id, $connection);
-            $date = today()->toDateString();
-            $rules = CaseTypeDocumentRule::on($connection)->with(['documentType', 'purposes'])
-                ->whereIn('case_type_id', $lineage)->where('is_active', true)
-                ->where(fn ($q) => $q->whereNull('effective_from')->orWhereDate('effective_from', '<=', $date))
-                ->where(fn ($q) => $q->whereNull('effective_to')->orWhereDate('effective_to', '>=', $date))
-                ->orderByDesc('version')->orderBy('id')->get();
-
-            // Choose latest effective version per document AT EACH level first.
-            // Then nearest level wins metadata; ancestors only contribute purpose IDs.
-            $candidates = [];
-            foreach ($lineage as $typeId) {
-                $level = $rules->where('case_type_id', $typeId)->unique('document_type_id')
-                    ->sortBy(fn ($rule) => [$rule->sort_order, $rule->id]);
-                foreach ($level as $rule) {
-                    $id = $rule->document_type_id;
-                    $candidates[$id] ??= ['rule' => $rule, 'purpose_ids' => []];
-                    $candidates[$id]['purpose_ids'] = array_values(array_unique([
-                        ...$candidates[$id]['purpose_ids'], ...$rule->purposes->modelKeys(),
-                    ]));
-                }
-            }
+            ['candidates' => $candidates, 'existing' => $existing] = $this->plan($case, true);
             $result['candidate_count'] = count($candidates);
-            // A locking read sees items committed by the prior lock holder on MySQL as well.
-            $existing = $case->documents()->withTrashed()->lockForUpdate()->get();
             $order = (int) ($existing->max('sort_order') ?? 0);
             foreach ($candidates as $candidate) {
                 $rule = $candidate['rule'];
-                if ($this->alreadyRepresented($existing, $rule)) {
+                if ($candidate['represented']) {
                     $result['skipped_count']++;
 
                     continue;
-                }
-                if (! $rule->documentType) {
-                    throw new RuntimeException("Document definition missing for rule {$rule->id}.");
-                }
-                // Rule metadata is TEXT but the existing case suggestion columns are VARCHAR(255).
-                // Refuse incompatible metadata rather than silently truncating historical context.
-                foreach (['standard_source', 'standard_target_person'] as $field) {
-                    if (mb_strlen((string) $rule->$field) > 255) {
-                        throw new RuntimeException("Rule {$rule->id} {$field} exceeds the case field capacity.");
-                    }
-                }
-                if (! in_array($rule->priority_default, CaseDocument::COLLECTION_PRIORITIES, true)) {
-                    throw new RuntimeException("Unsupported collection priority on rule {$rule->id}.");
                 }
                 $document = $case->documents()->create([
                     'document_type_id' => $rule->document_type_id,
@@ -114,6 +80,118 @@ class CaseDocumentChecklistGenerator
         });
     }
 
+    /** Read-only, advisory counts. POST must re-plan under the case lock. */
+    public function previewForCase(CaseFile $caseFile): array
+    {
+        $connection = $caseFile->getConnectionName();
+        $case = CaseFile::on($connection)->findOrFail($caseFile->getKey());
+        $type = $case->case_type_id === null ? null : CaseType::on($connection)->find($case->case_type_id);
+        // A missing selected type is a UI unavailable state, not a guessed type or a 500.
+        if ($type === null) {
+            $case->case_type_id = null;
+        }
+        ['candidates' => $candidates, 'existing' => $existing] = $this->plan($case, false);
+        $active = $existing->reject(fn ($item) => $item->trashed());
+        $manual = $active->where('is_template_generated', false)->count();
+        $legacy = $active->filter(fn ($item) => $item->template_item_id !== null || $item->document_type_id === null
+            || $item->file_url !== null || $item->status !== 'not_requested')->count();
+        $deletedGenerated = $existing->filter(fn ($item) => $item->trashed() && $item->is_template_generated)->count();
+        $warnings = [];
+        if ($type === null) {
+            $warnings[] = ['code' => 'case_type_missing', 'message' => '事件類型を設定してから収集リストを作成してください。'];
+        } elseif ($candidates === []) {
+            $warnings[] = ['code' => 'no_rules', 'message' => '現在の事件類型に有効な候補資料がありません。'];
+        }
+        if ($manual > 0) {
+            $warnings[] = ['code' => 'manual_items_present', 'message' => '手動追加された収集項目があります。重複候補を確認してください。'];
+        }
+        if ($legacy > 0) {
+            $warnings[] = ['code' => 'legacy_document_items_present', 'message' => '既存の書類項目があります。生成前に重複を確認してください。'];
+        }
+        if ($deletedGenerated > 0) {
+            $warnings[] = ['code' => 'deleted_generated_items_present', 'message' => '削除済みの生成項目は再作成されません。必要に応じて履歴を確認してください。'];
+        }
+        $purposeCounts = [];
+        foreach ($candidates as $candidate) {
+            foreach ($candidate['purpose_ids'] as $id) {
+                $purposeCounts[$id] = ($purposeCounts[$id] ?? 0) + 1;
+            }
+        }
+        $missing = count(array_filter($candidates, fn ($candidate) => ! $candidate['represented']));
+
+        return [
+            'case' => ['id' => $case->id, 'case_type' => $type ? ['id' => $type->id, 'name' => $type->name] : null],
+            'initialization' => [
+                'available' => $type !== null, 'candidate_count' => count($candidates),
+                'existing_generated_count' => $active->where('is_template_generated', true)->count(),
+                'missing_candidate_count' => $missing, 'skipped_candidate_count' => count($candidates) - $missing,
+                'manual_item_count' => $manual, 'total_existing_collection_items' => $active->count(),
+                'legacy_item_count' => $legacy, 'soft_deleted_generated_count' => $deletedGenerated,
+            ],
+            'purposes' => DocumentPurpose::on($connection)->whereIn('id', array_keys($purposeCounts))
+                ->orderBy('sort_order')->orderBy('id')->get(['id', 'code', 'name_ja'])
+                ->map(fn ($purpose) => ['code' => $purpose->code, 'name_ja' => $purpose->name_ja,
+                    'candidate_count' => $purposeCounts[$purpose->id]])->all(),
+            'warnings' => $warnings,
+        ];
+    }
+
+    /** Both consumers use identical inheritance, manual matching and metadata safety checks. */
+    private function plan(CaseFile $case, bool $locking): array
+    {
+        $connection = $case->getConnectionName();
+        $candidates = [];
+        if ($case->case_type_id !== null) {
+            $lineage = $this->lineage((int) $case->case_type_id, $connection);
+            $date = today()->toDateString();
+            $rules = CaseTypeDocumentRule::on($connection)->with(['documentType', 'purposes'])
+                ->whereIn('case_type_id', $lineage)->where('is_active', true)
+                ->where(fn ($q) => $q->whereNull('effective_from')->orWhereDate('effective_from', '<=', $date))
+                ->where(fn ($q) => $q->whereNull('effective_to')->orWhereDate('effective_to', '>=', $date))
+                ->orderByDesc('version')->orderBy('id')->get();
+            foreach ($lineage as $typeId) {
+                // Nearest level wins metadata; only latest effective versions contribute purposes.
+                $level = $rules->where('case_type_id', $typeId)->unique('document_type_id')
+                    ->sortBy(fn ($rule) => [$rule->sort_order, $rule->id]);
+                foreach ($level as $rule) {
+                    $id = $rule->document_type_id;
+                    $candidates[$id] ??= ['rule' => $rule, 'purpose_ids' => []];
+                    $candidates[$id]['purpose_ids'] = array_values(array_unique([
+                        ...$candidates[$id]['purpose_ids'], ...$rule->purposes->modelKeys(),
+                    ]));
+                }
+            }
+        }
+        $query = $case->documents()->withTrashed();
+        if ($locking) {
+            // A current locking read sees the prior initialization's committed items on MySQL.
+            $query->lockForUpdate();
+        }
+        $existing = $query->get();
+        foreach ($candidates as &$candidate) {
+            $rule = $candidate['rule'];
+            $candidate['represented'] = $this->alreadyRepresented($existing, $rule);
+            if ($candidate['represented']) {
+                continue;
+            }
+            if (! $rule->documentType) {
+                throw new ChecklistPlanningException("Document definition missing for rule {$rule->id}.");
+            }
+            // Master TEXT must fit the existing case VARCHAR(255) suggestions without truncation.
+            foreach (['standard_source', 'standard_target_person'] as $field) {
+                if (mb_strlen((string) $rule->$field) > 255) {
+                    throw new ChecklistPlanningException("Rule {$rule->id} {$field} exceeds the case field capacity.");
+                }
+            }
+            if (! in_array($rule->priority_default, CaseDocument::COLLECTION_PRIORITIES, true)) {
+                throw new ChecklistPlanningException("Unsupported collection priority on rule {$rule->id}.");
+            }
+        }
+        unset($candidate);
+
+        return compact('candidates', 'existing');
+    }
+
     /** @return list<int> Selected type first, root last. */
     private function lineage(int $selectedId, ?string $connection): array
     {
@@ -122,12 +200,12 @@ class CaseDocumentChecklistGenerator
         $id = $selectedId;
         while ($id !== null) {
             if (isset($seen[$id])) {
-                throw new RuntimeException("Cyclic case type hierarchy at case type {$id}.");
+                throw new ChecklistPlanningException("Cyclic case type hierarchy at case type {$id}.");
             }
             $seen[$id] = true;
             $type = CaseType::on($connection)->find($id);
             if (! $type) {
-                throw new RuntimeException("Invalid case type hierarchy: missing case type {$id}.");
+                throw new ChecklistPlanningException("Invalid case type hierarchy: missing case type {$id}.");
             }
             $lineage[] = (int) $type->id;
             $id = $type->parent_id === null ? null : (int) $type->parent_id;

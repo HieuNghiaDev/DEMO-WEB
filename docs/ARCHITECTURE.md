@@ -109,6 +109,14 @@ Master JSON và `CaseTypeDocumentRuleMasterSeeder` cung cấp 103 rule ứng vi�
 
 `app/Services/CaseDocumentChecklistGenerator.php` tạo candidate từ rule của selected type và lineage: nearest rule metadata, latest effective version mỗi cấp, union purpose, snapshot ngữ cảnh và necessity undetermined. Transaction khóa CaseFile, chỉ thêm mục thiếu, không ghi đè quyết định hoặc snapshot cũ. Chưa tự nối vào creation API vì template engine legacy chưa có document_type mapping, cần quyết định coexistence riêng để tránh checklist trùng. Không thay thế `CaseDocumentChecklistService`. Xem [PHASE_1D_CHECKLIST_GENERATOR.md](PHASE_1D_CHECKLIST_GENERATOR.md).
 
+### API 資料収集 V2 (Phase 1E-A)
+
+`CaseDocumentCollectionController` cung cấp ba route GET list, GET detail và PATCH dưới `case-files/{caseFile}/document-collection`; dùng `case.view`/`case.update` của CaseWorkspace, không thêm ACL riêng theo assignee. Hai Laravel Resources chỉ xuất các trường theo hợp đồng, không dump model. List lọc theo giá trị hồ sơ, eager-load quan hệ, paginate, sort whitelist và summary toàn case; ID item giữ độc lập dù cùng document type. PATCH khóa case rồi item, validate trạng thái/cặp ngày đã lưu và ghi before/after qua `CaseWorkspaceAuditService` cùng transaction. Snapshot/master và legacy status/file_url/version không được sửa từ route này. ReceivedDocument chỉ biểu diễn metadata, luôn lọc cùng case kể cả pivot sai. Không gọi generator hoặc thay create/template/AI/frontend workflow. Hợp đồng đầy đủ và policy necessity/overdue ở [API.md](API.md#v2-資料収集--phase-1e-a).
+
+### Explicit initialization (Phase 1E-B)
+
+`CaseDocumentInitializationController` thêm preview GET và initialize POST trước route động collection item. `CaseDocumentChecklistGenerator::previewForCase()` và `generateForCase()` dùng chung private planner (lineage, effective rules, purposes, existing/manual guard); không copy logic vào controller. Generator giữ parent lock/current document read và transaction; outer transaction ở endpoint cần cho kiểm tra case type và rollback cả generation khi activity lỗi. `ChecklistPlanningException` tách lỗi cấu hình domain để trả 422 an toàn, không nuốt lỗi DB/audit. No-op không tạo activity. Không nối generator vào create CaseFile hoặc frontend. Xem [API.md](API.md#v2-checklist-initialization--phase-1e-b).
+
 ## Quy ước trạng thái
 
 | Miền | Giá trị |

@@ -41,6 +41,191 @@ Phase 1D bổ sung application service `CaseDocumentChecklistGenerator::generate
 
 Tài liệu hỗ trợ `requirement_level`: `required`, `conditional`, `optional`; và trạng thái nghiệp vụ: `not_requested`, `requested`, `waiting`, `received`, `reviewing`, `deficient`, `resubmission_requested`, `confirmed`, `submitted`, `not_required`. Tài liệu thêm thủ công không phụ thuộc template. Xóa tài liệu dùng soft delete để phục hồi/audit về sau.
 
+### V2 資料収集 — Phase 1E-A
+
+API này độc lập với các route `documents` legacy; chưa nối frontend mockup và **không khởi tạo checklist**. Không gọi generator khi GET/PATCH hoặc tạo CaseFile. Không upload/delete file, gắn pivot, gửi yêu cầu bên ngoài, OCR hoặc quyết định pháp lý bằng AI.
+
+| Method & path | Quyền | Response |
+| --- | --- | --- |
+| `GET /case-files/{caseFile}/document-collection` | `case.view` | `{ documents: [...], pagination: {...}, summary: {...} }` |
+| `GET /case-files/{caseFile}/document-collection/{caseDocument}` | `case.view` | `{ document: {...} }` chi tiết |
+| `PATCH /case-files/{caseFile}/document-collection/{caseDocument}` | `case.update` | `{ document: {...} }` chi tiết sau cập nhật |
+
+Giữ nguyên Sanctum, middleware bắt đổi mật khẩu, rate limit và RBAC workspace. Role chính thức level 1/2 đọc; level 3 trở lên có `case.update`. **Không thêm ACL hồ sơ riêng**: hiện CaseWorkspace cấp quyền theo RBAC dùng chung, không giới hạn người được phân công từng hồ sơ. PATCH người phụ trách mục thu thập không thay người phụ trách CaseFile (route assign CaseFile vẫn giữ quy tắc level 4/5). Detail/PATCH kiểm tra item thuộc đúng case trước validation hoặc trả dữ liệu; sai case, case/item đã soft-delete hoặc không tồn tại trả 404. Không thay đổi permission seeder hay middleware.
+
+#### Query parameters
+
+Các filter kết hợp AND; chỉ áp dụng cho các CaseDocument chưa soft-delete của hồ sơ trong URL. Không group theo document_type: hai mục D-003 theo bệnh viện/đối tượng/kỳ khác nhau vẫn là hai hàng theo `CaseDocument.id`.
+
+| Parameter | Hành vi |
+| --- | --- |
+| `search` | Tối đa 255 ký tự, tìm substring code/tên Nhật của document type và title của item thủ công; LOWER, escape `%`/`_` để tìm literal |
+| `purpose` | Mã purpose, ví dụ `W3`; lọc qua EXISTS của pivot, không nhân đôi hàng nhiều purpose |
+| `source` | So khớp toàn bộ `case_documents.collection_source`, tối đa 255; không lấy `standard_source` từ master |
+| `assignee_id` | ID integer dương của nhân viên được phân công; ID không khớp trả danh sách rỗng |
+| `necessity_status` | undetermined / required / not_required |
+| `collection_status` | not_started / preparing / requested / partially_received / received / difficult / closed |
+| `collection_result` | Mã ngoại lệ bên dưới; query rỗng được Laravel chuẩn hóa null để tìm item chưa có kết quả |
+| `fulfillment_status` | undetermined / insufficient / satisfied / satisfied_by_alternative |
+| `review_status` | unreviewed / reviewing / reviewed / returned |
+| `overdue` | true/false/1/0; quá hạn = response_deadline < now() theo timezone ứng dụng và collection_status không là received/closed |
+| `preservation_priority` | true/false/1/0; cờ bảo toàn độc lập với độ ưu tiên công việc |
+| `priority` | low / normal / high / critical, lọc collection_priority |
+| `deadline_from`, `deadline_to` | YYYY-MM-DD; giới hạn ngày response_deadline bao gồm cả hai đầu, hỗ trợ một đầu; to không nhỏ hơn from |
+| `sort` | document_code / document_name / deadline / assignee / priority / updated_at |
+| `direction` | asc (mặc định khi có sort) / desc |
+| `page`, `per_page` | page >= 1; per_page 1–100, mặc định 25 |
+
+Sort priority theo low → normal → high → critical; assignee theo full_name. Giá trị null luôn cuối trong sort tường minh; hòa giá trị thì ID tăng dần. Không có sort thì `sort_order ASC, id ASC`. Không suy mức quan trọng pháp lý từ tên/mã tài liệu. `overdue=false` là phần bù, bao gồm deadline null/đúng hiện tại/tương lai và item received/closed. `not_required` không tự loại khỏi overdue, vì cần thiết và tiến độ là hai chiều độc lập. Query sai enum/kiểu/date/sort/page trả Laravel 422 `{message, errors}`.
+
+#### List response
+
+Mỗi phần tử `documents` có:
+
+- `id`, `title`, `document_type: {id, code, name_ja} | null`, `purposes: [{id, code, name_ja}]`.
+- `target_person`, `collection_source`, `collection_method`, `target_period_from/to`, `target_scope`.
+- `necessity_status`, `collection_status`, `collection_result`, `fulfillment_status`, `review_status`.
+- `assigned_employee: {id, display_name} | null`, `requested_at`, `response_deadline`.
+- `collection_priority`, `preservation_priority` (boolean), `preservation_reason`.
+- `applicability_condition_snapshot`, `is_template_generated` (boolean), `received_document_count`, `created_at`, `updated_at`.
+
+Ngày thuần trả YYYY-MM-DD; datetime trả ISO-8601 UTC, nullable giữ null. `display_name` là Employee.full_name; không trả email, điện thoại, role hay thông tin cá nhân khác của nhân viên. Resource whitelist không serialize toàn bộ model/master relations.
+
+`pagination`: `{current_page, per_page, last_page, total, from, to}`; total là số item sau lọc, from/to null khi trang rỗng. `summary` luôn tính **toàn hồ sơ**, không bị filter hoặc page làm thay đổi:
+
+```json
+{
+  "total": 55,
+  "necessity": {"undetermined": 55, "required": 0, "not_required": 0},
+  "overdue": 0,
+  "preservation_priority": 1,
+  "collection_result_count": 0,
+  "filtered_count": 12
+}
+```
+
+Đây là ví dụ response, không phải dữ liệu vận hành được seed. `collection_result_count` đếm item có result không null; `preservation_priority` đếm cờ true, không phải item priority high.
+
+#### Detail / PATCH response
+
+`document` trả:
+
+- `id`, `title`, `document_type` (thêm description), `purposes`, `is_template_generated`.
+- `rule: {version_snapshot, source_snapshot, applicability_condition_snapshot}` từ snapshot đã lưu, không đọc live rule để thay thế.
+- `necessity: {status, reason, decided_by: {id, display_name} | null, decided_at}`.
+- `collection: {target_person, source, method, target_period_from, target_period_to, target_scope, status, result, requested_at, response_deadline, priority, preservation_priority, preservation_reason}`.
+- `fulfillment_status`, `review_status`, `assigned_employee`, `received_document_count`, `received_documents`, `created_at`, `updated_at`.
+
+`received_documents` là read-only, mỗi file gồm `id`, `title`, `original_filename`, `storage_type`, `external_url`, `version`, `received_at`, `original_or_copy`, `return_required`, `returned_at`, `registered_by_employee: {id, display_name} | null`, `notes`, `relationship_type` từ pivot. Chỉ file chưa soft-delete **cùng case** được trả/đếm, kể cả pivot bị nối sai case trong DB. Cùng file có thể xuất hiện ở nhiều item; cùng item có thể có nhiều file. Không trả `storage_path`, toàn bộ pivot hay thông tin tài khoản. URL chỉ trả cho storage google_drive/external_link có URL hợp lệ http/https trong ranh giới quyền case; không gọi hoặc tải URL. Storage upload và scheme không an toàn trả external_url null.
+
+#### PATCH contract và tính độc lập
+
+Body là các field phẳng và partial; bỏ qua field nghĩa là giữ nguyên. Chỉ cho phép:
+
+| Field | Validation |
+| --- | --- |
+| target_person, collection_source | string tối đa 255, nullable |
+| collection_method, target_scope | text tự do tối đa 10.000, nullable; không enum hoặc tự suy từ source |
+| target_period_from, target_period_to | YYYY-MM-DD nullable; kiểm tra cả giá trị đã lưu của đầu còn lại khi PATCH một phía |
+| assigned_employee_id | integer tồn tại, chưa soft-delete; null để bỏ phân công |
+| requested_at, response_deadline | date/datetime hợp lệ, nullable; offset đầu vào được chuẩn hóa về timezone ứng dụng để lưu |
+| collection_priority | low / normal / high / critical, không null |
+| preservation_priority | boolean true/false hoặc 1/0, không null |
+| preservation_reason, necessity_reason | string tối đa 5.000, nullable |
+| necessity_status, collection_status, fulfillment_status, review_status | enum của trục tương ứng ở bảng filter, không null |
+| collection_result | null hoặc not_exist / not_disclosed / partially_disclosed / custodian_unknown / other |
+
+Mã kết quả: `not_exist` = 不存在; `not_disclosed` = 不開示; `partially_disclosed` = 一部不開示; `custodian_unknown` = 保管先不明; `other` = その他. Null nghĩa là chưa ghi nhận ngoại lệ, không phải completed.
+
+Mọi key ngoài allowlist bị từ chối 422, **kể cả khi gửi null**. Bao gồm case_file_id, document_type_id, case_type_document_rule_id, cả ba snapshot, is_template_generated, created_by provenance, necessity_decided_by_employee_id/necessity_decided_at, purposes, received_documents và legacy status/file_url/version. Không sửa master, pivot hoặc diễn giải lại API legacy.
+
+- Candidate != required: không đánh giá applicability_condition.
+- Received != reviewed và received != sufficient: cập nhật collection_status không cascade sang review/fulfillment.
+- Not required != collection completed: không tự đóng hoặc gán kết quả/trạng thái đủ/đã xem.
+- Collection result != collection status: not_exist không tự đổi necessity/fulfillment.
+- Preservation priority != collection priority: high + false, normal + true đều hợp lệ.
+- Collection method != source: cách thu thập là mô tả độc lập, không lấy từ master gợi ý.
+
+Khi necessity_status **thay đổi** sang required/not_required, hệ thống ghi employee đã xác thực và now(); nếu user không có employee hợp lệ thì từ chối quyết định này bằng 403. Gửi lại cùng status hoặc chỉ sửa reason không thay người/thời điểm quyết định. not_required yêu cầu reason không rỗng/không chỉ whitespace khi cập nhật status/reason, dùng reason hiện có nếu bỏ qua. Khi chuyển về undetermined, xóa reason/actor/time hiện tại (kể cả gửi reason cùng request); history vẫn giữ bản trước. Các PATCH không liên quan necessity không ép sửa quyết định cũ thiếu reason.
+
+PATCH khóa CaseFile rồi CaseDocument trong transaction, đọc state mới nhất để validate các cặp giá trị partial. Mỗi lần có thay đổi thật ghi một `case_activities` qua `CaseWorkspaceAuditService`, title `資料収集項目を更新`, metadata gồm event `document_collection.updated`, document_id, actor_user_id, `changes` chứa before/after từng field thay đổi (bao gồm actor/time do server ghi). Nhân viên, thời điểm và tên item nằm trong activity theo convention workspace. Bao phủ đổi trạng thái, review/returned, yêu cầu thêm, khó thu thập, reason, assignee/deadline và preservation. Audit thất bại rollback cả update và history. PATCH no-op không thay updated_at hoặc tạo history thừa. Security audit 401/403/429 hiện có giữ nguyên; không đưa nội dung tài liệu sang external logger.
+
+Kiểm chứng Phase 1E-A ngày 2026-08-31: 97 test API mới; toàn bộ backend **322 tests / 3.078 assertions PASS**, gồm regression generator và workspace legacy. Frontend production build PASS, cảnh báo bundle >500 kB hiện có. SQL list/filter/6 sort được kiểm tra thêm trên MySQL trong transaction READ ONLY, không tạo fixture trên DB vận hành. Master giữ nguyên checksum/count 78/11/103/107; clients/case_files/case_documents vẫn 0/0/0. Không migration/seed/deploy trong phase này.
+
+### V2 checklist initialization — Phase 1E-B
+
+Luồng tường minh: case → preview ứng viên → người vận hành xác nhận → POST initialize → GET collection hiện có. **Candidate != required**: mọi item mới vẫn necessity_status=undetermined; không đánh giá điều kiện áp dụng. Không tự khởi tạo V2 khi tạo CaseFile; template engine legacy vẫn giữ nguyên. Chưa nối frontend hoặc thay mock data.
+
+| Method & path | Quyền | Hành vi |
+| --- | --- | --- |
+| `GET /case-files/{caseFile}/document-collection/initialization-preview` | `case.view` | Chỉ đọc kế hoạch hiện tại và cảnh báo coexistence |
+| `POST /case-files/{caseFile}/document-collection/initialize` | `case.update` | Gọi generator, chỉ tạo candidate còn thiếu |
+
+Cả hai static route nằm trước route động `/{caseDocument}`. Giữ Sanctum, password-change restriction, throttle và RBAC CaseWorkspace hiện có; không thêm role bypass hoặc ACL mới. POST không có business payload: mọi field body/query, kể cả null, bị từ chối 422, không nhận document/rule IDs, actor, necessity/status hay purposes. Không cần idempotency key. GET không thay checklist/pivot/snapshot/master/activity; middleware auth/throttle hiện có không bị bỏ qua.
+
+Preview trả trực tiếp:
+
+```json
+{
+  "case": {"id": 123, "case_type": {"id": 10, "name": "労災"}},
+  "initialization": {
+    "available": true,
+    "candidate_count": 55,
+    "existing_generated_count": 0,
+    "missing_candidate_count": 55,
+    "skipped_candidate_count": 0,
+    "manual_item_count": 0,
+    "total_existing_collection_items": 0,
+    "legacy_item_count": 0,
+    "soft_deleted_generated_count": 0
+  },
+  "purposes": [{"code": "COMMON", "name_ja": "事件共通の資料", "candidate_count": 4}],
+  "warnings": []
+}
+```
+
+IDs/purpose list trên chỉ là ví dụ rút gọn. `purposes` đếm theo toàn bộ tập candidate đã resolve, không chỉ phần thiếu. Một candidate phục vụ nhiều purpose nên tổng purpose counts có thể lớn hơn candidate_count; không dùng tổng này làm số checklist duy nhất.
+
+`candidate_count` là số ứng viên hiệu lực sau kế thừa/dedup; `missing_candidate_count` dùng đúng guard chống trùng của generator, `skipped_candidate_count = candidate - missing`. Các count existing/manual/total/legacy chỉ xét item chưa soft-delete. `existing_generated_count` đếm cờ is_template_generated có sẵn, **kể cả cờ của template cũ**, không khẳng định toàn bộ đã sinh bằng V2. Manual count đếm cờ false. Legacy count cảnh báo item có template_item_id, thiếu document_type_id, có file_url hoặc legacy status khác not_requested; count có thể chồng với manual/generated, không cộng các count này thành total. Legacy dấu hiệu không được dùng để tự di chuyển/gộp dữ liệu.
+
+Generated item đã soft-delete vẫn chặn sinh lại theo generator hiện có, không tự restore; soft_deleted_generated_count và warning giải thích trường hợp missing=0 nhưng active total giảm. Item của rule bị bỏ/vô hiệu vẫn giữ nên existing có thể lớn hơn candidate. Manual có cùng document type vẫn hợp lệ theo nguồn/đối tượng/kỳ/phạm vi khác nhau; chỉ duplicate ngữ cảnh hẹp được bỏ qua, không sửa hoặc gắn lại purpose cho item manual.
+
+Warning structure: `{code, message}` (tiếng Nhật), gồm:
+
+- `manual_items_present`: có mục nhập tay, nên kiểm tra trùng.
+- `legacy_document_items_present`: có dấu hiệu template/legacy coexistence, không tự migrate.
+- `deleted_generated_items_present`: mục generated đã xóa sẽ không tự tạo lại.
+- `no_rules`: case type hợp lệ nhưng không có rule hiệu lực; candidate/missing=0, POST 200 no-op, không activity.
+- `case_type_missing`: selected type null/không tồn tại; preview 200 với available=false và case_type=null, POST 422 `code: case_type_required`.
+
+Warning coexistence không chặn POST. Hierarchy lỗi hoặc metadata candidate không thể lưu an toàn trả 422 `checklist_planning_unavailable`, không lộ stack trace, model name hoặc ID rule nội bộ. Case đã xóa/không tồn tại trả 404. Case type hợp lệ ở đây là ID tồn tại; không thêm một bộ lọc is_active của type khác với generator hiện có.
+
+POST thành công trả 200:
+
+```json
+{
+  "initialization": {
+    "candidate_count": 55,
+    "created_count": 55,
+    "skipped_count": 0,
+    "created_case_document_ids": [201, 202],
+    "total_collection_items": 55
+  }
+}
+```
+
+Danh sách IDs trong ví dụ đã rút gọn; response thật chứa IDs mới tạo, không trả lại toàn bộ item. Lần hai created=0/skipped=55 và không activity mới. Nếu sau này master thêm 2 ứng viên thiếu, preview missing=2, POST chỉ tạo 2; không sửa quyết định hoặc snapshot cũ.
+
+Preview và generator dùng chung private `plan()` của `CaseDocumentChecklistGenerator`: cùng lineage, active/effective rules, latest version mỗi cấp, nearest child metadata, union purpose và manual/generated duplicate guard. Preview không lock/write, là ảnh chụp mang tính tham khảo, không giữ chỗ hoặc đóng băng master. POST re-plan trạng thái mới nhất dưới khóa case, không tin count hoặc composition từ frontend.
+
+Generator giữ transaction riêng, parent `FOR UPDATE` và current locking read trên existing documents. Controller có outer transaction cùng thứ tự khóa chỉ để kiểm tra type dưới khóa và bảo đảm activity atomic; generator dùng nested transaction/savepoint hiện có, không commit sớm khỏi outer transaction. Hai initialize hợp tác qua cùng case lock sẽ không tạo trùng; writer legacy không dùng khóa này nằm ngoài bảo đảm đó. Preview và POST có thể khác nếu rule/case đổi giữa hai request.
+
+Khi created_count>0, ghi một case activity qua `CaseWorkspaceAuditService`: title `資料収集リストを作成`, metadata event `document_collection_initialized`, actor_user_id, created_count, candidate_count. case/employee/time dùng convention activity hiện có; user không gắn employee vẫn có actor_user_id, created_by_employee_id nullable như các workspace activity khác. Audit lỗi rollback toàn bộ tài liệu/purpose được tạo. Không ghi activity cho no-op; không event sourcing.
+
+Giới hạn cross-domain: traffic case chỉ dùng lineage/rules traffic hiện tại (48 ứng viên, gồm các mục cross-domain có điều kiện đã có trong master). Không tự thêm toàn bộ 55 mục 労災 vào mọi traffic case. Tự kết hợp nhiều case type hoặc thuộc tính “業務中・通勤中” cần phase riêng. **Initialize không liên hệ bên ngoài**, không upload, gửi yêu cầu, thực thi approval, OCR hoặc quyết định pháp lý AI.
+
+Kiểm chứng Phase 1E-B ngày 2026-08-31: 18 test initialization API / 387 assertions khi chạy riêng; toàn bộ backend **340 tests / 3.462 assertions PASS**, bao gồm 1E-A API và generator regression. Bốn parent/subtype lần lượt 55/48/48/55; lần hai tạo 0, rule mới chỉ thêm phần thiếu, quyết định/manual/legacy và snapshots giữ nguyên. Frontend build PASS (cảnh báo bundle >500 kB hiện có). Master checksum/count giữ 78/11/103/107; local clients/case_files/case_documents = 0/0/0. Generation tests chạy SQLite cô lập; khóa MySQL FOR UPDATE được giữ nguyên nhưng phase này chưa chạy thử tải hai request MySQL đồng thời. Không initialize DB local đang dùng, không sửa frontend, gửi bên ngoài hoặc deploy.
+
 ## Chấm công và báo cáo
 
 | Method & path | Khóa | Nội dung request | Hành vi |

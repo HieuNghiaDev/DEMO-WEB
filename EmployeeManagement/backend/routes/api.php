@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\ApprovalRequestController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CaseDocumentController;
+use App\Http\Controllers\Api\CaseDocumentCollectionController;
+use App\Http\Controllers\Api\CaseDocumentInitializationController;
 use App\Http\Controllers\Api\CaseCustomSectionController;
 use App\Http\Controllers\Api\CaseFileController;
 use App\Http\Controllers\Api\CaseWorkspaceController;
@@ -155,6 +157,16 @@ Route::middleware([
         ->middleware('permission:case.view');
 
     Route::prefix('case-files/{caseFile}')->group(function () {
+        Route::get('document-collection/initialization-preview', [CaseDocumentInitializationController::class, 'preview'])
+            ->middleware('permission:case.view');
+        Route::post('document-collection/initialize', [CaseDocumentInitializationController::class, 'initialize'])
+            ->middleware('permission:case.update');
+        Route::get('document-collection', [CaseDocumentCollectionController::class, 'index'])
+            ->middleware('permission:case.view');
+        Route::get('document-collection/{caseDocument}', [CaseDocumentCollectionController::class, 'show'])
+            ->middleware('permission:case.view');
+        Route::patch('document-collection/{caseDocument}', [CaseDocumentCollectionController::class, 'update'])
+            ->middleware('permission:case.update');
         Route::get('workspace', [CaseWorkspaceController::class, 'show'])
             ->middleware('permission:case.view');
         Route::post('apply-document-template', [CaseWorkspaceController::class, 'applyTemplate'])

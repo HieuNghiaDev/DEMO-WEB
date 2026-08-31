@@ -191,6 +191,14 @@ Khi generator tạo **item mới**, `preservation_priority` sao chép trực ti�
 
 Xác minh A0 ngày 2026-08-31: nhóm model/migration/generator **33 tests / 346 assertions PASS**; toàn bộ backend **225 tests / 1.657 assertions PASS**; frontend production build PASS (cảnh báo bundle >500 kB đã có). Local `127.0.0.1 / employee_management` chỉ chạy migration 150000, không reset/seed/generate: master giữ nguyên checksum và counts 78/11/103/107; clients/case_files/case_documents = 0/0/0. Mọi bảng ngoài lịch sử migration giữ nguyên nội dung; MySQL xác nhận varchar(30)/text nullable và tinyint(1) NOT NULL default 0. Không deploy hoặc triển khai Phase 1E-A API.
 
+### Phase 1E-A — API vận hành collection
+
+Phase 1E-A sử dụng schema A0 hiện có, không migration/seed mới. Endpoint collection cho phép cập nhật các trục nghiệp vụ độc lập, source/method/period, assignee/deadline và preservation theo hồ sơ; không sửa master, snapshot, legacy status/file_url hoặc pivot. Khi quyết định necessity đổi, actor/time do server ghi; trở về undetermined xóa reason/actor/time hiện tại nhưng lịch sử before/after trong `case_activities` vẫn còn. `CaseWorkspaceAuditService` chạy cùng transaction với PATCH và lỗi history làm rollback toàn bộ. Rule generator vẫn chỉ là action tường minh, không nối vào endpoint hoặc tạo case. Xem [API.md](API.md#v2-資料収集--phase-1e-a) cho contract/validation và giới hạn quyền CaseWorkspace hiện có.
+
+### Phase 1E-B — explicit checklist initialization
+
+Không schema/master/seed mới. Preview chỉ đọc shared plan; POST initialize tạo riêng những candidate còn thiếu bằng generator, copy snapshots/purposes và giữ necessity undetermined. Activity `document_collection_initialized` (metadata event, activity_type note/internal theo convention) ghi số candidate/mới tạo và actor cùng transaction; no-op không ghi activity. Existing/soft-deleted/manual/template data không tự migrate, sửa hoặc restore. Master mới chỉ thêm candidate thiếu khi người vận hành POST lại. Không tự gọi khi tạo CaseFile; chi tiết count coexistence, warning và limitation cross-domain xem [API.md](API.md#v2-checklist-initialization--phase-1e-b).
+
 ## Excel
 
 `AttendanceExcelService` ghi workbook vận hành dùng chung tại `storage/app/attendance/attendance.xlsx` với sheet chấm công và sheet work session. Mọi lần tạo/cập nhật attendance hay work session đều cố đồng bộ workbook; lỗi Excel chỉ ghi warning, không làm hỏng nghiệp vụ chính.
