@@ -1,0 +1,734 @@
+{
+  "source": {
+    "title": "事件類型別 資料収集マスター",
+    "filename": "事件類型別-資料収集マスター.docx",
+    "date": "2026-08-30",
+    "version": "1.0",
+    "sha256": "ac510b45971bf4bf8a17c3689d33fb80b4b925b7638c856bf6a51705265ddfb9",
+    "definition_occurrences": 97,
+    "repeated_codes": {
+      "C-002": 3,
+      "D-001": 2,
+      "D-002": 2,
+      "D-003": 2,
+      "D-004": 2,
+      "D-005": 2,
+      "D-006": 2,
+      "D-007": 2,
+      "D-008": 2,
+      "D-016": 2,
+      "D-017": 2,
+      "D-009": 2,
+      "D-010": 2,
+      "D-011": 2,
+      "D-012": 2,
+      "D-013": 2,
+      "D-014": 2,
+      "A-003": 2
+    }
+  },
+  "documents": [
+    {
+      "code": "C-001",
+      "name_ja": "委任契約書",
+      "name_vi": null,
+      "description": "2. 事件共通の資料\n受任範囲・費用等を確認し、締結済み書面を保存する。",
+      "document_group": "C",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "C-002",
+      "name_ja": "委任状（民事）",
+      "name_vi": null,
+      "description": "2. 事件共通の資料\n民事交渉・訴訟等の権限を確認する。提出先・手続ごとの使用可否を確認する。\n\nW4. 第三者機関からの資料取得・審査請求に必要な書類\n共通項目を参照。個別の取得手続で使えるか確認する。\n\nT5. 資料取得に必要な書類\n共通項目を参照し、個別の取得手続で使えるか確認する。",
+      "document_group": "C",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "C-003",
+      "name_ja": "本人確認資料",
+      "name_vi": null,
+      "description": "2. 事件共通の資料\n氏名・住所等を確認する。在留カード・旅券等は必要な範囲で収集する。",
+      "document_group": "C",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "C-004",
+      "name_ja": "既存の事件資料一式",
+      "name_vi": null,
+      "description": "2. 事件共通の資料\n相手方との連絡、通知書、請求書、既存合意、他の代理人の対応履歴等。資料ごとに分割し、D-016・D-017等との重複を確認する。",
+      "document_group": "C",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "D-001",
+      "name_ja": "給与明細",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n労災の初動では少なくとも事故前3か月分を収集。必要に応じ事故前1年程度・事故後にも範囲を拡張する。\n\nT2. 人身損害の確認\n給与所得者の事故前収入・事故後減収等を確認する。対象期間は弁護士が指定する。",
+      "document_group": "D",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "D-002",
+      "name_ja": "源泉徴収票・賞与明細等の年収資料",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n年収・賞与・収入変動を確認する。3か月分の給与明細だけで十分とは扱わない。\n\nT2. 人身損害の確認\n給与所得者の年収・賞与等を確認する。",
+      "document_group": "D",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "D-003",
+      "name_ja": "診断書",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n傷病名、治療見込み等を確認する。複数の医療機関・作成日を区別する。\n\nT2. 人身損害の確認\n人身事故の場合。傷病・治療状況を確認する。",
+      "document_group": "D",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "D-004",
+      "name_ja": "カルテ・診療記録一式",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n因果関係・治療経過。手術・検査・リハビリ記録等の内訳と対象期間を指定する。\n\nT2. 人身損害の確認\n治療経過・因果関係を確認する。医療機関・期間・必要な内訳を指定する。",
+      "document_group": "D",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "D-005",
+      "name_ja": "画像資料・検査結果",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n症状の裏付け。画像データ本体と読影・検査報告を区別する。\n\nT2. 人身損害の確認\n傷病・症状の裏付け。画像本体と報告を区別する。",
+      "document_group": "D",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "D-006",
+      "name_ja": "休業証明・休業損害証明書",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n休業期間・減収を確認する。手続に合った様式を指定する。\n\nT2. 人身損害の確認\n休業・減収がある場合。対象期間と証明内容を確認する。",
+      "document_group": "D",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "D-007",
+      "name_ja": "事故後の勤怠・給与資料、復職記録",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n事故後の減収・復職後の支障を確認する。W-104・D-001の既取得資料を参照できるようにする。\n\nT2. 人身損害の確認\n事故後の就労状況・減収を確認する。既取得資料を参照する。",
+      "document_group": "D",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "D-008",
+      "name_ja": "治療費・通院交通費・付添費・装具等の領収書・明細",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n支出額、支払者、対象期間、支出目的を確認する。費用種類ごとに分割する。\n\nT2. 人身損害の確認\n費用の種類、支払者、期間、必要性を確認する。",
+      "document_group": "D",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "D-009",
+      "name_ja": "後遺障害診断書",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n後遺障害が問題となる場合。症状固定等の判断・作成依頼時期を弁護士が確認する。\n\nT2. 人身損害の確認\n後遺障害が問題となる場合。作成依頼時期を確認する。",
+      "document_group": "D",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "D-010",
+      "name_ja": "就労・生活上の支障の記録",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n後遺障害等が問題となる場合。事故前後の差、記録者、日付を確認する。\n\nT2. 人身損害の確認\n事故前後の差、記録者、日付を確認する。",
+      "document_group": "D",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "D-011",
+      "name_ja": "死亡診断書・死体検案書",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n死亡事件の場合。死亡原因等を確認する。\n\nT2. 人身損害の確認\n死亡事故の場合。",
+      "document_group": "D",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "D-012",
+      "name_ja": "戸籍関係資料",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n死亡事件等で相続・身分関係の確認が必要な場合。対象者・範囲を限定する。\n\nT2. 人身損害の確認\n死亡事故等で身分・相続関係の確認が必要な場合。",
+      "document_group": "D",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "D-013",
+      "name_ja": "扶養・生計関係資料",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n扶養・生計関係が損害等の検討に必要な場合。\n\nT2. 人身損害の確認\n扶養・生計関係が損害等の検討に必要な場合。",
+      "document_group": "D",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "D-014",
+      "name_ja": "葬儀費用資料",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n死亡事件の場合。費目・支払額・支払者を確認する。\n\nT2. 人身損害の確認\n死亡事故の場合。",
+      "document_group": "D",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "D-016",
+      "name_ja": "既払金一覧・支払記録",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n既払金の名目・金額・対象損害を確認する。労災給付等との二重計上を防ぐ。\n\nT4. 保険・既払金・交渉経過の確認\n治療費等の既払金の名目・金額・対象期間を確認する。",
+      "document_group": "D",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "D-017",
+      "name_ja": "既存の合意書・免責証書・示談書・交渉記録",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n過去の合意、対象範囲、交渉経過を確認する。新たな合意締結を自動実行しない。\n\nT4. 保険・既払金・交渉経過の確認\n過去の合意・交渉経過を確認する。",
+      "document_group": "D",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-101",
+      "name_ja": "雇用契約書",
+      "name_vi": null,
+      "description": "W1. 契約内容・労働条件の確認\n使用者、職種、業務内容、賃金、労働時間を確認する。事故時点で適用される版を特定する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-102",
+      "name_ja": "労働条件通知書",
+      "name_vi": null,
+      "description": "W1. 契約内容・労働条件の確認\n雇用契約書と照合し、労働条件を確認する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-103",
+      "name_ja": "賃金台帳",
+      "name_vi": null,
+      "description": "W1. 契約内容・労働条件の確認\n賃金体系・支払実績を確認する。損害算定にも共用する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-104",
+      "name_ja": "タイムカード・出勤簿・勤怠データ",
+      "name_vi": null,
+      "description": "W1. 契約内容・労働条件の確認\n実労働時間、事故前後の就労・休業状況を確認する。対象期間を指定する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-105",
+      "name_ja": "技能実習計画・認定通知・変更関係書類",
+      "name_vi": null,
+      "description": "W1. 契約内容・労働条件の確認\n技能実習事件の場合。認定された業務と実際の作業を比較する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-106",
+      "name_ja": "就業規則・賃金規程",
+      "name_vi": null,
+      "description": "W1. 契約内容・労働条件の確認\n労働条件、災害補償、休業中の取扱いを確認する。事故時点の適用版を取得する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-201",
+      "name_ja": "監督復命書・添付資料",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n事故に関連する監督・指摘事項を確認する。本人情報該当性・開示範囲を確認する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-202",
+      "name_ja": "災害調査復命書・添付資料",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n事故原因・災害調査結果を確認する。すべての事故で作成されるわけではない。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-203",
+      "name_ja": "安全衛生教育記録",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n教育内容、実施時期、受講者、理解可能な言語での説明状況を確認する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-204",
+      "name_ja": "技能研修・技能講習・特別教育の記録、修了証",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n作業に必要な教育・資格を確認する。研修・技能講習・特別教育は混同せず内訳を特定する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-205",
+      "name_ja": "機械の取扱説明書",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n正しい使用方法、禁止事項、必要な安全措置を確認する。機種・型式・版を特定する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-206",
+      "name_ja": "技能実習日誌",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n技能実習事件の場合。実際の作業・指導状況を確認する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-207",
+      "name_ja": "認定計画の履行状況に係る管理簿",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n技能実習事件の場合。技能実習計画の履行状況を確認する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-208",
+      "name_ja": "監理団体側の技能実習関連管理簿",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n監理体制等が関係する場合。実習実施者の管理簿等、必要な帳簿名を具体化する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-209",
+      "name_ja": "業務別の労働安全衛生措置の実施記録",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n作業計画、点検、作業指揮、保護具等。作業内容と適用法令を弁護士が確認し、収集する記録を特定する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-210",
+      "name_ja": "現場・機械・負傷部位の写真、動画、防犯カメラ映像",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n事故態様と現場状況を保存する。保全優先。保存期間・上書き予定を確認する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-211",
+      "name_ja": "事故報告書",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n会社側の事故認識・説明を確認する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-212",
+      "name_ja": "労働者死傷病報告",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n行政機関への報告内容を確認する。存在・取得可能性を確認する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-213",
+      "name_ja": "再発防止資料",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n事故後に認識・実施された対策を確認する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-214",
+      "name_ja": "機械の点検・修理、安全装置の設置・変更記録",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n故障、整備、安全装置の機能を確認する。事故前後の記録を区別する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-215",
+      "name_ja": "作業指示書・マニュアル・連絡メッセージ",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n指揮命令、作業方法、事故前後の経過を確認する。電子データの原本性を保つ。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-216",
+      "name_ja": "目撃者の連絡先・説明記録",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n事故態様の裏付け。接触方針を確認し、説明者・聴取日・原文を記録する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-217",
+      "name_ja": "監理団体の監査・訪問指導・相談対応記録",
+      "name_vi": null,
+      "description": "W2. 事故態様・会社等の責任の検討\n監理団体の関与・事前把握状況が関係する場合に取得する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-301",
+      "name_ja": "労災保険給付支給請求書・添付書類",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n請求内容、事故態様、賃金等の申告内容を確認する。給付種類ごとに管理する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-302",
+      "name_ja": "労災給付認定に関する調査復命書・添付資料",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n業務上外・障害等級等の認定過程を確認する。対象給付・処分を特定する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-303",
+      "name_ja": "支給・不支給決定通知",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n決定内容・決定日・対象給付を確認する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-304",
+      "name_ja": "支払振込通知・支払証明",
+      "name_vi": null,
+      "description": "W3. 損害内容・労災給付の確認\n実支払額、給付種類、対象期間を確認する。決定通知と別管理する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-401",
+      "name_ja": "委任状（労災給付処分への審査請求）",
+      "name_vi": null,
+      "description": "W4. 第三者機関からの資料取得・審査請求に必要な書類\n当該審査請求を行う場合。対象処分・代理権・手続を確認する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-501",
+      "name_ja": "委任状（労基署への告訴等）",
+      "name_vi": null,
+      "description": "W5. 労基署・警察署への告訴・告発に関する書類\n弁護士が刑事手続の方針を決めた場合のみ。申立人、告訴・告発の別、必要な代理権を確認する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-502",
+      "name_ja": "委任状（警察署への告訴等）",
+      "name_vi": null,
+      "description": "W5. 労基署・警察署への告訴・告発に関する書類\n弁護士が刑事手続の方針を決めた場合のみ。対象行為・提出先・権限を確認する。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "W-503",
+      "name_ja": "告訴状・告発状、事実経過表、証拠一覧、提出用証拠写し",
+      "name_vi": null,
+      "description": "W5. 労基署・警察署への告訴・告発に関する書類\n手続の成果物。既存証拠を参照し、弁護士による承認前に提出しない。",
+      "document_group": "W",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-101",
+      "name_ja": "交通事故証明書",
+      "name_vi": null,
+      "description": "T1. 事故の発生・態様・責任関係の確認\n事故の発生、当事者、取扱警察署等を確認する。代理申請の必要書類を確認する。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-102",
+      "name_ja": "事故状況図・本人の事故経過説明",
+      "name_vi": null,
+      "description": "T1. 事故の発生・態様・責任関係の確認\n事故態様を整理する。事実と推測を分ける。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-103",
+      "name_ja": "ドライブレコーダー・防犯カメラ映像",
+      "name_vi": null,
+      "description": "T1. 事故の発生・態様・責任関係の確認\n事故態様を確認する。保全優先。外部接触・取得方針の承認が必要。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-104",
+      "name_ja": "現場・車両損傷・道路・信号・標識等の写真",
+      "name_vi": null,
+      "description": "T1. 事故の発生・態様・責任関係の確認\n事故状況・物損状況を確認する。撮影時点と事故時点の相違を記録する。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-105",
+      "name_ja": "目撃者の連絡先・説明、事故直後のメッセージ",
+      "name_vi": null,
+      "description": "T1. 事故の発生・態様・責任関係の確認\n事故態様の裏付け。聴取・接触方針を確認する。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-106",
+      "name_ja": "実況見分調書等の刑事記録",
+      "name_vi": null,
+      "description": "T1. 事故の発生・態様・責任関係の確認\n手続段階、記録の種類、処分状況等に応じて取得方法・範囲を確認する。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-107",
+      "name_ja": "相手方・保険会社の事故状況説明、過失割合の主張・根拠",
+      "name_vi": null,
+      "description": "T1. 事故の発生・態様・責任関係の確認\n主張の争点と根拠を整理する。提示された割合を自動確定しない。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-201",
+      "name_ja": "診療報酬明細書",
+      "name_vi": null,
+      "description": "T2. 人身損害の確認\n治療内容・治療費を確認する。保有者と取得方法を確認する。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-202",
+      "name_ja": "確定申告書・帳簿等の収入・減収資料",
+      "name_vi": null,
+      "description": "T2. 人身損害の確認\n自営業者等の場合。事故前所得・事故後減収を確認する。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-203",
+      "name_ja": "家族構成・家事分担・事故後の支障の資料",
+      "name_vi": null,
+      "description": "T2. 人身損害の確認\n家事従事者の損害を検討する場合。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-204",
+      "name_ja": "後遺障害等級認定結果・理由",
+      "name_vi": null,
+      "description": "T2. 人身損害の確認\n認定済みの場合。対象手続・認定内容・理由を確認する。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-301",
+      "name_ja": "車検証等の車両・所有者確認資料",
+      "name_vi": null,
+      "description": "T3. 物的損害の確認\n車両・所有者・使用者を確認する。車両種別に応じた資料とする。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-302",
+      "name_ja": "修理見積書・修理明細・請求書",
+      "name_vi": null,
+      "description": "T3. 物的損害の確認\n修理内容・金額を確認する。損傷写真T-104と関連付ける。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-303",
+      "name_ja": "車両の事故前価値を確認する資料",
+      "name_vi": null,
+      "description": "T3. 物的損害の確認\n車両価値が問題となる場合。年式・走行距離・状態等を確認する。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-304",
+      "name_ja": "レッカー・保管・代車等の費用・利用期間・必要性の資料",
+      "name_vi": null,
+      "description": "T3. 物的損害の確認\n関連費用を確認する。費目ごとに分割する。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-305",
+      "name_ja": "携行品等の写真・購入・修理資料",
+      "name_vi": null,
+      "description": "T3. 物的損害の確認\n車両以外の物損がある場合。物品ごとに管理する。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-401",
+      "name_ja": "保険証券・契約内容・特約の確認資料",
+      "name_vi": null,
+      "description": "T4. 保険・既払金・交渉経過の確認\n本人・関係車両の保険と利用可能な特約を確認する。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-402",
+      "name_ja": "自賠責請求書類・支払通知",
+      "name_vi": null,
+      "description": "T4. 保険・既払金・交渉経過の確認\n請求・支払状況を確認する。後遺障害認定資料はT-204を参照する。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-403",
+      "name_ja": "賠償提示書・計算明細",
+      "name_vi": null,
+      "description": "T4. 保険・既払金・交渉経過の確認\n提示額・計算根拠を確認する。提示と合意を区別する。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "T-404",
+      "name_ja": "第三者行為災害関係資料",
+      "name_vi": null,
+      "description": "T4. 保険・既払金・交渉経過の確認\n業務中・通勤中等で労災が関係する場合。W-301～W-304も適用候補に追加する。",
+      "document_group": "T",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "A-001",
+      "name_ja": "委任状（保有個人情報開示請求）",
+      "name_vi": null,
+      "description": "W4. 第三者機関からの資料取得・審査請求に必要な書類\n労働局等への本人情報の開示請求。提出先様式・権限を確認する。",
+      "document_group": "A",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "A-002",
+      "name_ja": "委任状（不開示決定等への審査請求）",
+      "name_vi": null,
+      "description": "W4. 第三者機関からの資料取得・審査請求に必要な書類\n開示手続で不服申立てを行う場合。W-401と混同しない。",
+      "document_group": "A",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "A-003",
+      "name_ja": "同意書・委任状（医療機関宛て）",
+      "name_vi": null,
+      "description": "W4. 第三者機関からの資料取得・審査請求に必要な書類\n診療情報の取得。医療機関、対象期間、同意範囲を確認する。\n\nT5. 資料取得に必要な書類\n医療機関、対象期間、同意範囲を確認する。",
+      "document_group": "A",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "A-004",
+      "name_ja": "各機関の開示請求書・申込書、本人・代理人確認資料",
+      "name_vi": null,
+      "description": "W4. 第三者機関からの資料取得・審査請求に必要な書類\n委任状とは別に提出先が要求するものを準備する。不要な個人情報を収集しない。",
+      "document_group": "A",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "A-005",
+      "name_ja": "交通事故証明書取得用の委任状",
+      "name_vi": null,
+      "description": "T5. 資料取得に必要な書類\n代理申請の場合。提出先の手続を確認する。",
+      "document_group": "A",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "A-006",
+      "name_ja": "刑事記録閲覧・謄写の申請書・委任関係資料",
+      "name_vi": null,
+      "description": "T5. 資料取得に必要な書類\n記録の保有先・手続段階に応じて準備する。",
+      "document_group": "A",
+      "version": 1,
+      "is_active": true
+    },
+    {
+      "code": "A-007",
+      "name_ja": "保険会社保有資料の取得用委任状等",
+      "name_vi": null,
+      "description": "T5. 資料取得に必要な書類\n保険会社・対象資料・権限を確認する。",
+      "document_group": "A",
+      "version": 1,
+      "is_active": true
+    }
+  ]
+}

@@ -31,7 +31,7 @@ erDiagram
 | `case_types` / `CaseType` | Nhóm hồ sơ và subtype theo quan hệ cha-con; case thực tế liên kết vào subtype để chọn đúng checklist. |
 | `document_templates`, `document_template_items` | Template tài liệu có version, khoảng hiệu lực, nguồn tham chiếu, thứ tự và mức `required/conditional/optional`. |
 | `case_documents` / `CaseDocument` | Mục thu thập/checklist theo hồ sơ; có thể sinh từ template hoặc thêm tự do. Giữ toàn bộ cột legacy (status, file_url, version...), bổ sung các trục necessity/collection/fulfillment/review độc lập ở Phase 1A. |
-| `document_types` / `DocumentType` | Master định nghĩa tài liệu: code duy nhất, name_ja/name_vi, description, document_group, version và is_active; chưa seed master C/D/W/T/A. |
+| `document_types` / `DocumentType` | Master định nghĩa tài liệu: code duy nhất, name_ja/name_vi, description, document_group, version và is_active. Phase 1B cung cấp 78 mã chính thức C/D/W/T/A qua seeder riêng. |
 | `case_type_document_rules` / `CaseTypeDocumentRule` | Ứng viên tài liệu theo case type, mục đích/điều kiện/nguồn/đối tượng/kỳ thu thập, tài liệu tiên quyết, ưu tiên, version và hiệu lực. Mặc định conditional, không tự xác định bắt buộc về pháp lý. |
 | `received_documents` / `ReceivedDocument` | File/tài liệu/phiên bản thực nhận theo case: metadata lưu trữ, URL, ngày nhận/hết hạn, bản gốc/bản sao, yêu cầu trả lại và nhân viên đăng ký. Có soft delete. |
 | `case_document_received_documents` | Liên kết nhiều–nhiều checklist ↔ file nhận, relationship_type và timestamps; unique cặp case_document_id + received_document_id. |
@@ -76,11 +76,19 @@ Các cột mới của `case_documents` gồm FK nullable `document_type_id`, `c
 
 Các giá trị dùng varchar để mở rộng về sau; constants là danh sách cho validation ở các phase API tiếp theo, chưa có API mới hoặc state machine. Không có tự động đồng bộ giữa bốn trục này và legacy `status`/`requirement_level`. Một file đã nhận không tự đồng nghĩa đã đủ hay đã kiểm tra. Rule là ứng viên; mặc định `conditional`, priority `normal`, preservation_priority `false`; chưa có cơ chế sinh checklist từ rule mới. `document_group` là metadata tường minh (C/D/W/T/A), không suy ra nghiệp vụ từ prefix của code. Cho phép nhiều rule cùng cặp case type/document type để phục vụ các mục đích/điều kiện khác nhau; version chưa có cơ chế tự tăng.
 
-Legacy `case_documents.file_url` tiếp tục phục vụ API/UI cũ. Kiến trúc mới lưu file thực nhận ở `received_documents` và nối qua pivot; không tự chuyển URL cũ, không dual-write, không seed master hoàn chỉnh. Một checklist có nhiều file, một file có thể liên kết nhiều checklist. `storage_type` có constants upload/google_drive/external_link; phase này chỉ lưu metadata, không upload, gọi Drive hay kiểm tra nội dung file. Version là số metadata mặc định 1, chưa triển khai lịch sử phiên bản tự động. Trong phase API tiếp theo phải kiểm tra cùng case khi gắn pivot, tính nhất quán document type/rule/case type, điều kiện ngày và quyền của nhân viên; FK hiện chỉ xác minh ID tồn tại.
+Legacy `case_documents.file_url` tiếp tục phục vụ API/UI cũ. Kiến trúc mới lưu file thực nhận ở `received_documents` và nối qua pivot; không tự chuyển URL cũ, không dual-write. Phase 1A chưa seed master; dữ liệu chính thức được bổ sung riêng ở Phase 1B bên dưới. Một checklist có nhiều file, một file có thể liên kết nhiều checklist. `storage_type` có constants upload/google_drive/external_link; phase này chỉ lưu metadata, không upload, gọi Drive hay kiểm tra nội dung file. Version là số metadata mặc định 1, chưa triển khai lịch sử phiên bản tự động. Trong phase API tiếp theo phải kiểm tra cùng case khi gắn pivot, tính nhất quán document type/rule/case type, điều kiện ngày và quyền của nhân viên; FK hiện chỉ xác minh ID tồn tại.
 
 FK chính của rule dùng RESTRICT khi hard-delete case type/document type; nên vô hiệu hóa master bằng is_active. FK nullable tới rule/type/employee/prerequisite dùng SET NULL để giữ checklist/file khi hard-delete tham chiếu. received_documents.case_file_id và hai FK pivot dùng CASCADE khi hard-delete cha, phù hợp workspace hiện có. Soft-delete case hoặc file không chạy cascade DB; pivot được giữ, quan hệ Eloquent mặc định ẩn file/checklist đã soft-delete và có thể hiện lại khi restore. Không có thao tác xóa storage bên ngoài.
 
 Migration `2026_08_31_100000`–`100400` chỉ thêm schema khi chạy `up`; không sửa/xóa dữ liệu legacy. `down` chỉ tháo phần Phase 1A nhưng sẽ mất dữ liệu mới, vì vậy không rollback trên dữ liệu vận hành nếu chưa backup và được duyệt. Phase này không thay đổi template/API/workspace/AI/approval execution; không tạo collection history, OCR hay rule pháp lý đầy đủ.
+
+### Phase 1B — master tài liệu chính thức
+
+Nguồn: **事件類型別 資料収集マスター**, bản 1.0 ngày 2026-08-30 (`事件類型別-資料収集マスター.docx`). Bản trích dữ liệu và SHA-256 nguồn nằm trong `EmployeeManagement/backend/database/seeders/data/document_type_master_v1.json`. 97 lượt định nghĩa trong nguồn được hợp nhất thành **78 mã duy nhất**: C=4 (chung), D=16 (dùng chung cho lao động/交通事故), W=31 (労災), T=20 (交通事故), A=7 (giấy tờ quyền hạn/thu thập).
+
+Có 18 mã lặp: C-002 xuất hiện 3 lần, D-001–D-014, D-016, D-017 và A-003 xuất hiện 2 lần. Không có xung đột tên; nguồn không định nghĩa D-015 nên không tạo mã này. Tên Nhật giữ nguyên; description giữ nguyên mục đích/điều kiện cùng nhãn chương nguồn, bao gồm các ngữ cảnh khác nhau của cùng mã. Đây chỉ là mô tả, không tự sinh rule, nghĩa vụ bắt buộc hay thời hạn theo case.
+
+Chạy riêng `php artisan db:seed --class=DocumentTypeMasterSeeder` từ backend. Seeder dùng transaction và updateOrCreate theo code, version=1, is_active=true; không xóa mã custom, không truncate. name_vi của bản ghi mới để null; bản dịch đã có trong database được giữ khi seed lại. Seeder này không được tự thêm vào DatabaseSeeder; không thay đổi document_name_catalog, document_templates, document_template_items, case_documents, matters/tasks hoặc các luồng nghiệp vụ.
 
 ## Excel
 
@@ -151,5 +159,6 @@ npm run preview
 | `PasswordSecurityTest` | Bắt buộc đổi mật khẩu, thu hồi token, khóa credential seed cũ và lệnh khôi phục tài khoản. |
 | `CaseCollectionFoundationTest`, `CaseCollectionMigrationTest` | Phase 1A: master/rule, trạng thái độc lập, FK, pivot nhiều–nhiều và soft delete; nâng cấp có dữ liệu legacy bằng migrate additive trên SQLite :memory:, không tự chuyển file_url. |
 | `CaseDocumentTest`, `CaseWorkspaceApiTest`, `CaseFileApiTest` | Hồi quy API tài liệu, workspace/template, khách hàng và hồ sơ hiện có. |
+| `DocumentTypeMasterSeederTest` | Phase 1B: đủ 78 mã nguồn, phân nhóm, tên đại diện, mã lặp/unique, seed lặp an toàn, giữ bản dịch/mã custom và dữ liệu legacy. |
 
 Khi sửa API hoặc schema, hãy thêm test vào đúng nhóm và chạy toàn bộ `php artisan test` trước khi deploy.
