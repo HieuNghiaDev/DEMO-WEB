@@ -1,0 +1,2305 @@
+{
+  "source": {
+    "title": "事件類型別 資料収集マスター",
+    "filename": "事件類型別-資料収集マスター.docx",
+    "date": "2026-08-30",
+    "version": "1.0",
+    "sha256": "ac510b45971bf4bf8a17c3689d33fb80b4b925b7638c856bf6a51705265ddfb9",
+    "preservation_basis": "1. 目的と基本設計：映像、現場、機械の状態など失われやすい証拠には「保全優先」を設定する。T-104 additionally records scene changes between capture and accident.",
+    "prerequisite_policy": "No unconditional single prerequisite is asserted. Sections W4/T5 require destination, procedure, authority and period checks; existing personal copies, direct disclosure and third-party requests need different authorization. Preserve individual authorization codes; do not substitute C-002."
+  },
+  "rules": [
+    {
+      "case_type": "労災",
+      "document_code": "C-001",
+      "version": 1,
+      "purposes": [
+        "COMMON"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "事務所で作成／依頼者から回収",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "COMMON",
+          "note": "受任範囲・費用等を確認し、締結済み書面を保存する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "C-001",
+      "version": 1,
+      "purposes": [
+        "COMMON"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "事務所で作成／依頼者から回収",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "COMMON",
+          "note": "受任範囲・費用等を確認し、締結済み書面を保存する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "C-002",
+      "version": 1,
+      "purposes": [
+        "COMMON",
+        "W4"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "民事交渉・訴訟等の権限を確認する。提出先・手続ごとの使用可否を確認する。\n共通項目を参照。個別の取得手続で使えるか確認する。",
+      "standard_source": "事務所で作成／依頼者から回収",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "COMMON",
+          "note": "民事交渉・訴訟等の権限を確認する。提出先・手続ごとの使用可否を確認する。"
+        },
+        {
+          "section": "W4",
+          "note": "共通項目を参照。個別の取得手続で使えるか確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "C-002",
+      "version": 1,
+      "purposes": [
+        "COMMON",
+        "T5"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "民事交渉・訴訟等の権限を確認する。提出先・手続ごとの使用可否を確認する。\n共通項目を参照し、個別の取得手続で使えるか確認する。",
+      "standard_source": "事務所で作成／依頼者から回収",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "COMMON",
+          "note": "民事交渉・訴訟等の権限を確認する。提出先・手続ごとの使用可否を確認する。"
+        },
+        {
+          "section": "T5",
+          "note": "共通項目を参照し、個別の取得手続で使えるか確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "C-003",
+      "version": 1,
+      "purposes": [
+        "COMMON"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "氏名・住所等を確認する。在留カード・旅券等は必要な範囲で収集する。",
+      "standard_source": "依頼者",
+      "standard_target_person": "依頼者",
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "COMMON",
+          "note": "氏名・住所等を確認する。在留カード・旅券等は必要な範囲で収集する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "C-003",
+      "version": 1,
+      "purposes": [
+        "COMMON"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "氏名・住所等を確認する。在留カード・旅券等は必要な範囲で収集する。",
+      "standard_source": "依頼者",
+      "standard_target_person": "依頼者",
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "COMMON",
+          "note": "氏名・住所等を確認する。在留カード・旅券等は必要な範囲で収集する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "C-004",
+      "version": 1,
+      "purposes": [
+        "COMMON"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "依頼者",
+      "standard_target_person": null,
+      "standard_period_rule": "資料ごとに分割し、D-016・D-017等との重複を確認する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "COMMON",
+          "note": "相手方との連絡、通知書、請求書、既存合意、他の代理人の対応履歴等。資料ごとに分割し、D-016・D-017等との重複を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "C-004",
+      "version": 1,
+      "purposes": [
+        "COMMON"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "依頼者",
+      "standard_target_person": null,
+      "standard_period_rule": "資料ごとに分割し、D-016・D-017等との重複を確認する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "COMMON",
+          "note": "相手方との連絡、通知書、請求書、既存合意、他の代理人の対応履歴等。資料ごとに分割し、D-016・D-017等との重複を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-101",
+      "version": 1,
+      "purposes": [
+        "W1"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・会社",
+      "standard_target_person": null,
+      "standard_period_rule": "事故時点で適用される版を特定する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W1",
+          "note": "使用者、職種、業務内容、賃金、労働時間を確認する。事故時点で適用される版を特定する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-102",
+      "version": 1,
+      "purposes": [
+        "W1"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・会社",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W1",
+          "note": "雇用契約書と照合し、労働条件を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-103",
+      "version": 1,
+      "purposes": [
+        "W1",
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "会社・本人保管分",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W1",
+          "note": "賃金体系・支払実績を確認する。損害算定にも共用する。"
+        },
+        {
+          "section": "W1",
+          "note": "賃金体系・支払実績を確認する。損害算定にも共用する。",
+          "mapping_basis": "W-103：損害算定にも共用する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-104",
+      "version": 1,
+      "purposes": [
+        "W1"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・会社",
+      "standard_target_person": null,
+      "standard_period_rule": "事故前後の就労・休業状況。対象期間を指定する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W1",
+          "note": "実労働時間、事故前後の就労・休業状況を確認する。対象期間を指定する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-105",
+      "version": 1,
+      "purposes": [
+        "W1"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "技能実習事件の場合。認定された業務と実際の作業を比較する。",
+      "standard_source": "本人・会社・監理団体",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W1",
+          "note": "技能実習事件の場合。認定された業務と実際の作業を比較する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-106",
+      "version": 1,
+      "purposes": [
+        "W1"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "会社・本人保管分",
+      "standard_target_person": null,
+      "standard_period_rule": "事故時点の適用版を取得する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W1",
+          "note": "労働条件、災害補償、休業中の取扱いを確認する。事故時点の適用版を取得する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-201",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "事故に関連する監督・指摘事項を確認する。本人情報該当性・開示範囲を確認する。",
+      "standard_source": "管轄労働局等への開示請求",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "事故に関連する監督・指摘事項を確認する。本人情報該当性・開示範囲を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-202",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "事故原因・災害調査結果を確認する。すべての事故で作成されるわけではない。",
+      "standard_source": "管轄労働局等への開示請求",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "事故原因・災害調査結果を確認する。すべての事故で作成されるわけではない。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-203",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "会社",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "教育内容、実施時期、受講者、理解可能な言語での説明状況を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-204",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "作業に必要な教育・資格を確認する。研修・技能講習・特別教育は混同せず内訳を特定する。",
+      "standard_source": "本人・会社・講習機関",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "作業に必要な教育・資格を確認する。研修・技能講習・特別教育は混同せず内訳を特定する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-205",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "会社・メーカー",
+      "standard_target_person": null,
+      "standard_period_rule": "機種・型式・版を特定する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "正しい使用方法、禁止事項、必要な安全措置を確認する。機種・型式・版を特定する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-206",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "技能実習事件の場合。実際の作業・指導状況を確認する。",
+      "standard_source": "会社",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "技能実習事件の場合。実際の作業・指導状況を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-207",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "技能実習事件の場合。技能実習計画の履行状況を確認する。",
+      "standard_source": "会社",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "技能実習事件の場合。技能実習計画の履行状況を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-208",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "監理体制等が関係する場合。実習実施者の管理簿等、必要な帳簿名を具体化する。",
+      "standard_source": "監理団体",
+      "standard_target_person": null,
+      "standard_period_rule": "実習実施者の管理簿等、必要な帳簿名を具体化する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "監理体制等が関係する場合。実習実施者の管理簿等、必要な帳簿名を具体化する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-209",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "作業計画、点検、作業指揮、保護具等。作業内容と適用法令を弁護士が確認し、収集する記録を特定する。",
+      "standard_source": "会社",
+      "standard_target_person": null,
+      "standard_period_rule": "作業計画、点検、作業指揮、保護具等。収集する記録を特定する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "作業計画、点検、作業指揮、保護具等。作業内容と適用法令を弁護士が確認し、収集する記録を特定する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-210",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・会社・現場管理者",
+      "standard_target_person": null,
+      "standard_period_rule": "保存期間・上書き予定を確認する。",
+      "priority_default": "high",
+      "preservation_priority": true,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "事故態様と現場状況を保存する。保全優先。保存期間・上書き予定を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-211",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "会社・本人保管分",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "会社側の事故認識・説明を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-212",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "行政機関への報告内容を確認する。存在・取得可能性を確認する。",
+      "standard_source": "会社・開示対象となる行政機関",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "行政機関への報告内容を確認する。存在・取得可能性を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-213",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "会社",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "事故後に認識・実施された対策を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-214",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "会社・保守業者",
+      "standard_target_person": null,
+      "standard_period_rule": "事故前後の記録を区別する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "故障、整備、安全装置の機能を確認する。事故前後の記録を区別する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-215",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・会社・関係者",
+      "standard_target_person": null,
+      "standard_period_rule": "事故前後の経過。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "指揮命令、作業方法、事故前後の経過を確認する。電子データの原本性を保つ。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-216",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "事故態様の裏付け。接触方針を確認し、説明者・聴取日・原文を記録する。",
+      "standard_source": "本人・関係者",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "事故態様の裏付け。接触方針を確認し、説明者・聴取日・原文を記録する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-217",
+      "version": 1,
+      "purposes": [
+        "W2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "監理団体の関与・事前把握状況が関係する場合に取得する。",
+      "standard_source": "監理団体",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W2",
+          "note": "監理団体の関与・事前把握状況が関係する場合に取得する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "D-001",
+      "version": 1,
+      "purposes": [
+        "W3",
+        "W1"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・会社",
+      "standard_target_person": null,
+      "standard_period_rule": "少なくとも事故前3か月分。必要に応じ事故前1年程度・事故後にも範囲を拡張する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "労災の初動では少なくとも事故前3か月分を収集。必要に応じ事故前1年程度・事故後にも範囲を拡張する。"
+        },
+        {
+          "section": "W3",
+          "note": "労災の初動では少なくとも事故前3か月分を収集。必要に応じ事故前1年程度・事故後にも範囲を拡張する。",
+          "mapping_basis": "AC-06：同じ給与明細を労働条件確認と損害算定に共用し、一度の受領で対応付けられる。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "D-002",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・会社",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "年収・賞与・収入変動を確認する。3か月分の給与明細だけで十分とは扱わない。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "D-003",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "医療機関・本人保管分",
+      "standard_target_person": null,
+      "standard_period_rule": "複数の医療機関・作成日を区別する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "傷病名、治療見込み等を確認する。複数の医療機関・作成日を区別する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "D-004",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "各医療機関",
+      "standard_target_person": null,
+      "standard_period_rule": "手術・検査・リハビリ記録等の内訳と対象期間を指定する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "因果関係・治療経過。手術・検査・リハビリ記録等の内訳と対象期間を指定する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "D-005",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "各医療機関",
+      "standard_target_person": null,
+      "standard_period_rule": "画像データ本体と読影・検査報告を区別する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "症状の裏付け。画像データ本体と読影・検査報告を区別する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "D-006",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・会社",
+      "standard_target_person": null,
+      "standard_period_rule": "休業期間。手続に合った様式を指定する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "休業期間・減収を確認する。手続に合った様式を指定する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "D-007",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・会社",
+      "standard_target_person": null,
+      "standard_period_rule": "事故後の減収・復職後の支障。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "事故後の減収・復職後の支障を確認する。W-104・D-001の既取得資料を参照できるようにする。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "D-008",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・医療機関等",
+      "standard_target_person": null,
+      "standard_period_rule": "対象期間・支出目的。費用種類ごとに分割する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "支出額、支払者、対象期間、支出目的を確認する。費用種類ごとに分割する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-301",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・会社・労基署関係資料",
+      "standard_target_person": null,
+      "standard_period_rule": "給付種類ごとに管理する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "請求内容、事故態様、賃金等の申告内容を確認する。給付種類ごとに管理する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-302",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "管轄労働局等への開示請求",
+      "standard_target_person": null,
+      "standard_period_rule": "対象給付・処分を特定する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "業務上外・障害等級等の認定過程を確認する。対象給付・処分を特定する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-303",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・関係行政機関",
+      "standard_target_person": null,
+      "standard_period_rule": "決定日・対象給付。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "決定内容・決定日・対象給付を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-304",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・関係行政機関",
+      "standard_target_person": null,
+      "standard_period_rule": "給付種類・対象期間。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "実支払額、給付種類、対象期間を確認する。決定通知と別管理する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "D-016",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・会社・保険会社等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "既払金の名目・金額・対象損害を確認する。労災給付等との二重計上を防ぐ。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "D-017",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・会社・保険会社等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "過去の合意、対象範囲、交渉経過を確認する。新たな合意締結を自動実行しない。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "D-009",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "後遺障害が問題となる場合。症状固定等の判断・作成依頼時期を弁護士が確認する。",
+      "standard_source": "医療機関",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "後遺障害が問題となる場合。症状固定等の判断・作成依頼時期を弁護士が確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "D-010",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "後遺障害等が問題となる場合。事故前後の差、記録者、日付を確認する。",
+      "standard_source": "本人・家族・会社等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "後遺障害等が問題となる場合。事故前後の差、記録者、日付を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "D-011",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "死亡事件の場合。死亡原因等を確認する。",
+      "standard_source": "医療機関・遺族",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "死亡事件の場合。死亡原因等を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "D-012",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "死亡事件等で相続・身分関係の確認が必要な場合。対象者・範囲を限定する。",
+      "standard_source": "遺族・関係行政機関",
+      "standard_target_person": "身分・相続関係の確認対象者（範囲は個別に確認）",
+      "standard_period_rule": "対象者・範囲を限定する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "死亡事件等で相続・身分関係の確認が必要な場合。対象者・範囲を限定する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "D-013",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "扶養・生計関係が損害等の検討に必要な場合。",
+      "standard_source": "本人・遺族・会社等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "扶養・生計関係が損害等の検討に必要な場合。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "D-014",
+      "version": 1,
+      "purposes": [
+        "W3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "死亡事件の場合。費目・支払額・支払者を確認する。",
+      "standard_source": "遺族・葬儀業者等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "死亡事件の場合。費目・支払額・支払者を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "A-001",
+      "version": 1,
+      "purposes": [
+        "W4"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "労働局等への本人情報の開示請求。提出先様式・権限を確認する。",
+      "standard_source": "依頼者",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W4",
+          "note": "労働局等への本人情報の開示請求。提出先様式・権限を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-401",
+      "version": 1,
+      "purposes": [
+        "W4"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "当該審査請求を行う場合。対象処分・代理権・手続を確認する。",
+      "standard_source": "依頼者",
+      "standard_target_person": null,
+      "standard_period_rule": "対象処分・代理権・手続を確認する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W4",
+          "note": "当該審査請求を行う場合。対象処分・代理権・手続を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "A-002",
+      "version": 1,
+      "purposes": [
+        "W4"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "開示手続で不服申立てを行う場合。W-401と混同しない。",
+      "standard_source": "依頼者",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W4",
+          "note": "開示手続で不服申立てを行う場合。W-401と混同しない。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "A-003",
+      "version": 1,
+      "purposes": [
+        "W4"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "診療情報の取得。医療機関、対象期間、同意範囲を確認する。",
+      "standard_source": "依頼者等",
+      "standard_target_person": null,
+      "standard_period_rule": "医療機関、対象期間、同意範囲を確認する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W4",
+          "note": "診療情報の取得。医療機関、対象期間、同意範囲を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "A-004",
+      "version": 1,
+      "purposes": [
+        "W4"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "委任状とは別に提出先が要求するものを準備する。不要な個人情報を収集しない。",
+      "standard_source": "事務所・依頼者等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W4",
+          "note": "委任状とは別に提出先が要求するものを準備する。不要な個人情報を収集しない。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-501",
+      "version": 1,
+      "purposes": [
+        "W5"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "弁護士の方針決定後に開始する手続。弁護士による承認前に提出しない。",
+      "standard_source": "事務所で作成／依頼者から回収",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W5",
+          "note": "弁護士が刑事手続の方針を決めた場合のみ。申立人、告訴・告発の別、必要な代理権を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-502",
+      "version": 1,
+      "purposes": [
+        "W5"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "弁護士の方針決定後に開始する手続。弁護士による承認前に提出しない。",
+      "standard_source": "事務所で作成／依頼者から回収",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W5",
+          "note": "弁護士が刑事手続の方針を決めた場合のみ。対象行為・提出先・権限を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "労災",
+      "document_code": "W-503",
+      "version": 1,
+      "purposes": [
+        "W5"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "弁護士の方針決定後に開始する手続。弁護士による承認前に提出しない。",
+      "standard_source": "事務所で作成",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W5",
+          "note": "手続の成果物。既存証拠を参照し、弁護士による承認前に提出しない。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-101",
+      "version": 1,
+      "purposes": [
+        "T1"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "事故の発生、当事者、取扱警察署等を確認する。代理申請の必要書類を確認する。",
+      "standard_source": "自動車安全運転センター",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T1",
+          "note": "事故の発生、当事者、取扱警察署等を確認する。代理申請の必要書類を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-102",
+      "version": 1,
+      "purposes": [
+        "T1"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T1",
+          "note": "事故態様を整理する。事実と推測を分ける。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-103",
+      "version": 1,
+      "purposes": [
+        "T1"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "事故態様を確認する。保全優先。外部接触・取得方針の承認が必要。",
+      "standard_source": "本人・相手方・周辺施設等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "high",
+      "preservation_priority": true,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T1",
+          "note": "事故態様を確認する。保全優先。外部接触・取得方針の承認が必要。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-104",
+      "version": 1,
+      "purposes": [
+        "T1"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・保険会社等",
+      "standard_target_person": null,
+      "standard_period_rule": "撮影時点と事故時点の相違を記録する。",
+      "priority_default": "high",
+      "preservation_priority": true,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T1",
+          "note": "事故状況・物損状況を確認する。撮影時点と事故時点の相違を記録する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-105",
+      "version": 1,
+      "purposes": [
+        "T1"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "事故態様の裏付け。聴取・接触方針を確認する。",
+      "standard_source": "本人・関係者",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T1",
+          "note": "事故態様の裏付け。聴取・接触方針を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-106",
+      "version": 1,
+      "purposes": [
+        "T1"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "手続段階、記録の種類、処分状況等に応じて取得方法・範囲を確認する。",
+      "standard_source": "検察庁・裁判所等",
+      "standard_target_person": null,
+      "standard_period_rule": "手続段階、記録の種類、処分状況等に応じて取得方法・範囲を確認する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T1",
+          "note": "手続段階、記録の種類、処分状況等に応じて取得方法・範囲を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-107",
+      "version": 1,
+      "purposes": [
+        "T1"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・保険会社等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T1",
+          "note": "主張の争点と根拠を整理する。提示された割合を自動確定しない。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "D-003",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。",
+      "standard_source": "医療機関・本人保管分",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "人身事故の場合。傷病・治療状況を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-201",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。",
+      "standard_source": "医療機関・本人・保険会社等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "治療内容・治療費を確認する。保有者と取得方法を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "D-004",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。",
+      "standard_source": "各医療機関",
+      "standard_target_person": null,
+      "standard_period_rule": "医療機関・期間・必要な内訳を指定する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "治療経過・因果関係を確認する。医療機関・期間・必要な内訳を指定する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "D-005",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。",
+      "standard_source": "各医療機関",
+      "standard_target_person": null,
+      "standard_period_rule": "画像本体と報告を区別する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "傷病・症状の裏付け。画像本体と報告を区別する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "D-008",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。",
+      "standard_source": "本人・医療機関等",
+      "standard_target_person": null,
+      "standard_period_rule": "費用の種類、支払者、期間、必要性を確認する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "費用の種類、支払者、期間、必要性を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "D-006",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。\n休業・減収がある場合。",
+      "standard_source": "本人・会社",
+      "standard_target_person": null,
+      "standard_period_rule": "対象期間と証明内容を確認する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "休業・減収がある場合。対象期間と証明内容を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "D-001",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。\n給与所得者の場合。",
+      "standard_source": "本人・会社",
+      "standard_target_person": "給与所得者",
+      "standard_period_rule": "事故前収入・事故後減収等。対象期間は弁護士が指定する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "給与所得者の事故前収入・事故後減収等を確認する。対象期間は弁護士が指定する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "D-002",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。\n給与所得者の場合。",
+      "standard_source": "本人・会社",
+      "standard_target_person": "給与所得者",
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "給与所得者の年収・賞与等を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "D-007",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。",
+      "standard_source": "本人・会社",
+      "standard_target_person": null,
+      "standard_period_rule": "事故後の就労状況・減収。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "事故後の就労状況・減収を確認する。既取得資料を参照する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-202",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。\n自営業者等の場合。事故前所得・事故後減収を確認する。",
+      "standard_source": "本人・税務関係資料保管者",
+      "standard_target_person": "自営業者等",
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "自営業者等の場合。事故前所得・事故後減収を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-203",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。\n家事従事者の損害を検討する場合。",
+      "standard_source": "本人・家族",
+      "standard_target_person": "家事従事者",
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "家事従事者の損害を検討する場合。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "D-009",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。\n後遺障害が問題となる場合。作成依頼時期を確認する。",
+      "standard_source": "医療機関",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "後遺障害が問題となる場合。作成依頼時期を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-204",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。\n認定済みの場合。対象手続・認定内容・理由を確認する。",
+      "standard_source": "本人・保険会社等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "認定済みの場合。対象手続・認定内容・理由を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "D-010",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。\n事故前後の差、記録者、日付を確認する。",
+      "standard_source": "本人・家族・会社等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "事故前後の差、記録者、日付を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "D-011",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。\n死亡事故の場合。",
+      "standard_source": "医療機関・遺族",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "死亡事故の場合。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "D-012",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。\n死亡事故等で身分・相続関係の確認が必要な場合。",
+      "standard_source": "遺族・関係行政機関",
+      "standard_target_person": "身分・相続関係の確認対象者（範囲は個別に確認）",
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "死亡事故等で身分・相続関係の確認が必要な場合。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "D-013",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。\n扶養・生計関係が損害等の検討に必要な場合。",
+      "standard_source": "本人・遺族・会社等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "扶養・生計関係が損害等の検討に必要な場合。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "D-014",
+      "version": 1,
+      "purposes": [
+        "T2"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "人身事故の場合（T2. 人身損害の確認）。\n死亡事故の場合。",
+      "standard_source": "遺族・葬儀業者等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T2",
+          "note": "死亡事故の場合。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-301",
+      "version": 1,
+      "purposes": [
+        "T3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "物損がある場合（T3. 物的損害の確認）。",
+      "standard_source": "本人・所有者等",
+      "standard_target_person": "車両の所有者・使用者",
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T3",
+          "note": "車両・所有者・使用者を確認する。車両種別に応じた資料とする。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-302",
+      "version": 1,
+      "purposes": [
+        "T3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "物損がある場合（T3. 物的損害の確認）。",
+      "standard_source": "本人・修理業者・保険会社等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T3",
+          "note": "修理内容・金額を確認する。損傷写真T-104と関連付ける。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-303",
+      "version": 1,
+      "purposes": [
+        "T3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "物損がある場合（T3. 物的損害の確認）。\n車両価値が問題となる場合。年式・走行距離・状態等を確認する。",
+      "standard_source": "本人・販売店・査定資料等",
+      "standard_target_person": null,
+      "standard_period_rule": "年式・走行距離・状態等を確認する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T3",
+          "note": "車両価値が問題となる場合。年式・走行距離・状態等を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-304",
+      "version": 1,
+      "purposes": [
+        "T3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "物損がある場合（T3. 物的損害の確認）。",
+      "standard_source": "本人・各事業者等",
+      "standard_target_person": null,
+      "standard_period_rule": "費用・利用期間・必要性。費目ごとに分割する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T3",
+          "note": "関連費用を確認する。費目ごとに分割する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-305",
+      "version": 1,
+      "purposes": [
+        "T3"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "物損がある場合（T3. 物的損害の確認）。\n車両以外の物損がある場合。物品ごとに管理する。",
+      "standard_source": "本人・購入先・修理業者等",
+      "standard_target_person": null,
+      "standard_period_rule": "物品ごとに管理する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T3",
+          "note": "車両以外の物損がある場合。物品ごとに管理する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-401",
+      "version": 1,
+      "purposes": [
+        "T4"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・保険会社等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T4",
+          "note": "本人・関係車両の保険と利用可能な特約を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-402",
+      "version": 1,
+      "purposes": [
+        "T4"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・保険会社等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T4",
+          "note": "請求・支払状況を確認する。後遺障害認定資料はT-204を参照する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-403",
+      "version": 1,
+      "purposes": [
+        "T4"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・相手方保険会社等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T4",
+          "note": "提示額・計算根拠を確認する。提示と合意を区別する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "D-016",
+      "version": 1,
+      "purposes": [
+        "T4"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・会社・保険会社等",
+      "standard_target_person": null,
+      "standard_period_rule": "対象期間。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T4",
+          "note": "治療費等の既払金の名目・金額・対象期間を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "D-017",
+      "version": 1,
+      "purposes": [
+        "T4"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": null,
+      "standard_source": "本人・会社・保険会社等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T4",
+          "note": "過去の合意・交渉経過を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "T-404",
+      "version": 1,
+      "purposes": [
+        "T4"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "業務中・通勤中等で労災が関係する場合。W-301～W-304も適用候補に追加する。\n業務中・通勤中等で労災が関係する場合。",
+      "standard_source": "本人・会社・労働局等",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T4",
+          "note": "業務中・通勤中等で労災が関係する場合。W-301～W-304も適用候補に追加する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "A-005",
+      "version": 1,
+      "purposes": [
+        "T5"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "代理申請の場合。提出先の手続を確認する。",
+      "standard_source": "依頼者",
+      "standard_target_person": null,
+      "standard_period_rule": null,
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T5",
+          "note": "代理申請の場合。提出先の手続を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "A-003",
+      "version": 1,
+      "purposes": [
+        "T5"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "医療機関、対象期間、同意範囲を確認する。",
+      "standard_source": "依頼者等",
+      "standard_target_person": null,
+      "standard_period_rule": "医療機関、対象期間、同意範囲を確認する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T5",
+          "note": "医療機関、対象期間、同意範囲を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "A-006",
+      "version": 1,
+      "purposes": [
+        "T5"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "記録の保有先・手続段階に応じて準備する。",
+      "standard_source": "事務所・依頼者等",
+      "standard_target_person": null,
+      "standard_period_rule": "記録の保有先・手続段階。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T5",
+          "note": "記録の保有先・手続段階に応じて準備する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "A-007",
+      "version": 1,
+      "purposes": [
+        "T5"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "保険会社・対象資料・権限を確認する。",
+      "standard_source": "依頼者",
+      "standard_target_person": null,
+      "standard_period_rule": "保険会社・対象資料・権限。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "T5",
+          "note": "保険会社・対象資料・権限を確認する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "W-301",
+      "version": 1,
+      "purposes": [
+        "T4"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "業務中・通勤中等で労災が関係する場合。",
+      "standard_source": "本人・会社・労基署関係資料",
+      "standard_target_person": null,
+      "standard_period_rule": "給付種類ごとに管理する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "請求内容、事故態様、賃金等の申告内容を確認する。給付種類ごとに管理する。",
+          "mapping_basis": "T-404：業務中・通勤中等で労災が関係する場合。W-301～W-304も適用候補に追加する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "W-302",
+      "version": 1,
+      "purposes": [
+        "T4"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "業務中・通勤中等で労災が関係する場合。",
+      "standard_source": "管轄労働局等への開示請求",
+      "standard_target_person": null,
+      "standard_period_rule": "対象給付・処分を特定する。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "業務上外・障害等級等の認定過程を確認する。対象給付・処分を特定する。",
+          "mapping_basis": "T-404：業務中・通勤中等で労災が関係する場合。W-301～W-304も適用候補に追加する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "W-303",
+      "version": 1,
+      "purposes": [
+        "T4"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "業務中・通勤中等で労災が関係する場合。",
+      "standard_source": "本人・関係行政機関",
+      "standard_target_person": null,
+      "standard_period_rule": "決定日・対象給付。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "決定内容・決定日・対象給付を確認する。",
+          "mapping_basis": "T-404：業務中・通勤中等で労災が関係する場合。W-301～W-304も適用候補に追加する。"
+        }
+      ]
+    },
+    {
+      "case_type": "交通事故",
+      "document_code": "W-304",
+      "version": 1,
+      "purposes": [
+        "T4"
+      ],
+      "requirement_level": "conditional",
+      "applicability_condition": "業務中・通勤中等で労災が関係する場合。",
+      "standard_source": "本人・関係行政機関",
+      "standard_target_person": null,
+      "standard_period_rule": "給付種類・対象期間。",
+      "priority_default": "normal",
+      "preservation_priority": false,
+      "prerequisite_code": null,
+      "source_entries": [
+        {
+          "section": "W3",
+          "note": "実支払額、給付種類、対象期間を確認する。決定通知と別管理する。",
+          "mapping_basis": "T-404：業務中・通勤中等で労災が関係する場合。W-301～W-304も適用候補に追加する。"
+        }
+      ]
+    }
+  ]
+}

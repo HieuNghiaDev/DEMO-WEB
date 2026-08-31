@@ -110,6 +110,44 @@ Khi có generator sau này, mục đích của rule được sao chép thành li
 
 `DocumentPurposeSeeder` chạy riêng qua `php artisan db:seed --class=DocumentPurposeSeeder`, updateOrCreate theo code trong transaction; giữ mục custom và description hiện có. Tên Nhật lấy chính xác tiêu đề nguồn v1.0 ngày 2026-08-30, bỏ tiền tố đánh số: COMMON = 事件共通の資料; W1–W5 và T1–T5 giữ tên các tiểu mục tương ứng. Chỉ seed 11 purpose, không gọi DocumentTypeMasterSeeder, không tạo rule hoặc pivot. Ba migration `2026_08_31_110000`–`110200` chỉ tạo bảng mới khi up; 78 document_types và dữ liệu legacy không được sửa.
 
+### Phase 1C — rule master chính thức
+
+`CaseTypeDocumentRuleMasterSeeder` seed 55 rule cho root **労災** và 48 cho root **交通事故**, 107 liên kết purpose. Tất cả là ứng viên `conditional`, không tự sinh `case_documents`, không kế thừa xuống subtype. `CleanV2MasterSeeder` gọi seeder này sau case types/document types/purposes; không thêm khách hàng hay hồ sơ.
+
+Migration `2026_08_31_130000_identify_official_document_rules` bổ sung unique `(case_type_id, document_type_id, version)` và `master_source` nullable. Migration dừng nếu có identity trùng, không tự xóa/gộp. Rule custom mặc định không có dấu nguồn; seeder không nhận quyền sở hữu hay ghi đè rule custom trùng identity mà rollback và báo lỗi. Dấu nguồn chỉ được gán tường minh trong seeder, không thuộc `$fillable`. Rule official seed lại giữ ID; pivot chỉ bổ sung bằng `syncWithoutDetaching`, không gỡ liên kết custom.
+
+Nguồn và điều kiện, 4 rule nhiều purpose, 3 rule bảo toàn chứng cứ, cross-domain W-301–W-304 có điều kiện và giới hạn single prerequisite FK được ghi trong [PHASE_1C_RULE_MASTER.md](PHASE_1C_RULE_MASTER.md). Không tạo FK tiên quyết vô điều kiện từ các phương thức lấy tài liệu có điều kiện. `document_types=78`, `document_purposes=11` không thay đổi.
+
+### Phase 1D-0 — snapshot ngữ cảnh rule theo hồ sơ
+
+Migration additive `2026_08_31_140000_add_rule_snapshots_to_case_documents` thêm ba cột nullable; không backfill, không tạo checklist hoặc thay đổi rule/master:
+
+| Cột trên `case_documents` | Kiểu | Nguồn sao chép khi Phase 1D triển khai generator sau này |
+| --- | --- | --- |
+| `rule_version_snapshot` | unsigned integer nullable; Eloquent cast integer | `CaseTypeDocumentRule.version`, độc lập với `case_documents.version` của tài liệu |
+| `applicability_condition_snapshot` | text nullable | `CaseTypeDocumentRule.applicability_condition` |
+| `rule_source_snapshot` | varchar(100) nullable | `CaseTypeDocumentRule.master_source`, ví dụ `official-document-collection-v1` |
+
+```text
+CaseTypeDocumentRule
+│
+│ snapshot on generation (Phase 1D tương lai, chưa triển khai)
+▼
+CaseDocument
+```
+
+**Master reference = traceability:** `case_type_document_rule_id` tiếp tục tham chiếu rule để truy nguồn; quan hệ `collectionRule` đọc master hiện tại, không phải lịch sử. **Snapshot = historical case context:** các cột snapshot lưu giá trị thuộc hồ sơ tại thời điểm tạo. Không có accessor, observer, trigger hay service đồng bộ lại khi master thay đổi. Xóa rule khiến FK thành null theo quan hệ đã có nhưng không xóa snapshot. Những cột này không phải cơ chế khóa mọi chỉnh sửa; code ở phase sau phải chủ động giữ snapshot khi cập nhật nghiệp vụ.
+
+`rule_source_snapshot` có cơ sở thực tế từ provenance Phase 1C: giữ dấu nguồn ngay cả khi rule đổi provenance hoặc không còn tồn tại. Đây không phải `standard_source` (nơi thu thập) và cũng không phải bản sao toàn bộ nguồn DOCX. Không sao chép purpose sang text/JSON: generator tương lai sẽ gắn các purpose ID vào `case_document_purposes` độc lập; nội dung master purpose vẫn là tham chiếu, không phải snapshot tên mục đích.
+
+Tài liệu nhập tay hoặc dữ liệu trước migration giữ snapshot null, kể cả khi đã có FK rule; không suy ra ngữ cảnh lịch sử từ master hiện tại. Phase này chỉ cho phép lưu snapshot qua model nội bộ và thêm integer cast. API validation, frontend workflow và template engine cũ không đổi. Generator Phase 1D chưa tồn tại và chưa có tự động sao chép purpose/snapshot.
+
+Điều kiện chỉ là hướng dẫn cho luật sư/người vận hành; không suy luận khả năng áp dụng hoặc tự chọn `required`/`not_required`. Mặc định `necessity_status=undetermined` được giữ nguyên. Migration `down` tháo các cột snapshot và sẽ mất nội dung snapshot nếu có; không rollback DB đang dùng nếu chưa có phương án bảo toàn lịch sử.
+
+Kiểm thử: `CaseDocumentRuleSnapshotTest` xác minh nullable, cast, tính độc lập với version tài liệu/master, master đổi/xóa không sửa snapshot và không tự gắn purpose. `CaseDocumentRuleSnapshotMigrationTest` nâng cấp từ trước migration với dữ liệu cũ + 103 rule chính thức, xác minh chỉ thêm ba cột null và giữ nguyên nội dung master/pivot.
+
+Xác minh Phase 1D-0 ngày 2026-08-31: 7 test mới / 104 assertions PASS; toàn bộ backend 192 tests / 1.314 assertions PASS (gồm workspace/API regression); frontend production build PASS với cảnh báo bundle >500 kB đã có. Local `127.0.0.1 / employee_management` đã áp dụng riêng migration bổ sung, không seed/reset: 48 bảng / 56 migration rows, master giữ nguyên checksum và số lượng 78/11/103/107; clients/case_files/case_documents đều 0. Ngoài lịch sử migration, nội dung mọi bảng giữ nguyên; MySQL xác nhận unsigned integer/text/varchar(100), cả ba nullable. Không triển khai generator hoặc deploy.
+
 ## Excel
 
 `AttendanceExcelService` ghi workbook vận hành dùng chung tại `storage/app/attendance/attendance.xlsx` với sheet chấm công và sheet work session. Mọi lần tạo/cập nhật attendance hay work session đều cố đồng bộ workbook; lỗi Excel chỉ ghi warning, không làm hỏng nghiệp vụ chính.

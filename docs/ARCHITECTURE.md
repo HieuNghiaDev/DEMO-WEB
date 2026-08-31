@@ -100,6 +100,10 @@ CaseDocument có bốn trục varchar độc lập: necessity, collection, fulfi
 
 V2 đã bỏ model/tool runtime của `matters/tasks`; B2 local đã hoàn tất. Cleanup local không còn trong chuỗi migration deploy. DB phát triển mới chạy migrate → master seed → command local `themis:v2-cleanup-legacy --confirm-local` để bỏ hai bảng legacy **rỗng**; không tự chạy trên remote. DB local đã hoàn tất B2 giữ nguyên lịch sử, không chạy lại cleanup. Chi tiết trong [V2_MIGRATION_PATH.md](V2_MIGRATION_PATH.md). `case_files` là 案件 chuẩn, `case_tasks` là việc của hồ sơ, `employee_tasks` là công việc nhân viên. Không ánh xạ ID legacy sang hai miền task còn lại. AI page/mascot/provider và approval list/approve/reject được giữ, nhưng hai skill legacy và execution cũ bị vô hiệu hóa. Không upload file, OCR hay gọi Google Drive trong cleanup.
 
+### Phase 1C — official candidate rules
+
+Master JSON và `CaseTypeDocumentRuleMasterSeeder` cung cấp 103 rule ứng viên cho hai root canonical 労災/交通事故, liên kết 107 purpose. Rule identity được unique ở DB; `master_source` phân biệt rule seed với custom. Seed chỉ cập nhật metadata thuộc nguồn chính thức và bổ sung purpose, không sửa hồ sơ/checklist hoặc đánh giá điều kiện. Chi tiết mapping, provenance và kiểm thử: [PHASE_1C_RULE_MASTER.md](PHASE_1C_RULE_MASTER.md). Phase 1D/generator chưa triển khai.
+
 ## Quy ước trạng thái
 
 | Miền | Giá trị |

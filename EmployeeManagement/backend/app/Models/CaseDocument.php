@@ -28,6 +28,7 @@ class CaseDocument extends Model
         'is_template_generated', 'created_by_employee_id', 'created_by_ai_name',
         'confirmed_by_employee_id', 'confirmed_at', 'note',
         'document_type_id', 'case_type_document_rule_id', 'target_person', 'collection_source',
+        'rule_version_snapshot', 'applicability_condition_snapshot', 'rule_source_snapshot',
         'target_period_from', 'target_period_to', 'target_scope', 'necessity_status', 'necessity_reason',
         'necessity_decided_by_employee_id', 'necessity_decided_at', 'collection_status',
         'fulfillment_status', 'review_status', 'assigned_employee_id', 'requested_at',
@@ -42,6 +43,7 @@ class CaseDocument extends Model
             'target_period_from' => 'date', 'target_period_to' => 'date',
             'necessity_decided_at' => 'datetime', 'requested_at' => 'datetime',
             'response_deadline' => 'datetime',
+            'rule_version_snapshot' => 'integer',
         ];
     }
 

@@ -41,12 +41,13 @@ class CleanV2Test extends TestCase
         $this->assertSame($caseTypes, DB::table('case_types')->orderBy('id')->get(['id', 'name', 'parent_id', 'sort_order', 'is_active'])->toJson());
         $this->assertDatabaseCount('document_types', 78);
         $this->assertDatabaseCount('document_purposes', 11);
+        $this->assertDatabaseCount('case_type_document_rules', 103);
         $this->assertSame(78, DB::table('document_types')->distinct()->count('code'));
         $this->assertDatabaseCount('case_types', 28);
         $this->assertDatabaseMissing('case_types', ['name' => '労災事故']);
         $this->assertFalse(CaseType::where('name', '継続技能')->sole()->is_active);
         foreach (['clients', 'case_files', 'case_documents', 'received_documents', 'case_tasks', 'case_deadlines',
-            'case_activities', 'case_parties', 'case_type_document_rules', 'approval_requests', 'secretary_logs',
+            'case_activities', 'case_parties', 'approval_requests', 'secretary_logs',
             'skill_proposals', 'users', 'employees'] as $table) {
             $this->assertDatabaseCount($table, 0);
         }
