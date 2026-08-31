@@ -52,6 +52,7 @@ Frontend chỉ giữ token ở `sessionStorage` hoặc `localStorage`; mọi quy
 | `/organization` | Có token hợp lệ | Organization Design. |
 | `/quests`, `/ai`, `/approvals` | Có token hợp lệ | Không gian nghiệp vụ. |
 | `/visa-progress` | Có token hợp lệ | 在留申請進捗管理; API còn yêu cầu `case.view`. |
+| `/design/case-document-collection` | Có token hợp lệ | Prototype 資料収集 dùng React state và fixture chính thức; không gọi API/generator, không thay CaseWorkspacePage. Xem [hướng dẫn review](frontend/DOCUMENT_COLLECTION_MOCKUP.md). |
 
 Mọi URL khác được chuyển về `/`. `BrowserRouter` dùng `import.meta.env.BASE_URL`, vì vậy đường dẫn vẫn hoạt động khi deploy dưới `/DEMO-WEB/`.
 

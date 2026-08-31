@@ -19,6 +19,9 @@ import AIEmployees from "./pages/AI";
 import ApprovalRoom from "./pages/ApprovalRoom";
 import ChangePassword from "./pages/ChangePassword";
 import SystemSettings from "./pages/system/SystemSettings";
+import { lazy, Suspense } from "react";
+
+const DocumentCollectionMockupPage = lazy(() => import("./features/document-collection-mockup/DocumentCollectionMockupPage"));
 
 function App() {
   return (
@@ -43,6 +46,7 @@ function App() {
               <Route path="/ai" element={<AIEmployees />} />
               <Route path="/approvals" element={<ApprovalRoom />} />
               <Route path="/system" element={<SystemSettings />} />
+              <Route path="/design/case-document-collection" element={<Suspense fallback={<p className="p-6">プレビューを読み込み中…</p>}><DocumentCollectionMockupPage /></Suspense>} />
             </Route>
           </Route>
 
