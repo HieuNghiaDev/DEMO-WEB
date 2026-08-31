@@ -100,6 +100,7 @@ class CaseDocumentChecklistGenerator
                     'target_scope' => $rule->standard_period_rule,
                     'target_period_from' => null, 'target_period_to' => null,
                     'collection_priority' => $rule->priority_default,
+                    'preservation_priority' => $rule->preservation_priority,
                     // Rule has a preservation flag but no preservation-reason text field.
                     'preservation_reason' => null,
                     'sort_order' => ++$order,

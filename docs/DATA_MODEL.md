@@ -160,6 +160,37 @@ Generator không bao giờ cập nhật/sync/restore item đã có, kể cả qu
 
 Service là application action riêng, chưa tự gọi trong `CaseFileController::store`: template engine cũ chưa có document_type mapping, chạy hai engine sẽ tạo checklist chồng nhau. Không thay đổi API/frontend hoặc tự reconcile khi đổi loại hồ sơ. Chi tiết precedence, hạn chế duplicate/locking và kiểm chứng **213 tests / 1.465 assertions** ở [PHASE_1D_CHECKLIST_GENERATOR.md](PHASE_1D_CHECKLIST_GENERATOR.md).
 
+### Phase 1E-A0 — acquisition result, method and case-level preservation
+
+Migration `2026_08_31_150000_add_collection_workflow_fields_to_case_documents.php` chỉ bổ sung ba cột: `collection_result` varchar(30) nullable, `collection_method` text nullable và `preservation_priority` boolean **NOT NULL default false**. Dữ liệu cũ nhận null/false từ schema, không backfill quyết định từ legacy status, priority, tên tài liệu hoặc master hiện tại. `preservation_reason` hiện có giữ nguyên.
+
+| Trường | Ý nghĩa độc lập |
+| --- | --- |
+| `collection_status` | Tiến độ công việc thu thập / 取得作業 |
+| `collection_result` | Kết quả ngoại lệ / 結果・例外理由; null = chưa ghi nhận kết quả ngoại lệ |
+| `collection_method` | Cách thu thập / 取得方法; mô tả text tự do, không enum, không thay cho nguồn hay phạm vi |
+| `collection_priority` | Ưu tiên xử lý công việc: low/normal/high/critical |
+| `preservation_priority` | Cờ ưu tiên bảo toàn do nguy cơ chứng cứ biến mất hoặc thay đổi; không suy ra từ collection_priority |
+| `preservation_reason` | Giải thích vì sao cần bảo toàn chứng cứ; không tự sinh |
+
+`CaseDocument::COLLECTION_RESULTS` định nghĩa hợp đồng mã nội bộ:
+
+| Mã | Hiển thị |
+| --- | --- |
+| `not_exist` | 不存在 |
+| `not_disclosed` | 不開示 |
+| `partially_disclosed` | 一部不開示 |
+| `custodian_unknown` | 保管先不明 |
+| `other` | その他 |
+
+Đây là varchar với constants dành cho validation, không phải DB enum hay model validator. Test kiểm chứng hợp đồng `nullable` + `Rule::in(CaseDocument::COLLECTION_RESULTS)`; API validation mới chưa triển khai ở A0. Model cho phép lưu ba trường theo fillable nội bộ hiện có và cast `preservation_priority` thành boolean. Allowlist của API cũ và các bảo vệ provenance/identity không thay đổi.
+
+`collection_status=closed`, `collection_result=not_exist`, `necessity_status=required` là tổ hợp hợp lệ. `necessity_status=not_required` cùng `collection_result=null` cũng hợp lệ. Không tự đồng bộ giữa các chiều này.
+
+Khi generator tạo **item mới**, `preservation_priority` sao chép trực tiếp từ **primary rule đã chọn** (cấp gần nhất, version hiệu lực cao nhất tại cấp đó), không hợp nhất cờ từ ancestor, không suy từ tên hoặc `priority_default`. `preservation_reason` vẫn null, result/method cũng null. Cờ trên CaseDocument là dữ liệu theo hồ sơ: chạy lại generator hoặc đổi master/version không ghi đè item hiện có, kể cả nhân viên đã bật/tắt cờ. Master chỉ ảnh hưởng item tạo mới; không thêm observer/reconciliation/API/frontend workflow trong phase này.
+
+Xác minh A0 ngày 2026-08-31: nhóm model/migration/generator **33 tests / 346 assertions PASS**; toàn bộ backend **225 tests / 1.657 assertions PASS**; frontend production build PASS (cảnh báo bundle >500 kB đã có). Local `127.0.0.1 / employee_management` chỉ chạy migration 150000, không reset/seed/generate: master giữ nguyên checksum và counts 78/11/103/107; clients/case_files/case_documents = 0/0/0. Mọi bảng ngoài lịch sử migration giữ nguyên nội dung; MySQL xác nhận varchar(30)/text nullable và tinyint(1) NOT NULL default 0. Không deploy hoặc triển khai Phase 1E-A API.
+
 ## Excel
 
 `AttendanceExcelService` ghi workbook vận hành dùng chung tại `storage/app/attendance/attendance.xlsx` với sheet chấm công và sheet work session. Mọi lần tạo/cập nhật attendance hay work session đều cố đồng bộ workbook; lỗi Excel chỉ ghi warning, không làm hỏng nghiệp vụ chính.

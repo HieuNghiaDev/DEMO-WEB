@@ -16,6 +16,8 @@ class CaseDocument extends Model
 
     public const COLLECTION_STATUSES = ['not_started', 'preparing', 'requested', 'partially_received', 'received', 'difficult', 'closed'];
 
+    public const COLLECTION_RESULTS = ['not_exist', 'not_disclosed', 'partially_disclosed', 'custodian_unknown', 'other'];
+
     public const FULFILLMENT_STATUSES = ['undetermined', 'insufficient', 'satisfied', 'satisfied_by_alternative'];
 
     public const REVIEW_STATUSES = ['unreviewed', 'reviewing', 'reviewed', 'returned'];
@@ -31,8 +33,9 @@ class CaseDocument extends Model
         'rule_version_snapshot', 'applicability_condition_snapshot', 'rule_source_snapshot',
         'target_period_from', 'target_period_to', 'target_scope', 'necessity_status', 'necessity_reason',
         'necessity_decided_by_employee_id', 'necessity_decided_at', 'collection_status',
+        'collection_result', 'collection_method',
         'fulfillment_status', 'review_status', 'assigned_employee_id', 'requested_at',
-        'response_deadline', 'collection_priority', 'preservation_reason',
+        'response_deadline', 'collection_priority', 'preservation_priority', 'preservation_reason',
     ];
 
     protected function casts(): array
@@ -44,6 +47,7 @@ class CaseDocument extends Model
             'necessity_decided_at' => 'datetime', 'requested_at' => 'datetime',
             'response_deadline' => 'datetime',
             'rule_version_snapshot' => 'integer',
+            'preservation_priority' => 'boolean',
         ];
     }
 

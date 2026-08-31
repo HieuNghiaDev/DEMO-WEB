@@ -70,6 +70,7 @@ class CaseDocumentChecklistGeneratorTest extends TestCase
         $this->assertCount($expected, $documents->where('requirement_level', 'conditional'));
         $this->assertCount($expected, $documents->whereNull('target_period_from')->whereNull('target_period_to'));
         $this->assertCount($expected, $documents->whereNull('preservation_reason'));
+        $this->assertCount($expected, $documents->whereNull('collection_result')->whereNull('collection_method'));
         $stored = $this->caseSnapshot();
         $this->travel(1)->hours();
         $this->assertSame(['created_count' => 0, 'skipped_count' => $expected, 'candidate_count' => $expected,
@@ -99,10 +100,14 @@ class CaseDocumentChecklistGeneratorTest extends TestCase
         $this->assertNull($salary->target_period_from);
         $this->assertSame('本人・会社', $salary->collection_source);
         $this->assertSame('high', $this->document($case, 'W-210')->collection_priority);
+        $this->assertTrue($this->document($case, 'W-210')->preservation_priority);
+        $this->assertFalse($salary->preservation_priority);
         $traffic = $this->caseFile(CaseType::where('name', '交通事故')->sole());
         $this->generate($traffic);
         $this->assertSame('high', $this->document($traffic, 'T-103')->collection_priority);
         $this->assertSame('high', $this->document($traffic, 'T-104')->collection_priority);
+        $this->assertTrue($this->document($traffic, 'T-103')->preservation_priority);
+        $this->assertTrue($this->document($traffic, 'T-104')->preservation_priority);
         $this->assertSame('自営業者等', $this->document($traffic, 'T-202')->target_person);
         $this->assertSame('undetermined', $this->document($traffic, 'W-301')->necessity_status);
     }
@@ -113,11 +118,12 @@ class CaseDocumentChecklistGeneratorTest extends TestCase
         $middle = CaseType::create(['name' => 'Middle', 'parent_id' => $root->id]);
         $child = CaseType::create(['name' => 'Leaf', 'parent_id' => $middle->id]);
         $type = DocumentType::where('code', 'D-003')->sole();
-        $this->rule($root, $type, ['version' => 10], ['COMMON', 'W3']);
+        $this->rule($root, $type, ['version' => 10, 'preservation_priority' => true], ['COMMON', 'W3']);
         $this->rule($middle, $type, ['version' => 1], ['T1']);
         $this->rule($child, $type, ['version' => 1], ['W5']);
         $primary = $this->rule($child, $type, ['version' => 2, 'standard_source' => 'Child source',
-            'standard_period_rule' => 'Child scope', 'applicability_condition' => 'Child condition'], ['COMMON', 'T2']);
+            'standard_period_rule' => 'Child scope', 'applicability_condition' => 'Child condition',
+            'priority_default' => 'high', 'preservation_priority' => false], ['COMMON', 'T2']);
         $case = $this->caseFile($child);
         $this->assertSame(1, $this->generate($case)['created_count']);
         $document = $case->documents()->sole();
@@ -126,6 +132,8 @@ class CaseDocumentChecklistGeneratorTest extends TestCase
         $this->assertSame('Child source', $document->collection_source);
         $this->assertSame('Child scope', $document->target_scope);
         $this->assertSame('Child condition', $document->applicability_condition_snapshot);
+        $this->assertSame('high', $document->collection_priority);
+        $this->assertFalse($document->preservation_priority);
         $this->assertSame(['COMMON', 'W3', 'T1', 'T2'], $document->purposes->pluck('code')->all());
     }
 
@@ -156,7 +164,9 @@ class CaseDocumentChecklistGeneratorTest extends TestCase
             $this->document($case, $code)->update(['necessity_status' => $necessity, 'necessity_reason' => 'Operator decision',
                 'collection_status' => 'requested', 'fulfillment_status' => 'satisfied', 'review_status' => 'reviewed',
                 'collection_source' => 'Specific hospital', 'target_person' => 'Person A', 'target_scope' => 'Updated scope',
-                'target_period_from' => '2026-01-01', 'note' => 'Keep note', 'collection_priority' => 'critical']);
+                'target_period_from' => '2026-01-01', 'note' => 'Keep note', 'collection_priority' => 'critical',
+                'preservation_priority' => true, 'preservation_reason' => 'Operator preservation decision',
+                'collection_result' => 'partially_disclosed', 'collection_method' => 'Request with consent']);
         }
         $this->document($case, 'T-103')->delete();
         $before = $this->caseSnapshot();
@@ -181,6 +191,42 @@ class CaseDocumentChecklistGeneratorTest extends TestCase
         $this->rule($root, $type, ['version' => 3], ['W3']);
         $this->assertSame(0, $this->generate($case)['created_count']);
         $this->assertSame($before, $this->caseSnapshot());
+    }
+
+    public static function preservationFlags(): array
+    {
+        return ['ordinary' => [false], 'sensitive' => [true]];
+    }
+
+    #[DataProvider('preservationFlags')]
+    public function test_preservation_changes_affect_only_new_items_and_never_overwrite_case_decisions(bool $initial): void
+    {
+        $root = CaseType::create(['name' => 'Preservation lifecycle']);
+        $type = DocumentType::where('code', 'D-003')->sole();
+        $rule = $this->rule($root, $type, ['preservation_priority' => $initial, 'priority_default' => 'high']);
+        $case = $this->caseFile($root);
+        $this->generate($case);
+        $document = $case->documents()->sole();
+        $this->assertSame($initial, $document->preservation_priority);
+        $this->assertNull($document->preservation_reason);
+        $before = $this->caseSnapshot();
+
+        $rule->update(['preservation_priority' => ! $initial, 'version' => 2]);
+        $this->assertSame(0, $this->generate($case)['created_count']);
+        $this->assertSame($before, $this->caseSnapshot());
+        $newCase = $this->caseFile($root);
+        $this->generate($newCase);
+        $this->assertSame(! $initial, $newCase->documents()->sole()->preservation_priority);
+        $this->assertNull($newCase->documents()->sole()->preservation_reason);
+
+        // Operator choice differs from the next master version in both directions.
+        $document->update(['preservation_priority' => ! $initial, 'preservation_reason' => 'Case-specific reason']);
+        $rule->update(['preservation_priority' => $initial, 'version' => 3]);
+        $before = $this->caseSnapshot();
+        $this->assertSame(0, $this->generate($case)['created_count']);
+        $this->assertSame($before, $this->caseSnapshot());
+        $this->assertSame(! $initial, $document->refresh()->preservation_priority);
+        $this->assertSame('Case-specific reason', $document->preservation_reason);
     }
 
     public function test_new_rules_are_added_but_removed_or_deactivated_rules_do_not_delete_history(): void
