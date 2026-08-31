@@ -1,3 +1,4 @@
+/* Shared approved collection presentation: design adapter and production workspace. */
 .dc-preview {
   --dc-bg: #fff; --dc-subtle: #f8fafc; --dc-hover: #f1f5f9; --dc-line: #e2e8f0;
   --dc-ink: #0f172a; --dc-muted: #64748b; --dc-blue: #1d4ed8; --dc-selected: #eff6ff;
@@ -82,3 +83,36 @@
 @media (max-width: 1279px) { .dc-workspace.has-inspector { grid-template-columns: minmax(0, 1fr); }.dc-review-bar { flex-wrap: wrap; }.dc-case-title { flex-wrap: wrap; }.dc-preview { padding-inline: 20px; } }
 @media (max-width: 767px) { .dc-preview { padding: 76px 16px 32px; }.dc-review-bar > div { flex-wrap: wrap; gap: 8px; }.dc-case-header { padding: 14px; }.dc-case-title h1 { font-size: 20px; }.dc-case-title dl { gap: 24px; }.dc-tabs { padding: 0 4px; gap: 0; }.dc-tabs button { flex: 0 0 33.333%; padding: 10px 5px; font-size: 12px; }.dc-collection-heading { align-items: flex-start; flex-direction: column; gap: 6px; margin-top: 20px; }.dc-summary { gap: 8px 14px; padding: 10px 12px; }.dc-summary i { display: none; }.dc-summary b { font-size: 15px; }.dc-inspector.is-overlay { width: 100%; }.dc-inspector-head { padding-inline: 16px; }.dc-inspector-body { padding-inline: 16px; }.dc-inspector-footer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }.dc-uninitialized { padding: 32px 16px; }.dc-uninitialized h3 { font-size: 15px; } }
 @media (prefers-reduced-motion: reduce) { .dc-preview button { transition: none; } }
+
+/* API states extend the approved presentation without changing its layout language. */
+.dc-production.dc-preview { padding: 0; overflow-wrap: anywhere; }
+.dc-inspector-head > div { min-width: 0; overflow-wrap: anywhere; }
+.dc-production .dc-collection-heading { margin-top: 0; }
+.dc-feedback { padding: 12px 16px; border-left: 2px solid currentColor; margin-bottom: 12px !important; background: var(--dc-subtle); overflow-wrap: anywhere; }
+.dc-feedback .dc-action-row:empty { display: none; }
+.dc-candidate-notice { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; font-size: 12px; }
+.dc-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--dc-line); font-size: 11px; }
+.dc-pagination > span:first-child { margin-right: auto; }
+.dc-editor { border: 0; padding: 0; margin: 0; min-width: 0; }
+.dc-editor:disabled :is(input, select, textarea) { opacity: .7; }
+.dc-editor .dc-checkbox { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dc-preview input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--dc-blue); }
+.dc-preview [aria-invalid=true] { border-color: var(--dc-danger); }
+.dc-confirm { padding: 0; margin: auto; width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; border: 1px solid var(--dc-line); border-radius: 10px; background: var(--dc-bg); color: var(--dc-ink); }
+.dc-confirm::backdrop { background: rgb(2 6 23 / .4); }
+.dc-confirm header, .dc-confirm > div, .dc-confirm footer { padding: 16px 20px; }
+.dc-confirm header { border-bottom: 1px solid var(--dc-line); }
+.dc-confirm h2 { font-size: 17px; font-weight: 600; }
+.dc-confirm p + p { margin-top: 12px; }
+.dc-confirm footer { display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--dc-line); }
+.dc-production .dc-inspector-footer > .dc-danger { color: var(--dc-danger); }
+@media (min-width: 1024px) {
+  .dc-production .dc-workspace.has-inspector { grid-template-columns: minmax(0, 1fr) 420px; }
+  .dc-production .dc-workspace { height: max(560px, calc(100dvh - 350px)); align-items: stretch; }
+  .dc-production .dc-master { display: flex; flex-direction: column; min-height: 0; }
+  .dc-production :is(.dc-toolbar, .dc-list-caption, .dc-list-footer, .dc-pagination) { flex-shrink: 0; }
+  .dc-production .dc-toolbar { max-height: 45%; overflow-y: auto; }
+  .dc-production .dc-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .dc-production .dc-inspector { position: relative; top: 0; height: 100%; max-height: none; }
+}
+@media (min-width: 768px) and (max-width: 1023px) { .dc-production .dc-inspector.is-overlay { width: 420px; } }

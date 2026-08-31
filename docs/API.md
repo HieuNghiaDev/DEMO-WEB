@@ -28,12 +28,14 @@ Mỗi hồ sơ có thể có tab tự do ngoài ba tab mặc định. `POST /cas
 
 ### Workspace hồ sơ và checklist
 
-Phase 1D bổ sung application service `CaseDocumentChecklistGenerator::generateForCase`, **không có endpoint mới và chưa tự gọi khi POST tạo CaseFile**. API hiện vẫn dùng template engine cũ; rule generator được giữ riêng vì template item chưa ánh xạ document_type, gọi cả hai sẽ tạo mục trùng. Caller backend tương lai phải kiểm tra quyền trước khi gọi service. Xem [PHASE_1D_CHECKLIST_GENERATOR.md](PHASE_1D_CHECKLIST_GENERATOR.md) về transaction, inheritance và snapshot.
+`POST /case-files` giữ nguyên request/response shape và quyền, nhưng CaseFile mới bắt đầu với **0 `case_documents`** (`documents_count = 0`, `confirmed_documents_count = 0`), kể cả khi case type có template legacy đang hiệu lực. Không gọi legacy template engine hoặc V2 generator và không ghi activity initialize trong lúc tạo案件. Hồ sơ/tài liệu đã tồn tại không bị thay đổi.
+
+Vòng đời V2: tạo案件 → GET `document-collection/initialization-preview` → người dùng xác nhận → POST `document-collection/initialize` → `CaseDocumentChecklistGenerator::generateForCase`. Preview chỉ đọc; initialize tạo candidate còn thiếu và ghi activity khi thực sự tạo item; chạy lại không tạo trùng. Template legacy còn giữ dưới dạng deprecated/compatibility-only, chỉ qua API tường minh bên dưới. Xem [PHASE_1D_CHECKLIST_GENERATOR.md](PHASE_1D_CHECKLIST_GENERATOR.md) về transaction, inheritance và snapshot.
 
 | Method & path | Quyền | Hành vi |
 | --- | --- | --- |
 | `GET /case-files/{id}/workspace` | `case.view` | Trả hồ sơ, checklist, bên liên quan, deadline, task, timeline và summary tiến độ. |
-| `POST /case-files/{id}/apply-document-template` | `document.create` | Áp dụng template đang hiệu lực; chạy lại không tạo trùng checklist. |
+| `POST /case-files/{id}/apply-document-template` | `document.create` | Compatibility-only: áp dụng template legacy tường minh; chạy lại không tạo trùng checklist. Không tự chạy khi tạo案件. |
 | `POST/PATCH/DELETE /case-files/{id}/parties/...` | `case.update` | Quản lý gia đình, công ty, đối phương, bảo hiểm, bệnh viện và bên liên quan khác. |
 | `POST/PATCH/DELETE /case-files/{id}/deadlines/...` | `case.update` | Quản lý hạn lưu trú, nộp hồ sơ, bổ sung, thời hiệu và hạn nội bộ. |
 | `POST/PATCH/DELETE /case-files/{id}/case-tasks/...` | `case.update` | Quản lý task gắn trực tiếp với hồ sơ. |
@@ -42,6 +44,8 @@ Phase 1D bổ sung application service `CaseDocumentChecklistGenerator::generate
 Tài liệu hỗ trợ `requirement_level`: `required`, `conditional`, `optional`; và trạng thái nghiệp vụ: `not_requested`, `requested`, `waiting`, `received`, `reviewing`, `deficient`, `resubmission_requested`, `confirmed`, `submitted`, `not_required`. Tài liệu thêm thủ công không phụ thuộc template. Xóa tài liệu dùng soft delete để phục hồi/audit về sau.
 
 ### V2 資料収集 — Phase 1E-A
+
+Frontend consumer từ Phase 1E-C: tab 資料収集 trong CaseWorkspace gọi các endpoint 1E-A/1E-B hiện có, không thay contract. Xem [production integration](frontend/DOCUMENT_COLLECTION_INTEGRATION.md); các ghi chú “chưa nối frontend” bên dưới mô tả thời điểm triển khai backend tương ứng.
 
 API này độc lập với các route `documents` legacy; chưa nối frontend mockup và **không khởi tạo checklist**. Không gọi generator khi GET/PATCH hoặc tạo CaseFile. Không upload/delete file, gắn pivot, gửi yêu cầu bên ngoài, OCR hoặc quyết định pháp lý bằng AI.
 
@@ -154,7 +158,7 @@ Kiểm chứng Phase 1E-A ngày 2026-08-31: 97 test API mới; toàn bộ backen
 
 ### V2 checklist initialization — Phase 1E-B
 
-Luồng tường minh: case → preview ứng viên → người vận hành xác nhận → POST initialize → GET collection hiện có. **Candidate != required**: mọi item mới vẫn necessity_status=undetermined; không đánh giá điều kiện áp dụng. Không tự khởi tạo V2 khi tạo CaseFile; template engine legacy vẫn giữ nguyên. Chưa nối frontend hoặc thay mock data.
+Luồng tường minh: case → preview ứng viên → người vận hành xác nhận → POST initialize → GET collection hiện có. **Candidate != required**: mọi item mới vẫn necessity_status=undetermined; không đánh giá điều kiện áp dụng. Không tự khởi tạo V2 hoặc áp dụng template legacy khi tạo CaseFile; legacy chỉ còn qua API tường minh. Phase 1E-B không nối frontend hoặc thay mock data; tích hợp frontend sau đó được mô tả riêng.
 
 | Method & path | Quyền | Hành vi |
 | --- | --- | --- |

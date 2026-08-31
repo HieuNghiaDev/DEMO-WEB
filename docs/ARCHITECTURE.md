@@ -70,7 +70,7 @@ Mọi URL khác được chuyển về `/`. `BrowserRouter` dùng `import.meta.e
 | `app/Http/Controllers/Api/OrganizationController.php` | Trả về danh sách nhân viên, trạng thái hiện tại và thống kê; chỉ manager/admin nhận PII. |
 | `app/Http/Controllers/Api/CaseWorkspaceController.php` | Trả dữ liệu tổng hợp, tiến độ, thiếu tài liệu và áp dụng template tài liệu có phiên bản cho một hồ sơ. |
 | `app/Http/Controllers/Api/CaseWorkspaceItemController.php` | CRUD các bên liên quan, deadline, task và ghi timeline của hồ sơ. |
-| `app/Services/CaseDocumentChecklistService.php` | Sao chép template đang hiệu lực thành checklist riêng của hồ sơ theo cách idempotent. |
+| `app/Services/CaseDocumentChecklistService.php` | Compatibility-only/deprecated: sao chép template legacy khi gọi API áp dụng template tường minh; không chạy khi tạo CaseFile. |
 | `app/Http/Controllers/Api/EmployeeTaskController.php` | Giao việc (manager/admin), lấy việc của tôi, xác nhận, bắt đầu và hoàn tất công việc. |
 | `app/Http/Controllers/Api/VisaProgressController.php` | API read-only cho 在留申請進捗管理; cache dashboard ngắn, không lộ thông tin credential và trả lỗi cấu hình/nguồn/file theo contract. |
 | `app/Http/Middleware/SecurityHeaders.php` | Thêm cache-control, CSP, anti-frame, referrer, permissions và HSTS phù hợp cho API. |
@@ -107,7 +107,15 @@ Master JSON và `CaseTypeDocumentRuleMasterSeeder` cung cấp 103 rule ứng vi�
 
 ### Phase 1D — explicit checklist generation action
 
-`app/Services/CaseDocumentChecklistGenerator.php` tạo candidate từ rule của selected type và lineage: nearest rule metadata, latest effective version mỗi cấp, union purpose, snapshot ngữ cảnh và necessity undetermined. Transaction khóa CaseFile, chỉ thêm mục thiếu, không ghi đè quyết định hoặc snapshot cũ. Chưa tự nối vào creation API vì template engine legacy chưa có document_type mapping, cần quyết định coexistence riêng để tránh checklist trùng. Không thay thế `CaseDocumentChecklistService`. Xem [PHASE_1D_CHECKLIST_GENERATOR.md](PHASE_1D_CHECKLIST_GENERATOR.md).
+`app/Services/CaseDocumentChecklistGenerator.php` tạo candidate từ rule của selected type và lineage: nearest rule metadata, latest effective version mỗi cấp, union purpose, snapshot ngữ cảnh và necessity undetermined. Transaction khóa CaseFile, chỉ thêm mục thiếu, không ghi đè quyết định hoặc snapshot cũ. Generator chỉ chạy qua thao tác initialize tường minh, không tự nối vào creation API. Không thay thế `CaseDocumentChecklistService`. Xem [PHASE_1D_CHECKLIST_GENERATOR.md](PHASE_1D_CHECKLIST_GENERATOR.md).
+
+### Vòng đời tạo案件 V2 — backend patch trước C0
+
+`POST /case-files` → CaseFile mới với **0 case_documents** → GET `document-collection/initialization-preview` (chỉ đọc) → người dùng xác nhận → POST `document-collection/initialize` → V2 generator. `CaseFileController::store` không còn gọi `applyDefaultTemplate`, kể cả khi có template legacy đang hiệu lực. Không thay payload/response shape, quyền hoặc audit tạo案件; không ghi lịch sử initialize khi tạo案件. Activity initialize chỉ được ghi khi endpoint V2 thực sự tạo item.
+
+Hạ tầng template legacy là deprecated/compatibility-only: service và `POST /case-files/{id}/apply-document-template` vẫn tồn tại để phục vụ thao tác tường minh, không phải luồng V2 chuẩn. Không migrate template, sửa hồ sơ cũ hoặc xóa tài liệu; thay đổi chỉ ảnh hưởng việc tạo案件 mới.
+
+Kiểm chứng patch ngày 2026-08-31: CaseFile/workspace/initialization **29 tests / 615 assertions PASS**; toàn bộ backend (gồm generator và collection API) **344 tests / 3.624 assertions PASS**. Regression đi từ POST tạo案件 có active legacy template qua preview → initialize → chạy lại cho cả 4 parent/subtype chính thức (55/48/48/55); xác minh không tự gọi hai engine, không tạo activity giả và giữ dữ liệu cũ. Tests chạy `APP_ENV=testing`, SQLite `:memory:`, không dùng MySQL vận hành. Frontend production build PASS, còn cảnh báo bundle >500 kB hiện có. Không migration/seed DB local, deploy hoặc tiếp tục UI C0 trong patch này.
 
 ### API 資料収集 V2 (Phase 1E-A)
 
@@ -116,6 +124,10 @@ Master JSON và `CaseTypeDocumentRuleMasterSeeder` cung cấp 103 rule ứng vi�
 ### Explicit initialization (Phase 1E-B)
 
 `CaseDocumentInitializationController` thêm preview GET và initialize POST trước route động collection item. `CaseDocumentChecklistGenerator::previewForCase()` và `generateForCase()` dùng chung private planner (lineage, effective rules, purposes, existing/manual guard); không copy logic vào controller. Generator giữ parent lock/current document read và transaction; outer transaction ở endpoint cần cho kiểm tra case type và rollback cả generation khi activity lỗi. `ChecklistPlanningException` tách lỗi cấu hình domain để trả 422 an toàn, không nuốt lỗi DB/audit. No-op không tạo activity. Không nối generator vào create CaseFile hoặc frontend. Xem [API.md](API.md#v2-checklist-initialization--phase-1e-b).
+
+### Frontend 資料収集 (Phase 1E-C)
+
+`CaseWorkspacePage` bổ sung tab 資料収集, lazy-load `features/document-collection`. Feature dùng Axios hiện có cho preview → xác nhận → initialize, list/filter/page/summary và detail/PATCH; không tự sinh checklist khi tạo CaseFile. Mockup đã duyệt tiếp tục tồn tại, dùng chung list/inspector shell/CSS nhưng tách hoàn toàn dữ liệu mô phỏng. Nhân viên lấy từ `/organization`, lịch sử lọc metadata của workspace hiện có. Không đổi backend hoặc workflow file/approval. Chi tiết kiểm thử và giới hạn ở [DOCUMENT_COLLECTION_INTEGRATION.md](frontend/DOCUMENT_COLLECTION_INTEGRATION.md).
 
 ## Quy ước trạng thái
 

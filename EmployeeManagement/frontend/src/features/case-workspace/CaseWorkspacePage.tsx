@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import {
   AlertTriangle, ArrowLeft, CalendarClock, CheckCircle2, ChevronRight, CircleGauge,
@@ -15,6 +15,7 @@ import type {
 
 type DialogKind = 'document' | 'task' | 'deadline' | 'party' | 'activity'
 type Props = { caseId: number; onBack: () => void }
+const DocumentCollectionPanel = lazy(() => import('../document-collection/DocumentCollectionPanel'))
 
 const inputClass = 'h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'
 const textareaClass = `${inputClass} min-h-24 py-2.5`
@@ -29,6 +30,7 @@ const documentStatuses: Array<{ value: DocumentStatus; label: string }> = [
 
 const tabs: Array<{ id: WorkspaceTab; label: string; icon: typeof Files }> = [
   { id: 'overview', label: '概要', icon: CircleGauge },
+  { id: 'collection', label: '資料収集', icon: ListChecks },
   { id: 'documents', label: '書類', icon: Files },
   { id: 'tasks', label: 'タスク', icon: ListChecks },
   { id: 'deadlines', label: '期限', icon: CalendarClock },
@@ -126,6 +128,7 @@ export default function CaseWorkspacePage({ caseId, onBack }: Props) {
         {tabs.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setTab(id)} className={`relative flex h-12 shrink-0 items-center gap-2 px-3.5 text-sm font-medium transition-colors ${tab === id ? 'text-blue-700 dark:text-blue-300' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'}`}><Icon size={17}/>{label}{tab === id && <span className="absolute inset-x-3 bottom-0 h-0.5 bg-blue-600 dark:bg-blue-400"/>}</button>)}
       </nav>
       <div className="p-4 sm:p-5">
+        {tab === 'collection' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">資料収集を読み込み中…</p>}><DocumentCollectionPanel key={caseId} caseId={caseId} canUpdate={canUpdate} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onHistory={() => setTab('timeline')} onBack={onBack} onChanged={() => void reload(true)} /></Suspense>}
         {tab === 'overview' && <OverviewPanel caseFile={caseFile} summary={data.summary} onOpenTab={setTab}/>}
         {tab === 'documents' && <DocumentsPanel documents={caseFile.documents} canCreate={canCreateDocument} canUpdate={canUpdate} canDelete={canDeleteDocument} working={working} onAdd={() => setDialog('document')} onApply={() => void run(async () => { const result = await caseWorkspaceApi.applyTemplate(caseId); setNotice(result.message) })} onStatus={(document, status) => void run(() => caseWorkspaceApi.updateDocument(caseId, document.id, { status }), status === 'not_required' ? '不要な資料として一覧の下部へ移動しました。' : '書類ステータスを更新しました。')} onEdit={setEditingDocument} onDelete={(document) => confirmDelete(document.title) && void run(() => caseWorkspaceApi.deleteDocument(caseId, document.id), '資料を削除しました。')}/>}
         {tab === 'tasks' && <TasksPanel tasks={caseFile.case_tasks} canUpdate={canUpdate} working={working} onAdd={() => setDialog('task')} onStatus={(task, status) => void run(() => caseWorkspaceApi.updateTask(caseId, task.id, { status }), 'タスクを更新しました。')} onDelete={(task) => confirmDelete(task.title) && void run(() => caseWorkspaceApi.deleteTask(caseId, task.id), 'タスクを削除しました。')}/>}

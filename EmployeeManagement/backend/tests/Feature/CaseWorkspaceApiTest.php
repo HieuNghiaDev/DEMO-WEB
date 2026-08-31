@@ -16,7 +16,7 @@ class CaseWorkspaceApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_case_creation_applies_versioned_document_template_and_workspace_items_are_manageable(): void
+    public function test_explicit_legacy_template_and_workspace_items_remain_manageable(): void
     {
         $this->seed([RolePermissionSeeder::class, CaseTypeSeeder::class, CaseWorkspaceTemplateSeeder::class]);
         $user = User::factory()->create();
@@ -30,6 +30,10 @@ class CaseWorkspaceApiTest extends TestCase
             'status' => 'active',
             'priority' => 'high',
         ])->assertCreated()->json('case_file');
+
+        $this->assertDatabaseMissing('case_documents', ['case_file_id' => $case['id']]);
+        $this->actingAs($user, 'sanctum')->postJson("/api/case-files/{$case['id']}/apply-document-template")
+            ->assertOk();
 
         $this->assertDatabaseHas('case_documents', [
             'case_file_id' => $case['id'],
@@ -122,7 +126,12 @@ class CaseWorkspaceApiTest extends TestCase
             'client' => ['name' => 'Template Client'],
             'title' => 'Template Client - 在留期間更新',
         ])->assertCreated()->json('case_file');
+        $this->assertDatabaseMissing('case_documents', ['case_file_id' => $case['id']]);
+        $first = $this->actingAs($user, 'sanctum')->postJson("/api/case-files/{$case['id']}/apply-document-template")
+            ->assertOk()->json('created_count');
+        $this->assertGreaterThan(0, $first);
         $before = $this->actingAs($user, 'sanctum')->getJson("/api/case-files/{$case['id']}/workspace")->json('summary.documents_total');
+        $this->assertSame($first, $before);
 
         $this->actingAs($user, 'sanctum')->postJson("/api/case-files/{$case['id']}/apply-document-template")
             ->assertOk()

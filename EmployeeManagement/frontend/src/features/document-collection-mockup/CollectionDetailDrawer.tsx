@@ -1,45 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
-import { Check, LockKeyhole, ShieldAlert, X } from 'lucide-react'
+import { useState } from 'react'
+import { Check, LockKeyhole, ShieldAlert } from 'lucide-react'
 import type { CollectionItem } from './types'
 import { approvals, collections, exceptions, necessities, reviews, sufficiencies } from './types'
 import { isOverdue, purposeNames } from './mockData'
+import InspectorShell from '../document-collection/components/InspectorShell'
 import ReceivedDocumentsSection from './ReceivedDocumentsSection'
 
 interface Props { item: CollectionItem; onClose: () => void; onSave: (item: CollectionItem) => void }
 export default function CollectionDetailDrawer({ item, onClose, onSave }: Props) {
   const [draft, setDraft] = useState(() => structuredClone(item))
-  const [overlay, setOverlay] = useState(() => window.innerWidth < 1280)
   const [action, setAction] = useState('')
   const [reason, setReason] = useState('')
   const [feedback, setFeedback] = useState('')
-  const panel = useRef<HTMLElement>(null)
-  const close = useRef(onClose)
-  useEffect(() => { close.current = onClose }, [onClose])
   const dirty = JSON.stringify(draft) !== JSON.stringify(item)
   const update = <K extends keyof CollectionItem>(key: K, value: CollectionItem[K]) => { setDraft(previous => ({ ...previous, [key]: value })); setFeedback('') }
-
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 1279px)')
-    const change = () => setOverlay(media.matches)
-    media.addEventListener('change', change)
-    return () => media.removeEventListener('change', change)
-  }, [])
-  useEffect(() => {
-    const origin = document.activeElement as HTMLElement | null
-    const previousOverflow = document.body.style.overflow
-    if (overlay) document.body.style.overflow = 'hidden'
-    panel.current?.focus({ preventScroll: true })
-    const keydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close.current()
-      if (event.key !== 'Tab' || !overlay) return
-      const controls = Array.from(panel.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input, select, textarea, [tabindex="0"]') ?? []).filter(element => element.getClientRects().length)
-      const first = controls[0]; const last = controls.at(-1)
-      if (event.shiftKey && (document.activeElement === first || document.activeElement === panel.current)) { event.preventDefault(); last?.focus() }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
-    }
-    document.addEventListener('keydown', keydown)
-    return () => { document.removeEventListener('keydown', keydown); document.body.style.overflow = previousOverflow; if (origin?.isConnected) origin.focus() }
-  }, [overlay])
 
   const save = () => {
     if (draft.necessity !== '未判定' && !draft.decisionReason.trim()) { setFeedback('必要・不要の判断理由を入力してください。'); return }
@@ -54,11 +28,9 @@ export default function CollectionDetailDrawer({ item, onClose, onSave }: Props)
     setDraft(previous => ({ ...previous, ...(action === '差戻し' ? { review: '差戻し' as const } : {}), ...(action === '委任状準備' ? { authorityStatus: '準備中' } : {}), history: [{ id: crypto.randomUUID(), at: '2026/08/31 14:00（デモ）', actor: '担当者（デモ操作）', action: `${action}（DRAFT・未送信）`, reason }, ...previous.history] }))
     setAction(''); setReason(''); setFeedback('下書き・理由を追加しました。下部の「デモに反映」で確定します。')
   }
-  return <>
-    {overlay && <div className="dc-backdrop" onClick={onClose} aria-hidden="true" />}
-    <aside className={`dc-inspector ${overlay ? 'is-overlay' : ''}`} ref={panel} tabIndex={-1} role={overlay ? 'dialog' : 'region'} aria-modal={overlay || undefined} aria-labelledby="dc-inspector-title">
-      <header className="dc-inspector-head"><div><span className="dc-code">{draft.code} <span>{draft.origin} · 収集項目</span></span><h2 id="dc-inspector-title">{draft.title}</h2><p>{draft.source || '取得先 未設定'}</p></div><button className="dc-icon-button" aria-label="詳細を閉じる" onClick={onClose}><X size={20} /></button></header>
-      <div className="dc-inspector-body">
+  return <InspectorShell breakpoint={1280} title={draft.title} code={<>{draft.code} <span>{draft.origin} · 収集項目</span></>} subtitle={draft.source || '取得先 未設定'} onClose={onClose} footer={<>
+{feedback && <p role="status">{feedback}</p>}<div><span className="dc-meta">{dirty ? '未反映の変更あり' : 'デモデータ · 保存先なし'}</span><button className="dc-button" onClick={() => { setDraft(structuredClone(item)); setFeedback('') }} disabled={!dirty}>取消</button><button className="dc-button dc-primary" onClick={save} disabled={!dirty}>デモに反映</button></div>
+</>}>
         <div className="dc-access"><LockKeyhole size={14} />案件担当者のみ <span>権限表示のデモ</span></div>
         {draft.priority === '保全優先' && <div className="dc-priority-note"><ShieldAlert size={18} /><div><strong>保全優先</strong><p>保存期間・上書き予定を確認し、弁護士の承認後に対応。</p></div></div>}
         <section className="dc-detail-section"><h3><span>A</span>基本情報</h3><dl className="dc-facts"><dt>確認目的</dt><dd>{draft.purposes.map(purpose => <span key={purpose}>{purpose} · {purposeNames[purpose]}</span>)}</dd><dt>適用条件</dt><dd>{draft.condition || '条件の記載なし。案件担当者が必要性を判断します。'}</dd><dt>保存ルール</dt><dd>v{draft.version} · 2026/08/31 作成時点<br /><small>official-document-collection-v1<br />マスター更新後も、この案件の条件・版は保持します。</small></dd></dl></section>
@@ -74,8 +46,6 @@ export default function CollectionDetailDrawer({ item, onClose, onSave }: Props)
         </section>
         <ReceivedDocumentsSection files={draft.files} purposes={draft.purposes} onChange={files => update('files', files)} />
         <section className="dc-detail-section"><h3><span>G</span>履歴</h3><ol className="dc-history">{draft.history.map(entry => <li key={entry.id}><time>{entry.at}</time><strong>{entry.action}</strong><p>{entry.reason}</p><span>{entry.actor}</span></li>)}</ol></section>
-      </div>
-      <footer className="dc-inspector-footer">{feedback && <p role="status">{feedback}</p>}<div><span className="dc-meta">{dirty ? '未反映の変更あり' : 'デモデータ · 保存先なし'}</span><button className="dc-button" onClick={() => { setDraft(structuredClone(item)); setFeedback('') }} disabled={!dirty}>取消</button><button className="dc-button dc-primary" onClick={save} disabled={!dirty}>デモに反映</button></div></footer>
-    </aside>
-  </>
+
+  </InspectorShell>
 }

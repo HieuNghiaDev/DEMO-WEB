@@ -1,7 +1,8 @@
-import { ChevronDown, ChevronRight, Search, ShieldAlert, SlidersHorizontal } from 'lucide-react'
+import { Search, ShieldAlert, SlidersHorizontal } from 'lucide-react'
 import { useState } from 'react'
 import { collections, necessities, sufficiencies, reviews, exceptions, approvals } from './types'
 import type { CollectionFilters, CollectionItem } from './types'
+import CollectionListView from '../document-collection/components/CollectionListView'
 import { emptyFilters, isOverdue, purposeNames } from './mockData'
 
 const statusGroups: Array<{ axis: string; label: string; values: readonly string[] }> = [
@@ -33,44 +34,19 @@ export function CollectionToolbar({ items, filters, onChange }: { items: Collect
   </div>
 }
 
-function CollectionRow({ item, selected, onSelect }: { item: CollectionItem; selected: boolean; onSelect: () => void }) {
-  const overdue = isOverdue(item)
-  return <button type="button" className={`dc-row ${selected ? 'is-selected' : ''} ${item.necessity === '不要' ? 'is-unnecessary' : ''}`} onClick={onSelect} aria-pressed={selected} aria-label={`${item.code} ${item.title} ${item.source ?? ''} の詳細`}>
-    <span className="dc-document">
-      <span className="dc-code">{item.code}<span>{item.purposes.join(' · ')}</span>{item.origin === '案件で追加' && <span>別取得先</span>}</span>
-      <strong>{item.title}</strong>
-      <span className="dc-source">{item.source || '取得先 未設定'} · 対象: {item.target || '未指定'}</span>
-      {item.periodStart && <span className="dc-meta">{item.periodStart.replaceAll('-', '/')} — {item.periodEnd.replaceAll('-', '/')}</span>}
-      {item.priority === '保全優先' && <span className="dc-warning dc-preservation"><ShieldAlert size={14} />保全優先 · 保存期間の確認が必要</span>}
-    </span>
-    <span className="dc-axes">
-      <span><small>要否</small><b className={item.necessity === '必要' ? 'dc-blue' : ''}>{item.necessity}</b></span>
-      <span><small>取得</small><b>{item.collection}</b></span>
-      <span><small>充足</small><b className={item.sufficiency === '不足あり' ? 'dc-warning' : ''}>{item.sufficiency}</b></span>
-      <span><small>確認</small><b className={item.review === '確認済み' ? 'dc-success' : item.review === '差戻し' ? 'dc-warning' : ''}>{item.review}</b></span>
-      {item.exception !== 'なし' && <span className="dc-result">結果: {item.exception}</span>}
-      {item.approval === '承認待ち' && <span className="dc-result dc-warning">外部請求 · 承認待ち</span>}
-    </span>
-    <span className="dc-owner"><span>{item.assignee === 'LE HIEU NGHIA' ? 'L.H. NGHIA' : item.assignee}</span><span className={overdue ? 'dc-danger' : 'dc-meta'}>{item.deadline ? item.deadline.replaceAll('-', '/') : '期限 未設定'}</span>{overdue && <small className="dc-danger">期限超過</small>}<ChevronRight size={15} aria-hidden="true" /></span>
-  </button>
-}
-
 export default function CollectionList({ items, selectedId, onSelect }: { items: CollectionItem[]; selectedId: string | null; onSelect: (id: string) => void }) {
-  const [collapsed, setCollapsed] = useState<string[]>([])
-  const groups = [...new Set(items.map(item => item.necessity === '不要' ? 'NOT_REQUIRED' : item.purposes[0]))]
-  groups.sort((a, b) => a === 'NOT_REQUIRED' ? 1 : b === 'NOT_REQUIRED' ? -1 : a.localeCompare(b))
-  return <div className="dc-list">
-    <div className="dc-table-head"><span>資料 / 取得先・対象</span><span>必要性・取得・充足・確認</span><span>担当 / 回答期限</span></div>
-    {groups.map(purpose => {
-      const rows = items.filter(item => (item.necessity === '不要' ? 'NOT_REQUIRED' : item.purposes[0]) === purpose)
-      const closed = collapsed.includes(purpose)
-      return <section className="dc-group" key={purpose} aria-label={purposeNames[purpose] || '不要な資料'}>
-        <button className="dc-group-title" aria-expanded={!closed} onClick={() => setCollapsed(closed ? collapsed.filter(value => value !== purpose) : [...collapsed, purpose])}>
-          {closed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}<span className="dc-group-code">{purpose === 'NOT_REQUIRED' ? '—' : purpose === 'COMMON' ? '共通' : purpose}</span><strong>{purposeNames[purpose] || '不要な資料 · この案件では取得しません'}</strong><span className="dc-count">{rows.length}</span>
-        </button>
-        {!closed && rows.map(item => <CollectionRow key={item.id} item={item} selected={item.id === selectedId} onSelect={() => onSelect(item.id)} />)}
-      </section>
-    })}
-    {!items.length && <div className="dc-empty-results"><Search size={24} /><h3>該当する資料がありません</h3><p>検索語または絞り込み条件を変更してください。</p></div>}
-  </div>
+  return <CollectionListView selectedId={selectedId} onSelect={onSelect} items={items.map(item => ({
+    id: item.id, code: item.code, title: item.title,
+    purposes: item.purposes.map(code => ({ code, label: purposeNames[code] })),
+    source: item.source, target: item.target,
+    period: item.periodStart ? `${item.periodStart.replaceAll('-', '/')} — ${item.periodEnd.replaceAll('-', '/')}` : null,
+    origin: item.origin === '案件で追加' ? '別取得先' : null,
+    preservation: item.priority === '保全優先', preservationText: '保存期間の確認が必要',
+    unnecessary: item.necessity === '不要', necessity: item.necessity,
+    collection: item.collection, fulfillment: item.sufficiency, review: item.review,
+    result: item.exception === 'なし' ? null : item.exception,
+    approval: item.approval === '承認待ち' ? '外部請求 · 承認待ち' : undefined,
+    assignee: item.assignee === 'LE HIEU NGHIA' ? 'L.H. NGHIA' : item.assignee,
+    deadline: item.deadline ? item.deadline.replaceAll('-', '/') : '期限 未設定', overdue: isOverdue(item),
+  }))} />
 }

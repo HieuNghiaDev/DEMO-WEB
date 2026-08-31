@@ -53,6 +53,7 @@ export type CaseActivity = {
   content: string | null
   occurred_at: string
   created_by_employee: { full_name: string } | null
+  metadata?: { event?: string; document_id?: number; changes?: Record<string, { before: unknown; after: unknown }> } | null
 }
 
 export type CaseWorkspace = Omit<CaseDetail, 'documents'> & {
@@ -78,4 +79,4 @@ export type WorkspaceSummary = {
 }
 
 export type WorkspaceResponse = { case_file: CaseWorkspace; summary: WorkspaceSummary }
-export type WorkspaceTab = 'overview' | 'documents' | 'tasks' | 'deadlines' | 'parties' | 'timeline'
+export type WorkspaceTab = 'overview' | 'collection' | 'documents' | 'tasks' | 'deadlines' | 'parties' | 'timeline'

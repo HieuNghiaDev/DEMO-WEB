@@ -13,6 +13,8 @@ use App\Models\DocumentType;
 use App\Models\Employee;
 use App\Models\Office;
 use App\Models\User;
+use App\Services\CaseDocumentChecklistGenerator;
+use App\Services\CaseDocumentChecklistService;
 use App\Services\CaseWorkspaceAuditService;
 use Database\Seeders\CaseTypeDocumentRuleMasterSeeder;
 use Database\Seeders\CaseTypeSeeder;
@@ -327,10 +329,70 @@ class CaseDocumentInitializationApiTest extends TestCase
 
     public function test_case_creation_remains_separate_from_v2_initialization(): void
     {
+        $this->mock(CaseDocumentChecklistGenerator::class)->shouldNotReceive('generateForCase');
+        $this->mock(CaseDocumentChecklistService::class)->shouldNotReceive('applyDefaultTemplate');
         $this->postJson('/api/case-files', ['case_type_id' => CaseType::where('name', '労災')->sole()->id,
-            'title' => 'Explicit workflow', 'client' => ['name' => 'No automatic candidates']])->assertCreated();
+            'title' => 'Explicit workflow', 'client' => ['name' => 'No automatic candidates']])->assertCreated()
+            ->assertJsonPath('case_file.documents_count', 0)->assertJsonPath('case_file.confirmed_documents_count', 0);
         $this->assertDatabaseCount('case_documents', 0);
         $this->assertDatabaseCount('case_activities', 0);
+    }
+
+    #[DataProvider('officialTypes')]
+    public function test_api_created_case_with_active_legacy_template_waits_for_explicit_v2_initialization(string $type, int $count): void
+    {
+        $caseType = CaseType::where('name', $type)->sole();
+        $template = DocumentTemplate::create(['case_type_id' => $caseType->id, 'name' => 'Active compatibility template',
+            'version' => 1, 'is_active' => true, 'effective_from' => '2026-01-01', 'effective_to' => '2026-12-31']);
+        $item = $template->items()->create(['title' => 'Legacy document', 'code' => 'COMPAT', 'requirement_level' => 'required']);
+        $existing = $this->caseFile($caseType);
+        $existing->documents()->create(['title' => 'Existing legacy document', 'category' => 'Legacy',
+            'template_item_id' => $item->id, 'is_template_generated' => true, 'status' => 'confirmed']);
+        $before = $this->snapshot();
+        $templateBefore = $template->refresh()->getRawOriginal();
+        $itemBefore = $item->refresh()->getRawOriginal();
+
+        $response = $this->postJson('/api/case-files', ['case_type_id' => $caseType->id,
+            'title' => 'Explicit V2 intake', 'client_id' => $existing->client_id, 'status' => 'active'])
+            ->assertCreated()->assertJsonPath('case_file.client.id', $existing->client_id)
+            ->assertJsonPath('case_file.case_type_id', $caseType->id)
+            ->assertJsonPath('case_file.created_by_employee_id', $this->editor->employee_id)
+            ->assertJsonPath('case_file.documents_count', 0)->assertJsonPath('case_file.confirmed_documents_count', 0);
+        $case = CaseFile::findOrFail($response->json('case_file.id'));
+        $this->assertSame(0, $case->documents()->withTrashed()->count());
+        $this->assertDatabaseCount('case_activities', 0);
+        $afterCreate = $this->snapshot();
+        foreach ($before as $table => $rows) {
+            if ($table !== 'case_files') {
+                $this->assertSame($rows, $afterCreate[$table], "Creation changed {$table}");
+            }
+        }
+        $this->assertSame($before['case_files'], DB::table('case_files')->where('id', '!=', $case->id)->orderBy('id')->get()->toJson());
+
+        $this->getJson($this->url($case, 'initialization-preview'))->assertOk()
+            ->assertJsonPath('initialization.candidate_count', $count)
+            ->assertJsonPath('initialization.missing_candidate_count', $count)
+            ->assertJsonPath('initialization.total_existing_collection_items', 0)
+            ->assertJsonPath('initialization.legacy_item_count', 0);
+        $this->assertSame($afterCreate, $this->snapshot());
+
+        $this->postJson($this->url($case, 'initialize'))->assertOk()
+            ->assertJsonPath('initialization.created_count', $count)
+            ->assertJsonPath('initialization.total_collection_items', $count);
+        $this->assertSame($count, $case->documents()->whereNotNull('case_type_document_rule_id')
+            ->whereNull('template_item_id')->where('necessity_status', 'undetermined')->count());
+        $this->assertDatabaseCount('case_activities', 1);
+        $activity = CaseActivity::sole();
+        $this->assertSame($case->id, $activity->case_file_id);
+        $this->assertSame('document_collection_initialized', $activity->metadata['event']);
+        $this->assertSame($count, $activity->metadata['created_count']);
+        $afterInitialize = $this->snapshot();
+        $this->postJson($this->url($case, 'initialize'))->assertOk()
+            ->assertJsonPath('initialization.created_count', 0)->assertJsonPath('initialization.skipped_count', $count);
+        $this->assertSame($afterInitialize, $this->snapshot());
+        $this->assertSame($before['case_documents'], DB::table('case_documents')->where('case_file_id', $existing->id)->orderBy('id')->get()->toJson());
+        $this->assertSame($templateBefore, $template->refresh()->getRawOriginal());
+        $this->assertSame($itemBefore, $item->refresh()->getRawOriginal());
     }
 
     private function caseFile(?CaseType $type): CaseFile

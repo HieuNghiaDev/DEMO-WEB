@@ -12,7 +12,6 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use App\Services\CaseDocumentChecklistService;
 
 class CaseFileController extends Controller
 {
@@ -28,7 +27,7 @@ class CaseFileController extends Controller
             ->latest()->get()]);
     }
 
-    public function store(Request $request, CaseDocumentChecklistService $checklistService): JsonResponse
+    public function store(Request $request): JsonResponse
     {
         $data = $this->validated($request);
 
@@ -46,8 +45,7 @@ class CaseFileController extends Controller
             return CaseFile::query()->create($data);
         });
 
-        $checklistService->applyDefaultTemplate($caseFile);
-
+        // Checklist initialization is an explicit action, never a side effect of case creation.
         return response()->json(['case_file' => $caseFile->load(['client', 'caseTypeOption.parent', 'department', 'assignedEmployee', 'createdByEmployee'])->loadCount(['documents' => fn ($query) => $query->where('status', '!=', 'not_required'), 'documents as confirmed_documents_count' => fn ($query) => $query->whereIn('status', ['confirmed', 'submitted'])])], 201);
     }
 

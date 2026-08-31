@@ -5,7 +5,7 @@ import CollectionList, { CollectionToolbar } from './CollectionList'
 import CollectionDetailDrawer from './CollectionDetailDrawer'
 import { createPreviewItems, emptyFilters, isOverdue, matchesFilters, REVIEW_DATE } from './mockData'
 import type { CaseKind, CollectionItem } from './types'
-import './documentCollectionMockup.css'
+import '../document-collection/documentCollection.css'
 
 const tabs = [{ label: '概要', icon: ClipboardList }, { label: '資料収集', icon: ListChecks }, { label: 'ファイル', icon: Files }, { label: 'タスク', icon: CheckCheck }, { label: '期限', icon: FileClock }, { label: '履歴', icon: History }]
 

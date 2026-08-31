@@ -47,7 +47,9 @@ erDiagram
 
 Migration giữ lịch sử thay đổi schema, không phải nơi để đặt nghiệp vụ mới. Mọi quan hệ được khai báo trong model; khi thêm cột mới cần đồng thời cập nhật migration, `$fillable`, casts (nếu cần), validation/controller, factory/seeder/test và tài liệu API.
 
-Khi tạo hồ sơ với subtype có template đang hiệu lực, `CaseDocumentChecklistService` sao chép template thành checklist riêng trong `case_documents`. Template mới không làm thay đổi hồ sơ đang xử lý; thao tác áp dụng lại là idempotent và chỉ bổ sung item còn thiếu.
+Tạo CaseFile mới luôn bắt đầu với **0 `case_documents`**, kể cả khi case type có template legacy đang hiệu lực. Vòng đời V2 chuẩn là tạo案件 → preview ứng viên (chỉ đọc) → xác nhận → POST initialize → `CaseDocumentChecklistGenerator`; không tự sinh tài liệu hay activity initialize khi tạo案件. Không thay schema/master hoặc reprocess dữ liệu đang có.
+
+`document_templates` / `document_template_items` và `CaseDocumentChecklistService` giữ lại ở chế độ deprecated/compatibility-only. Chỉ API áp dụng template legacy tường minh mới sao chép template thành checklist; không còn tự áp dụng trong `CaseFileController::store`. Không thay semantics idempotence/restore hiện có của thao tác legacy hoặc chuyển template sang rule V2.
 
 ### 事件類型別資料収集 — Phase 1A (database/model foundation)
 
@@ -158,7 +160,7 @@ Item mới giữ `necessity_status=undetermined` và ba trục mặc định kh�
 
 Generator không bao giờ cập nhật/sync/restore item đã có, kể cả quyết định cần/không cần, snapshot, purpose, các trục trạng thái và soft-delete. Item mới chỉ được thêm nếu chưa có candidate generated cùng document/rule; manual item cùng loại vẫn hợp lệ khi nguồn/đối tượng/kỳ/phạm vi khác. Chỉ skip manual duplicate có ngữ cảnh khớp hẹp, không tự chuyển manual thành generated.
 
-Service là application action riêng, chưa tự gọi trong `CaseFileController::store`: template engine cũ chưa có document_type mapping, chạy hai engine sẽ tạo checklist chồng nhau. Không thay đổi API/frontend hoặc tự reconcile khi đổi loại hồ sơ. Chi tiết precedence, hạn chế duplicate/locking và kiểm chứng **213 tests / 1.465 assertions** ở [PHASE_1D_CHECKLIST_GENERATOR.md](PHASE_1D_CHECKLIST_GENERATOR.md).
+Service là application action riêng, không tự gọi trong `CaseFileController::store`. Patch trước C0 cũng đã gỡ tự áp dụng template legacy khỏi store; cả hai engine chỉ chạy qua thao tác tường minh. Không tự reconcile khi đổi loại hồ sơ. Chi tiết precedence, hạn chế duplicate/locking và kiểm chứng tại Phase 1D **213 tests / 1.465 assertions** ở [PHASE_1D_CHECKLIST_GENERATOR.md](PHASE_1D_CHECKLIST_GENERATOR.md).
 
 ### Phase 1E-A0 — acquisition result, method and case-level preservation
 

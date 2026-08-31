@@ -1,6 +1,6 @@
 # THEMIS V2 · 資料収集 — UI review prototype
 
-Status: **mock only**, 2026-08-31. Not a production integration.
+Status: approved design preview retained. **Phase 1E-C production integration** added on 2026-08-31; see [DOCUMENT_COLLECTION_INTEGRATION.md](DOCUMENT_COLLECTION_INTEGRATION.md). The design route described below remains mock-only.
 
 ## Preview
 
@@ -74,7 +74,9 @@ Feature directory: `EmployeeManagement/frontend/src/features/document-collection
 - `CollectionDetailDrawer.tsx`: A–G workflow, editing, draft/reason history, focus behavior.
 - `ReceivedDocumentsSection.tsx`: mock received files, versions and links.
 - `types.ts`, `officialCandidates.ts`, `mockData.ts`: isolated typed fixtures and pure filtering helpers.
-- `documentCollectionMockup.css`: feature-scoped responsive/light-dark styling.
+- `../document-collection/documentCollection.css`: shared approved responsive/light-dark styling.
+
+Phase 1E-C extracts the primary list/rows (`CollectionListView`) and responsive inspector/focus shell (`InspectorShell`) into the production module. The preview adapters still own all fictional scenarios and mock edits. Production never imports those fixtures. The mock inspector retains its original 1280px overlay breakpoint; production follows the requested 1024px split-view breakpoint.
 
 Only existing application file modified: `frontend/src/App.tsx`, for the lazy protected preview route. Test additions: `tests/documentCollectionMockup.test.mjs` and `tests/fixtures/document-collection.{html,tsx}`.
 
@@ -86,4 +88,4 @@ Only existing application file modified: `frontend/src/App.tsx`, for the lazy pr
 - Browser checked standalone fixture at 1440×1000, 1024×900, 768×1000 and 390×844, light/dark. Checked page width, list/detail rendering, search, combined filters, 不要 movement, mock file-link save, explicit creation, traffic count, modal focus loop and Escape.
 - Screenshots are local review artifacts in ignored `outputs/document-collection-mockup/`. They show the standalone content harness, **not proof of end-to-end authentication or production API behavior**. Full authenticated-shell visual verification needs a signed-in session; source route/layout wiring is preserved.
 
-No backend changed. No generator invoked. No database records created. No external send or AI legal determination. Production CaseWorkspacePage is not replaced. No deployment or production integration is authorized by this prototype.
+The prototype phase itself changed no backend, invoked no generator and created no database records. Its later authorized production integration is documented separately; the design preview remains isolated and available.
