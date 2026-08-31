@@ -139,6 +139,7 @@ class ApprovalManagementApiTest extends TestCase
 
     public function test_legacy_execution_is_gone_for_every_state_without_touching_v2_tasks(): void
     {
+        $this->artisan('themis:v2-cleanup-legacy', ['--confirm-local' => true])->assertExitCode(0);
         $client = Client::create(['name' => 'V2 client']);
         $case = CaseFile::create(['title' => 'V2 case', 'client_id' => $client->id]);
         $task = $case->caseTasks()->create(['title' => 'Keep canonical task']);

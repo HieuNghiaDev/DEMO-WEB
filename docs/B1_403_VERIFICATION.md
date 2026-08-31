@@ -1,5 +1,9 @@
 # Phase B1 — 403 test-fixture verification
 
+> Subsequent B2 execution was explicitly approved and completed locally.
+> See [B2_LOCAL_CLEANUP_REPORT.md](B2_LOCAL_CLEANUP_REPORT.md).
+> The B1 verification and pre-B2 stop below are retained as historical evidence.
+
 Status: **B1 passed; STOP before B2.** This follow-up changes test setup only,
 not production authorization. The working local database was not migrated,
 seeded, cleaned, recreated or written to by this follow-up.

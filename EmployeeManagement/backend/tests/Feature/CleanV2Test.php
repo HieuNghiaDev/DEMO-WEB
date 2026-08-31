@@ -31,6 +31,9 @@ class CleanV2Test extends TestCase
     public function test_clean_master_is_repeatable_without_operational_demo_data(): void
     {
         $this->seed(CleanV2MasterSeeder::class);
+        $this->assertTrue(Schema::hasTable('matters'));
+        $this->assertTrue(Schema::hasTable('tasks'));
+        $this->artisan('themis:v2-cleanup-legacy', ['--confirm-local' => true])->assertExitCode(0);
         $counts = $this->counts();
         $caseTypes = DB::table('case_types')->orderBy('id')->get(['id', 'name', 'parent_id', 'sort_order', 'is_active'])->toJson();
         $this->seed(CleanV2MasterSeeder::class);
@@ -90,27 +93,36 @@ class CleanV2Test extends TestCase
 
     public function test_cleanup_refuses_unapproved_environment_and_is_repeatable_in_isolated_tests(): void
     {
-        Schema::create('matters', fn ($table) => $table->id());
-        Schema::create('tasks', fn ($table) => $table->id());
-        $migration = require database_path('migrations/2026_08_31_120000_remove_legacy_matter_tasks.php');
         $environment = app()->environment();
         try {
-            app()->instance('env', 'production');
-            try {
-                $migration->up();
-                $this->fail('Unapproved cleanup must be refused.');
-            } catch (\RuntimeException $exception) {
-                $this->assertStringContainsString('Remote cleanup is not authorized', $exception->getMessage());
+            foreach (['production', 'staging'] as $unapproved) {
+                app()->instance('env', $unapproved);
+                $this->artisan('themis:v2-cleanup-legacy', ['--confirm-local' => true])->assertExitCode(1);
             }
             $this->assertTrue(Schema::hasTable('tasks'));
             $this->assertTrue(Schema::hasTable('matters'));
         } finally {
             app()->instance('env', $environment);
         }
-        $migration->up();
-        $migration->up();
+        $this->artisan('themis:v2-cleanup-legacy')->assertExitCode(1);
+        $this->assertTrue(Schema::hasTable('tasks'));
+        $this->artisan('themis:v2-cleanup-legacy', ['--confirm-local' => true])->assertExitCode(0);
+        $this->artisan('themis:v2-cleanup-legacy', ['--confirm-local' => true])->assertExitCode(0);
         $this->assertFalse(Schema::hasTable('tasks'));
         $this->assertFalse(Schema::hasTable('matters'));
+    }
+
+    public function test_cleanup_refuses_data_in_either_legacy_table_before_any_drop(): void
+    {
+        $matter = DB::table('matters')->insertGetId(['title' => 'Preserve legacy data', 'status' => 'active']);
+        $this->artisan('themis:v2-cleanup-legacy', ['--confirm-local' => true])->assertExitCode(1);
+        $this->assertTrue(Schema::hasTable('tasks'));
+        $this->assertDatabaseHas('matters', ['id' => $matter]);
+        DB::table('matters')->where('id', $matter)->delete();
+        $task = DB::table('tasks')->insertGetId(['title' => 'Preserve legacy task', 'horizon' => 'short', 'status' => 'pending', 'source' => 'manual']);
+        $this->artisan('themis:v2-cleanup-legacy', ['--confirm-local' => true])->assertExitCode(1);
+        $this->assertTrue(Schema::hasTable('matters'));
+        $this->assertDatabaseHas('tasks', ['id' => $task]);
     }
 
     private function counts(): array

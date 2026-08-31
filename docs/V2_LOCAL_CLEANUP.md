@@ -1,5 +1,15 @@
 # THEMIS V2 local cleanup — 2026-08-31
 
+> Deployment-path finalization: the local cleanup migration was retired from
+> normal migration discovery after B2. Use [V2_MIGRATION_PATH.md](V2_MIGRATION_PATH.md)
+> for current new-development-DB instructions. Do not rerun the historical B2
+> procedure or environment opt-in below.
+
+> B2 is now completed on the approved local database: 48 tables / 54 migrations,
+> zero operational case/client data, 78 document types and 11 purposes. See
+> [B2_LOCAL_CLEANUP_REPORT.md](B2_LOCAL_CLEANUP_REPORT.md). Earlier stop-point
+> notes below are historical; Phase 1C remains unstarted.
+
 > Update: the B1 403 test-fixture follow-up now passes (168 tests / 1,069
 > assertions). B2 is still NOT authorized or executed. See
 > [B1_403_VERIFICATION.md](B1_403_VERIFICATION.md). The original stop-point

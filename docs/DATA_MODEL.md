@@ -51,7 +51,7 @@ Khi tạo hồ sơ với subtype có template đang hiệu lực, `CaseDocumentC
 
 ### 事件類型別資料収集 — Phase 1A (database/model foundation)
 
-`clients` là khách hàng/依頼者; `case_files` là thực thể legal 案件 chuẩn. Phase 1A không thay đổi `matters/tasks`. Bản chuẩn bị cleanup V2 bỏ phụ thuộc runtime legacy và bổ sung migration có kiểm tra môi trường để drop `tasks` trước `matters`. Migration lịch sử vẫn giữ nguyên. Database local đang dùng chỉ được cleanup sau khi B1 đạt; trạng thái thực tế xem [V2_LOCAL_CLEANUP.md](V2_LOCAL_CLEANUP.md). `employee_tasks` và cấu trúc `case_tasks` được giữ.
+`clients` là khách hàng/依頼者; `case_files` là thực thể legal 案件 chuẩn. Phase 1A không thay đổi `matters/tasks`; B2 sau đó đã bỏ hai bảng trên DB local. Migration cleanup `120000` nay được gỡ khỏi chuỗi deploy, nhưng dòng lịch sử local vẫn giữ. Các migration tạo bảng lịch sử không bị squash. Command local riêng chỉ bỏ `tasks` trước `matters` khi cả hai rỗng; không tự chạy trong migrate/seeder. Quy trình DB mới và lưu ý rollback xem [V2_MIGRATION_PATH.md](V2_MIGRATION_PATH.md). `employee_tasks` và cấu trúc `case_tasks` được giữ.
 
 ```mermaid
 erDiagram
