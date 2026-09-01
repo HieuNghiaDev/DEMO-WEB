@@ -11,6 +11,17 @@ class ApiSecurityTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_unauthenticated_api_requests_without_json_accept_header_return_json_401(): void
+    {
+        $this->get('/api/case-files')
+            ->assertUnauthorized()
+            ->assertExactJson(['message' => 'Unauthenticated.']);
+
+        $this->get('/api/attendances/my-report')
+            ->assertUnauthorized()
+            ->assertExactJson(['message' => 'Unauthenticated.']);
+    }
+
     public function test_api_responses_include_security_headers(): void
     {
         $this->getJson('/api/me')
