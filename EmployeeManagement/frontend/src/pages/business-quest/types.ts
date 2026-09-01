@@ -31,6 +31,7 @@ export type BusinessCase = {
   documentsTotal: number
   updatedAt: string
   rawUpdatedAt: string
+  targetCompletionAt?: string | null
 }
 
 export type CaseDocument = {
@@ -83,6 +84,8 @@ export type CaseCustomSection = {
 export type ApiCaseFile = {
   id: number
   title: string
+  reference_number?: string | null
+  target_completion_at?: string | null
   case_type: string | null
   case_type_id?: number | null
   case_type_other?: string | null

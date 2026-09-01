@@ -69,3 +69,7 @@ export function itemToRow(item: CollectionItem, now = Date.now()): CollectionRow
     assignee: item.assigned_employee?.display_name ?? '未割当', deadline: formatDate(item.response_deadline), overdue,
   }
 }
+
+export function isRequiredDocument(item: Pick<CollectionItem, 'necessity_status'>) {
+  return item.necessity_status === 'required'
+}

@@ -22,6 +22,8 @@ Tài khoản có `must_change_password=true` chỉ được gọi `/me`, `/passw
 
 ## Hồ sơ khách hàng và案件
 
+Form案件 một trang dùng `GET /clients` để tìm theo tên/kana/điện thoại/email phía frontend. Modal **登録して選択** gọi API hiện có `POST /clients` (quyền `case.create`), nhận HTTP 201 `{client}` rồi tự chọn `client.id`. Tên là bắt buộc; kana, phone, email, client_type, nationality, address, notes dùng các trường backend đã hỗ trợ, không có trường language. Khách hàng được lưu riêng, nên hủy form案件 sau đó không xóa khách hàng vừa đăng ký. Khi tạo案件, frontend gửi `client_id` và tự ghép `title` từ tên khách hàng + subtype/parent trong giới hạn 255 ký tự; không thay đổi hợp đồng backend. Xem [CASE_MANAGEMENT_UI.md](frontend/CASE_MANAGEMENT_UI.md).
+
 Khách hàng (`clients`) lưu dữ liệu liên hệ: `phone`, `email`, `address`, `nationality`, cùng `name`, `name_kana` và `client_type` (`individual`/`corporate`). Khi tạo mới `case-files`, payload `client` có thể bao gồm các trường này; email hợp lệ, điện thoại tối đa 30 ký tự, địa chỉ tối đa 255 ký tự. `GET /case-files/{id}` trả toàn bộ thông tin liên hệ của khách hàng để hiển thị trong hồ sơ; `PUT /clients/{client}` cập nhật hồ sơ khi người gọi có `case.update`.
 
 Mỗi hồ sơ có thể có tab tự do ngoài ba tab mặc định. `POST /case-files/{caseFile}/custom-sections` tạo tab với `title` (bắt buộc, tối đa 80 ký tự) và `content` (tùy chọn). `PATCH` hoặc `DELETE /case-files/{caseFile}/custom-sections/{customSection}` cập nhật hoặc xóa tab; các thao tác này yêu cầu quyền `case.update`.

@@ -50,7 +50,9 @@ Frontend chỉ giữ token ở `sessionStorage` hoặc `localStorage`; mọi quy
 | `/change-password` | Có token hợp lệ | Đổi mật khẩu tạm thời; thành công sẽ thu hồi token và yêu cầu đăng nhập lại. |
 | `/` | Có token hợp lệ | Employee Room. |
 | `/organization` | Có token hợp lệ | Organization Design. |
-| `/quests`, `/ai`, `/approvals` | Có token hợp lệ | Không gian nghiệp vụ. |
+| `/quests` | Có token hợp lệ | 案件管理: danh sách, tìm kiếm, bộ lọc và phân công theo quyền hiện có. |
+| `/quests`, `/quests/{id}/edit`, `/quests/{id}` | Có token hợp lệ | `+ 新規案件` mở popup intake + xác nhận cuối trong danh sách; `/quests/new` chuyển hướng về danh sách để không tồn tại luồng tạo trùng lặp. Sửa案件 và workspace chi tiết giữ nguyên; tạo mới không khởi tạo checklist. Xem [CASE_MANAGEMENT_UI.md](frontend/CASE_MANAGEMENT_UI.md). |
+| `/ai`, `/approvals` | Có token hợp lệ | Không gian nghiệp vụ. |
 | `/visa-progress` | Có token hợp lệ | 在留申請進捗管理; API còn yêu cầu `case.view`. |
 | `/design/case-document-collection` | Có token hợp lệ | Prototype 資料収集 dùng React state và fixture chính thức; không gọi API/generator, không thay CaseWorkspacePage. Xem [hướng dẫn review](frontend/DOCUMENT_COLLECTION_MOCKUP.md). |
 

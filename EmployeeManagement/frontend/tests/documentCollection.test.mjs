@@ -3,7 +3,7 @@ import test from 'node:test'
 import { readFileSync, readdirSync } from 'node:fs'
 import { AxiosError } from 'axios'
 import { detailFixture, previewFixture, fixtureDetails, fixtureListItem } from './fixtures/collectionApiData.ts'
-import { changedFields, draftFromDetail, initializationMode, itemToRow, validateDraft, withFilter, toLocalDateTime, fromLocalDateTime, safeExternalUrl } from '../src/features/document-collection/utils.ts'
+import { changedFields, draftFromDetail, initializationMode, isRequiredDocument, itemToRow, validateDraft, withFilter, toLocalDateTime, fromLocalDateTime, safeExternalUrl } from '../src/features/document-collection/utils.ts'
 import { collectionError } from '../src/features/document-collection/errors.ts'
 import { statusGroups } from '../src/features/document-collection/labels.ts'
 
@@ -32,6 +32,25 @@ test('received, insufficiency, unreviewed, result and necessity stay independent
   assert.equal(rows[0].collection, '受領済み'); assert.equal(rows[0].review, '未確認'); assert.equal(rows[0].fulfillment, '不足あり')
   assert.equal(rows[1].collection, '終了'); assert.equal(rows[1].result, '不存在'); assert.equal(rows[1].necessity, '必要')
   assert.equal(rows[0].preservation, false); assert.equal(rows[2].preservation, true)
+})
+test('required workspace filters only by necessity and preserves all independent status axes', () => {
+  const [received, absent, candidate] = fixtureDetails().map(fixtureListItem)
+  const partialDisclosure = { ...received, id: 204, collection_status: 'partially_received', collection_result: 'partially_disclosed', fulfillment_status: 'insufficient', review_status: 'reviewing' }
+  const custodianUnknown = { ...received, id: 205, collection_status: 'requested', collection_result: 'custodian_unknown', fulfillment_status: 'undetermined', review_status: 'unreviewed' }
+  const difficult = { ...received, id: 206, collection_status: 'difficult', collection_result: null }
+  const overdue = { ...received, id: 207, collection_status: 'requested', collection_result: null, response_deadline: '2026-08-25T00:00:00.000Z' }
+  const decidedRequired = { ...candidate, id: candidate.id + 10, necessity_status: 'required', collection_status: 'not_started' }
+  const decidedNotRequired = { ...candidate, id: candidate.id + 11, necessity_status: 'not_required', collection_status: 'not_started' }
+  const all = [received, absent, candidate, partialDisclosure, custodianUnknown, difficult, overdue, decidedRequired, decidedNotRequired]
+  const required = all.filter(isRequiredDocument)
+  assert.deepEqual(required.map(item => item.id), [received.id, absent.id, partialDisclosure.id, custodianUnknown.id, difficult.id, overdue.id, decidedRequired.id])
+  assert.equal(required.filter(item => item.id === received.id).length, 1, 'the same CaseDocument is not duplicated')
+  assert.equal(required.find(item => item.id === partialDisclosure.id)?.collection_status, 'partially_received')
+  assert.equal(required.find(item => item.id === partialDisclosure.id)?.collection_result, 'partially_disclosed')
+  assert.equal(required.find(item => item.id === partialDisclosure.id)?.review_status, 'reviewing')
+  assert.equal(required.find(item => item.id === partialDisclosure.id)?.fulfillment_status, 'insufficient')
+  assert.equal(required.includes(candidate), false)
+  assert.equal(required.some(item => item.id === decidedNotRequired.id), false)
 })
 test('overdue marker follows server collection semantics including not_required, never mock review date', () => {
   const item = fixtureListItem(detailFixture)

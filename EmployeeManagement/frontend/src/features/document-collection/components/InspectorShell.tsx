@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
 
-export default function InspectorShell({ title, code, subtitle, children, footer, onClose, breakpoint = 1024 }: {
+export default function InspectorShell({ title, code, subtitle, children, footer, onClose, breakpoint = 1280 }: {
   title: string; code: ReactNode; subtitle?: string; children: ReactNode; footer: ReactNode; onClose: () => void; breakpoint?: number
 }) {
   const [overlay, setOverlay] = useState(() => window.innerWidth < breakpoint)

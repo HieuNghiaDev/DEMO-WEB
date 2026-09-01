@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ja">
+  <head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>THEMIS responsive case review</title></head>
+  <body style="margin:0;background:#e2e8f0;overflow:hidden">
+    <label style="display:block;padding:8px;font:12px sans-serif">検証幅
+      <select id="width"><option>1440</option><option>1024</option><option>768</option><option>390</option></select>
+      · 隔離テスト / iframe 内の実 viewport で検証
+    </label>
+    <iframe title="案件管理 responsive review" src="./case-management.html" style="position:fixed;top:48px;left:0;display:block;border:0;width:1440px;height:calc(100vh - 48px)"></iframe>
+    <script type="module">
+      const resize = () => {
+        const width = Number(document.querySelector('#width').value)
+        const frame = document.querySelector('iframe')
+        const scale = Math.min(1, window.innerWidth / width)
+        frame.style.width = `${width}px`
+        frame.style.height = `${(window.innerHeight - 48) / scale}px`
+        frame.style.transformOrigin = 'top left'
+        frame.style.transform = `scale(${scale})`
+      }
+      document.querySelector('#width').addEventListener('change', resize)
+      window.addEventListener('resize', resize)
+      resize()
+    </script>
+  </body>
+</html>

@@ -17,7 +17,8 @@ export function useDocumentCollection(caseId: number, canReadEmployees: boolean)
   const [confirming, setConfirming] = useState(false)
   const [notice, setNotice] = useState('')
   const [revision, setRevision] = useState(0)
-  const [query, setQuery] = useState<CollectionQuery>({ page: 1, per_page: 25 })
+  // Candidates start with the remaining business decision, not a mixed status list.
+  const [query, setQuery] = useState<CollectionQuery>({ necessity_status: 'undetermined', page: 1, per_page: 25 })
   const [search, setSearch] = useState('')
   const [employees, setEmployees] = useState<EmployeeOption[]>([])
   const [employeeError, setEmployeeError] = useState<string | null>(null)
@@ -81,6 +82,7 @@ export function useDocumentCollection(caseId: number, canReadEmployees: boolean)
   return {
     preview, data, previewError, listError, initializationError, previewLoading, listLoading, initializing,
     confirming, setConfirming, notice, setNotice, refresh, query, search, setSearch, changeFilter,
+    revision,
     setPage: (page: number) => setQuery(previous => ({ ...previous, page })),
     employees, employeeError: canReadEmployees ? employeeError : '担当者一覧の閲覧権限がありません。', initialize,
   }

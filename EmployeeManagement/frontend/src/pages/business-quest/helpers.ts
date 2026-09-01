@@ -57,18 +57,18 @@ export const japanDateValue = () => {
   return `${value.year}-${value.month}-${value.day}`
 }
 
-export const mapCaseFile = (caseFile: ApiCaseFile): BusinessCase => {
+export const mapCaseFile = (caseFile: ApiCaseFile, caseTypePath?: string): BusinessCase => {
   const total = caseFile.documents_count ?? 0
   const confirmed = caseFile.confirmed_documents_count ?? 0
   return {
     id: caseFile.id,
-    code: `CASE-${new Date(caseFile.updated_at).getFullYear()}-${String(caseFile.id).padStart(3, '0')}`,
+    code: caseFile.reference_number || `CASE-${String(caseFile.id).padStart(6, '0')}`,
     title: caseFile.title,
     customerName: caseFile.client.name,
     customerKana: caseFile.client.name_kana ?? '',
     caseType: caseFile.case_type === 'その他' && caseFile.case_type_other
       ? `その他：${caseFile.case_type_other}`
-      : caseFile.case_type ?? '未分類',
+      : caseTypePath ?? caseFile.case_type ?? '未分類',
     assignee: caseFile.assigned_employee?.full_name ?? '未割当',
     assignedEmployeeId: caseFile.assigned_employee?.id ?? null,
     role: caseFile.assigned_employee?.position_title ?? '担当者',
@@ -78,5 +78,6 @@ export const mapCaseFile = (caseFile: ApiCaseFile): BusinessCase => {
     documentsTotal: total,
     updatedAt: formatDateTime(caseFile.updated_at),
     rawUpdatedAt: caseFile.updated_at,
+    targetCompletionAt: caseFile.target_completion_at,
   }
 }

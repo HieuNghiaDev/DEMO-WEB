@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  BadgeCheck, BotMessageSquare, ChevronRight, FileSpreadsheet, FolderKanban,
-  Home, Menu, Settings, UsersRound, X, type LucideIcon,
+  BadgeCheck, BotMessageSquare, FileSpreadsheet, FolderKanban, Home, LogOut,
+  Menu, Settings, UsersRound, X, type LucideIcon,
 } from 'lucide-react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import SidebarUtilityPanel from './SidebarUtilityPanel'
 
@@ -39,8 +39,10 @@ function SidebarItem({ path, name, icon: Icon, onSelect }: {
 }
 
 export default function Sidebar() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const sidebarRef = useRef<HTMLElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const employeeName = user?.employee?.full_name || user?.name || user?.login_id || '社員'
@@ -81,6 +83,20 @@ export default function Sidebar() {
 
   const closeMenu = () => setIsOpen(false)
 
+  const handleLogout = async () => {
+    if (isLoggingOut) return
+    try {
+      setIsLoggingOut(true)
+      await logout()
+    } catch {
+      // AuthContext clears local authentication even if the API is unavailable.
+    } finally {
+      setIsLoggingOut(false)
+      closeMenu()
+      navigate('/login', { replace: true })
+    }
+  }
+
   return <>
     <button ref={triggerRef} type="button" onClick={() => setIsOpen(true)} aria-label="メニューを開く" aria-expanded={isOpen} aria-controls="main-sidebar"
       className="fixed left-4 top-4 z-40 flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 md:hidden">
@@ -109,15 +125,20 @@ export default function Sidebar() {
         <SidebarItem path="/system" name="設定" icon={Settings} onSelect={closeMenu} />
       </nav>
       <div className="mt-4 shrink-0 border-t border-slate-200 pt-4 dark:border-slate-800">
-        <NavLink to="/system?section=account" onClick={closeMenu} aria-label={`${employeeName} のアカウント設定`}
-          className="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5 transition-colors duration-200 hover:border-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:border-indigo-400/50">
+        <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5 transition-colors duration-200 hover:border-indigo-300 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:border-indigo-400/50">
+          <NavLink to="/system?section=account" onClick={closeMenu} aria-label={`${employeeName} のアカウント設定`}
+            className="flex min-w-0 flex-1 items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-sm font-semibold text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200">{employeeName.charAt(0).toUpperCase()}</span>
           <div className="min-w-0 flex-1">
             <p title={employeeName} className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100">{employeeName}</p>
             <p className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">{user?.login_id}</p>
           </div>
-          <ChevronRight size={16} className="shrink-0 text-slate-400 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transform-none" aria-hidden="true" />
-        </NavLink>
+          </NavLink>
+          <button type="button" onClick={() => void handleLogout()} disabled={isLoggingOut} aria-label="ログアウト" title="ログアウト"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors duration-200 hover:bg-rose-500/[0.07] hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-wait disabled:opacity-60 dark:text-slate-500 dark:hover:text-rose-300">
+            <LogOut size={16} aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </aside>
   </>

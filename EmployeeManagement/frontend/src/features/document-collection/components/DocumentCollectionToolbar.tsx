@@ -15,6 +15,8 @@ export default function DocumentCollectionToolbar({ query, search, onSearch, onC
     <div className="dc-quick" aria-label="クイックフィルター">
       <button type="button" aria-pressed={!count && !search} className={!count && !search ? 'is-active' : ''} onClick={() => onChange({}, true)}>すべて</button>
       <button type="button" aria-pressed={query.necessity_status === 'undetermined'} className={query.necessity_status === 'undetermined' ? 'is-active' : ''} onClick={() => onChange({ necessity_status: query.necessity_status === 'undetermined' ? undefined : 'undetermined' })}>未判定</button>
+      <button type="button" aria-pressed={query.necessity_status === 'required'} className={query.necessity_status === 'required' ? 'is-active' : ''} onClick={() => onChange({ necessity_status: query.necessity_status === 'required' ? undefined : 'required' })}>必要</button>
+      <button type="button" aria-pressed={query.necessity_status === 'not_required'} className={query.necessity_status === 'not_required' ? 'is-active' : ''} onClick={() => onChange({ necessity_status: query.necessity_status === 'not_required' ? undefined : 'not_required' })}>不要</button>
       <button type="button" aria-pressed={query.overdue === true} className={query.overdue ? 'is-active' : ''} onClick={() => onChange({ overdue: query.overdue ? undefined : true })}>期限超過</button>
       <button type="button" aria-pressed={query.preservation_priority === true} className={query.preservation_priority ? 'is-active' : ''} onClick={() => onChange({ preservation_priority: query.preservation_priority ? undefined : true })}><ShieldAlert size={14} />保全優先</button>
       {(count > 0 || search) && <button type="button" className="dc-clear" onClick={() => onChange({}, true)}>条件をクリア</button>}

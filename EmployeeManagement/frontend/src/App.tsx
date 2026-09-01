@@ -41,7 +41,7 @@ function App() {
                 path="/organization"
                 element={<OrganizationDesign />}
               />
-              <Route path="/quests" element={<BusinessQuest />} />
+              <Route path="/quests/*" element={<BusinessQuest />} />
               <Route path="/visa-progress" element={<VisaProgress />} />
               <Route path="/ai" element={<AIEmployees />} />
               <Route path="/approvals" element={<ApprovalRoom />} />

@@ -2,12 +2,14 @@
 // Run against /tests/fixtures/collection-api.html; all transport is isolated there.
 import assert from 'node:assert/strict'
 const button = (tab, name) => tab.playwright.getByRole('button', { name, exact: true })
-const selectNames = ['試験シナリオ', '試験エラー', '応答時間', '確認目的', '取得要否', '取得作業', '確認', '担当者', '作業優先度', '内容充足', '結果・例外']
+const selectNames = ['試験シナリオ', '試験画面', '試験エラー', '応答時間', '確認目的', '取得要否', '取得作業', '確認', '担当者', '作業優先度', '充足状況', '確認状況', '結果・例外']
 const label = (tab, name) => tab.playwright.getByRole(name === '閲覧のみ' ? 'checkbox' : selectNames.includes(name) ? 'combobox' : 'textbox', { name, exact: true })
 const visible = async (tab, text) => tab.playwright.getByText(text, { exact: true }).waitFor({ state: 'visible' })
 const logs = async tab => JSON.parse(await tab.playwright.getByTestId('transport-log').textContent())
 const rows = tab => tab.playwright.getByRole('button', { name: /の詳細$/ })
+const requiredRows = tab => tab.playwright.getByRole('button', { name: /の必要資料詳細$/ })
 const selectScenario = async (tab, value) => { await label(tab, '試験シナリオ').selectOption(value); await tab.playwright.domSnapshot() }
+const allCandidates = async tab => { await button(tab, 'すべて').click(); await rows(tab).first().waitFor({ state: 'visible' }) }
 
 export async function initializationChecks(tab) {
   await tab.reload()
@@ -37,6 +39,7 @@ export async function initializationChecks(tab) {
   await label(tab, '応答時間').selectOption('25')
   await selectScenario(tab, 'new')
   await button(tab, '候補を追加').waitFor({ state: 'visible' })
+  await allCandidates(tab)
   assert.equal(await rows(tab).count(), 3)
   await button(tab, '候補を追加').click(); await button(tab, '作成する').click()
   await visible(tab, '2件の候補資料を作成しました。')
@@ -48,7 +51,7 @@ export async function initializationChecks(tab) {
 }
 
 export async function listChecks(tab) {
-  await tab.reload(); await rows(tab).first().waitFor({ state: 'visible' })
+  await tab.reload(); await rows(tab).first().waitFor({ state: 'visible' }); await allCandidates(tab)
   assert.equal(await rows(tab).count(), 3)
   const osaka = button(tab, 'D-003 診断書 大阪病院 の詳細')
   const kyoto = button(tab, 'D-003 診断書 京都病院 の詳細')
@@ -77,7 +80,7 @@ export async function listChecks(tab) {
   await button(tab, '条件をクリア').click()
   await label(tab, '資料名・コードを検索').fill('no-such-document')
   await visible(tab, '該当する資料がありません')
-  await selectScenario(tab, 'paginated'); await button(tab, '次へ').waitFor({ state: 'visible' })
+  await selectScenario(tab, 'paginated'); await allCandidates(tab); await button(tab, '次へ').waitFor({ state: 'visible' })
   await button(tab, '次へ').click(); await visible(tab, '26–31 / 31件')
   assert.equal(await rows(tab).count(), 6)
   await label(tab, '資料名・コードを検索').fill('D-003')
@@ -86,8 +89,36 @@ export async function listChecks(tab) {
   return ['unique item IDs + multi-purpose', 'independent axes/result/preservation', 'server search and case summary', 'five-axis query mapping', 'empty result', 'pagination + reset page']
 }
 
+export async function requiredWorkspaceChecks(tab) {
+  await tab.reload()
+  await selectScenario(tab, 'workflow')
+  await label(tab, '試験画面').selectOption('required')
+  await requiredRows(tab).first().waitFor({ state: 'visible' })
+  assert.equal(await requiredRows(tab).count(), 6)
+  const page = await tab.playwright.domSnapshot()
+  assert.ok(page.includes('必要資料'))
+  assert.ok(!page.includes('診断書 神戸病院'), 'undetermined candidate does not enter required work')
+  const partial = tab.playwright.getByRole('button', { name: /W-021 画像データ の必要資料詳細$/ })
+  for (const value of ['一部受領', '確認中', '不足あり']) assert.ok((await partial.innerText()).includes(value))
+  await partial.click()
+  await visible(tab, '取得条件')
+  assert.equal(await tab.playwright.getByRole('textbox', { name: '取得先', exact: true }).count(), 0, 'conditions are read-only until explicit edit')
+  assert.equal(await button(tab, '例外を記録').count(), 0, 'existing exception is summarized without a fake creation action')
+  assert.equal(await tab.playwright.getByText('一部不開示', { exact: true }).count() > 0, true)
+  await button(tab, '編集').click()
+  await tab.playwright.getByRole('textbox', { name: '取得先', exact: true }).waitFor({ state: 'visible' })
+  await button(tab, 'キャンセル').click()
+  await button(tab, '詳細を閉じる').click()
+  await tab.playwright.getByRole('button', { name: /D-003 診断書 の必要資料詳細$/ }).first().click()
+  assert.equal(await tab.playwright.getByRole('link', { name: '資料リンクを開く' }).getAttribute('href'), 'https://example.test/document')
+  assert.equal(await tab.playwright.getByRole('button', { name: /ファイル|リンクを追加/ }).count(), 0)
+  assert.equal(await tab.playwright.getByText('ルール・詳細情報', { exact: true }).count(), 1)
+  assert.equal((await logs(tab)).filter(request => request.method === 'post').length, 0)
+  return ['required-only same CaseDocument identities', 'independent axes remain visible', 'read-first inspector', 'real received link', 'no fake write API']
+}
+
 export async function inspectorChecks(tab) {
-  await tab.reload(); await rows(tab).first().waitFor({ state: 'visible' })
+  await tab.reload(); await rows(tab).first().waitFor({ state: 'visible' }); await allCandidates(tab)
   await label(tab, '応答時間').selectOption('1200')
   await button(tab, 'D-003 診断書 大阪病院 の詳細').click()
   await visible(tab, '資料の詳細を読み込み中…')
@@ -95,9 +126,9 @@ export async function inspectorChecks(tab) {
   await label(tab, '取得先').waitFor({ state: 'visible' })
   await label(tab, '応答時間').selectOption('25')
   assert.equal(await button(tab, '保存').isEnabled(), false)
-  for (const name of ['取得先', '取得方法', '対象者', '対象期間・開始', '対象期間・終了', '対象範囲', '担当者', '依頼日時', '回答期限', '作業優先度', '保全理由', '取得作業', '内容充足', '確認', '結果・例外']) assert.equal(await label(tab, name).count(), 1)
+  for (const name of ['取得先', '取得方法', '対象者', '対象期間・開始', '対象期間・終了', '対象範囲', '担当者', '依頼日時', '回答期限', '作業優先度', '保全理由', '取得作業', '充足状況', '確認状況', '結果・例外']) assert.equal(await label(tab, name).count(), 1)
   assert.equal(await tab.playwright.getByRole('link', { name: '資料リンクを開く' }).getAttribute('href'), 'https://example.test/document')
-  await button(tab, '不要').click(); await tab.playwright.getByRole('textbox', { name: /^判断理由/ }).fill('   ')
+  await tab.playwright.getByLabel('取得要否').getByRole('button', { name: '不要', exact: true }).click(); await tab.playwright.getByRole('textbox', { name: /^判断理由/ }).fill('   ')
   await button(tab, '保存').click(); await visible(tab, '不要と判断した理由を入力してください。')
   assert.equal((await logs(tab)).filter(r => r.method === 'patch').length, 0)
   await button(tab, 'キャンセル').click()
@@ -116,6 +147,7 @@ export async function inspectorChecks(tab) {
   await button(tab, '保存').waitFor({ state: 'visible' })
   await button(tab, '詳細を閉じる').click()
   await label(tab, '閲覧のみ').check()
+  await allCandidates(tab)
   await button(tab, 'D-003 診断書 試験病院・更新 の詳細').waitFor({ state: 'visible' })
   await button(tab, 'D-003 診断書 試験病院・更新 の詳細').click()
   await label(tab, '取得先').waitFor({ state: 'visible' })
@@ -140,12 +172,12 @@ export async function errorChecks(tab) {
   await selectScenario(tab, 'missing-type'); await visible(tab, '事件類型が設定されていません。')
   assert.equal(await button(tab, '資料収集リストを作成').count(), 0)
   await selectScenario(tab, 'warnings'); await visible(tab, '旧書類データが含まれています。自動移行は行いません。')
-  await rows(tab).first().waitFor({ state: 'visible' }); assert.equal(await rows(tab).count(), 3)
+  await rows(tab).first().waitFor({ state: 'visible' }); await allCandidates(tab); assert.equal(await rows(tab).count(), 3)
   return [...results, 'no rules', 'missing case type', 'coexistence warnings keep collection']
 }
 
 export async function recoveryChecks(tab) {
-  await tab.reload(); await rows(tab).first().waitFor({ state: 'visible' })
+  await tab.reload(); await rows(tab).first().waitFor({ state: 'visible' }); await allCandidates(tab)
   await label(tab, '試験エラー').selectOption('detail:404')
   await button(tab, 'D-003 診断書 大阪病院 の詳細').click()
   await visible(tab, '案件または資料が見つかりません。一覧を再読み込みしてください。')
@@ -182,7 +214,7 @@ export async function recoveryChecks(tab) {
 }
 
 export async function fieldChecks(tab) {
-  await tab.reload(); await rows(tab).first().waitFor({ state: 'visible' })
+  await tab.reload(); await rows(tab).first().waitFor({ state: 'visible' }); await allCandidates(tab)
   await button(tab, 'D-003 診断書 大阪病院 の詳細').click()
   await label(tab, '取得先').waitFor({ state: 'visible' })
   await button(tab, '通信記録をクリア').click()
@@ -194,11 +226,11 @@ export async function fieldChecks(tab) {
   await label(tab, '作業優先度').selectOption('normal')
   await tab.playwright.getByRole('checkbox', { name: '保全優先', exact: true }).check()
   await label(tab, '保全理由').fill('保存期間を確認')
-  await button(tab, '不要').click()
+  await tab.playwright.getByLabel('取得要否').getByRole('button', { name: '不要', exact: true }).click()
   await tab.playwright.getByRole('textbox', { name: /^判断理由/ }).fill('本件では対象外')
   await label(tab, '取得作業').selectOption('closed')
-  await label(tab, '内容充足').selectOption('satisfied_by_alternative')
-  await label(tab, '確認').selectOption('reviewing')
+  await label(tab, '充足状況').selectOption('satisfied_by_alternative')
+  await label(tab, '確認状況').selectOption('reviewing')
   await label(tab, '結果・例外').selectOption('other')
   await button(tab, '保存').click(); await visible(tab, '保存しました。')
   const payload = (await logs(tab)).find(r => r.method === 'patch').payload
