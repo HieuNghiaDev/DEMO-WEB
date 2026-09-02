@@ -41,7 +41,7 @@ export default function VisaProgressTable({ applications, hasActiveFilters, onRe
     <>
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[1080px] border-collapse text-left">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+          <thead className="border-b border-slate-200 bg-slate-50/80 text-xs font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-400">
             <tr>
               <th className="px-4 py-3">案件ID</th>
               <th className="px-3 py-3">申請者氏名</th>

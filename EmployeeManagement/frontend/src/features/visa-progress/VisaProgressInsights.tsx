@@ -69,8 +69,8 @@ function DeadlineRiskOverview({ deadlineRisk }: { deadlineRisk: ReturnType<typeo
       <div className="flex items-start gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-400/10 dark:text-amber-300" aria-hidden="true"><AlertTriangle size={18} /></span>
         <div>
-        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">期限リスク</h2>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">在留期限・追完期限を30日以内で集計</p>
+          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">期限リスク</h2>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">在留期限・追完期限を30日以内で集計</p>
         </div>
       </div>
       <div className="mt-auto pt-4">

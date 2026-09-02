@@ -19,9 +19,16 @@ export default function VisaScrollReveal({ children, className = '', delayMs = 0
       return undefined
     }
 
-    const observer = new IntersectionObserver(([entry]) => {
-      setIsVisible(entry.isIntersecting)
-    }, { threshold: 0.16, rootMargin: '0px 0px -6% 0px' })
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          // Once visible, mark permanently and stop observing to avoid flicker on scroll-back
+          setIsVisible(true)
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.08, rootMargin: '0px 0px -4% 0px' },
+    )
 
     observer.observe(panel)
     return () => observer.disconnect()

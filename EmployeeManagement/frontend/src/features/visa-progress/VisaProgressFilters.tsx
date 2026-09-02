@@ -28,33 +28,38 @@ export default function VisaProgressFilters(props: Props) {
   ].filter(Boolean).length
 
   return (
-    <div className="border-b border-slate-200 bg-slate-50/70 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">申請データ</h2>
-          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+    <div className="border-b border-slate-200 bg-slate-50/70 px-4 py-3.5 dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">申請データ一覧</h2>
+          <span className="rounded bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
             {props.filteredCount === 0
-              ? `全${props.totalCount}件中 0件`
+              ? `0 / ${props.totalCount}件`
               : props.filteredCount === props.totalCount
-                ? `${props.filteredCount}件中 ${props.visibleStart}–${props.visibleEnd}件を表示`
-                : `全${props.totalCount}件中 ${props.filteredCount}件 · ${props.visibleStart}–${props.visibleEnd}件を表示`}
-          </p>
+                ? `${props.filteredCount}件`
+                : `${props.filteredCount} / ${props.totalCount}件`}
+          </span>
+          {props.filteredCount !== props.totalCount && (
+            <span className="text-[11px] text-slate-400 dark:text-slate-500">
+              （{props.visibleStart}–{props.visibleEnd}件を表示）
+            </span>
+          )}
         </div>
 
         {activeFilterCount > 0 && (
           <button
             type="button"
             onClick={props.onReset}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-200/70 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-200/70 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
           >
-            <RotateCcw size={14} aria-hidden="true" />
+            <RotateCcw size={13} aria-hidden="true" />
             条件をクリア
             <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] tabular-nums dark:bg-slate-700">{activeFilterCount}</span>
           </button>
         )}
       </div>
 
-      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.4fr)_minmax(150px,.7fr)_minmax(150px,.7fr)_minmax(150px,.7fr)]">
+      <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.4fr)_minmax(150px,.7fr)_minmax(150px,.7fr)_minmax(150px,.7fr)]">
         <label className="relative md:col-span-2 xl:col-span-1">
           <span className="sr-only">申請者名・案件IDを検索</span>
           <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
