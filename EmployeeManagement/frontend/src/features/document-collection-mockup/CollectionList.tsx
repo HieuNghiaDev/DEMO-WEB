@@ -5,6 +5,12 @@ import type { CollectionFilters, CollectionItem } from './types'
 import CollectionListView from '../document-collection/components/CollectionListView'
 import { emptyFilters, isOverdue, purposeNames } from './mockData'
 
+const necessityStatus = { '未判定': 'undetermined', '必要': 'required', '不要': 'not_required' } as const
+const collectionStatus = { '未着手': 'not_started', '準備中': 'preparing', '依頼済み': 'requested', '一部受領': 'partially_received', '受領済み': 'received', '取得困難': 'difficult', '終了': 'closed' } as const
+const fulfillmentStatus = { '未判定': 'undetermined', '不足あり': 'insufficient', '充足': 'satisfied', '代替資料で充足': 'satisfied_by_alternative' } as const
+const reviewStatus = { '未確認': 'unreviewed', '確認中': 'reviewing', '確認済み': 'reviewed', '差戻し': 'returned' } as const
+const resultStatus = { 'なし': null, '不存在': 'not_exist', '不開示': 'not_disclosed', '一部不開示': 'partially_disclosed', '保管先不明': 'custodian_unknown', 'その他': 'other' } as const
+
 const statusGroups: Array<{ axis: string; label: string; values: readonly string[] }> = [
   { axis: 'necessity', label: '必要性', values: necessities }, { axis: 'collection', label: '取得作業', values: collections },
   { axis: 'sufficiency', label: '内容充足', values: sufficiencies }, { axis: 'review', label: '確認', values: reviews },
@@ -42,11 +48,11 @@ export default function CollectionList({ items, selectedId, onSelect }: { items:
     period: item.periodStart ? `${item.periodStart.replaceAll('-', '/')} — ${item.periodEnd.replaceAll('-', '/')}` : null,
     origin: item.origin === '案件で追加' ? '別取得先' : null,
     preservation: item.priority === '保全優先', preservationText: '保存期間の確認が必要',
-    unnecessary: item.necessity === '不要', necessity: item.necessity,
-    collection: item.collection, fulfillment: item.sufficiency, review: item.review,
-    result: item.exception === 'なし' ? null : item.exception,
+    unnecessary: item.necessity === '不要', necessity: item.necessity, necessityStatus: necessityStatus[item.necessity],
+    collection: item.collection, collectionStatus: collectionStatus[item.collection], fulfillment: item.sufficiency, fulfillmentStatus: fulfillmentStatus[item.sufficiency], review: item.review, reviewStatus: reviewStatus[item.review],
+    result: item.exception === 'なし' ? null : item.exception, resultStatus: resultStatus[item.exception],
     approval: item.approval === '承認待ち' ? '外部請求 · 承認待ち' : undefined,
-    assignee: item.assignee === 'LE HIEU NGHIA' ? 'L.H. NGHIA' : item.assignee,
+    assignee: item.assignee === 'LE HIEU NGHIA' ? 'L.H. NGHIA' : item.assignee, hasAssignee: true,
     deadline: item.deadline ? item.deadline.replaceAll('-', '/') : '期限 未設定', overdue: isOverdue(item),
   }))} />
 }

@@ -1,10 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 export default function InspectorShell({ title, code, subtitle, children, footer, onClose, breakpoint = 1280 }: {
   title: string; code: ReactNode; subtitle?: string; children: ReactNode; footer: ReactNode; onClose: () => void; breakpoint?: number
 }) {
+  const { t } = useTranslation()
   const [overlay, setOverlay] = useState(() => window.innerWidth < breakpoint)
   const panel = useRef<HTMLElement>(null)
   const close = useRef(onClose)
@@ -35,7 +37,7 @@ export default function InspectorShell({ title, code, subtitle, children, footer
   return <>
     {overlay && <div className="dc-backdrop" onClick={onClose} aria-hidden="true" />}
     <aside className={`dc-inspector ${overlay ? 'is-overlay' : ''}`} ref={panel} tabIndex={-1} role={overlay ? 'dialog' : 'region'} aria-modal={overlay || undefined} aria-labelledby={titleId}>
-      <header className="dc-inspector-head"><div><span className="dc-code">{code}</span><h2 id={titleId}>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><button type="button" className="dc-icon-button" aria-label="詳細を閉じる" onClick={onClose}><X size={20} /></button></header>
+      <header className="dc-inspector-head"><div><span className="dc-code">{code}</span><h2 id={titleId}>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><button type="button" className="dc-icon-button" aria-label={t('documentCollection.editor.closeDetail')} onClick={onClose}><X size={20} /></button></header>
       <div className="dc-inspector-body">{children}</div>
       <footer className="dc-inspector-footer">{footer}</footer>
     </aside>

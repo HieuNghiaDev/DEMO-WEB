@@ -20,7 +20,8 @@ erDiagram
 | --- | --- |
 | `offices` / `Office` | Văn phòng: `office_code` duy nhất, tên, địa chỉ, ảnh phòng, trạng thái. |
 | `departments` / `Department` | Phòng ban của office; unique theo cặp `office_id + department_code`. |
-| `employees` / `Employee` | Hồ sơ nhân viên: mã duy nhất, tên/kana, nhân khẩu học, office/department, liên hệ, avatar, trạng thái. Dùng soft delete. |
+| `employees` / `Employee` | Hồ sơ nhân viên: mã duy nhất, tên/kana, nhân khẩu học, office/department, liên hệ, avatar, trạng thái. Dùng soft delete. Mã được backend phát hành bất biến theo office/năm: `TMS-{YY}{NNN}` cho `THEMIS`, `TLW-{YY}{NNN}` cho `CHUKA_LAW`. Migration backfill chuẩn hóa các mã legacy hiện hữu; `users.login_id` chỉ được đồng bộ khi trước đó chính xác là bản sao của mã nhân viên cũ. |
+| `employee_code_sequences` / `EmployeeCodeSequence` | Bộ đếm mã nhân viên theo cặp `office_id + sequence_year` (unique). `last_sequence` được khóa trong transaction khi tạo nhân viên để mã mới không trùng và không tái sử dụng sau khi xóa/vô hiệu hóa. |
 | `users` / `User` | Tài khoản đăng nhập, liên kết tối đa một employee, role, active, yêu cầu đổi mật khẩu và lần đăng nhập gần nhất. Password được Laravel hash và ẩn khi serialize. |
 | `personal_access_tokens` | Token Sanctum, có thời hạn do AuthController truyền vào khi tạo token. |
 | `attendances` / `Attendance` | Một ca làm: employee, ngày, check-in/out, khoảng nghỉ, khoảng ra ngoài/địa điểm và status. Các datetime/date được cast Eloquent. |

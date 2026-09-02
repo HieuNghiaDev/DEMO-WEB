@@ -59,7 +59,8 @@ class CaseWorkspaceApiTest extends TestCase
             ->assertJsonPath('summary.missing_documents', $summaryBefore['missing_documents'] - 1)
             ->assertJsonPath('summary.documents_total', $summaryBefore['documents_total'] - 1);
         $this->actingAs($user, 'sanctum')->getJson('/api/case-files')
-            ->assertJsonPath('case_files.0.documents_count', $summaryBefore['documents_total'] - 1);
+            // Legacy template rows are candidates until an operator explicitly marks them required.
+            ->assertJsonPath('case_files.0.documents_count', 0);
 
         $this->actingAs($user, 'sanctum')
             ->patchJson("/api/case-files/{$case['id']}/documents/{$applicationDocumentId}", [

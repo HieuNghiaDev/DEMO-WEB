@@ -28,6 +28,12 @@ class EmployeeTaskController extends Controller
             '在籍中の社員にのみ業務を依頼できます。'
         );
 
+        abort_if(
+            $request->user()->employee_id === $employee->id,
+            422,
+            '自分自身に業務を依頼することはできません。'
+        );
+
         $isOnline = Attendance::query()
             ->where('employee_id', $employee->id)
             ->whereNull('clock_out')

@@ -5,12 +5,15 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\EmployeeNotification;
+use App\Models\Office;
 use App\Models\Role;
+use App\Services\EmployeeCodeGenerator;
+use App\Services\SecurityAuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use App\Services\SecurityAuditLogger;
 
 class OrganizationController extends Controller
 {
@@ -32,10 +35,11 @@ class OrganizationController extends Controller
 
         return response()->json(['message' => '仮パスワードを生成しました。本人は次回ログイン時に変更が必要です。', 'temporary_password' => $temporaryPassword]);
     }
-    public function store(Request $request): JsonResponse
+
+    public function store(Request $request, EmployeeCodeGenerator $employeeCodeGenerator): JsonResponse
     {
         $validated = $request->validate([
-            'employee_code' => ['required', 'string', 'max:50', 'unique:employees,employee_code'],
+            'employee_code' => ['prohibited'],
             'full_name' => ['required', 'string', 'max:255'],
             'full_name_kana' => ['nullable', 'string', 'max:255'],
             'office_id' => ['required', 'integer', 'exists:offices,id'],
@@ -45,11 +49,16 @@ class OrganizationController extends Controller
             'hire_date' => ['required', 'date'],
         ]);
 
-        $employee = Employee::create([
-            ...$validated,
-            'employment_type' => 'full_time',
-            'status' => 'active',
-        ]);
+        $employee = DB::transaction(function () use ($validated, $employeeCodeGenerator): Employee {
+            $office = Office::query()->findOrFail($validated['office_id']);
+
+            return Employee::create([
+                ...$validated,
+                'employee_code' => $employeeCodeGenerator->allocate($office),
+                'employment_type' => 'full_time',
+                'status' => 'active',
+            ]);
+        });
 
         return response()->json([
             'message' => '社員を登録しました。',

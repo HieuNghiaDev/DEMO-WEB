@@ -28,9 +28,11 @@ class AdditionalEmployeeUserSeeder extends Seeder
             throw new \RuntimeException('Required offices have not been seeded.');
         }
 
+        $year = now()->format('y');
+
         $employees = [
             [
-                'employee_code' => 'TM002',
+                'employee_code' => "TMS-{$year}002",
                 'full_name' => 'THAN VAN SAY',
                 'full_name_kana' => 'タンバンサイ',
                 'gender' => 'male',
@@ -42,7 +44,7 @@ class AdditionalEmployeeUserSeeder extends Seeder
                 'employment_type' => 'part_time',
             ],
             [
-                'employee_code' => 'TM003',
+                'employee_code' => "TMS-{$year}003",
                 'full_name' => 'TRINH THI THU HUONG',
                 'full_name_kana' => 'チン・ティ・トゥ・フオン',
                 'gender' => 'female',
@@ -54,7 +56,7 @@ class AdditionalEmployeeUserSeeder extends Seeder
                 'employment_type' => 'full_time',
             ],
             [
-                'employee_code' => 'TM004',
+                'employee_code' => "TMS-{$year}004",
                 'full_name' => 'VU THI NGOC BICH',
                 'full_name_kana' => 'ヴー・ティ・ゴック・ビック',
                 'gender' => 'female',
@@ -66,7 +68,7 @@ class AdditionalEmployeeUserSeeder extends Seeder
                 'employment_type' => 'full_time',
             ],
             [
-                'employee_code' => 'LW001',
+                'employee_code' => "TLW-{$year}001",
                 'full_name' => '中峯',
                 'full_name_kana' => 'ナカミネ',
                 'gender' => 'female',
@@ -78,7 +80,7 @@ class AdditionalEmployeeUserSeeder extends Seeder
                 'employment_type' => 'full_time',
             ],
             [
-                'employee_code' => 'LW002',
+                'employee_code' => "TLW-{$year}002",
                 'full_name' => '中峯　将文',
                 'full_name_kana' => 'ナカミネ・マサフミ',
                 'gender' => 'male',

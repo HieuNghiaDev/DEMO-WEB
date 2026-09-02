@@ -22,9 +22,11 @@ class EmployeeUserSeeder extends Seeder
             ->where('office_code', 'THEMIS')
             ->firstOrFail();
 
+        $employeeCode = sprintf('TMS-%s001', now()->format('y'));
+
         $employee = Employee::updateOrCreate(
             [
-                'employee_code' => 'TM001',
+                'employee_code' => $employeeCode,
             ],
             [
                 'full_name' => 'LE HIEU NGHIA',
@@ -46,7 +48,7 @@ class EmployeeUserSeeder extends Seeder
         );
 
         $user = User::firstOrNew([
-            'login_id' => 'TM001',
+            'login_id' => $employeeCode,
         ]);
 
         $user->fill([

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 import { CaseWorkspaceView } from '../features/case-workspace/CaseWorkspacePage'
 import CaseFormPage from '../features/case-management/CaseFormPage'
@@ -37,6 +38,7 @@ function CaseDetailRoute({ user }: { user: CaseViewer }) {
   return <CaseWorkspaceView key={caseId} user={user} caseId={Number(caseId)} onBack={() => navigate('/quests')} onEdit={() => navigate(`/quests/${caseId}/edit`)} initialNotice={location.state?.caseNotice}/>
 }
 function CaseListPage({ user }: { user: CaseViewer }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [cases, setCases] = useState<BusinessCase[]>([])
   const [loading, setLoading] = useState(true)
@@ -78,7 +80,7 @@ function CaseListPage({ user }: { user: CaseViewer }) {
     } catch (requestError) { setError(caseError(requestError).message) } finally { setAssigning(null) }
   }
   return <>
-    <CaseListView cases={cases} filteredCases={filtered} loading={canRead && loading} error={canRead ? error : '案件を閲覧する権限がありません。'} keyword={keyword} status={status} caseType={caseType} quickFilter={quick} caseTypes={types} canCreate={canCreate} canAssign={canAssign && employees.length > 0} assignees={employees} assigningCaseId={assigning} onKeywordChange={setKeyword} onStatusChange={setStatus} onCaseTypeChange={setCaseType} onQuickFilterChange={setQuick} onRefresh={() => { setLoading(true); setRefresh(value => value + 1) }} onCreate={() => setCreating(true)} onOpen={id => navigate(`/quests/${id}`)} onAssign={(id, employeeId) => void assign(id, employeeId)}/>
+    <CaseListView cases={cases} filteredCases={filtered} loading={canRead && loading} error={canRead ? error : t('cases.list.readPermissionRequired')} keyword={keyword} status={status} caseType={caseType} quickFilter={quick} caseTypes={types} canCreate={canCreate} canAssign={canAssign && employees.length > 0} assignees={employees} assigningCaseId={assigning} onKeywordChange={setKeyword} onStatusChange={setStatus} onCaseTypeChange={setCaseType} onQuickFilterChange={setQuick} onRefresh={() => { setLoading(true); setRefresh(value => value + 1) }} onCreate={() => setCreating(true)} onOpen={id => navigate(`/quests/${id}`)} onAssign={(id, employeeId) => void assign(id, employeeId)}/>
     {creating && <NewCaseDialog
       user={user}
       onClose={() => setCreating(false)}

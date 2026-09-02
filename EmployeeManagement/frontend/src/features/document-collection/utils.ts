@@ -65,8 +65,9 @@ export function itemToRow(item: CollectionItem, now = Date.now()): CollectionRow
     origin: item.is_template_generated ? null : '案件で追加', preservation: item.preservation_priority,
     preservationText: item.preservation_reason, unnecessary: item.necessity_status === 'not_required',
     necessity: necessityLabels[item.necessity_status], collection: collectionLabels[item.collection_status], fulfillment: fulfillmentLabels[item.fulfillment_status], review: reviewLabels[item.review_status],
-    result: item.collection_result ? resultLabels[item.collection_result] : null,
-    assignee: item.assigned_employee?.display_name ?? '未割当', deadline: formatDate(item.response_deadline), overdue,
+    necessityStatus: item.necessity_status, collectionStatus: item.collection_status, fulfillmentStatus: item.fulfillment_status, reviewStatus: item.review_status,
+    result: item.collection_result ? resultLabels[item.collection_result] : null, resultStatus: item.collection_result,
+    assignee: item.assigned_employee?.display_name ?? '未割当', hasAssignee: item.assigned_employee !== null, deadline: formatDate(item.response_deadline), overdue,
   }
 }
 

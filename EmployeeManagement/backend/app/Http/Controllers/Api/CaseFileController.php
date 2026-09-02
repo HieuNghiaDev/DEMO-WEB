@@ -19,11 +19,7 @@ class CaseFileController extends Controller
     {
         return response()->json(['case_files' => CaseFile::query()
             ->with(['client', 'caseTypeOption', 'department', 'assignedEmployee', 'createdByEmployee'])
-            ->withCount([
-                'documents' => fn ($query) => $query->where('status', '!=', 'not_required'),
-                'documents as confirmed_documents_count' => fn ($query) => $query
-                    ->whereIn('status', ['confirmed', 'submitted']),
-            ])
+            ->withCount($this->documentProgressCounts())
             ->latest()->get()]);
     }
 
@@ -46,16 +42,12 @@ class CaseFileController extends Controller
         });
 
         // Checklist initialization is an explicit action, never a side effect of case creation.
-        return response()->json(['case_file' => $caseFile->load(['client', 'caseTypeOption.parent', 'department', 'assignedEmployee', 'createdByEmployee'])->loadCount(['documents' => fn ($query) => $query->where('status', '!=', 'not_required'), 'documents as confirmed_documents_count' => fn ($query) => $query->whereIn('status', ['confirmed', 'submitted'])])], 201);
+        return response()->json(['case_file' => $caseFile->load(['client', 'caseTypeOption.parent', 'department', 'assignedEmployee', 'createdByEmployee'])->loadCount($this->documentProgressCounts())], 201);
     }
 
     public function show(CaseFile $caseFile): JsonResponse
     {
-        $caseFile->loadCount([
-            'documents' => fn ($query) => $query->where('status', '!=', 'not_required'),
-            'documents as confirmed_documents_count' => fn ($query) => $query
-                ->whereIn('status', ['confirmed', 'submitted']),
-        ]);
+        $caseFile->loadCount($this->documentProgressCounts());
 
         return response()->json(['case_file' => $caseFile->load([
             'client', 'caseTypeOption', 'department', 'assignedEmployee', 'createdByEmployee', 'documents.createdByEmployee',
@@ -154,5 +146,17 @@ class CaseFileController extends Controller
             403,
             '案件の担当者を変更できるのはレベル4以上のユーザーのみです。'
         );
+    }
+
+    private function documentProgressCounts(): array
+    {
+        return [
+            // List progress is driven exclusively by the V2 collection axes, not legacy document.status.
+            'documents' => fn ($query) => $query->where('necessity_status', 'required'),
+            'documents as confirmed_documents_count' => fn ($query) => $query
+                ->where('necessity_status', 'required')
+                ->whereIn('fulfillment_status', ['satisfied', 'satisfied_by_alternative'])
+                ->where('review_status', 'reviewed'),
+        ];
     }
 }

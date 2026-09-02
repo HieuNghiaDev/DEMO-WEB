@@ -203,6 +203,25 @@ class EmployeeTaskWorkflowTest extends TestCase
             ->assertJsonPath('message', '勤務中の社員にのみ業務を依頼できます。');
     }
 
+    public function test_manager_cannot_assign_a_task_to_themselves(): void
+    {
+        $manager = User::factory()->withRole('level_4')->create([
+            'employee_id' => $this->employee->id,
+            'role' => 'manager',
+        ]);
+        Sanctum::actingAs($manager);
+
+        $this->postJson("/api/employees/{$this->employee->id}/tasks", [
+            'title' => '自分用の業務',
+            'duration_minutes' => 60,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', '自分自身に業務を依頼することはできません。');
+
+        $this->assertDatabaseCount('employee_tasks', 0);
+        $this->assertDatabaseCount('employee_notifications', 0);
+    }
+
     public function test_legacy_manager_string_without_rbac_cannot_assign_tasks(): void
     {
         $manager = User::factory()->create(['role' => 'manager']);

@@ -23,8 +23,10 @@ class ManagerTestUserSeeder extends Seeder
             ->where('office_code', 'THEMIS')
             ->firstOrFail();
 
+        $employeeCode = sprintf('TMS-%s005', now()->format('y'));
+
         $employee = Employee::updateOrCreate(
-            ['employee_code' => 'TM-MGR001'],
+            ['employee_code' => $employeeCode],
             [
                 'full_name' => 'THEMIS MANAGER',
                 'full_name_kana' => 'テミス・マネージャー',
@@ -45,7 +47,7 @@ class ManagerTestUserSeeder extends Seeder
         );
 
         User::updateOrCreate(
-            ['login_id' => 'TM-MGR001'],
+            ['login_id' => $employeeCode],
             [
                 'employee_id' => $employee->id,
                 'name' => $employee->full_name,

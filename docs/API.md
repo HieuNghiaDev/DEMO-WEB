@@ -28,6 +28,8 @@ Khách hàng (`clients`) lưu dữ liệu liên hệ: `phone`, `email`, `address
 
 Mỗi hồ sơ có thể có tab tự do ngoài ba tab mặc định. `POST /case-files/{caseFile}/custom-sections` tạo tab với `title` (bắt buộc, tối đa 80 ký tự) và `content` (tùy chọn). `PATCH` hoặc `DELETE /case-files/{caseFile}/custom-sections/{customSection}` cập nhật hoặc xóa tab; các thao tác này yêu cầu quyền `case.update`.
 
+`GET /case-files` trả tiến độ tài liệu cho danh sách: `documents_count` chỉ đếm `case_documents` có `necessity_status=required`. `confirmed_documents_count` chỉ đếm các tài liệu cần thiết có `review_status=reviewed` và `fulfillment_status` là `satisfied` hoặc `satisfied_by_alternative`. Vì vậy hồ sơ mới hoặc chỉ có tài liệu `undetermined`/`not_required` hiển thị `0 / 0`; việc chỉ nhận file chưa tự được coi là hoàn thành.
+
 ### Workspace hồ sơ và checklist
 
 `POST /case-files` giữ nguyên request/response shape và quyền, nhưng CaseFile mới bắt đầu với **0 `case_documents`** (`documents_count = 0`, `confirmed_documents_count = 0`), kể cả khi case type có template legacy đang hiệu lực. Không gọi legacy template engine hoặc V2 generator và không ghi activity initialize trong lúc tạo案件. Hồ sơ/tài liệu đã tồn tại không bị thay đổi.
@@ -272,7 +274,8 @@ Payload đổi trạng thái:
 | Method & path | Khóa | Nội dung request | Hành vi |
 | --- | --- | --- | --- |
 | `GET /organization` | Có | — | Nhân viên, office/department, trạng thái hiện tại, task hiện tại và tổng `summary`. PII chỉ có cho manager/admin. |
-| `POST /employees/{employee}/tasks` | Có | `title`, `description` (tùy chọn, tối đa 5000), `duration_minutes`: `30`, `60` hoặc `120` | Giao task mới ở trạng thái `pending`, gắn với đúng một employee. |
+| `POST /employees` | Có, `employee.create` | `full_name`, `office_id`, `hire_date`; tùy chọn `full_name_kana`, `position_title`, `work_email`, `gender` | Backend phát hành `employee_code` bất biến từ `offices.office_code`: `THEMIS → TMS-YYNNN`, `CHUKA_LAW → TLW-YYNNN`. Không nhận `employee_code` từ client; response trả nhân viên kèm mã đã phát hành. |
+| `POST /employees/{employee}/tasks` | Có | `title`, `description` (tùy chọn, tối đa 5000), `duration_minutes`: `30`, `60` hoặc `120` | Giao task mới ở trạng thái `pending`, gắn với đúng một employee. Người nhận phải đang online và người giao không thể tự giao việc cho chính mình. |
 | `GET /my/tasks` | Có | — | Các task của employee hiện tại có trạng thái `pending`, `accepted`, `in_progress`. |
 | `PATCH /tasks/{task}/accept` | Có | — | Chỉ nhân viên nhận task đó có thể chuyển `pending` sang `accepted`, và đặt `accepted_at`. |
 | `PATCH /tasks/{task}/status` | Có | `status`: `in_progress` hoặc `completed` | Nhân viên nhận task bắt đầu task đã xác nhận, hoặc hoàn tất task đang thực hiện. Khi bắt đầu, API tạo `work_session` liên kết với attendance đang mở để Current Task luôn đồng bộ. |
@@ -355,7 +358,7 @@ Ví dụ đăng nhập thành công (đã rút gọn):
     "id": 1,
     "email": "employee@example.com",
     "role": "employee",
-    "employee": { "id": 1, "employee_code": "TM001", "status": "active" }
+    "employee": { "id": 1, "employee_code": "TMS-26001", "status": "active" }
   },
   "token": "1|..."
 }

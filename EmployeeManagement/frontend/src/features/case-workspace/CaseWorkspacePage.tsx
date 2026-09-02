@@ -1,13 +1,14 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import axios from 'axios'
+import { useTranslation } from 'react-i18next'
 import {
-  AlertTriangle, ArrowLeft, CalendarClock, CheckCircle2, ChevronRight, CircleGauge,
+  AlertTriangle, ArrowLeft, CheckCircle2, ChevronRight, CircleGauge,
   Clock3, Files, ListChecks, Mail, MessageSquareText, Pencil, Phone,
-  Plus, RefreshCw, ShieldCheck, Trash2, UserRound, UsersRound, X,
+  Plus, RefreshCw, ShieldCheck, Trash2, UserRound, X,
 } from 'lucide-react'
 
 import { useAuth } from '../../contexts/AuthContext'
-import { CasePageHeader, CaseSummaryStrip } from '../case-management/CasePrimitives'
+import i18n from '../../i18n'
 import { generatedCaseTitle } from '../case-management/helpers'
 import type { CaseViewer } from '../case-management/types'
 import { caseWorkspaceApi } from './api'
@@ -26,14 +27,11 @@ const textareaClass = `${inputClass} min-h-24 py-2.5`
 const primaryButton = 'inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400'
 const secondaryButton = 'inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'
 
-const tabs: Array<{ id: WorkspaceTab; label: string; icon: typeof Files }> = [
-  { id: 'overview', label: '概要', icon: CircleGauge },
-  { id: 'collection', label: '資料収集', icon: ListChecks },
-  { id: 'documents', label: '必要資料', icon: Files },
-  { id: 'tasks', label: 'タスク', icon: ListChecks },
-  { id: 'deadlines', label: '期限', icon: CalendarClock },
-  { id: 'parties', label: '関係者', icon: UsersRound },
-  { id: 'timeline', label: '履歴', icon: MessageSquareText },
+const tabs: Array<{ id: WorkspaceTab; icon: typeof Files }> = [
+  { id: 'overview', icon: CircleGauge },
+  { id: 'collection', icon: ListChecks },
+  { id: 'documents', icon: Files },
+  { id: 'timeline', icon: MessageSquareText },
 ]
 
 export default function CaseWorkspacePage(props: Props) {
@@ -42,6 +40,7 @@ export default function CaseWorkspacePage(props: Props) {
 }
 
 export function CaseWorkspaceView({ caseId, onBack, onEdit, initialNotice, user }: Props & { user: CaseViewer }) {
+  const { t } = useTranslation()
   const [data, setData] = useState<WorkspaceResponse | null>(null)
   const [tab, setTab] = useState<WorkspaceTab>('overview')
   const [loading, setLoading] = useState(true)
@@ -57,7 +56,7 @@ export function CaseWorkspaceView({ caseId, onBack, onEdit, initialNotice, user 
     try {
       setData(await caseWorkspaceApi.show(caseId))
     } catch (requestError) {
-      setError(apiError(requestError, '案件ワークスペースを読み込めませんでした。'))
+      setError(apiError(requestError, t('cases.workspace.loadFailed')))
     } finally {
       setLoading(false)
     }
@@ -98,7 +97,7 @@ export function CaseWorkspaceView({ caseId, onBack, onEdit, initialNotice, user 
   return <main className="dc-preview cm-page">
     <div className="cm-backbar">
       <button type="button" onClick={onBack} className="dc-button">
-        <ArrowLeft size={17}/>案件一覧へ
+        <ArrowLeft size={17}/>{t('cases.workspace.backToList')}
       </button>
     </div>
 
@@ -107,13 +106,13 @@ export function CaseWorkspaceView({ caseId, onBack, onEdit, initialNotice, user 
     {(error || notice) && <div className={`mt-4 rounded-lg border px-4 py-3 text-sm ${error ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300' : 'border-green-200 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-300'}`}>{error ?? notice}</div>}
 
     <section className="cm-surface cm-workspace-tabs">
-      <nav aria-label="案件ワークスペース">
-        {tabs.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setTab(id)} aria-current={tab === id ? 'page' : undefined}><Icon size={16}/>{label}</button>)}
+      <nav aria-label={t('cases.workspace.ariaLabel')}>
+        {tabs.map(({ id, icon: Icon }) => <button key={id} type="button" onClick={() => setTab(id)} aria-current={tab === id ? 'page' : undefined}><Icon size={16}/>{t(`cases.tabs.${id}`)}</button>)}
       </nav>
       <div className="cm-tab-content">
-        {tab === 'collection' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">資料収集を読み込み中…</p>}><DocumentCollectionPanel key={caseId} caseId={caseId} canUpdate={canUpdate} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onHistory={() => setTab('timeline')} onBack={onBack} onChanged={() => void reload(true)} /></Suspense>}
+        {tab === 'collection' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingCollection')}</p>}><DocumentCollectionPanel key={caseId} caseId={caseId} canUpdate={canUpdate} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onHistory={() => setTab('timeline')} onBack={onBack} onChanged={() => void reload(true)} /></Suspense>}
         {tab === 'overview' && <OverviewPanel caseFile={caseFile} summary={data.summary} onOpenTab={setTab}/>}
-        {tab === 'documents' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">必要資料を読み込み中…</p>}><RequiredDocumentsPanel key={caseId} caseId={caseId} canUpdate={canUpdate} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onCandidates={() => setTab('collection')} onHistory={() => setTab('timeline')} onChanged={() => void reload(true)}/></Suspense>}
+        {tab === 'documents' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingDocuments')}</p>}><RequiredDocumentsPanel key={caseId} caseId={caseId} canUpdate={canUpdate} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onCandidates={() => setTab('collection')} onHistory={() => setTab('timeline')} onChanged={() => void reload(true)}/></Suspense>}
         {tab === 'tasks' && <TasksPanel tasks={caseFile.case_tasks} canUpdate={canUpdate} working={working} onAdd={() => setDialog('task')} onStatus={(task, status) => void run(() => caseWorkspaceApi.updateTask(caseId, task.id, { status }), 'タスクを更新しました。')} onDelete={(task) => confirmDelete(task.title) && void run(() => caseWorkspaceApi.deleteTask(caseId, task.id), 'タスクを削除しました。')}/>}
         {tab === 'deadlines' && <DeadlinesPanel deadlines={caseFile.deadlines} canUpdate={canUpdate} working={working} onAdd={() => setDialog('deadline')} onComplete={(deadline) => void run(() => caseWorkspaceApi.updateDeadline(caseId, deadline.id, { status: deadline.status === 'completed' ? 'open' : 'completed' }), '期限の状態を更新しました。')} onDelete={(deadline) => confirmDelete(deadline.title) && void run(() => caseWorkspaceApi.deleteDeadline(caseId, deadline.id), '期限を削除しました。')}/>}
         {tab === 'parties' && <PartiesPanel client={caseFile.client} parties={caseFile.parties} canUpdate={canUpdate} onAdd={() => setDialog('party')} onDelete={(party) => confirmDelete(party.name) && void run(() => caseWorkspaceApi.deleteParty(caseId, party.id), '関係者を削除しました。')}/>}
@@ -128,26 +127,64 @@ export function CaseWorkspaceView({ caseId, onBack, onEdit, initialNotice, user 
 }
 
 function WorkspaceHeader({ caseFile, onEdit }: { caseFile: CaseWorkspace; onEdit?: () => void }) {
+  const { t } = useTranslation()
   const code = caseFile.reference_number || `CASE-${String(caseFile.id).padStart(6, '0')}`
-  const caseType = caseFile.case_type_option?.parent ? `${caseFile.case_type_option.parent.name} / ${caseFile.case_type_option.name}` : caseFile.case_type ?? '未分類'
+  const caseType = caseFile.case_type_option?.parent ? `${caseFile.case_type_option.parent.name} / ${caseFile.case_type_option.name}` : caseFile.case_type ?? t('cases.workspace.unclassified')
   const customTitle = caseFile.title !== generatedCaseTitle(caseFile.client.name, caseFile.case_type_option?.name ?? caseFile.case_type ?? '') ? caseFile.title : ''
-  return <div className="cm-detail-header">
-    <CasePageHeader title={caseFile.client.name} description={customTitle ? `${code} · ${customTitle}` : code} actions={onEdit && <button type="button" className="dc-button" onClick={onEdit}><Pencil size={15}/>案件を編集</button>}/>
-    <CaseSummaryStrip items={[{ label: '事件類型', value: caseFile.case_type === 'その他' && caseFile.case_type_other ? `${caseType}：${caseFile.case_type_other}` : caseType }, { label: '担当者', value: caseFile.assigned_employee?.full_name ?? '未割当' }, { label: '案件状態', value: caseStatusLabel(caseFile.status) }, { label: '案件優先度', value: priorityLabel(caseFile.priority ?? 'normal') }]}/>
-    <div className="cm-contact"><span><small>電話</small>{caseFile.client.phone || '未登録'}</span><span><small>メール</small>{caseFile.client.email || '未登録'}</span><span><small>国籍</small>{caseFile.client.nationality || '未登録'}</span></div>
-    <details className="cm-more"><summary>住所・登録情報</summary><dl className="cm-detail-metadata">
-      <dt>住所</dt><dd>{caseFile.client.address || '未登録'}</dd><dt>登録者</dt><dd>{caseFile.created_by_employee?.full_name ?? '未記録'}</dd>
-      <dt>登録日時</dt><dd>{caseFile.created_at ? dateTime(caseFile.created_at) : '—'}</dd><dt>最終更新</dt><dd>{dateTime(caseFile.updated_at)}</dd>
-      <dt>開始日</dt><dd>{caseFile.opened_at?.slice(0,10) || '未設定'}</dd><dt>目標完了日</dt><dd>{caseFile.target_completion_at?.slice(0,10) || '未設定'}</dd>
-    </dl></details>
+  const caseTypeStr = caseFile.case_type === 'その他' && caseFile.case_type_other ? `${caseType}：${caseFile.case_type_other}` : caseType
+
+  return <div className="cm-workspace-header">
+    <div className="cm-wh-top">
+      <div className="cm-wh-title">
+        <div className="flex items-center gap-3">
+          <h1>{caseFile.client.name}</h1>
+          <CaseStatusBadge status={caseFile.status}/>
+        </div>
+        <p className="cm-wh-code">{customTitle ? <><span className="cm-code-pill">{code}</span> <span className="cm-code-desc">{customTitle}</span></> : <span className="cm-code-pill">{code}</span>}</p>
+      </div>
+      <div className="cm-wh-actions">
+        {onEdit && <button type="button" className="dc-button" onClick={onEdit}><Pencil size={15}/>{t('cases.workspace.edit')}</button>}
+      </div>
+    </div>
+    <div className="cm-wh-meta">
+      <div className="cm-wh-group cm-wh-group--1">
+        <dl>
+          <div><dt>{t('cases.workspace.caseType')}</dt><dd title={caseTypeStr}>{presentWorkspaceCaseType(caseTypeStr, t)}</dd></div>
+          <div><dt>{t('cases.workspace.assignee')}</dt><dd>{caseFile.assigned_employee?.full_name ?? t('cases.workspace.unassigned')}</dd></div>
+          <div><dt>{t('cases.workspace.priority')}</dt><dd><PriorityBadge priority={caseFile.priority ?? 'normal'} translated/></dd></div>
+        </dl>
+      </div>
+      <div className="cm-wh-group cm-wh-group--2">
+        <dl>
+          <div><dt>{t('cases.workspace.phone')}</dt><dd>{caseFile.client.phone || t('cases.workspace.notRegistered')}</dd></div>
+          <div><dt>{t('cases.workspace.email')}</dt><dd title={caseFile.client.email || t('cases.workspace.notRegistered')}>{caseFile.client.email || t('cases.workspace.notRegistered')}</dd></div>
+          <div><dt>{t('cases.workspace.nationality')}</dt><dd>{caseFile.client.nationality || t('cases.workspace.notRegistered')}</dd></div>
+        </dl>
+      </div>
+      <div className="cm-wh-group cm-wh-group--3">
+        <dl>
+          <div><dt>{t('cases.workspace.openedAt')}</dt><dd>{caseFile.opened_at?.slice(0,10) || t('cases.workspace.notSet')}</dd></div>
+          <div><dt>{t('cases.workspace.targetCompletion')}</dt><dd>{caseFile.target_completion_at?.slice(0,10) || t('cases.workspace.notSet')}</dd></div>
+          <div><dt>{t('cases.workspace.updatedAt')}</dt><dd>{dateTime(caseFile.updated_at)}</dd></div>
+        </dl>
+      </div>
+      <div className="cm-wh-group cm-wh-group--4">
+        <dl>
+          <div><dt>{t('cases.workspace.address')}</dt><dd title={caseFile.client.address || t('cases.workspace.notRegistered')}>{caseFile.client.address || t('cases.workspace.notRegistered')}</dd></div>
+          <div><dt>{t('cases.workspace.createdBy')}</dt><dd>{caseFile.created_by_employee?.full_name ?? t('cases.workspace.notRecorded')}</dd></div>
+          <div><dt>{t('cases.workspace.createdAt')}</dt><dd>{caseFile.created_at ? dateTime(caseFile.created_at) : '—'}</dd></div>
+        </dl>
+      </div>
+    </div>
   </div>
 }
 
 function OverviewPanel({ caseFile, summary, onOpenTab }: { caseFile: CaseWorkspace; summary: WorkspaceSummary; onOpenTab: (tab: WorkspaceTab) => void }) {
+  const { t } = useTranslation()
   const urgent = caseFile.deadlines.filter((item) => item.status === 'open' && remainingDays(item.due_at) <= 7)
   return <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-    <section><SectionHeading title="案件の現在地" description="資料判断、期限、未完了タスクを一つの画面から確認します。"/><div className="mt-4 grid gap-3 sm:grid-cols-3"><OverviewStat label="未完了タスク" value={`${summary.open_tasks}件`} detail="対応が必要なタスク" icon={ListChecks}/><OverviewStat label="期限リスク" value={`${urgent.length}件`} detail="7日以内の未完了期限" icon={AlertTriangle}/><OverviewStat label="次回期限" value={summary.next_deadline ? shortDate(summary.next_deadline) : '未設定'} detail="案件に登録された最短期限" icon={Clock3}/></div><div className="mt-5 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"><div className="border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60"><h3 className="text-sm font-semibold text-slate-900 dark:text-white">資料ワークフロー</h3><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">候補の必要性を判断してから、必要資料の取得・確認を進めます。</p></div><div className="grid gap-3 p-4 sm:grid-cols-2"><button type="button" onClick={() => onOpenTab('collection')} className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/60 dark:border-slate-700 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10"><span><strong className="block text-sm text-slate-900 dark:text-white">資料収集</strong><small className="mt-1 block text-xs text-slate-500">候補を必要・不要に判定</small></span><ChevronRight size={17} className="text-slate-400"/></button><button type="button" onClick={() => onOpenTab('documents')} className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/60 dark:border-slate-700 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10"><span><strong className="block text-sm text-slate-900 dark:text-white">必要資料</strong><small className="mt-1 block text-xs text-slate-500">取得・確認・充足を管理</small></span><ChevronRight size={17} className="text-slate-400"/></button></div></div></section>
-    <aside><SectionHeading title="最近の履歴" description="案件で行われた直近の対応"/><div className="mt-4 divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 dark:divide-slate-700 dark:border-slate-700">{caseFile.activities.slice(0, 6).map((activity) => <div key={activity.id} className="px-4 py-3"><div className="flex items-center justify-between gap-3"><p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{activity.title}</p><time className="shrink-0 text-[11px] text-slate-400">{shortDate(activity.occurred_at)}</time></div><p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{activity.content || activityTypeLabel(activity.activity_type)}</p></div>)}{caseFile.activities.length === 0 && <EmptyRow text="対応履歴はまだありません。"/>}</div></aside>
+    <section><SectionHeading title={t('cases.workspace.overview.title')} description={t('cases.workspace.overview.description')}/><div className="mt-4 grid gap-3 sm:grid-cols-3"><OverviewStat label={t('cases.workspace.overview.openTasks')} value={t('cases.count', { count: summary.open_tasks })} detail={t('cases.workspace.overview.openTasksDetail')} icon={ListChecks} variant="neutral"/><OverviewStat label={t('cases.workspace.overview.deadlineRisk')} value={t('cases.count', { count: urgent.length })} detail={t('cases.workspace.overview.deadlineRiskDetail')} icon={AlertTriangle} variant={urgent.length > 0 ? 'warning' : 'neutral'}/><OverviewStat label={t('cases.workspace.overview.nextDeadline')} value={summary.next_deadline ? shortDate(summary.next_deadline) : t('cases.workspace.notSet')} detail={t('cases.workspace.overview.nextDeadlineDetail')} icon={Clock3} variant={summary.next_deadline ? 'time' : 'neutral'}/></div><div className="mt-6"><div className="cm-workflow-header"><h3>{t('cases.workspace.overview.documentWorkflow')}</h3><p>{t('cases.workspace.overview.documentWorkflowDescription')}</p></div><div className="grid gap-3 pt-3 sm:grid-cols-2"><button type="button" onClick={() => onOpenTab('collection')} className="cm-workflow-btn"><span><strong>{t('cases.tabs.collection')}</strong><small>{t('cases.workspace.overview.collectionHint')}</small></span><ChevronRight size={18}/></button><button type="button" onClick={() => onOpenTab('documents')} className="cm-workflow-btn"><span><strong>{t('cases.tabs.documents')}</strong><small>{t('cases.workspace.overview.documentsHint')}</small></span><ChevronRight size={18}/></button></div></div></section>
+    <aside><SectionHeading title={t('cases.workspace.overview.recentHistory')} description={t('cases.workspace.overview.recentHistoryDescription')}/><div className="mt-4 divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white dark:divide-slate-700 dark:border-slate-700 dark:bg-slate-900">{caseFile.activities.slice(0, 6).map((activity) => <div key={activity.id} className="cm-timeline-row"><div><p className="cm-timeline-title">{activity.title}</p><time>{shortDate(activity.occurred_at)}</time><p className="cm-timeline-desc line-clamp-2">{activity.content || t(`cases.activityType.${activity.activity_type}`)}</p></div></div>)}{caseFile.activities.length === 0 && <EmptyRow text={t('cases.workspace.overview.noHistory')}/>}</div></aside>
   </div>
 }
 
@@ -178,23 +215,23 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function PrioritySelect({ value, onChange }: { value: string; onChange: (value: string) => void }) { return <select value={value} onChange={(e) => onChange(e.target.value)} className={inputClass}><option value="low">低</option><option value="normal">通常</option><option value="high">高</option><option value="critical">最優先</option></select> }
 function PanelToolbar({ title, description, actions }: { title: string; description: string; actions?: React.ReactNode }) { return <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold text-slate-950 dark:text-white">{title}</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{description}</p></div>{actions && <div className="flex flex-wrap gap-2">{actions}</div>}</div> }
 function SectionHeading({ title, description }: { title: string; description: string }) { return <div><h2 className="text-base font-semibold text-slate-900 dark:text-white">{title}</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{description}</p></div> }
-function OverviewStat({ label, value, detail, icon: Icon }: { label: string; value: string; detail: string; icon: typeof Files }) { return <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700"><div className="flex items-center justify-between"><p className="text-xs text-slate-500">{label}</p><Icon size={17} className="text-blue-500"/></div><p className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div> }
+function OverviewStat({ label, value, detail, icon: Icon, variant = 'neutral' }: { label: string; value: string; detail: string; icon: typeof Files; variant?: 'neutral' | 'warning' | 'danger' | 'time' }) { return <div className={`cm-workspace-stat cm-workspace-stat--${variant}`}><div><p>{label}</p><Icon size={17} className="cm-stat-icon"/></div><p className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div> }
 function EmptyRow({ text }: { text: string }) { return <div className="flex min-h-24 items-center justify-center px-4 py-8 text-center text-sm text-slate-500"><ShieldCheck size={18} className="mr-2 text-slate-400"/>{text}</div> }
-function PriorityBadge({ priority }: { priority: CaseTask['priority'] | CaseDeadline['priority'] }) { const config = { low: ['低', 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'], normal: ['通常', 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'], high: ['高', 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'], critical: ['最優先', 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300'] }[priority]; return <span className={`inline-flex h-6 items-center rounded-md px-2 text-xs font-medium ${config[1]}`}>{config[0]}</span> }
+function PriorityBadge({ priority, translated = false }: { priority: CaseTask['priority'] | CaseDeadline['priority']; translated?: boolean }) { const { t } = useTranslation(); const config = { low: ['低', 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'], normal: ['通常', 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'], high: ['高', 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'], critical: ['最優先', 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300'] }[priority]; return <span className={`inline-flex h-6 items-center rounded-md px-2 text-xs font-medium ${config[1]}`}>{translated ? t(`cases.priority.${priority}`) : config[0]}</span> }
+function CaseStatusBadge({ status }: { status: string }) { const { t } = useTranslation(); const config: Record<string, [string, string]> = { intake: ['intake', 'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300'], active: ['active', 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'], waiting_documents: ['waitingDocuments', 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'], reviewing: ['reviewing', 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300'], waiting_payment: ['waitingPayment', 'bg-purple-50 text-purple-700 dark:bg-purple-500/10 dark:text-purple-300'], on_hold: ['onHold', 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'], closed: ['closed', 'bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-300'] }; const match = config[status]; return match ? <span className={`inline-flex h-6 items-center rounded-md px-2 text-xs font-medium ${match[1]}`}>{t(`cases.status.${match[0]}`)}</span> : <span>{status}</span> }
 
-function WorkspaceSkeleton({ onBack }: { onBack: () => void }) { return <div className="p-5"><button type="button" onClick={onBack} className={secondaryButton}><ArrowLeft size={16}/>案件一覧へ</button><div className="mt-4 h-52 animate-pulse rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"/><div className="mt-4 h-96 animate-pulse rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"/></div> }
-function WorkspaceFailure({ error, onBack, onRetry }: { error: string | null; onBack: () => void; onRetry: () => void }) { return <div className="p-5"><button type="button" onClick={onBack} className={secondaryButton}><ArrowLeft size={16}/>案件一覧へ</button><div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-500/30 dark:bg-red-500/10"><AlertTriangle className="mx-auto text-red-500"/><h1 className="mt-3 text-lg font-semibold text-red-800 dark:text-red-200">案件を読み込めませんでした</h1><p className="mt-1 text-sm text-red-600 dark:text-red-300">{error}</p><button type="button" onClick={onRetry} className={`${primaryButton} mt-4`}><RefreshCw size={16}/>再試行</button></div></div> }
+function WorkspaceSkeleton({ onBack }: { onBack: () => void }) { const { t } = useTranslation(); return <div className="p-5"><button type="button" onClick={onBack} className={secondaryButton}><ArrowLeft size={16}/>{t('cases.workspace.backToList')}</button><div className="mt-4 h-52 animate-pulse rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"/><div className="mt-4 h-96 animate-pulse rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"/></div> }
+function WorkspaceFailure({ error, onBack, onRetry }: { error: string | null; onBack: () => void; onRetry: () => void }) { const { t } = useTranslation(); return <div className="p-5"><button type="button" onClick={onBack} className={secondaryButton}><ArrowLeft size={16}/>{t('cases.workspace.backToList')}</button><div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-500/30 dark:bg-red-500/10"><AlertTriangle className="mx-auto text-red-500"/><h1 className="mt-3 text-lg font-semibold text-red-800 dark:text-red-200">{t('cases.workspace.loadFailed')}</h1><p className="mt-1 text-sm text-red-600 dark:text-red-300">{error}</p><button type="button" onClick={onRetry} className={`${primaryButton} mt-4`}><RefreshCw size={16}/>{t('cases.workspace.retry')}</button></div></div> }
 
 async function createItem(kind: DialogKind, caseId: number, payload: Record<string, unknown>) { if (kind === 'task') return caseWorkspaceApi.createTask(caseId, payload); if (kind === 'deadline') return caseWorkspaceApi.createDeadline(caseId, payload); if (kind === 'party') return caseWorkspaceApi.createParty(caseId, payload); return caseWorkspaceApi.createActivity(caseId, payload) }
 function confirmDelete(name: string) { return window.confirm(`「${name}」を削除しますか？この操作は画面上から取り消せません。`) }
 function apiError(error: unknown, fallback: string) { if (!axios.isAxiosError(error)) return fallback; const validation = error.response?.data?.errors as Record<string, string[]> | undefined; return validation ? Object.values(validation).flat()[0] : error.response?.data?.message ?? fallback }
-function shortDate(value: string) { return new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value)) }
-function dateTime(value: string) { return new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
+function shortDate(value: string) { return new Intl.DateTimeFormat(i18n.language, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value)) }
+function dateTime(value: string) { return new Intl.DateTimeFormat(i18n.language, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
 function remainingDays(value: string) { const target = new Date(value); const today = new Date(); target.setHours(0, 0, 0, 0); today.setHours(0, 0, 0, 0); return Math.ceil((target.getTime() - today.getTime()) / 86400000) }
 function localDateTime() { const date = new Date(Date.now() - new Date().getTimezoneOffset() * 60000); return date.toISOString().slice(0, 16) }
-function caseStatusLabel(status: string) { return ({ intake: '受付', active: '対応中', waiting_documents: '書類待ち', reviewing: '確認中', waiting_payment: '支払待ち', on_hold: '保留', closed: '完了' } as Record<string, string>)[status] ?? status }
-function priorityLabel(priority: string) { return ({ low: '低', normal: '通常', high: '高', critical: '最優先' } as Record<string, string>)[priority] ?? priority }
 function deadlineTypeLabel(type: CaseDeadline['deadline_type']) { return ({ residence: '在留期限', submission: '提出期限', additional: '追加資料期限', limitation: '時効', document: '書類期限', internal: '内部期限', other: 'その他' } as Record<string, string>)[type] }
 function partyTypeLabel(type: CaseParty['party_type']) { return ({ client: '依頼者', family: '家族', employer: '勤務先', opponent: '相手方', insurer: '保険会社', medical: '医療機関', supporter: '支援者', other: 'その他' } as Record<string, string>)[type] }
 function activityTypeLabel(type: CaseActivity['activity_type']) { return ({ communication: '連絡', event: 'イベント', note: '内部メモ', submission: '提出', medical: '通院・医療', incident: '事故・事実' } as Record<string, string>)[type] }
 function channelLabel(channel: NonNullable<CaseActivity['channel']>) { return ({ meeting: '面談', phone: '電話', email: 'メール', line: 'LINE', internal: '社内', other: 'その他' } as Record<string, string>)[channel] }
+function presentWorkspaceCaseType(value: string, t: (key: string) => string) { const [parent, ...children] = value.split(' / '); const key = parent === '労災' ? 'cases.caseTypes.laborAccident' : parent === '交通事故' ? 'cases.caseTypes.trafficAccident' : null; return key ? [t(key), ...children].join(' / ') : value }

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CaseType;
+use App\Models\CaseDocument;
 use App\Models\Employee;
 use App\Models\Office;
 use App\Models\Role;
@@ -73,6 +74,51 @@ class CaseFileApiTest extends TestCase
             ->getJson('/api/case-types')
             ->assertOk()
             ->assertJsonFragment(['name' => '在留期間更新']);
+    }
+
+    public function test_case_list_progress_counts_only_required_documents_completed_in_the_v2_workflow(): void
+    {
+        $user = User::factory()->create();
+        $this->seed(RolePermissionSeeder::class);
+        $this->seed(CaseTypeSeeder::class);
+        $user->roles()->sync([Role::query()->where('name', 'level_5')->value('id')]);
+
+        $case = $this->actingAs($user, 'sanctum')->postJson('/api/case-files', [
+            'title' => 'Collection progress case',
+            'case_type_id' => CaseType::where('name', '労災')->sole()->id,
+            'client' => ['name' => 'Collection Progress Client'],
+        ])->assertCreated()->json('case_file');
+
+        $this->actingAs($user, 'sanctum')->getJson('/api/case-files')
+            ->assertOk()
+            ->assertJsonPath('case_files.0.documents_count', 0)
+            ->assertJsonPath('case_files.0.confirmed_documents_count', 0);
+
+        CaseDocument::query()->create([
+            'case_file_id' => $case['id'], 'category' => '資料', 'title' => '未判定資料',
+            'necessity_status' => 'undetermined', 'collection_status' => 'not_started',
+            'fulfillment_status' => 'undetermined', 'review_status' => 'unreviewed',
+        ]);
+        CaseDocument::query()->create([
+            'case_file_id' => $case['id'], 'category' => '資料', 'title' => '不要資料',
+            'necessity_status' => 'not_required', 'collection_status' => 'closed',
+            'fulfillment_status' => 'undetermined', 'review_status' => 'unreviewed',
+        ]);
+        CaseDocument::query()->create([
+            'case_file_id' => $case['id'], 'category' => '資料', 'title' => '必要・未完了',
+            'necessity_status' => 'required', 'collection_status' => 'received',
+            'fulfillment_status' => 'satisfied', 'review_status' => 'reviewing',
+        ]);
+        CaseDocument::query()->create([
+            'case_file_id' => $case['id'], 'category' => '資料', 'title' => '必要・完了',
+            'necessity_status' => 'required', 'collection_status' => 'received',
+            'fulfillment_status' => 'satisfied_by_alternative', 'review_status' => 'reviewed',
+        ]);
+
+        $this->actingAs($user, 'sanctum')->getJson('/api/case-files')
+            ->assertOk()
+            ->assertJsonPath('case_files.0.documents_count', 2)
+            ->assertJsonPath('case_files.0.confirmed_documents_count', 1);
     }
 
     public function test_other_case_type_requires_and_saves_its_detail(): void

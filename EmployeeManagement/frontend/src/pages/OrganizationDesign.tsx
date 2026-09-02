@@ -315,11 +315,18 @@ export default function OrganizationDesign() {
   }, [])
 
   useEffect(() => {
-    void loadOrganization()
+    // Initial loading is scheduled after the effect completes to avoid a synchronous
+    // state update during effect setup; the initial `loading` state remains true.
+    const initialLoadId = window.setTimeout(() => {
+      void loadOrganization()
+    }, 0)
     const intervalId = window.setInterval(() => {
       void loadOrganization(true)
     }, 30_000)
-    return () => window.clearInterval(intervalId)
+    return () => {
+      window.clearTimeout(initialLoadId)
+      window.clearInterval(intervalId)
+    }
   }, [loadOrganization])
 
   const offices = useMemo(() => {
@@ -786,7 +793,10 @@ export default function OrganizationDesign() {
         <EmployeeDetailModal
           key={selectedEmployee.id}
           employee={selectedEmployee}
-          canAssignTasks={user?.permission_names.includes('task.assign') ?? false}
+          canAssignTasks={
+            (user?.permission_names.includes('task.assign') ?? false)
+            && selectedEmployee.id !== user?.employee_id
+          }
           canManageRoles={user?.permission_names.includes('employee.manage_roles') ?? false}
           canUpdateEmployment={user?.permission_names.includes('employee.update') ?? false}
           canResetPassword={
@@ -1463,10 +1473,10 @@ function EmployeeDetailModal({
                   return (
                     <label
                       key={role.id}
-                      className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition ${
+                      className={`flex cursor-pointer items-start gap-3 rounded-lg border p-2.5 transition duration-150 ${
                         isSelected
-                          ? 'border-indigo-500 bg-indigo-50/50 dark:border-indigo-500/60 dark:bg-indigo-950/20'
-                          : 'border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50'
+                          ? `${visual?.selectedClass ?? 'border-indigo-500 bg-indigo-50/50'} ring-1 ring-inset ${visual?.selectedClass?.split(' ')[0].replace('border', 'ring') ?? 'ring-indigo-500'}`
+                          : 'border-slate-200 bg-white hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/80'
                       }`}
                     >
                       <input
@@ -1476,38 +1486,45 @@ function EmployeeDetailModal({
                         onChange={() => toggleRole(role.id)}
                         className="sr-only"
                       />
-                      <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${visual?.iconClass}`}>
-                        <Icon size={15} />
+                      <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${visual?.iconClass ?? 'bg-slate-100 text-slate-500'}`}>
+                        <Icon size={13} />
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between">
-                          <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                            {role.display_name}
-                          </p>
-                          <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-xs ${
+                          <div className="flex items-baseline gap-2">
+                            <p className="text-xs font-bold text-slate-900 dark:text-white">
+                              {role.display_name}
+                            </p>
+                            {level && <span className="text-[10px] font-medium text-slate-500">{level.summary}</span>}
+                          </div>
+                          <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors ${
                             isSelected
-                              ? 'border-indigo-600 bg-indigo-600 text-white'
-                              : 'border-slate-300 dark:border-slate-600'
+                              ? (visual?.checkClass ?? 'border-indigo-600 bg-indigo-600 text-white')
+                              : 'border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800'
                           }`}>
-                            {isSelected && <Check size={10} strokeWidth={3} />}
+                            {isSelected && <Check size={8} strokeWidth={4} />}
                           </span>
                         </div>
                         {level && (
-                          <>
-                            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <p className="text-[11px] text-slate-600 dark:text-slate-400">
                               {level.description}
                             </p>
-                            <div className="mt-1.5 flex flex-wrap gap-1">
+                            <div className="flex flex-wrap gap-1">
                               {level.capabilities.map((cap) => (
                                 <span
                                   key={cap}
-                                  className="rounded bg-white px-1.5 py-0.2 text-[9px] font-medium text-slate-600 shadow-2xs dark:bg-slate-800 dark:text-slate-300"
+                                  className={`rounded-[4px] border px-1.5 py-0 text-[9px] font-medium tracking-wide ${
+                                    isSelected
+                                      ? (visual?.badgeClass ?? 'bg-white text-slate-600')
+                                      : 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400'
+                                  }`}
                                 >
                                   {cap}
                                 </span>
                               ))}
                             </div>
-                          </>
+                          </div>
                         )}
                       </div>
                     </label>
@@ -1779,19 +1796,14 @@ function CreateEmployeeModal({
   onClose: () => void
   onCreated: () => void
 }) {
-  const [employeeCode, setEmployeeCode] = useState('')
   const [fullName, setFullName] = useState('')
   const [fullNameKana, setFullNameKana] = useState('')
-  const [officeId, setOfficeId] = useState('')
+  const [officeId, setOfficeId] = useState(() => String(offices[0]?.id ?? ''))
   const [positionTitle, setPositionTitle] = useState('')
   const [workEmail, setWorkEmail] = useState('')
   const [gender, setGender] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-
-  useEffect(() => {
-    if (!officeId && offices[0]) setOfficeId(String(offices[0].id))
-  }, [officeId, offices])
 
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -1802,7 +1814,6 @@ function CreateEmployeeModal({
 
     try {
       await api.post('/employees', {
-        employee_code: employeeCode.trim(),
         full_name: fullName.trim(),
         full_name_kana: fullNameKana.trim() || null,
         office_id: Number(officeId),
@@ -1870,33 +1881,22 @@ function CreateEmployeeModal({
             </div>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                社員コード <span className="text-rose-500">*</span>
-              </span>
-              <input
-                required
-                value={employeeCode}
-                onChange={(e) => setEmployeeCode(e.target.value)}
-                placeholder="例：TM005"
-                className={inputClass}
-              />
-            </label>
+          <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+            社員コードは登録時に自動発行されます。
+          </p>
 
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                氏名 <span className="text-rose-500">*</span>
-              </span>
-              <input
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="例：山田 太郎"
-                className={inputClass}
-              />
-            </label>
-          </div>
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+              氏名 <span className="text-rose-500">*</span>
+            </span>
+            <input
+              required
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="例：山田 太郎"
+              className={inputClass}
+            />
+          </label>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block space-y-1">

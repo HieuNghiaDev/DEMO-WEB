@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { LoaderCircle, LogOut } from 'lucide-react'
 
-// The sidebar's existing confirmation is now owned by System Settings.
 export default function LogoutConfirmationDialog({ isLoggingOut, onCancel, onConfirm }: {
   isLoggingOut: boolean
   onCancel: () => void

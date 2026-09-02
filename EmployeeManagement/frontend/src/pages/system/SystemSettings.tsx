@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { Check, ChevronRight, KeyRound, Moon, Palette, ShieldCheck, Sun, UserRound } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
+import { setAppLanguage, type SupportedLocale } from '../../i18n'
 import LogoutConfirmationDialog from '../../components/settings/LogoutConfirmationDialog'
 import SettingsLogoutAction from '../../components/settings/SettingsLogoutAction'
 
@@ -15,12 +17,14 @@ const categories = [
 export default function SystemSettings() {
   const { user, logout } = useAuth()
   const { theme, setTheme } = useTheme()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const section = categories.find(({ id }) => id === searchParams.get('section'))?.id ?? 'account'
   const [isLogoutConfirmationOpen, setIsLogoutConfirmationOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const employeeName = user?.employee?.full_name || user?.name || user?.login_id || '社員'
+  const language: SupportedLocale = i18n.resolvedLanguage === 'vi' ? 'vi' : 'ja'
   const role = user?.roles?.map((item) => item.display_name || item.name).filter(Boolean).join('・') || user?.role
   const accountFields = [
     { label: '氏名', value: employeeName },
@@ -133,6 +137,23 @@ export default function SystemSettings() {
                     </label>
                   ))}
                 </div>
+              </fieldset>
+              <fieldset className="mt-6 border-t border-slate-100 px-5 pt-6 dark:border-slate-800 sm:px-6">
+                <legend className="float-left mb-1 w-full text-sm font-semibold">{t('settings.display.title')}</legend>
+                <p className="clear-both mb-5 text-xs leading-5 text-slate-500 dark:text-slate-400">{t('settings.display.description')}</p>
+                <label className="block max-w-sm space-y-2">
+                  <span className="block text-sm font-medium">{t('settings.language.label')}</span>
+                  <span className="block text-xs leading-5 text-slate-500 dark:text-slate-400">{t('settings.language.description')}</span>
+                  <select
+                    aria-label={t('settings.language.label')}
+                    value={language}
+                    onChange={(event) => void setAppLanguage(event.target.value as SupportedLocale)}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  >
+                    <option value="ja">{t('settings.language.japanese')}</option>
+                    <option value="vi">{t('settings.language.vietnamese')}</option>
+                  </select>
+                </label>
               </fieldset>
             </>}
           </section>

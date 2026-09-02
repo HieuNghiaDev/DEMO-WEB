@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { documentCollectionApi } from '../api'
 import { collectionError } from '../errors'
 import type { CollectionError } from '../errors'
@@ -6,6 +7,7 @@ import type { CollectionListResponse, CollectionQuery, EmployeeOption, Initializ
 import { withFilter } from '../utils'
 
 export function useDocumentCollection(caseId: number, canReadEmployees: boolean) {
+  const { t } = useTranslation()
   const [preview, setPreview] = useState<InitializationPreview | null>(null)
   const [data, setData] = useState<CollectionListResponse | null>(null)
   const [previewError, setPreviewError] = useState<CollectionError | null>(null)
@@ -18,7 +20,7 @@ export function useDocumentCollection(caseId: number, canReadEmployees: boolean)
   const [notice, setNotice] = useState('')
   const [revision, setRevision] = useState(0)
   // Candidates start with the remaining business decision, not a mixed status list.
-  const [query, setQuery] = useState<CollectionQuery>({ necessity_status: 'undetermined', page: 1, per_page: 25 })
+  const [query, setQuery] = useState<CollectionQuery>({ necessity_status: 'undetermined', page: 1, per_page: 100 })
   const [search, setSearch] = useState('')
   const [employees, setEmployees] = useState<EmployeeOption[]>([])
   const [employeeError, setEmployeeError] = useState<string | null>(null)
@@ -43,7 +45,17 @@ export function useDocumentCollection(caseId: number, canReadEmployees: boolean)
     const controller = new AbortController()
     const load = async () => {
       setListLoading(true); setListError(null)
-      try { const result = await documentCollectionApi.list(caseId, query, controller.signal); if (!controller.signal.aborted) setData(result) }
+      try {
+        const firstPage = await documentCollectionApi.list(caseId, query, controller.signal)
+        const remainingPages = await Promise.all(Array.from(
+          { length: Math.max(0, firstPage.pagination.last_page - 1) },
+          (_, index) => documentCollectionApi.list(caseId, { ...query, page: index + 2 }, controller.signal),
+        ))
+        if (!controller.signal.aborted) setData({
+          ...firstPage,
+          documents: [firstPage, ...remainingPages].flatMap(page => page.documents),
+        })
+      }
       catch (error) { if (!controller.signal.aborted) setListError(collectionError(error)) }
       finally { if (!controller.signal.aborted) setListLoading(false) }
     }
@@ -59,7 +71,7 @@ export function useDocumentCollection(caseId: number, canReadEmployees: boolean)
   useEffect(() => {
     if (!canReadEmployees) return
     const controller = new AbortController()
-    void documentCollectionApi.employees(controller.signal).then(result => { if (!controller.signal.aborted) setEmployees(result) }).catch(() => { if (!controller.signal.aborted) setEmployeeError('担当者一覧を取得できませんでした。担当者は変更せずに他の項目を編集できます。') })
+    void documentCollectionApi.employees(controller.signal).then(result => { if (!controller.signal.aborted) setEmployees(result) }).catch(() => { if (!controller.signal.aborted) setEmployeeError(t('documentCollection.employeeLoadFailed')) })
     return () => controller.abort()
   }, [canReadEmployees])
 
@@ -73,7 +85,7 @@ export function useDocumentCollection(caseId: number, canReadEmployees: boolean)
     setInitializing(true); setInitializationError(null); setNotice('')
     try {
       const response = await documentCollectionApi.initialize(caseId)
-      setNotice(response.initialization.created_count > 0 ? `${response.initialization.created_count}件の候補資料を作成しました。` : '追加する候補資料はありませんでした。最新の状態を表示します。')
+      setNotice(response.initialization.created_count > 0 ? t('documentCollection.initialized', { count: response.initialization.created_count }) : t('documentCollection.noCandidatesToAdd'))
       setConfirming(false); refresh()
       return true
     } catch (error) { setInitializationError(collectionError(error)); return false }
@@ -83,7 +95,6 @@ export function useDocumentCollection(caseId: number, canReadEmployees: boolean)
     preview, data, previewError, listError, initializationError, previewLoading, listLoading, initializing,
     confirming, setConfirming, notice, setNotice, refresh, query, search, setSearch, changeFilter,
     revision,
-    setPage: (page: number) => setQuery(previous => ({ ...previous, page })),
-    employees, employeeError: canReadEmployees ? employeeError : '担当者一覧の閲覧権限がありません。', initialize,
+    employees, employeeError: canReadEmployees ? employeeError : t('documentCollection.employeePermissionRequired'), initialize,
   }
 }
