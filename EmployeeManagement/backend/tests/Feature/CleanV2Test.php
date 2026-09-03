@@ -77,12 +77,12 @@ class CleanV2Test extends TestCase
         $user = User::factory()->create(['role' => 'admin']);
         Persona::create(['name' => 'secretary', 'display_name' => 'AI', 'active' => true,
             'skills' => ['task_management', 'morning_briefing']]);
-        foreach (['task_management', 'morning_briefing'] as $skill) {
+        foreach (['morning_briefing'] as $skill) {
             $this->actingAs($user, 'sanctum')->postJson('/api/ai/chat', [
                 'persona' => 'secretary', 'skill' => $skill, 'message' => 'test',
             ])->assertUnprocessable()->assertJsonPath('code', 'ai_skill_unavailable');
         }
-        $this->getJson('/api/personas')->assertOk()->assertJsonPath('personas.0.skills', []);
+        $this->getJson('/api/personas')->assertOk()->assertJsonPath('personas.0.skills', ['task_management']);
         Http::assertNothingSent();
     }
 

@@ -4,7 +4,7 @@ namespace App\Services;
 
 class SkillLoader extends MarkdownDefinitionLoader
 {
-    public const DISABLED_SKILLS = ['task_management', 'morning_briefing'];
+    public const DISABLED_SKILLS = ['morning_briefing'];
 
     /** @return array{name: string, trigger: string, tools: list<string>, instructions: string, schedule?: string} */
     public function load(string $name): array

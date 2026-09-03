@@ -9,6 +9,7 @@ class EmployeeTask extends Model
 {
     protected $fillable = [
         'employee_id',
+        'case_document_id',
         'work_session_id',
         'assigned_by',
         'title',
@@ -33,6 +34,11 @@ class EmployeeTask extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function caseDocument(): BelongsTo
+    {
+        return $this->belongsTo(CaseDocument::class);
     }
 
     public function assignedBy(): BelongsTo

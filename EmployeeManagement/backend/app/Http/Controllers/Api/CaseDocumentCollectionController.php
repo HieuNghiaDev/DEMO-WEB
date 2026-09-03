@@ -11,6 +11,7 @@ use App\Models\DocumentType;
 use App\Models\Employee;
 use App\Models\ReceivedDocument;
 use App\Services\CaseWorkspaceAuditService;
+use App\Services\DocumentCollectionTaskService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -78,11 +79,11 @@ class CaseDocumentCollectionController extends Controller
         return $this->detail($request, $caseDocument);
     }
 
-    public function update(Request $request, CaseFile $caseFile, CaseDocument $caseDocument, CaseWorkspaceAuditService $audit): JsonResponse
+    public function update(Request $request, CaseFile $caseFile, CaseDocument $caseDocument, CaseWorkspaceAuditService $audit, DocumentCollectionTaskService $documentCollectionTasks): JsonResponse
     {
         abort_unless($caseDocument->case_file_id === $caseFile->id, 404);
 
-        return $caseFile->getConnection()->transaction(function () use ($request, $caseFile, $caseDocument, $audit) {
+        return $caseFile->getConnection()->transaction(function () use ($request, $caseFile, $caseDocument, $audit, $documentCollectionTasks) {
             // Same lock order as checklist generation; validate against the latest stored state.
             $case = CaseFile::whereKey($caseFile->id)->lockForUpdate()->firstOrFail();
             $document = $case->documents()->whereKey($caseDocument->id)->lockForUpdate()->firstOrFail();
@@ -103,6 +104,9 @@ class CaseDocumentCollectionController extends Controller
                 }
             }
             $before = $document->getRawOriginal();
+            $wasPreparationConfirmed = $document->requested_at !== null;
+            $assigneeChanged = array_key_exists('assigned_employee_id', $data)
+                && (int) $data['assigned_employee_id'] !== (int) $document->assigned_employee_id;
             $document->fill($data);
             $changes = [];
             foreach ($document->getDirty() as $field => $value) {
@@ -110,9 +114,16 @@ class CaseDocumentCollectionController extends Controller
             }
             if ($changes !== []) {
                 $document->save();
+                $task = null;
+                if ($document->requested_at && $document->assigned_employee_id && (! $wasPreparationConfirmed || $assigneeChanged)) {
+                    $task = $documentCollectionTasks->synchronize($document, $request);
+                } elseif ($assigneeChanged && ! $document->assigned_employee_id) {
+                    $documentCollectionTasks->cancelOpenTask($document);
+                }
                 $audit->record($case, $request, '資料収集項目を更新', $document->title, [
                     'event' => 'document_collection.updated', 'document_id' => $document->id,
                     'actor_user_id' => $request->user()->id, 'changes' => $changes,
+                    'employee_task_id' => $task?->id,
                 ]);
             }
 

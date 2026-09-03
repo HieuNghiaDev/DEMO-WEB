@@ -283,7 +283,7 @@ Payload đổi trạng thái:
 | `GET /organization` | Có | — | Nhân viên, office/department, trạng thái hiện tại, task hiện tại và tổng `summary`. PII chỉ có cho manager/admin. |
 | `POST /employees` | Có, `employee.create` | `full_name`, `office_id`, `hire_date`; tùy chọn `full_name_kana`, `position_title`, `work_email`, `gender` | Backend phát hành `employee_code` bất biến từ `offices.office_code`: `THEMIS → TMS-YYNNN`, `CHUKA_LAW → TLW-YYNNN`. Không nhận `employee_code` từ client; response trả nhân viên kèm mã đã phát hành. |
 | `POST /employees/{employee}/tasks` | Có | `title`, `description` (tùy chọn, tối đa 5000), `duration_minutes`: `30`, `60` hoặc `120` | Giao task mới ở trạng thái `pending`, gắn với đúng một employee. Người nhận phải đang online và người giao không thể tự giao việc cho chính mình. |
-| `GET /my/tasks` | Có | — | Các task của employee hiện tại có trạng thái `pending`, `accepted`, `in_progress`. |
+| `GET /my/tasks` | Có | — | Các task của employee hiện tại có trạng thái `pending`, `accepted`, `in_progress`, bao gồm task được tạo khi xác nhận mục C「依頼・準備」của tài liệu. |
 | `PATCH /tasks/{task}/accept` | Có | — | Chỉ nhân viên nhận task đó có thể chuyển `pending` sang `accepted`, và đặt `accepted_at`. |
 | `PATCH /tasks/{task}/status` | Có | `status`: `in_progress` hoặc `completed` | Nhân viên nhận task bắt đầu task đã xác nhận, hoặc hoàn tất task đang thực hiện. Khi bắt đầu, API tạo `work_session` liên kết với attendance đang mở để Current Task luôn đồng bộ. |
 | `PUT /employees/{employee}/password-reset` | Có, Level 4/5 | — | Hệ thống tự tạo mật khẩu tạm 12 ký tự và chỉ trả về một lần trong phản hồi để quản trị viên sao chép gửi cho nhân viên. Thu hồi token và bắt buộc đổi mật khẩu ở lần đăng nhập tiếp theo. Level 4 không thể đặt lại mật khẩu Level 5. |
@@ -349,7 +349,7 @@ Ví dụ response (đã rút gọn):
 
 ### V2: tạm ngừng AI task legacy và execution cũ
 
-- `GET /api/personas` không trả `task_management` hoặc `morning_briefing` trong danh sách skills, kể cả khi DB vẫn lưu cấu hình cũ.
+- `GET /api/personas` trả `task_management` khi persona được cấp skill này. AI chỉ nhận snapshot task mở của chính employee đã xác thực; không thể thay đổi task qua chat. `morning_briefing` vẫn không khả dụng.
 - `POST /api/ai/chat` trả `422`, `code: ai_skill_unavailable` nếu yêu cầu skill bị tắt hoặc không thuộc persona. Không gọi provider/tool trong trường hợp này. Các kiểm tra đăng nhập/quyền vẫn giữ.
 - Endpoint execution cũ của approval trả `410`, `code: legacy_execution_unavailable` sau middleware xác thực/phân quyền. Không đọc Task hoặc thực thi payload cũ; không chuyển `task_id` sang `case_tasks`.
 - Approval list/approve/reject và thông báo vẫn giữ. `request_approval` từ chối `action_type` hoặc `tool_name` là `delete_task`; frontend bỏ nút execution. AI page/mascot hiển thị thông báo tạm dừng khi không còn skill khả dụng.

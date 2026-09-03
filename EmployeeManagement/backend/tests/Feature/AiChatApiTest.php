@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Permission;
 use App\Models\Persona;
+use App\Models\Employee;
+use App\Models\EmployeeTask;
+use App\Models\Office;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AIOrchestrator;
@@ -136,6 +139,30 @@ class AiChatApiTest extends TestCase
                 'messages' => $history,
             ])
             ->assertOk();
+    }
+
+    public function test_task_management_skill_receives_only_the_authenticated_employees_open_tasks(): void
+    {
+        Persona::create(['name' => 'secretary', 'display_name' => 'AI 秘書', 'skills' => ['task_management'], 'active' => true]);
+        $office = Office::create(['office_code' => 'AI', 'name' => 'AI office', 'status' => 'active']);
+        $employee = Employee::create(['employee_code' => 'AI001', 'full_name' => 'AI employee', 'gender' => 'male', 'hire_date' => '2026-01-01', 'office_id' => $office->id, 'status' => 'active', 'work_email' => 'ai@example.test', 'phone' => '090']);
+        $user = $this->createAiUser(['employee_id' => $employee->id]);
+        EmployeeTask::create(['employee_id' => $employee->id, 'assigned_by' => $user->id, 'title' => '今日の資料収集', 'duration_minutes' => 60, 'status' => 'pending']);
+        $other = Employee::create(['employee_code' => 'AI002', 'full_name' => 'Other employee', 'gender' => 'female', 'hire_date' => '2026-01-01', 'office_id' => $office->id, 'status' => 'active', 'work_email' => 'other@example.test', 'phone' => '091']);
+        EmployeeTask::create(['employee_id' => $other->id, 'title' => '他人のタスク', 'duration_minutes' => 60, 'status' => 'pending']);
+
+        $orchestrator = Mockery::mock(AIOrchestrator::class);
+        $orchestrator->shouldReceive('runSkill')->once()->withArgs(function (string $persona, string $skill, array $messages, array $context): bool {
+            return $persona === 'secretary' && $skill === 'task_management'
+                && $messages === [['role' => 'user', 'content' => '今日のタスクを教えて']]
+                && count($context['employee_task_context']['tasks'] ?? []) === 1
+                && $context['employee_task_context']['tasks'][0]['title'] === '今日の資料収集';
+        })->andReturn(['persona' => 'secretary', 'skill' => 'task_management', 'text' => '1件あります。', 'tool_executions' => [], 'stop_reason' => 'end_turn']);
+        $this->app->instance(AIOrchestrator::class, $orchestrator);
+
+        $this->actingAs($user, 'sanctum')->postJson('/api/ai/chat', [
+            'persona' => 'secretary', 'skill' => 'task_management', 'message' => '今日のタスクを教えて',
+        ])->assertOk()->assertJsonPath('data.message', '1件あります。');
     }
 
     public function test_chat_endpoint_passes_valid_page_context_to_the_orchestrator(): void

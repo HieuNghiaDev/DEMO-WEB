@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Persona;
+use App\Models\EmployeeTask;
 use App\Services\AIOrchestrator;
 use App\Services\AiProviderBusyException;
 use App\Services\SkillLoader;
@@ -94,6 +95,10 @@ class AiChatController extends Controller
                 'role' => $request->user()->role,
             ];
 
+            if ($validated['skill'] === 'task_management') {
+                $triggerContext['employee_task_context'] = $this->employeeTaskContext($request);
+            }
+
             if (isset($validated['context'])) {
                 $triggerContext['page_context'] = $validated['context'];
             }
@@ -139,5 +144,48 @@ class AiChatController extends Controller
                 'tool_executions' => $result['tool_executions'],
             ],
         ]);
+    }
+
+    /** @return array{generated_at: string, timezone: string, tasks: list<array<string, mixed>>} */
+    private function employeeTaskContext(Request $request): array
+    {
+        $employee = $request->user()->employee;
+
+        if (! $employee) {
+            return [
+                'generated_at' => now()->toIso8601String(),
+                'timezone' => config('app.timezone'),
+                'tasks' => [],
+            ];
+        }
+
+        $tasks = EmployeeTask::query()
+            ->with('caseDocument:id,case_file_id,title')
+            ->where('employee_id', $employee->id)
+            ->whereIn('status', ['pending', 'accepted', 'in_progress'])
+            ->orderByRaw("CASE status WHEN 'in_progress' THEN 0 WHEN 'pending' THEN 1 WHEN 'accepted' THEN 2 ELSE 3 END")
+            ->orderBy('due_at')
+            ->get()
+            ->map(fn (EmployeeTask $task) => [
+                'id' => $task->id,
+                'title' => $task->title,
+                'description' => $task->description,
+                'status' => $task->status,
+                'due_at' => $task->due_at?->toIso8601String(),
+                'assigned_at' => $task->created_at?->toIso8601String(),
+                'case_document' => $task->caseDocument ? [
+                    'id' => $task->caseDocument->id,
+                    'case_file_id' => $task->caseDocument->case_file_id,
+                    'title' => $task->caseDocument->title,
+                ] : null,
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'generated_at' => now()->toIso8601String(),
+            'timezone' => config('app.timezone'),
+            'tasks' => $tasks,
+        ];
     }
 }

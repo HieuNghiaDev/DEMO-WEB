@@ -32,8 +32,8 @@ type ChatResponse = {
 }
 
 export const AI_CONVERSATION_HISTORY_LIMIT = 20
-export const AI_SKILLS_PAUSED_MESSAGE = '旧タスク管理・朝会ブリーフィングはV2移行のため一時停止中です。'
-const disabledSkills = ['task_management', 'morning_briefing']
+export const AI_SKILLS_PAUSED_MESSAGE = '朝会ブリーフィングは現在利用できません。'
+const disabledSkills = ['morning_briefing']
 
 export const aiSkillLabels: Record<string, string> = {
   task_management: 'タスク管理',

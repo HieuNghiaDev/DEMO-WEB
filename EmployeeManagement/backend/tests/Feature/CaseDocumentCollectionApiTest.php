@@ -11,6 +11,7 @@ use App\Models\Client;
 use App\Models\DocumentPurpose;
 use App\Models\DocumentType;
 use App\Models\Employee;
+use App\Models\EmployeeTask;
 use App\Models\Office;
 use App\Models\ReceivedDocument;
 use App\Models\User;
@@ -409,6 +410,33 @@ class CaseDocumentCollectionApiTest extends TestCase
         $this->patchJson($this->url($item), ['review_status' => 'reviewed'])->assertOk()
             ->assertJsonPath('document.review_status', 'reviewed');
         $this->assertDatabaseCount('case_activities', 2);
+    }
+
+    public function test_confirming_preparation_creates_a_linked_employee_task_and_notification(): void
+    {
+        $assignee = Employee::create([
+            'employee_code' => 'ASSIGN001', 'full_name' => 'Document assignee', 'gender' => 'female',
+            'hire_date' => '2026-01-01', 'office_id' => $this->employee->office_id, 'status' => 'active',
+            'work_email' => 'assignee@example.test', 'phone' => '090-0000-0000',
+        ]);
+        $assigneeUser = User::factory()->withRole('level_3')->create(['employee_id' => $assignee->id]);
+        $item = $this->document(['collection_source' => '大阪病院']);
+
+        $this->patchJson($this->url($item), [
+            'assigned_employee_id' => $assignee->id,
+            'requested_at' => '2026-08-31 12:00:00',
+            'response_deadline' => '2026-09-05 12:00:00',
+        ])->assertOk();
+
+        $task = EmployeeTask::sole();
+        $this->assertSame($assignee->id, $task->employee_id);
+        $this->assertSame($item->id, $task->case_document_id);
+        $this->assertSame('pending', $task->status);
+        $this->assertSame('2026-09-05 12:00:00', $task->due_at?->format('Y-m-d H:i:s'));
+        $this->assertDatabaseHas('employee_notifications', [
+            'user_id' => $assigneeUser->id,
+            'title' => '資料収集の依頼が届きました',
+        ]);
     }
 
     public function test_nullable_fields_can_be_explicitly_cleared_and_noop_patch_does_not_create_history(): void

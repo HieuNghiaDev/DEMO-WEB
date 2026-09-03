@@ -13,7 +13,7 @@ class PersonaSeeder extends Seeder
             ['name' => 'secretary'],
             [
                 'display_name' => 'AI 秘書',
-                'skills' => [],
+                'skills' => ['task_management'],
                 'active' => true,
             ]
         );

@@ -93,6 +93,11 @@ class CaseDocument extends Model
         return $this->belongsTo(Employee::class, 'assigned_employee_id');
     }
 
+    public function employeeTasks(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(EmployeeTask::class);
+    }
+
     public function necessityDecidedBy(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'necessity_decided_by_employee_id');
