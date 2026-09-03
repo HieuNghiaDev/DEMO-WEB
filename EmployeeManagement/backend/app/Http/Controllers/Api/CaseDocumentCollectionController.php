@@ -9,13 +9,16 @@ use App\Models\CaseDocument;
 use App\Models\CaseFile;
 use App\Models\DocumentType;
 use App\Models\Employee;
+use App\Models\ReceivedDocument;
 use App\Services\CaseWorkspaceAuditService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class CaseDocumentCollectionController extends Controller
 {
@@ -84,6 +87,11 @@ class CaseDocumentCollectionController extends Controller
             $case = CaseFile::whereKey($caseFile->id)->lockForUpdate()->firstOrFail();
             $document = $case->documents()->whereKey($caseDocument->id)->lockForUpdate()->firstOrFail();
             $data = $this->validatedPatch($request, $document);
+            abort_unless(
+                ! array_key_exists('review_status', $data) || $request->user()?->hasAnyRole(['level_4', 'level_5']),
+                403,
+                '資料の確認状態を変更できるのはレベル4またはレベル5のユーザーのみです。'
+            );
             if (isset($data['necessity_status']) && $data['necessity_status'] !== $document->necessity_status) {
                 $decided = $data['necessity_status'] !== 'undetermined';
                 $actor = $request->user()->employee;
@@ -110,6 +118,90 @@ class CaseDocumentCollectionController extends Controller
 
             return $this->detail($request, $document);
         });
+    }
+
+    public function storeReceivedDocument(Request $request, CaseFile $caseFile, CaseDocument $caseDocument, CaseWorkspaceAuditService $audit): JsonResponse
+    {
+        abort_unless($caseDocument->case_file_id === $caseFile->id, 404);
+
+        $data = $request->validate([
+            'storage_type' => ['required', Rule::in(ReceivedDocument::STORAGE_TYPES)],
+            'title' => ['required', 'string', 'max:255'],
+            'file' => ['nullable', 'required_if:storage_type,upload', 'file', 'max:20480'],
+            'external_url' => ['nullable', 'required_if:storage_type,external_link,google_drive', 'string', 'max:2048', function (string $attribute, mixed $value, \Closure $fail) use ($request): void {
+                if (in_array($request->input('storage_type'), ['external_link', 'google_drive'], true)
+                    && (! filter_var($value, FILTER_VALIDATE_URL)
+                    || ! in_array(strtolower((string) parse_url($value, PHP_URL_SCHEME)), ['http', 'https'], true))) {
+                    $fail('有効なhttpまたはhttpsのURLを入力してください。');
+                }
+            }],
+            'received_at' => ['nullable', 'date'],
+            'original_or_copy' => ['nullable', Rule::in(ReceivedDocument::ORIGINAL_OR_COPY_VALUES)],
+            'return_required' => ['nullable', 'boolean'],
+            'notes' => ['nullable', 'string', 'max:5000'],
+        ]);
+        $storedPath = null;
+
+        try {
+            return $caseFile->getConnection()->transaction(function () use ($request, $caseFile, $caseDocument, $audit, $data, &$storedPath) {
+                $case = CaseFile::whereKey($caseFile->id)->lockForUpdate()->firstOrFail();
+                $document = $case->documents()->whereKey($caseDocument->id)->lockForUpdate()->firstOrFail();
+                $attributes = [
+                    'case_file_id' => $case->id,
+                    'document_type_id' => $document->document_type_id,
+                    'title' => $data['title'],
+                    'storage_type' => $data['storage_type'],
+                    'received_at' => isset($data['received_at']) ? Carbon::parse($data['received_at']) : now(),
+                    'original_or_copy' => $data['original_or_copy'] ?? null,
+                    'return_required' => $data['return_required'] ?? false,
+                    'registered_by_employee_id' => $request->user()?->employee_id,
+                    'notes' => $data['notes'] ?? null,
+                ];
+
+                if ($data['storage_type'] === 'upload') {
+                    $upload = $request->file('file');
+                    $storedPath = Storage::disk('local')->putFile("case-received-documents/{$case->id}", $upload);
+                    abort_unless($storedPath !== false, 500, '受領文書の保存に失敗しました。');
+                    $attributes['storage_path'] = $storedPath;
+                    $attributes['original_filename'] = $upload->getClientOriginalName();
+                } else {
+                    $attributes['external_url'] = $data['external_url'];
+                }
+
+                $received = ReceivedDocument::create($attributes);
+                $document->receivedDocuments()->attach($received->id, ['relationship_type' => 'received']);
+                $reviewReset = $document->review_status === 'reviewed';
+                if ($reviewReset) {
+                    $document->update(['review_status' => 'unreviewed']);
+                }
+                $audit->record($case, $request, '受領文書を登録', $received->title, [
+                    'event' => 'document_collection.received_document_registered',
+                    'document_id' => $document->id,
+                    'received_document_id' => $received->id,
+                    'storage_type' => $received->storage_type,
+                    'review_reset' => $reviewReset,
+                ]);
+
+                return $this->detail($request, $document)->setStatusCode(201);
+            });
+        } catch (Throwable $exception) {
+            if ($storedPath) {
+                Storage::disk('local')->delete($storedPath);
+            }
+
+            throw $exception;
+        }
+    }
+
+    public function downloadReceivedDocument(CaseFile $caseFile, CaseDocument $caseDocument, ReceivedDocument $receivedDocument)
+    {
+        abort_unless($caseDocument->case_file_id === $caseFile->id, 404);
+        abort_unless($receivedDocument->case_file_id === $caseFile->id, 404);
+        abort_unless($caseDocument->receivedDocuments()->whereKey($receivedDocument->id)->exists(), 404);
+        abort_unless($receivedDocument->storage_type === 'upload' && $receivedDocument->storage_path, 404);
+        abort_unless(Storage::disk('local')->exists($receivedDocument->storage_path), 404);
+
+        return Storage::disk('local')->download($receivedDocument->storage_path, $receivedDocument->original_filename ?: $receivedDocument->title);
     }
 
     private function detail(Request $request, CaseDocument $document): JsonResponse

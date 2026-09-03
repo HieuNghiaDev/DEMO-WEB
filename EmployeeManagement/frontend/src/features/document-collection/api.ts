@@ -18,6 +18,12 @@ export const documentCollectionApi = {
   async update(caseId: number, itemId: number, payload: CollectionPatch) {
     return (await api.patch<{ document: CollectionDetail }>(`${collectionPath(caseId)}/${itemId}`, payload)).data.document
   },
+  async registerReceivedDocument(caseId: number, itemId: number, formData: FormData) {
+    return (await api.post<{ document: CollectionDetail }>(`${collectionPath(caseId)}/${itemId}/received-documents`, formData)).data.document
+  },
+  async downloadReceivedDocument(caseId: number, itemId: number, receivedDocumentId: number) {
+    return (await api.get<Blob>(`${collectionPath(caseId)}/${itemId}/received-documents/${receivedDocumentId}/download`, { responseType: 'blob' })).data
+  },
   async employees(signal?: AbortSignal): Promise<EmployeeOption[]> {
     const { data } = await api.get<{ employees: Array<{ id: number; full_name: string }> }>('/organization', { signal })
     return data.employees.map(employee => ({ id: employee.id, display_name: employee.full_name }))

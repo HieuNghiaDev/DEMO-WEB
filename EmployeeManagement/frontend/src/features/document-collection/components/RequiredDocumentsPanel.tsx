@@ -11,8 +11,8 @@ import RequiredDocumentInspector from './RequiredDocumentInspector'
 
 type DeadlineFilter = 'all' | 'overdue' | 'upcoming' | 'unset'
 
-export default function RequiredDocumentsPanel({ caseId, canUpdate, canReadEmployees, activities, onCandidates, onHistory, onChanged }: {
-  caseId: number; canUpdate: boolean; canReadEmployees: boolean; activities: CaseActivity[]
+export default function RequiredDocumentsPanel({ caseId, canUpdate, canReviewDocuments, canReadEmployees, activities, onCandidates, onHistory, onChanged }: {
+  caseId: number; canUpdate: boolean; canReviewDocuments: boolean; canReadEmployees: boolean; activities: CaseActivity[]
   onCandidates: () => void; onHistory: () => void; onChanged: () => void
 }) {
   const [revision, setRevision] = useState(0)
@@ -74,23 +74,25 @@ export default function RequiredDocumentsPanel({ caseId, canUpdate, canReadEmplo
         {collection.error ? <CollectionFeedback error={collection.error} onRetry={collection.retry}/> : collection.loading ? <div className="dc-empty-results" role="status">必要資料を読み込み中…</div> : <RequiredDocumentList items={filtered} selectedId={selectedId} onSelect={setSelectedId}/>} 
         {!collection.loading && required.length === 0 && <div className="dc-required-empty"><p>必要と判断された資料はまだありません。</p><button type="button" className="dc-button" onClick={onCandidates}>資料収集で候補を確認</button></div>}
       </div>
-      {selectedId !== null && <RequiredDocumentInspector key={selectedId} caseId={caseId} itemId={selectedId} canUpdate={canUpdate} employees={employees} activities={activities} onCandidates={onCandidates} onHistory={onHistory} onClose={() => setSelectedId(null)} onSaved={refresh}/>} 
+      {selectedId !== null && (
+        <RequiredDocumentInspector key={selectedId} caseId={caseId} itemId={selectedId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} activities={activities} onCandidates={onCandidates} onHistory={onHistory} onClose={() => setSelectedId(null)} onSaved={refresh}/>
+      )}
     </div>
   </div>
 }
 
 function RequiredDocumentList({ items, selectedId, onSelect }: { items: CollectionItem[]; selectedId: number | null; onSelect: (id: number) => void }) {
   if (!items.length) return <div className="dc-empty-results"><Search size={22}/><h3>該当する必要資料がありません</h3><p>検索または絞り込み条件を変更してください。</p></div>
-  return <div className="dc-required-list"><div className="dc-required-head"><span>資料</span><span>取得作業</span><span>確認</span><span>内容充足</span><span>担当者</span><span>回答期限</span><span aria-hidden="true" /></div>{items.map(item => {
+  return <div className="dc-required-list"><div className="dc-required-head"><span>資料</span><span>取得作業</span><span>内容充足</span><span>担当者</span><span>回答期限</span><span>確認</span><span aria-hidden="true" /></div>{items.map(item => {
     const row = itemToRow(item)
     const exception = row.result
     return <button key={item.id} type="button" className={`dc-required-row ${selectedId === item.id ? 'is-selected' : ''}`} onClick={() => onSelect(item.id)} aria-label={`${row.code} ${row.title} の必要資料詳細`}>
       <span className="dc-document"><span className="dc-code">{row.code}</span><strong>{row.title}</strong><span className="dc-source">{[item.collection_source, row.period].filter(Boolean).join(' · ') || '取得先・対象期間 未設定'}</span>{exception && <span className="dc-required-exception">{exception}</span>}</span>
       <StatusLane tone={collectionTone(item.collection_status)} label={collectionLabels[item.collection_status]}/>
-      <StatusLane tone={reviewTone(item.review_status)} label={reviewLabels[item.review_status]}/>
       <StatusLane tone={fulfillmentTone(item.fulfillment_status)} label={fulfillmentLabels[item.fulfillment_status]}/>
       <span className="dc-owner">{item.assigned_employee?.display_name ?? '未割当'}</span>
       <Deadline value={item.response_deadline} overdue={row.overdue}/>
+      <StatusLane tone={reviewTone(item.review_status)} label={reviewLabels[item.review_status]}/>
       <ChevronRight className="dc-required-chevron" size={15}/>
     </button>
   })}</div>

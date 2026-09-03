@@ -51,13 +51,15 @@ Tài liệu hỗ trợ `requirement_level`: `required`, `conditional`, `optional
 
 Frontend consumer từ Phase 1E-C: tab 資料収集 trong CaseWorkspace gọi các endpoint 1E-A/1E-B hiện có, không thay contract. Xem [production integration](frontend/DOCUMENT_COLLECTION_INTEGRATION.md); các ghi chú “chưa nối frontend” bên dưới mô tả thời điểm triển khai backend tương ứng.
 
-API này độc lập với các route `documents` legacy; chưa nối frontend mockup và **không khởi tạo checklist**. Không gọi generator khi GET/PATCH hoặc tạo CaseFile. Không upload/delete file, gắn pivot, gửi yêu cầu bên ngoài, OCR hoặc quyết định pháp lý bằng AI.
+API này độc lập với các route `documents` legacy và **không khởi tạo checklist**. Không gọi generator khi GET/PATCH, tạo CaseFile hoặc đăng ký tệp. Không gửi yêu cầu bên ngoài, OCR hoặc quyết định pháp lý bằng AI.
 
 | Method & path | Quyền | Response |
 | --- | --- | --- |
 | `GET /case-files/{caseFile}/document-collection` | `case.view` | `{ documents: [...], pagination: {...}, summary: {...} }` |
 | `GET /case-files/{caseFile}/document-collection/{caseDocument}` | `case.view` | `{ document: {...} }` chi tiết |
 | `PATCH /case-files/{caseFile}/document-collection/{caseDocument}` | `case.update` | `{ document: {...} }` chi tiết sau cập nhật |
+| `POST /case-files/{caseFile}/document-collection/{caseDocument}/received-documents` | `case.update` | Đăng ký một tệp upload riêng tư, Google Drive hoặc URL HTTPS/HTTP và gắn vào mục tài liệu; trả `{ document: {...} }` HTTP 201 |
+| `GET /case-files/{caseFile}/document-collection/{caseDocument}/received-documents/{receivedDocument}/download` | `case.view` | Tải tệp upload riêng tư khi tệp, mục và hồ sơ cùng thuộc một CaseFile; link ngoài vẫn mở ở URL gốc |
 
 Giữ nguyên Sanctum, middleware bắt đổi mật khẩu, rate limit và RBAC workspace. Role chính thức level 1/2 đọc; level 3 trở lên có `case.update`. **Không thêm ACL hồ sơ riêng**: hiện CaseWorkspace cấp quyền theo RBAC dùng chung, không giới hạn người được phân công từng hồ sơ. PATCH người phụ trách mục thu thập không thay người phụ trách CaseFile (route assign CaseFile vẫn giữ quy tắc level 4/5). Detail/PATCH kiểm tra item thuộc đúng case trước validation hoặc trả dữ liệu; sai case, case/item đã soft-delete hoặc không tồn tại trả 404. Không thay đổi permission seeder hay middleware.
 
@@ -124,7 +126,9 @@ Ngày thuần trả YYYY-MM-DD; datetime trả ISO-8601 UTC, nullable giữ null
 - `collection: {target_person, source, method, target_period_from, target_period_to, target_scope, status, result, requested_at, response_deadline, priority, preservation_priority, preservation_reason}`.
 - `fulfillment_status`, `review_status`, `assigned_employee`, `received_document_count`, `received_documents`, `created_at`, `updated_at`.
 
-`received_documents` là read-only, mỗi file gồm `id`, `title`, `original_filename`, `storage_type`, `external_url`, `version`, `received_at`, `original_or_copy`, `return_required`, `returned_at`, `registered_by_employee: {id, display_name} | null`, `notes`, `relationship_type` từ pivot. Chỉ file chưa soft-delete **cùng case** được trả/đếm, kể cả pivot bị nối sai case trong DB. Cùng file có thể xuất hiện ở nhiều item; cùng item có thể có nhiều file. Không trả `storage_path`, toàn bộ pivot hay thông tin tài khoản. URL chỉ trả cho storage google_drive/external_link có URL hợp lệ http/https trong ranh giới quyền case; không gọi hoặc tải URL. Storage upload và scheme không an toàn trả external_url null.
+Mỗi `received_documents` gồm `id`, `title`, `original_filename`, `storage_type`, `external_url`, `version`, `received_at`, `original_or_copy`, `return_required`, `returned_at`, `registered_by_employee: {id, display_name} | null`, `notes`, `relationship_type` từ pivot. Chỉ file chưa soft-delete **cùng case** được trả/đếm, kể cả pivot bị nối sai case trong DB. Cùng file có thể xuất hiện ở nhiều item; cùng item có thể có nhiều file. Không trả `storage_path`, toàn bộ pivot hay thông tin tài khoản. URL chỉ trả cho storage google_drive/external_link có URL hợp lệ http/https trong ranh giới quyền case. Storage upload trả external_url null và chỉ tải qua endpoint được xác thực ở trên.
+
+`POST .../received-documents` dùng `multipart/form-data`: `storage_type` (`upload`, `google_drive`, `external_link`), `title` bắt buộc, `file` bắt buộc khi upload (tối đa 20 MB), hoặc `external_url` bắt buộc khi liên kết (chỉ HTTP/HTTPS). `received_at`, `original_or_copy` (`original`/`copy`), `return_required`, `notes` là tùy chọn. Server ghi người đăng ký từ tài khoản hiện tại, gắn pivot `received`, ghi activity `document_collection.received_document_registered` và **không** tự đổi collection/fulfillment sang hoàn tất. Nếu item đang `reviewed`, file mới reset `review_status` về `unreviewed` để Level 4/5 kiểm tra lại.
 
 #### PATCH contract và tính độc lập
 
@@ -140,7 +144,8 @@ Body là các field phẳng và partial; bỏ qua field nghĩa là giữ nguyên
 | collection_priority | low / normal / high / critical, không null |
 | preservation_priority | boolean true/false hoặc 1/0, không null |
 | preservation_reason, necessity_reason | string tối đa 5.000, nullable |
-| necessity_status, collection_status, fulfillment_status, review_status | enum của trục tương ứng ở bảng filter, không null |
+| necessity_status, collection_status, fulfillment_status | enum của trục tương ứng ở bảng filter, không null |
+| review_status | unreviewed / reviewing / reviewed / returned, không null; chỉ Level 4 hoặc Level 5 được PATCH |
 | collection_result | null hoặc not_exist / not_disclosed / partially_disclosed / custodian_unknown / other |
 
 Mã kết quả: `not_exist` = 不存在; `not_disclosed` = 不開示; `partially_disclosed` = 一部不開示; `custodian_unknown` = 保管先不明; `other` = その他. Null nghĩa là chưa ghi nhận ngoại lệ, không phải completed.
@@ -155,6 +160,8 @@ Mọi key ngoài allowlist bị từ chối 422, **kể cả khi gửi null**. B
 - Collection method != source: cách thu thập là mô tả độc lập, không lấy từ master gợi ý.
 
 Khi necessity_status **thay đổi** sang required/not_required, hệ thống ghi employee đã xác thực và now(); nếu user không có employee hợp lệ thì từ chối quyết định này bằng 403. Gửi lại cùng status hoặc chỉ sửa reason không thay người/thời điểm quyết định. not_required yêu cầu reason không rỗng/không chỉ whitespace khi cập nhật status/reason, dùng reason hiện có nếu bỏ qua. Khi chuyển về undetermined, xóa reason/actor/time hiện tại (kể cả gửi reason cùng request); history vẫn giữ bản trước. Các PATCH không liên quan necessity không ép sửa quyết định cũ thiếu reason.
+
+`review_status` là bước xác nhận toàn bộ tài liệu sau khi đã kiểm tra việc thu thập và nội dung. Chỉ user có role `level_4` hoặc `level_5` mới được cập nhật field này; các role khác nhận 403, kể cả khi có quyền `case.update`. Các field PATCH khác vẫn dùng quyền `case.update` hiện có.
 
 PATCH khóa CaseFile rồi CaseDocument trong transaction, đọc state mới nhất để validate các cặp giá trị partial. Mỗi lần có thay đổi thật ghi một `case_activities` qua `CaseWorkspaceAuditService`, title `資料収集項目を更新`, metadata gồm event `document_collection.updated`, document_id, actor_user_id, `changes` chứa before/after từng field thay đổi (bao gồm actor/time do server ghi). Nhân viên, thời điểm và tên item nằm trong activity theo convention workspace. Bao phủ đổi trạng thái, review/returned, yêu cầu thêm, khó thu thập, reason, assignee/deadline và preservation. Audit thất bại rollback cả update và history. PATCH no-op không thay updated_at hoặc tạo history thừa. Security audit 401/403/429 hiện có giữ nguyên; không đưa nội dung tài liệu sang external logger.
 

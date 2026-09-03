@@ -11,8 +11,8 @@ import InitializationDialog from './components/InitializationDialog'
 import DocumentCollectionInspector from './components/DocumentCollectionInspector'
 import './documentCollection.css'
 
-export default function DocumentCollectionPanel({ caseId, canUpdate, canReadEmployees, activities, onHistory, onBack, onChanged }: {
-  caseId: number; canUpdate: boolean; canReadEmployees: boolean; activities: CaseActivity[]
+export default function DocumentCollectionPanel({ caseId, canUpdate, canReviewDocuments, canReadEmployees, activities, onHistory, onBack, onChanged }: {
+  caseId: number; canUpdate: boolean; canReviewDocuments: boolean; canReadEmployees: boolean; activities: CaseActivity[]
   onHistory: () => void; onBack: () => void; onChanged: () => void
 }) {
   const { t } = useTranslation()
@@ -43,7 +43,7 @@ export default function DocumentCollectionPanel({ caseId, canUpdate, canReadEmpl
             {state.listError ? <CollectionFeedback error={state.listError} onRetry={state.refresh} onBack={onBack} /> : state.listLoading ? <div className="dc-empty-results" role="status">{t('documentCollection.loadingList')}</div> : data && <CollectionListView items={data.documents.map(item => itemToRow(item))} selectedId={selectedId === null ? null : String(selectedId)} onSelect={id => { if (Number(id) === selectedId || editState.current.saving) return; if (!editState.current.dirty || window.confirm(t('documentCollection.editor.discardAndClose'))) setSelectedId(Number(id)) }} />}
             <div className="dc-list-footer">{t('documentCollection.independentAxes')}</div>
           </div>
-          {selectedId !== null && <DocumentCollectionInspector key={selectedId} caseId={caseId} itemId={selectedId} canUpdate={canUpdate} employees={state.employees} employeeError={state.employeeError} activities={activities} onHistory={onHistory} onClose={() => { editState.current = { dirty: false, saving: false }; setSelectedId(null) }} onSaved={saved} onEditState={value => { editState.current = value }} />}
+          {selectedId !== null && <DocumentCollectionInspector key={selectedId} caseId={caseId} itemId={selectedId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} employees={state.employees} employeeError={state.employeeError} activities={activities} onHistory={onHistory} onClose={() => { editState.current = { dirty: false, saving: false }; setSelectedId(null) }} onSaved={saved} onEditState={value => { editState.current = value }} />}
         </div>
       </>}
     </>}

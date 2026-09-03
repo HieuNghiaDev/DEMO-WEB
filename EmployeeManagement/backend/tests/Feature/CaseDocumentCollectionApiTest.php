@@ -22,7 +22,9 @@ use Database\Seeders\DocumentPurposeSeeder;
 use Database\Seeders\DocumentTypeMasterSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
@@ -241,6 +243,60 @@ class CaseDocumentCollectionApiTest extends TestCase
         $this->assertSame($before, $this->masters());
     }
 
+    public function test_editor_can_register_an_external_received_document_without_completing_collection(): void
+    {
+        $item = $this->document(['review_status' => 'reviewed']);
+
+        $this->post($this->receivedUrl($item), [
+            'storage_type' => 'external_link', 'title' => '病院からの回答書',
+            'external_url' => 'https://example.test/records/123', 'received_at' => '2026-09-01 10:30:00',
+            'notes' => '受付で受領',
+        ])->assertCreated()
+            ->assertJsonPath('document.received_document_count', 1)
+            ->assertJsonPath('document.received_documents.0.title', '病院からの回答書')
+            ->assertJsonPath('document.received_documents.0.external_url', 'https://example.test/records/123')
+            ->assertJsonPath('document.review_status', 'unreviewed');
+
+        $received = ReceivedDocument::sole();
+        $this->assertSame($this->case->id, $received->case_file_id);
+        $this->assertSame($item->document_type_id, $received->document_type_id);
+        $this->assertSame($this->employee->id, $received->registered_by_employee_id);
+        $this->assertSame('not_started', $item->refresh()->collection_status);
+        $this->assertDatabaseHas('case_document_received_documents', ['case_document_id' => $item->id, 'received_document_id' => $received->id, 'relationship_type' => 'received']);
+        $this->assertDatabaseHas('case_activities', ['case_file_id' => $this->case->id, 'title' => '受領文書を登録']);
+    }
+
+    public function test_editor_can_upload_and_download_a_received_document_without_exposing_its_path(): void
+    {
+        Storage::fake('local');
+        $item = $this->document();
+
+        $this->post($this->receivedUrl($item), [
+            'storage_type' => 'upload', 'title' => '診療記録PDF',
+            'file' => UploadedFile::fake()->create('medical-record.pdf', 64, 'application/pdf'),
+        ])->assertCreated()->assertJsonPath('document.received_documents.0.external_url', null);
+
+        $received = ReceivedDocument::sole();
+        Storage::disk('local')->assertExists($received->storage_path);
+        $detail = $this->getJson($this->url($item))->assertOk();
+        $this->assertStringNotContainsString($received->storage_path, $detail->getContent());
+        $this->get($this->receivedDownloadUrl($item, $received))->assertOk()->assertDownload('medical-record.pdf');
+
+        $foreign = ReceivedDocument::create(['case_file_id' => $this->newCase()->id, 'title' => 'Other case file', 'storage_type' => 'upload', 'storage_path' => 'other.pdf']);
+        $this->get($this->receivedDownloadUrl($item, $foreign))->assertNotFound();
+    }
+
+    public function test_received_document_requires_a_real_http_link_or_uploaded_file(): void
+    {
+        $item = $this->document();
+        $this->post($this->receivedUrl($item), ['storage_type' => 'external_link', 'title' => 'Unsafe', 'external_url' => 'javascript:alert(1)'])
+            ->assertUnprocessable()->assertJsonValidationErrors('external_url');
+        $this->post($this->receivedUrl($item), ['storage_type' => 'upload', 'title' => 'Missing file'])
+            ->assertUnprocessable()->assertJsonValidationErrors('file');
+        $this->assertDatabaseCount('received_documents', 0);
+        $this->assertDatabaseCount('case_activities', 0);
+    }
+
     public function test_partial_patch_edits_context_and_does_not_modify_master_legacy_or_snapshot_fields(): void
     {
         $item = $this->document(['status' => 'confirmed', 'file_url' => 'https://example.test/legacy', 'version' => '7',
@@ -305,7 +361,6 @@ class CaseDocumentCollectionApiTest extends TestCase
             ['collection_result', 'not_exist'], ['collection_result', 'not_disclosed'], ['collection_result', 'partially_disclosed'],
             ['collection_result', 'custodian_unknown'], ['collection_result', 'other'],
             ['fulfillment_status', 'satisfied'], ['fulfillment_status', 'insufficient'],
-            ['review_status', 'reviewed'], ['review_status', 'returned'],
             ['collection_priority', 'high'], ['preservation_priority', true],
         ];
     }
@@ -336,6 +391,24 @@ class CaseDocumentCollectionApiTest extends TestCase
             ->assertJsonPath('document.fulfillment_status', 'insufficient')->assertJsonPath('document.review_status', 'unreviewed');
         $this->patchJson($this->url($item), ['fulfillment_status' => 'satisfied'])
             ->assertOk()->assertJsonPath('document.fulfillment_status', 'satisfied')->assertJsonPath('document.review_status', 'unreviewed');
+    }
+
+    public function test_review_status_can_only_be_updated_by_level_four_or_five(): void
+    {
+        $item = $this->document(['necessity_status' => 'required']);
+
+        $this->patchJson($this->url($item), ['review_status' => 'reviewing'])->assertForbidden();
+        $this->assertSame('unreviewed', $item->refresh()->review_status);
+        $this->assertDatabaseCount('case_activities', 0);
+
+        Sanctum::actingAs(User::factory()->withRole('level_4')->create());
+        $this->patchJson($this->url($item), ['review_status' => 'reviewing'])->assertOk()
+            ->assertJsonPath('document.review_status', 'reviewing');
+
+        Sanctum::actingAs(User::factory()->withRole('level_5')->create());
+        $this->patchJson($this->url($item), ['review_status' => 'reviewed'])->assertOk()
+            ->assertJsonPath('document.review_status', 'reviewed');
+        $this->assertDatabaseCount('case_activities', 2);
     }
 
     public function test_nullable_fields_can_be_explicitly_cleared_and_noop_patch_does_not_create_history(): void
@@ -524,6 +597,16 @@ class CaseDocumentCollectionApiTest extends TestCase
     private function url(?CaseDocument $document = null): string
     {
         return "/api/case-files/{$this->case->id}/document-collection".($document ? "/{$document->id}" : '');
+    }
+
+    private function receivedUrl(CaseDocument $document): string
+    {
+        return $this->url($document).'/received-documents';
+    }
+
+    private function receivedDownloadUrl(CaseDocument $document, ReceivedDocument $received): string
+    {
+        return $this->receivedUrl($document)."/{$received->id}/download";
     }
 
     private function masters(): array

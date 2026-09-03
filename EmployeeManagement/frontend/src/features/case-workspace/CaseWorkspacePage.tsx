@@ -5,6 +5,7 @@ import {
   AlertTriangle, ArrowLeft, CheckCircle2, ChevronRight, CircleGauge,
   Clock3, Files, ListChecks, Mail, MessageSquareText, Pencil, Phone,
   Plus, RefreshCw, ShieldCheck, Trash2, UserRound, X,
+  FolderOpen, Flag, Globe, CalendarDays, Target, MapPin, UserPlus, CalendarPlus
 } from 'lucide-react'
 
 import { useAuth } from '../../contexts/AuthContext'
@@ -49,6 +50,7 @@ export function CaseWorkspaceView({ caseId, onBack, onEdit, initialNotice, user 
   const [notice, setNotice] = useState<string | null>(initialNotice ?? null)
   const [dialog, setDialog] = useState<DialogKind | null>(null)
   const canUpdate = user?.permission_names.includes('case.update') ?? false
+  const canReviewDocuments = canUpdate && (user?.role_names.some(role => role === 'level_4' || role === 'level_5') ?? false)
 
   const reload = async (quiet = false) => {
     if (!quiet) setLoading(true)
@@ -110,9 +112,9 @@ export function CaseWorkspaceView({ caseId, onBack, onEdit, initialNotice, user 
         {tabs.map(({ id, icon: Icon }) => <button key={id} type="button" onClick={() => setTab(id)} aria-current={tab === id ? 'page' : undefined}><Icon size={16}/>{t(`cases.tabs.${id}`)}</button>)}
       </nav>
       <div className="cm-tab-content">
-        {tab === 'collection' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingCollection')}</p>}><DocumentCollectionPanel key={caseId} caseId={caseId} canUpdate={canUpdate} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onHistory={() => setTab('timeline')} onBack={onBack} onChanged={() => void reload(true)} /></Suspense>}
+        {tab === 'collection' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingCollection')}</p>}><DocumentCollectionPanel key={caseId} caseId={caseId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onHistory={() => setTab('timeline')} onBack={onBack} onChanged={() => void reload(true)} /></Suspense>}
         {tab === 'overview' && <OverviewPanel caseFile={caseFile} summary={data.summary} onOpenTab={setTab}/>}
-        {tab === 'documents' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingDocuments')}</p>}><RequiredDocumentsPanel key={caseId} caseId={caseId} canUpdate={canUpdate} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onCandidates={() => setTab('collection')} onHistory={() => setTab('timeline')} onChanged={() => void reload(true)}/></Suspense>}
+        {tab === 'documents' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingDocuments')}</p>}><RequiredDocumentsPanel key={caseId} caseId={caseId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onCandidates={() => setTab('collection')} onHistory={() => setTab('timeline')} onChanged={() => void reload(true)}/></Suspense>}
         {tab === 'tasks' && <TasksPanel tasks={caseFile.case_tasks} canUpdate={canUpdate} working={working} onAdd={() => setDialog('task')} onStatus={(task, status) => void run(() => caseWorkspaceApi.updateTask(caseId, task.id, { status }), 'タスクを更新しました。')} onDelete={(task) => confirmDelete(task.title) && void run(() => caseWorkspaceApi.deleteTask(caseId, task.id), 'タスクを削除しました。')}/>}
         {tab === 'deadlines' && <DeadlinesPanel deadlines={caseFile.deadlines} canUpdate={canUpdate} working={working} onAdd={() => setDialog('deadline')} onComplete={(deadline) => void run(() => caseWorkspaceApi.updateDeadline(caseId, deadline.id, { status: deadline.status === 'completed' ? 'open' : 'completed' }), '期限の状態を更新しました。')} onDelete={(deadline) => confirmDelete(deadline.title) && void run(() => caseWorkspaceApi.deleteDeadline(caseId, deadline.id), '期限を削除しました。')}/>}
         {tab === 'parties' && <PartiesPanel client={caseFile.client} parties={caseFile.parties} canUpdate={canUpdate} onAdd={() => setDialog('party')} onDelete={(party) => confirmDelete(party.name) && void run(() => caseWorkspaceApi.deleteParty(caseId, party.id), '関係者を削除しました。')}/>}
@@ -149,30 +151,30 @@ function WorkspaceHeader({ caseFile, onEdit }: { caseFile: CaseWorkspace; onEdit
     <div className="cm-wh-meta">
       <div className="cm-wh-group cm-wh-group--1">
         <dl>
-          <div><dt>{t('cases.workspace.caseType')}</dt><dd title={caseTypeStr}>{presentWorkspaceCaseType(caseTypeStr, t)}</dd></div>
-          <div><dt>{t('cases.workspace.assignee')}</dt><dd>{caseFile.assigned_employee?.full_name ?? t('cases.workspace.unassigned')}</dd></div>
-          <div><dt>{t('cases.workspace.priority')}</dt><dd><PriorityBadge priority={caseFile.priority ?? 'normal'} translated/></dd></div>
+          <div><dt aria-label={t('cases.workspace.caseType')} data-tooltip={t('cases.workspace.caseType')}><FolderOpen size={15}/></dt><dd title={caseTypeStr}>{presentWorkspaceCaseType(caseTypeStr, t)}</dd></div>
+          <div><dt aria-label={t('cases.workspace.assignee')} data-tooltip={t('cases.workspace.assignee')}><UserRound size={15}/></dt><dd>{caseFile.assigned_employee?.full_name ?? t('cases.workspace.unassigned')}</dd></div>
+          <div><dt aria-label={t('cases.workspace.priority')} data-tooltip={t('cases.workspace.priority')}><Flag size={15}/></dt><dd><PriorityBadge priority={caseFile.priority ?? 'normal'} translated/></dd></div>
         </dl>
       </div>
       <div className="cm-wh-group cm-wh-group--2">
         <dl>
-          <div><dt>{t('cases.workspace.phone')}</dt><dd>{caseFile.client.phone || t('cases.workspace.notRegistered')}</dd></div>
-          <div><dt>{t('cases.workspace.email')}</dt><dd title={caseFile.client.email || t('cases.workspace.notRegistered')}>{caseFile.client.email || t('cases.workspace.notRegistered')}</dd></div>
-          <div><dt>{t('cases.workspace.nationality')}</dt><dd>{caseFile.client.nationality || t('cases.workspace.notRegistered')}</dd></div>
+          <div><dt aria-label={t('cases.workspace.phone')} data-tooltip={t('cases.workspace.phone')}><Phone size={15}/></dt><dd>{caseFile.client.phone || t('cases.workspace.notRegistered')}</dd></div>
+          <div><dt aria-label={t('cases.workspace.email')} data-tooltip={t('cases.workspace.email')}><Mail size={15}/></dt><dd title={caseFile.client.email || t('cases.workspace.notRegistered')}>{caseFile.client.email || t('cases.workspace.notRegistered')}</dd></div>
+          <div><dt aria-label={t('cases.workspace.nationality')} data-tooltip={t('cases.workspace.nationality')}><Globe size={15}/></dt><dd>{caseFile.client.nationality || t('cases.workspace.notRegistered')}</dd></div>
         </dl>
       </div>
       <div className="cm-wh-group cm-wh-group--3">
         <dl>
-          <div><dt>{t('cases.workspace.openedAt')}</dt><dd>{caseFile.opened_at?.slice(0,10) || t('cases.workspace.notSet')}</dd></div>
-          <div><dt>{t('cases.workspace.targetCompletion')}</dt><dd>{caseFile.target_completion_at?.slice(0,10) || t('cases.workspace.notSet')}</dd></div>
-          <div><dt>{t('cases.workspace.updatedAt')}</dt><dd>{dateTime(caseFile.updated_at)}</dd></div>
+          <div><dt aria-label={t('cases.workspace.openedAt')} data-tooltip={t('cases.workspace.openedAt')}><CalendarDays size={15}/></dt><dd>{caseFile.opened_at?.slice(0,10) || t('cases.workspace.notSet')}</dd></div>
+          <div><dt aria-label={t('cases.workspace.targetCompletion')} data-tooltip={t('cases.workspace.targetCompletion')}><Target size={15}/></dt><dd>{caseFile.target_completion_at?.slice(0,10) || t('cases.workspace.notSet')}</dd></div>
+          <div><dt aria-label={t('cases.workspace.updatedAt')} data-tooltip={t('cases.workspace.updatedAt')}><Clock3 size={15}/></dt><dd>{dateTime(caseFile.updated_at)}</dd></div>
         </dl>
       </div>
       <div className="cm-wh-group cm-wh-group--4">
         <dl>
-          <div><dt>{t('cases.workspace.address')}</dt><dd title={caseFile.client.address || t('cases.workspace.notRegistered')}>{caseFile.client.address || t('cases.workspace.notRegistered')}</dd></div>
-          <div><dt>{t('cases.workspace.createdBy')}</dt><dd>{caseFile.created_by_employee?.full_name ?? t('cases.workspace.notRecorded')}</dd></div>
-          <div><dt>{t('cases.workspace.createdAt')}</dt><dd>{caseFile.created_at ? dateTime(caseFile.created_at) : '—'}</dd></div>
+          <div><dt aria-label={t('cases.workspace.address')} data-tooltip={t('cases.workspace.address')}><MapPin size={15}/></dt><dd title={caseFile.client.address || t('cases.workspace.notRegistered')}>{caseFile.client.address || t('cases.workspace.notRegistered')}</dd></div>
+          <div><dt aria-label={t('cases.workspace.createdBy')} data-tooltip={t('cases.workspace.createdBy')}><UserPlus size={15}/></dt><dd>{caseFile.created_by_employee?.full_name ?? t('cases.workspace.notRecorded')}</dd></div>
+          <div><dt aria-label={t('cases.workspace.createdAt')} data-tooltip={t('cases.workspace.createdAt')}><CalendarPlus size={15}/></dt><dd>{caseFile.created_at ? dateTime(caseFile.created_at) : '—'}</dd></div>
         </dl>
       </div>
     </div>
@@ -182,10 +184,28 @@ function WorkspaceHeader({ caseFile, onEdit }: { caseFile: CaseWorkspace; onEdit
 function OverviewPanel({ caseFile, summary, onOpenTab }: { caseFile: CaseWorkspace; summary: WorkspaceSummary; onOpenTab: (tab: WorkspaceTab) => void }) {
   const { t } = useTranslation()
   const urgent = caseFile.deadlines.filter((item) => item.status === 'open' && remainingDays(item.due_at) <= 7)
-  return <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
+  return <div className="space-y-6">
     <section><SectionHeading title={t('cases.workspace.overview.title')} description={t('cases.workspace.overview.description')}/><div className="mt-4 grid gap-3 sm:grid-cols-3"><OverviewStat label={t('cases.workspace.overview.openTasks')} value={t('cases.count', { count: summary.open_tasks })} detail={t('cases.workspace.overview.openTasksDetail')} icon={ListChecks} variant="neutral"/><OverviewStat label={t('cases.workspace.overview.deadlineRisk')} value={t('cases.count', { count: urgent.length })} detail={t('cases.workspace.overview.deadlineRiskDetail')} icon={AlertTriangle} variant={urgent.length > 0 ? 'warning' : 'neutral'}/><OverviewStat label={t('cases.workspace.overview.nextDeadline')} value={summary.next_deadline ? shortDate(summary.next_deadline) : t('cases.workspace.notSet')} detail={t('cases.workspace.overview.nextDeadlineDetail')} icon={Clock3} variant={summary.next_deadline ? 'time' : 'neutral'}/></div><div className="mt-6"><div className="cm-workflow-header"><h3>{t('cases.workspace.overview.documentWorkflow')}</h3><p>{t('cases.workspace.overview.documentWorkflowDescription')}</p></div><div className="grid gap-3 pt-3 sm:grid-cols-2"><button type="button" onClick={() => onOpenTab('collection')} className="cm-workflow-btn"><span><strong>{t('cases.tabs.collection')}</strong><small>{t('cases.workspace.overview.collectionHint')}</small></span><ChevronRight size={18}/></button><button type="button" onClick={() => onOpenTab('documents')} className="cm-workflow-btn"><span><strong>{t('cases.tabs.documents')}</strong><small>{t('cases.workspace.overview.documentsHint')}</small></span><ChevronRight size={18}/></button></div></div></section>
-    <aside><SectionHeading title={t('cases.workspace.overview.recentHistory')} description={t('cases.workspace.overview.recentHistoryDescription')}/><div className="mt-4 divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white dark:divide-slate-700 dark:border-slate-700 dark:bg-slate-900">{caseFile.activities.slice(0, 6).map((activity) => <div key={activity.id} className="cm-timeline-row"><div><p className="cm-timeline-title">{activity.title}</p><time>{shortDate(activity.occurred_at)}</time><p className="cm-timeline-desc line-clamp-2">{activity.content || t(`cases.activityType.${activity.activity_type}`)}</p></div></div>)}{caseFile.activities.length === 0 && <EmptyRow text={t('cases.workspace.overview.noHistory')}/>}</div></aside>
+    <section className="cm-recent-history-section"><div className="cm-recent-history-header"><SectionHeading title={t('cases.workspace.overview.recentHistory')} description={t('cases.workspace.overview.recentHistoryDescription')}/>{caseFile.activities.length > 3 && <button type="button" className="cm-recent-history-all" onClick={() => onOpenTab('timeline')}>{t('cases.workspace.overview.viewAllHistory')}<ChevronRight size={16}/></button>}</div><div className="mt-4 divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white dark:divide-slate-700 dark:border-slate-700 dark:bg-slate-900">{caseFile.activities.slice(0, 3).map((activity) => <RecentHistoryRow key={activity.id} activity={activity}/>)}{caseFile.activities.length === 0 && <EmptyRow text={t('cases.workspace.overview.noHistory')}/>}</div></section>
   </div>
+}
+
+function RecentHistoryRow({ activity }: { activity: CaseActivity }) {
+  const { t } = useTranslation()
+  const changedFields = Object.keys(activity.metadata?.changes ?? {}).map((field) => historyFieldLabel(field, t)).filter(Boolean)
+  const relatedDocument = activity.metadata?.event === 'document_collection.updated' ? activity.content : null
+
+  return <article className="cm-timeline-row cm-recent-history-row">
+    <div>
+      <p className="cm-timeline-title">{activity.title}</p>
+      <dl className="cm-recent-history-facts">
+        <div><dt>{t('cases.workspace.overview.historyDocument')}</dt><dd>{relatedDocument || t('cases.workspace.overview.historyNoDocument')}</dd></div>
+        <div><dt>{t('cases.workspace.overview.historyChangedFields')}</dt><dd>{changedFields.length ? changedFields.join(' · ') : t('cases.workspace.overview.historyChangeNotRecorded')}</dd></div>
+        <div><dt>{t('cases.workspace.overview.historyActor')}</dt><dd>{activity.created_by_employee?.full_name ?? t('cases.workspace.overview.historySystem')}</dd></div>
+        <div><dt>{t('cases.workspace.overview.historyDateTime')}</dt><dd><time dateTime={activity.occurred_at}>{dateTime(activity.occurred_at)}</time></dd></div>
+      </dl>
+    </div>
+  </article>
 }
 
 function TasksPanel({ tasks, canUpdate, working, onAdd, onStatus, onDelete }: { tasks: CaseTask[]; canUpdate: boolean; working: boolean; onAdd: () => void; onStatus: (task: CaseTask, status: CaseTask['status']) => void; onDelete: (task: CaseTask) => void }) { return <><PanelToolbar title="担当タスク" description="担当者、期限、進捗を案件単位で追跡します。" actions={canUpdate && <button type="button" onClick={onAdd} className={primaryButton}><Plus size={16}/>タスクを追加</button>}/><div className="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 dark:divide-slate-700 dark:border-slate-700">{tasks.map((task) => <div key={task.id} className="grid gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 md:grid-cols-[minmax(0,1fr)_9rem_9rem_2.5rem] md:items-center"><div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-slate-900 dark:text-white">{task.title}</p><PriorityBadge priority={task.priority}/></div><p className="mt-1 text-xs text-slate-500">{task.assigned_employee?.full_name ?? '未割当'} · {task.due_at ? `期限 ${shortDate(task.due_at)}` : '期限未設定'}</p></div><select disabled={!canUpdate || working} value={task.status} onChange={(event) => onStatus(task, event.target.value as CaseTask['status'])} className="h-9 rounded-md border border-slate-300 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900"><option value="pending">未着手</option><option value="in_progress">対応中</option><option value="completed">完了</option><option value="cancelled">取消</option></select><span className="text-xs text-slate-500">{task.description || '詳細なし'}</span>{canUpdate && <button type="button" onClick={() => onDelete(task)} aria-label={`${task.title}を削除`} className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"><Trash2 size={15}/></button>}</div>)}{tasks.length === 0 && <EmptyRow text="タスクはまだ登録されていません。"/>}</div></> }
@@ -228,6 +248,17 @@ function confirmDelete(name: string) { return window.confirm(`「${name}」を�
 function apiError(error: unknown, fallback: string) { if (!axios.isAxiosError(error)) return fallback; const validation = error.response?.data?.errors as Record<string, string[]> | undefined; return validation ? Object.values(validation).flat()[0] : error.response?.data?.message ?? fallback }
 function shortDate(value: string) { return new Intl.DateTimeFormat(i18n.language, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value)) }
 function dateTime(value: string) { return new Intl.DateTimeFormat(i18n.language, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
+function historyFieldLabel(field: string, t: (key: string) => string) {
+  const key = ({
+    necessity_status: 'necessity', necessity_reason: 'necessityReason', necessity_decided_by_employee_id: 'necessityDecidedBy', necessity_decided_at: 'necessityDecidedAt',
+    target_person: 'targetPerson', collection_source: 'collectionSource', collection_method: 'collectionMethod',
+    target_period_from: 'targetPeriod', target_period_to: 'targetPeriod', target_scope: 'targetScope',
+    assigned_employee_id: 'assignee', requested_at: 'requestedAt', response_deadline: 'responseDeadline',
+    collection_priority: 'collectionPriority', preservation_priority: 'preservationPriority', preservation_reason: 'preservationReason',
+    collection_status: 'collectionStatus', collection_result: 'collectionResult', fulfillment_status: 'fulfillmentStatus', review_status: 'reviewStatus',
+  } as Record<string, string>)[field]
+  return key ? t(`cases.workspace.overview.historyFields.${key}`) : field
+}
 function remainingDays(value: string) { const target = new Date(value); const today = new Date(); target.setHours(0, 0, 0, 0); today.setHours(0, 0, 0, 0); return Math.ceil((target.getTime() - today.getTime()) / 86400000) }
 function localDateTime() { const date = new Date(Date.now() - new Date().getTimezoneOffset() * 60000); return date.toISOString().slice(0, 16) }
 function deadlineTypeLabel(type: CaseDeadline['deadline_type']) { return ({ residence: '在留期限', submission: '提出期限', additional: '追加資料期限', limitation: '時効', document: '書類期限', internal: '内部期限', other: 'その他' } as Record<string, string>)[type] }
