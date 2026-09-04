@@ -237,6 +237,12 @@ Generator giữ transaction riêng, parent `FOR UPDATE` và current locking read
 
 Khi created_count>0, ghi một case activity qua `CaseWorkspaceAuditService`: title `資料収集リストを作成`, metadata event `document_collection_initialized`, actor_user_id, created_count, candidate_count. case/employee/time dùng convention activity hiện có; user không gắn employee vẫn có actor_user_id, created_by_employee_id nullable như các workspace activity khác. Audit lỗi rollback toàn bộ tài liệu/purpose được tạo. Không ghi activity cho no-op; không event sourcing.
 
+### Bulk necessity decision
+
+`PATCH /case-files/{caseFile}/document-collection/bulk-necessity` yêu cầu `case.update`. Payload gồm `case_document_ids` (1–100 ID duy nhất thuộc đúng case), `necessity_status` (`undetermined`, `required`, `not_required`) và `necessity_reason` khi chọn `not_required`.
+
+Endpoint khóa case và toàn bộ tài liệu được chọn trong một transaction. Nếu một ID không hợp lệ hoặc thuộc case khác, toàn bộ request bị từ chối và không cập nhật một phần. Mỗi thay đổi dùng đúng `necessity_*` canonical fields và ghi `document_collection.updated` bằng `CaseWorkspaceAuditService` với cờ `bulk_necessity`; không tạo ReceivedDocument, task, notification hay external request. Khi trả về `undetermined`, reason/actor/timestamp được xóa theo cùng semantics với PATCH một tài liệu.
+
 Giới hạn cross-domain: traffic case chỉ dùng lineage/rules traffic hiện tại (48 ứng viên, gồm các mục cross-domain có điều kiện đã có trong master). Không tự thêm toàn bộ 55 mục 労災 vào mọi traffic case. Tự kết hợp nhiều case type hoặc thuộc tính “業務中・通勤中” cần phase riêng. **Initialize không liên hệ bên ngoài**, không upload, gửi yêu cầu, thực thi approval, OCR hoặc quyết định pháp lý AI.
 
 Kiểm chứng Phase 1E-B ngày 2026-08-31: 18 test initialization API / 387 assertions khi chạy riêng; toàn bộ backend **340 tests / 3.462 assertions PASS**, bao gồm 1E-A API và generator regression. Bốn parent/subtype lần lượt 55/48/48/55; lần hai tạo 0, rule mới chỉ thêm phần thiếu, quyết định/manual/legacy và snapshots giữ nguyên. Frontend build PASS (cảnh báo bundle >500 kB hiện có). Master checksum/count giữ 78/11/103/107; local clients/case_files/case_documents = 0/0/0. Generation tests chạy SQLite cô lập; khóa MySQL FOR UPDATE được giữ nguyên nhưng phase này chưa chạy thử tải hai request MySQL đồng thời. Không initialize DB local đang dùng, không sửa frontend, gửi bên ngoài hoặc deploy.

@@ -355,6 +355,92 @@ class CaseDocumentCollectionApiTest extends TestCase
         $this->assertSame($this->employee->id, $history[2]->metadata['changes']['necessity_decided_by_employee_id']['before']);
     }
 
+    public function test_bulk_necessity_updates_only_documents_in_the_case_with_existing_audit_and_no_received_documents(): void
+    {
+        $first = $this->document();
+        $second = $this->document(['title' => 'Second candidate']);
+
+        $this->patchJson($this->bulkUrl(), [
+            'case_document_ids' => [$first->id, $second->id],
+            'necessity_status' => 'required',
+        ])->assertOk()
+            ->assertExactJson(['updated_count' => 2, 'selected_count' => 2, 'necessity_status' => 'required']);
+
+        foreach ([$first, $second] as $document) {
+            $document->refresh();
+            $this->assertSame('required', $document->necessity_status);
+            $this->assertSame($this->employee->id, $document->necessity_decided_by_employee_id);
+            $this->assertTrue($document->necessity_decided_at->equalTo(now()));
+        }
+        $activities = CaseActivity::orderBy('id')->get();
+        $this->assertCount(2, $activities);
+        $this->assertTrue($activities->every(fn (CaseActivity $activity) => $activity->metadata['event'] === 'document_collection.updated'
+            && $activity->metadata['bulk_necessity'] === true));
+        $this->assertDatabaseCount('received_documents', 0);
+        $this->assertDatabaseCount('case_document_received_documents', 0);
+        $this->assertDatabaseCount('employee_tasks', 0);
+        $this->assertDatabaseCount('employee_notifications', 0);
+    }
+
+    public function test_bulk_not_required_requires_a_reason_and_reset_clears_the_existing_reason(): void
+    {
+        $first = $this->document();
+        $second = $this->document(['title' => 'Second candidate']);
+        $payload = ['case_document_ids' => [$first->id, $second->id], 'necessity_status' => 'not_required'];
+
+        $this->patchJson($this->bulkUrl(), $payload)->assertUnprocessable()->assertJsonValidationErrors('necessity_reason');
+        $this->patchJson($this->bulkUrl(), [...$payload, 'necessity_reason' => '他の資料で代替できる'])->assertOk();
+        $this->patchJson($this->bulkUrl(), ['case_document_ids' => [$first->id, $second->id], 'necessity_status' => 'undetermined'])->assertOk();
+
+        foreach ([$first, $second] as $document) {
+            $document->refresh();
+            $this->assertSame('undetermined', $document->necessity_status);
+            $this->assertNull($document->necessity_reason);
+            $this->assertNull($document->necessity_decided_by_employee_id);
+            $this->assertNull($document->necessity_decided_at);
+        }
+    }
+
+    public function test_bulk_necessity_rejects_cross_case_documents_without_a_partial_update(): void
+    {
+        $local = $this->document();
+        $foreign = $this->document(['title' => 'Foreign candidate'], $this->newCase());
+
+        $this->patchJson($this->bulkUrl(), [
+            'case_document_ids' => [$local->id, $foreign->id],
+            'necessity_status' => 'required',
+        ])->assertUnprocessable()->assertJsonValidationErrors('case_document_ids');
+
+        $this->assertSame('undetermined', $local->refresh()->necessity_status);
+        $this->assertSame('undetermined', $foreign->refresh()->necessity_status);
+        $this->assertDatabaseCount('case_activities', 0);
+    }
+
+    public function test_bulk_necessity_rejects_an_unknown_document_id_without_a_partial_update(): void
+    {
+        $local = $this->document();
+
+        $this->patchJson($this->bulkUrl(), [
+            'case_document_ids' => [$local->id, 999999],
+            'necessity_status' => 'required',
+        ])->assertUnprocessable()->assertJsonValidationErrors('case_document_ids');
+
+        $this->assertSame('undetermined', $local->refresh()->necessity_status);
+        $this->assertDatabaseCount('case_activities', 0);
+    }
+
+    public function test_bulk_necessity_requires_case_update_permission(): void
+    {
+        $document = $this->document();
+        Sanctum::actingAs(User::factory()->withRole('level_2')->create());
+
+        $this->patchJson($this->bulkUrl(), [
+            'case_document_ids' => [$document->id],
+            'necessity_status' => 'required',
+        ])->assertForbidden();
+        $this->assertSame('undetermined', $document->refresh()->necessity_status);
+    }
+
     public static function independentChanges(): array
     {
         return [
@@ -625,6 +711,11 @@ class CaseDocumentCollectionApiTest extends TestCase
     private function url(?CaseDocument $document = null): string
     {
         return "/api/case-files/{$this->case->id}/document-collection".($document ? "/{$document->id}" : '');
+    }
+
+    private function bulkUrl(): string
+    {
+        return $this->url().'/bulk-necessity';
     }
 
     private function receivedUrl(CaseDocument $document): string

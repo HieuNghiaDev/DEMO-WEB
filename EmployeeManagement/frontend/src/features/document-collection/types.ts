@@ -83,6 +83,16 @@ export interface CollectionDraft {
   collection_result: CollectionResult | null; fulfillment_status: FulfillmentStatus; review_status: ReviewStatus
 }
 export type CollectionPatch = Partial<CollectionDraft>
+export type BulkNecessityPayload = {
+  case_document_ids: number[]
+  necessity_status: NecessityStatus
+  necessity_reason?: string | null
+}
+export type BulkNecessityResponse = {
+  updated_count: number
+  selected_count: number
+  necessity_status: NecessityStatus
+}
 export interface CollectionQuery {
   search?: string; purpose?: string; source?: string; assignee_id?: number
   necessity_status?: NecessityStatus; collection_status?: CollectionStatus; collection_result?: CollectionResult | ''

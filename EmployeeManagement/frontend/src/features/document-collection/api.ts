@@ -1,5 +1,5 @@
 import api from '../../services/api'
-import type { CollectionDetail, CollectionListResponse, CollectionPatch, CollectionQuery, EmployeeOption, InitializationPreview, InitializationResponse } from './types'
+import type { BulkNecessityPayload, BulkNecessityResponse, CollectionDetail, CollectionListResponse, CollectionPatch, CollectionQuery, EmployeeOption, InitializationPreview, InitializationResponse } from './types'
 
 const collectionPath = (caseId: number) => `/case-files/${caseId}/document-collection`
 export const documentCollectionApi = {
@@ -17,6 +17,9 @@ export const documentCollectionApi = {
   },
   async update(caseId: number, itemId: number, payload: CollectionPatch) {
     return (await api.patch<{ document: CollectionDetail }>(`${collectionPath(caseId)}/${itemId}`, payload)).data.document
+  },
+  async bulkNecessity(caseId: number, payload: BulkNecessityPayload) {
+    return (await api.patch<BulkNecessityResponse>(`${collectionPath(caseId)}/bulk-necessity`, payload)).data
   },
   async registerReceivedDocument(caseId: number, itemId: number, formData: FormData) {
     return (await api.post<{ document: CollectionDetail }>(`${collectionPath(caseId)}/${itemId}/received-documents`, formData)).data.document

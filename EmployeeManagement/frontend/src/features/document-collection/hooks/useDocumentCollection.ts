@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { documentCollectionApi } from '../api'
 import { collectionError } from '../errors'
 import type { CollectionError } from '../errors'
-import type { CollectionListResponse, CollectionQuery, EmployeeOption, InitializationPreview } from '../types'
+import type { BulkNecessityPayload, CollectionListResponse, CollectionQuery, EmployeeOption, InitializationPreview } from '../types'
 import { withFilter } from '../utils'
 
 export function useDocumentCollection(caseId: number, canReadEmployees: boolean) {
@@ -16,6 +16,7 @@ export function useDocumentCollection(caseId: number, canReadEmployees: boolean)
   const [previewLoading, setPreviewLoading] = useState(true)
   const [listLoading, setListLoading] = useState(false)
   const [initializing, setInitializing] = useState(false)
+  const [bulkUpdating, setBulkUpdating] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [notice, setNotice] = useState('')
   const [revision, setRevision] = useState(0)
@@ -79,6 +80,16 @@ export function useDocumentCollection(caseId: number, canReadEmployees: boolean)
     if (reset) { setSearch(''); setQuery({ page: 1, per_page: query.per_page }); return }
     setQuery(previous => withFilter(previous, patch))
   }
+  const replaceView = (nextQuery: CollectionQuery, nextSearch = '') => {
+    const normalizedSearch = nextSearch.trim()
+    setSearch(nextSearch)
+    setQuery({
+      ...nextQuery,
+      search: normalizedSearch || undefined,
+      page: 1,
+      per_page: nextQuery.per_page ?? query.per_page,
+    })
+  }
   const initialize = async () => {
     if (initializeLock.current) return false
     initializeLock.current = true
@@ -91,9 +102,19 @@ export function useDocumentCollection(caseId: number, canReadEmployees: boolean)
     } catch (error) { setInitializationError(collectionError(error)); return false }
     finally { initializeLock.current = false; setInitializing(false) }
   }
+  const bulkUpdateNecessity = async (payload: BulkNecessityPayload) => {
+    setBulkUpdating(true); setNotice('')
+    try {
+      const response = await documentCollectionApi.bulkNecessity(caseId, payload)
+      refresh()
+      return response
+    } finally {
+      setBulkUpdating(false)
+    }
+  }
   return {
     preview, data, previewError, listError, initializationError, previewLoading, listLoading, initializing,
-    confirming, setConfirming, notice, setNotice, refresh, query, search, setSearch, changeFilter,
+    confirming, setConfirming, notice, setNotice, refresh, query, search, setSearch, changeFilter, replaceView, bulkUpdating, bulkUpdateNecessity,
     revision,
     employees, employeeError: canReadEmployees ? employeeError : t('documentCollection.employeePermissionRequired'), initialize,
   }

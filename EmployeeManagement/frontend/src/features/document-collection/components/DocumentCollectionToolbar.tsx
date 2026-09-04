@@ -13,15 +13,25 @@ export default function DocumentCollectionToolbar({ query, search, onSearch, onC
   const filterId = useId()
   const count = Object.entries(query).filter(([key, value]) => !['search', 'page', 'per_page', 'sort', 'direction'].includes(key) && value !== undefined).length
   return <div className="dc-toolbar">
-    <div className="dc-search-row"><label className="dc-search"><Search size={17} aria-hidden="true" /><input maxLength={255} aria-label={t('documentCollection.toolbar.searchAria')} placeholder={t('documentCollection.toolbar.searchPlaceholder')} value={search} onChange={event => onSearch(event.target.value)} /></label><button type="button" className={`dc-button ${expanded ? 'is-active' : ''}`} onClick={() => setExpanded(!expanded)} aria-expanded={expanded} aria-controls={filterId}><SlidersHorizontal size={16} />{t('documentCollection.toolbar.filter')}{count > 0 && ` (${count})`}</button></div>
+    <div className="dc-search-row">
+      <label className="dc-search">
+        <Search size={15} aria-hidden="true" className="dc-search-icon" />
+        <input maxLength={255} aria-label={t('documentCollection.toolbar.searchAria')} placeholder={t('documentCollection.toolbar.searchPlaceholder')} value={search} onChange={event => onSearch(event.target.value)} />
+      </label>
+      <button type="button" className={`dc-button dc-toolbar-filter-btn ${expanded ? 'is-active' : ''}`} onClick={() => setExpanded(!expanded)} aria-expanded={expanded} aria-controls={filterId}>
+        <SlidersHorizontal size={14} aria-hidden="true" />
+        <span>{t('documentCollection.toolbar.filter')}</span>
+        {count > 0 && <span className="dc-filter-badge">{count}</span>}
+      </button>
+    </div>
     <div className="dc-quick" aria-label={t('documentCollection.toolbar.quickFilters')}>
-      <button type="button" aria-pressed={!count && !search} className={!count && !search ? 'is-active' : ''} onClick={() => onChange({}, true)}>{t('documentCollection.toolbar.all')}</button>
-      <button type="button" aria-pressed={query.necessity_status === 'undetermined'} className={query.necessity_status === 'undetermined' ? 'is-active' : ''} onClick={() => onChange({ necessity_status: query.necessity_status === 'undetermined' ? undefined : 'undetermined' })}>{t('documentCollection.status.necessity.undetermined')}</button>
-      <button type="button" aria-pressed={query.necessity_status === 'required'} className={query.necessity_status === 'required' ? 'is-active' : ''} onClick={() => onChange({ necessity_status: query.necessity_status === 'required' ? undefined : 'required' })}>{t('documentCollection.status.necessity.required')}</button>
-      <button type="button" aria-pressed={query.necessity_status === 'not_required'} className={query.necessity_status === 'not_required' ? 'is-active' : ''} onClick={() => onChange({ necessity_status: query.necessity_status === 'not_required' ? undefined : 'not_required' })}>{t('documentCollection.status.necessity.not_required')}</button>
-      <button type="button" aria-pressed={query.overdue === true} className={query.overdue ? 'is-active' : ''} onClick={() => onChange({ overdue: query.overdue ? undefined : true })}>{t('documentCollection.overdue')}</button>
-      <button type="button" aria-pressed={query.preservation_priority === true} className={query.preservation_priority ? 'is-active' : ''} onClick={() => onChange({ preservation_priority: query.preservation_priority ? undefined : true })}><ShieldAlert size={14} />{t('documentCollection.preservationPriority')}</button>
-      {(count > 0 || search) && <button type="button" className="dc-clear" onClick={() => onChange({}, true)}>{t('documentCollection.toolbar.clear')}</button>}
+      <button type="button" aria-pressed={!count && !search} className={`dc-filter-chip dc-filter-chip--all ${!count && !search ? 'is-active' : ''}`} onClick={() => onChange({}, true)}>{t('documentCollection.toolbar.all')}</button>
+      <button type="button" aria-pressed={query.necessity_status === 'undetermined'} className={`dc-filter-chip dc-filter-chip--undetermined ${query.necessity_status === 'undetermined' ? 'is-active' : ''}`} onClick={() => onChange({ necessity_status: query.necessity_status === 'undetermined' ? undefined : 'undetermined' })}>{t('documentCollection.status.necessity.undetermined')}</button>
+      <button type="button" aria-pressed={query.necessity_status === 'required'} className={`dc-filter-chip dc-filter-chip--required ${query.necessity_status === 'required' ? 'is-active' : ''}`} onClick={() => onChange({ necessity_status: query.necessity_status === 'required' ? undefined : 'required' })}>{t('documentCollection.status.necessity.required')}</button>
+      <button type="button" aria-pressed={query.necessity_status === 'not_required'} className={`dc-filter-chip dc-filter-chip--not_required ${query.necessity_status === 'not_required' ? 'is-active' : ''}`} onClick={() => onChange({ necessity_status: query.necessity_status === 'not_required' ? undefined : 'not_required' })}>{t('documentCollection.status.necessity.not_required')}</button>
+      <button type="button" aria-pressed={query.overdue === true} className={`dc-filter-chip dc-filter-chip--overdue ${query.overdue ? 'is-active' : ''}`} onClick={() => onChange({ overdue: query.overdue ? undefined : true })}>{t('documentCollection.overdue')}</button>
+      <button type="button" aria-pressed={query.preservation_priority === true} className={`dc-filter-chip dc-filter-chip--preservation ${query.preservation_priority ? 'is-active' : ''}`} onClick={() => onChange({ preservation_priority: query.preservation_priority ? undefined : true })}><ShieldAlert size={13} aria-hidden="true" /><span>{t('documentCollection.preservationPriority')}</span></button>
+      {(count > 0 || search) && <button type="button" className="dc-clear-btn" onClick={() => onChange({}, true)}>{t('documentCollection.toolbar.clear')}</button>}
     </div>
     {expanded && <div className="dc-filter-grid" id={filterId}>
       <label>{t('documentCollection.toolbar.purpose')}<select value={query.purpose ?? ''} onChange={event => onChange({ purpose: event.target.value || undefined })}><option value="">{t('documentCollection.toolbar.allPurposes')}</option>{purposes.map(p => <option key={p.code} value={p.code}>{p.code} · {p.name_ja}</option>)}</select></label>

@@ -131,6 +131,84 @@ class CaseDocumentCollectionController extends Controller
         });
     }
 
+    public function bulkUpdateNecessity(Request $request, CaseFile $caseFile, CaseWorkspaceAuditService $audit): JsonResponse
+    {
+        $rules = [
+            'case_document_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'case_document_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
+            'necessity_status' => ['required', Rule::in(CaseDocument::NECESSITY_STATUSES)],
+            'necessity_reason' => ['nullable', 'string', 'max:5000'],
+        ];
+        $unknown = array_diff(array_keys($request->all()), array_keys($rules));
+        if ($unknown) {
+            throw ValidationException::withMessages(array_fill_keys($unknown, 'この項目は変更できません。'));
+        }
+        $data = $request->validate($rules);
+
+        if ($data['necessity_status'] === 'not_required'
+            && preg_match('/[^\s\p{Z}]/u', (string) ($data['necessity_reason'] ?? '')) !== 1) {
+            throw ValidationException::withMessages(['necessity_reason' => '不要と判断した理由を入力してください。']);
+        }
+
+        return $caseFile->getConnection()->transaction(function () use ($request, $caseFile, $audit, $data) {
+            $case = CaseFile::whereKey($caseFile->id)->lockForUpdate()->firstOrFail();
+            $ids = array_values($data['case_document_ids']);
+            $documents = $case->documents()->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get();
+
+            if ($documents->count() !== count($ids)) {
+                throw ValidationException::withMessages(['case_document_ids' => 'この案件に属さない資料が含まれています。']);
+            }
+
+            $status = $data['necessity_status'];
+            $actor = null;
+            if ($status !== 'undetermined') {
+                $actor = $request->user()?->employee;
+                abort_if(! $actor, 403, '判断を記録するには社員情報が必要です。');
+            }
+
+            $updatedCount = 0;
+            foreach ($documents as $document) {
+                $before = $document->getRawOriginal();
+                $attributes = ['necessity_status' => $status];
+                if ($status === 'not_required') {
+                    $attributes['necessity_reason'] = $data['necessity_reason'];
+                }
+                if ($status === 'undetermined') {
+                    $attributes['necessity_reason'] = null;
+                }
+                if ($status !== $document->necessity_status) {
+                    $attributes['necessity_decided_by_employee_id'] = $actor?->id;
+                    $attributes['necessity_decided_at'] = $actor ? now() : null;
+                }
+
+                $document->fill($attributes);
+                $changes = [];
+                foreach ($document->getDirty() as $field => $value) {
+                    $changes[$field] = ['before' => $before[$field] ?? null, 'after' => $value];
+                }
+                if ($changes === []) {
+                    continue;
+                }
+
+                $document->save();
+                $audit->record($case, $request, '資料収集項目を更新', $document->title, [
+                    'event' => 'document_collection.updated',
+                    'document_id' => $document->id,
+                    'actor_user_id' => $request->user()->id,
+                    'changes' => $changes,
+                    'bulk_necessity' => true,
+                ]);
+                $updatedCount++;
+            }
+
+            return response()->json([
+                'updated_count' => $updatedCount,
+                'selected_count' => count($ids),
+                'necessity_status' => $status,
+            ]);
+        });
+    }
+
     public function storeReceivedDocument(Request $request, CaseFile $caseFile, CaseDocument $caseDocument, CaseWorkspaceAuditService $audit): JsonResponse
     {
         abort_unless($caseDocument->case_file_id === $caseFile->id, 404);

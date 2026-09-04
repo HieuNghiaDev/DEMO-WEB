@@ -163,6 +163,8 @@ Route::middleware([
             ->middleware('permission:case.update');
         Route::get('document-collection', [CaseDocumentCollectionController::class, 'index'])
             ->middleware('permission:case.view');
+        Route::patch('document-collection/bulk-necessity', [CaseDocumentCollectionController::class, 'bulkUpdateNecessity'])
+            ->middleware('permission:case.update');
         Route::get('document-collection/{caseDocument}/received-documents/{receivedDocument}/download', [CaseDocumentCollectionController::class, 'downloadReceivedDocument'])
             ->middleware('permission:case.view');
         Route::post('document-collection/{caseDocument}/received-documents', [CaseDocumentCollectionController::class, 'storeReceivedDocument'])
