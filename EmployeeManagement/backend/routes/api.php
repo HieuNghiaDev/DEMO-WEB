@@ -52,6 +52,11 @@ Route::middleware([
         'changePassword',
     ])->middleware('throttle:5,1')->withoutMiddleware('password.changed');
 
+    Route::post('/me/avatar', [
+        AuthController::class,
+        'updateAvatar',
+    ])->middleware('throttle:10,1');
+
     Route::get('/organization', [
         OrganizationController::class,
         'index',

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Check, ChevronRight, KeyRound, Moon, Palette, ShieldCheck, Sun, UserRound } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Check, ChevronRight, KeyRound, Moon, Palette, ShieldCheck, Sun, UserRound, Camera } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../contexts/AuthContext'
@@ -7,6 +7,8 @@ import { useTheme } from '../../contexts/ThemeContext'
 import { setAppLanguage, type SupportedLocale } from '../../i18n'
 import LogoutConfirmationDialog from '../../components/settings/LogoutConfirmationDialog'
 import SettingsLogoutAction from '../../components/settings/SettingsLogoutAction'
+import api from '../../services/api'
+import { getEmployeeAvatarUrl } from '../../utils/employeeAvatar'
 
 const categories = [
   { id: 'account', label: 'アカウント', caption: 'Account', icon: UserRound },
@@ -15,7 +17,7 @@ const categories = [
 ] as const
 
 export default function SystemSettings() {
-  const { user, logout } = useAuth()
+  const { user, logout, refreshUser } = useAuth()
   const { theme, setTheme } = useTheme()
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
@@ -23,6 +25,9 @@ export default function SystemSettings() {
   const section = categories.find(({ id }) => id === searchParams.get('section'))?.id ?? 'account'
   const [isLogoutConfirmationOpen, setIsLogoutConfirmationOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const [avatarUploadError, setAvatarUploadError] = useState('')
+  const avatarInputRef = useRef<HTMLInputElement | null>(null)
   const employeeName = user?.employee?.full_name || user?.name || user?.login_id || '社員'
   const language: SupportedLocale = i18n.resolvedLanguage === 'vi' ? 'vi' : 'ja'
   const role = user?.roles?.map((item) => item.display_name || item.name).filter(Boolean).join('・') || user?.role
@@ -46,6 +51,32 @@ export default function SystemSettings() {
       setIsLoggingOut(false)
       setIsLogoutConfirmationOpen(false)
       navigate('/login', { replace: true })
+    }
+  }
+
+  const handleAvatarChange = async (file?: File) => {
+    if (!file || isUploadingAvatar) return
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024) {
+      setAvatarUploadError('JPG、PNG、WebP形式（2MB以下）の画像を選択してください。')
+      return
+    }
+
+    try {
+      setIsUploadingAvatar(true)
+      setAvatarUploadError('')
+      const formData = new FormData()
+      formData.append('avatar', file)
+      await api.post('/me/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      await refreshUser()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      setAvatarUploadError(message || 'プロフィール画像を更新できませんでした。')
+    } finally {
+      setIsUploadingAvatar(false)
+      if (avatarInputRef.current) avatarInputRef.current.value = ''
     }
   }
 
@@ -85,12 +116,38 @@ export default function SystemSettings() {
               </div>
               <div className="px-5 py-6 sm:px-6">
                 <div className="mb-6 flex items-center gap-4">
-                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-xl font-semibold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-200" aria-hidden="true">{employeeName.charAt(0).toUpperCase()}</span>
+                  <div className="relative shrink-0">
+                    <img
+                      src={getEmployeeAvatarUrl(user?.employee?.avatar_path, user?.employee?.gender)}
+                      alt=""
+                      className="h-14 w-14 rounded-xl border border-slate-200 object-cover dark:border-slate-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => avatarInputRef.current?.click()}
+                      disabled={isUploadingAvatar}
+                      className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-indigo-600 text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-wait dark:border-slate-900"
+                      aria-label="プロフィール画像を変更"
+                    >
+                      <Camera size={13} aria-hidden="true" />
+                    </button>
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="sr-only"
+                      onChange={(event) => void handleAvatarChange(event.target.files?.[0])}
+                    />
+                  </div>
                   <div className="min-w-0">
                     <p className="break-words text-base font-semibold">{employeeName}</p>
                     <p className="mt-1 break-all text-sm text-slate-500 dark:text-slate-400">{user?.login_id}</p>
+                    <button type="button" onClick={() => avatarInputRef.current?.click()} disabled={isUploadingAvatar} className="mt-1 text-xs font-medium text-indigo-600 hover:underline disabled:cursor-wait disabled:text-slate-400 dark:text-indigo-300">
+                      {isUploadingAvatar ? 'アップロード中…' : 'プロフィール画像を変更'}
+                    </button>
                   </div>
                 </div>
+                {avatarUploadError && <p role="alert" className="-mt-3 mb-5 text-xs text-red-600 dark:text-red-300">{avatarUploadError}</p>}
                 <dl className="divide-y divide-slate-100 border-t border-slate-100 dark:divide-slate-800 dark:border-slate-800">
                   {accountFields.map(({ label, value }) => <div key={label} className="grid gap-1 py-4 sm:grid-cols-[140px_minmax(0,1fr)] sm:gap-4">
                     <dt className="text-xs text-slate-500 dark:text-slate-400 sm:text-sm">{label}</dt>

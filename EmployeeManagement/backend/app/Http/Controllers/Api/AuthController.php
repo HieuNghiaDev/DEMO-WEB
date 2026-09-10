@@ -8,6 +8,7 @@ use App\Services\SecurityAuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
@@ -201,6 +202,57 @@ class AuthController extends Controller
             'message' => 'パスワードを変更しました。新しいパスワードで再度ログインしてください。',
             'reauthentication_required' => true,
         ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    }
+
+    /**
+     * Update the authenticated employee's avatar without granting access to
+     * another employee profile.
+     */
+    public function updateAvatar(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'avatar' => [
+                'required',
+                'file',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:2048',
+                'dimensions:max_width=2048,max_height=2048',
+            ],
+        ], [
+            'avatar.image' => 'プロフィール画像は画像ファイルを選択してください。',
+            'avatar.mimes' => 'プロフィール画像はJPG、PNG、WebP形式でアップロードしてください。',
+            'avatar.max' => 'プロフィール画像は2MB以下にしてください。',
+        ]);
+
+        $user = $request->user()->load('employee');
+
+        if ($user->employee === null) {
+            return response()->json([
+                'message' => 'このアカウントには社員プロフィールが登録されていません。',
+            ], 403);
+        }
+
+        $employee = $user->employee;
+        $previousPath = $employee->avatar_path;
+        $storedPath = $validated['avatar']->store('avatars', 'public');
+
+        $employee->forceFill([
+            'avatar_path' => Storage::disk('public')->url($storedPath),
+        ])->save();
+
+        if (is_string($previousPath) && str_starts_with($previousPath, '/storage/avatars/')) {
+            Storage::disk('public')->delete(ltrim(substr($previousPath, strlen('/storage/')), '/'));
+        }
+
+        return response()->json([
+            'message' => 'プロフィール画像を更新しました。',
+            'user' => $user->fresh([
+                'employee.office',
+                'employee.department',
+                'roles.permissions',
+            ]),
+        ]);
     }
 
     /**

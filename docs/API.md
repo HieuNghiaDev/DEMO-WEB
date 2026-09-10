@@ -18,6 +18,10 @@ Accept: application/json
 
 Token không ghi nhớ hết hạn sau 12 giờ; token có `remember: true` hết hạn sau 30 ngày. Frontend lưu token vào `sessionStorage` hoặc `localStorage` tương ứng.
 
+### Ảnh đại diện nhân viên
+
+`POST /me/avatar` yêu cầu Sanctum và chỉ thay ảnh của **employee đang đăng nhập**. Gửi `multipart/form-data` với field `avatar`: JPG/PNG/WebP, tối đa 2 MB, tối đa 2048 × 2048. Response là `{message, user}` với `user.employee.avatar_path` mới. Ảnh tùy chỉnh lưu public storage tại `/storage/avatars/...`; ảnh mặc định `/images/boy.png` hoặc `/images/girl.png` không bị xóa. Tài khoản chưa có employee profile nhận 403.
+
 Tài khoản có `must_change_password=true` chỉ được gọi `/me`, `/password` và `/logout`. Mọi API nghiệp vụ khác trả `403` với `code: password_change_required`. Mật khẩu mới phải có ít nhất 11 ký tự, gồm tối thiểu một chữ hoa và một ký hiệu. Sau khi đổi thành công, người dùng phải đăng nhập lại vì tất cả token cũ đã bị thu hồi.
 
 ## Hồ sơ khách hàng và案件

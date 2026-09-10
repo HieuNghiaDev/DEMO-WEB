@@ -4,9 +4,8 @@ import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import OfficeSwitcher from "../components/employee-room/OfficeSwitcher";
+import { getEmployeeAvatarUrl } from "../utils/employeeAvatar";
 import {
-  Sparkles,
-  Plus,
   Bell,
   Play,
   Briefcase,
@@ -25,6 +24,9 @@ import {
   FileSpreadsheet,
   History,
   X,
+  Sun,
+  Users,
+  Maximize2,
 } from "lucide-react";
 
 type WorkStatus = "working" | "break" | "outside" | "offline";
@@ -164,6 +166,11 @@ type TimelineResponse = {
 
 type NotificationKind = "success" | "info" | "warning" | "error";
 
+type OsakaWeather = {
+  temperature: number | null;
+  label: string;
+};
+
 type UserNotification = {
   id: string;
   sourceKey: string;
@@ -209,49 +216,30 @@ const loadStoredNotifications = (storageKey: string): UserNotification[] => {
   }
 };
 
-const femaleDeskPositions = [
-  { left: "15%", top: "30%" },
-  { left: "30%", top: "30%" },
-];
+type OfficeMapPosition = { left: string; top: string };
 
-const maleDeskPositions = [
-  { left: "15%", top: "50%" },
-  { left: "30%", top: "50%" },
-];
-
-const breakPositions = [
-  { left: "51%", top: "56%" },
-  { left: "62%", top: "56%" },
-  { left: "51%", top: "70%" },
-  { left: "62%", top: "70%" },
-];
-
-const outsidePositions = [
-  { left: "79%", top: "40%" },
-  { left: "88%", top: "40%" },
-  { left: "79%", top: "57%" },
-  { left: "88%", top: "57%" },
-];
-
-const employeeDeskSlots: Record<string, number> = {
-  TM001: 0,
-  TM002: 1,
-  TM003: 0,
-  TM004: 1,
-};
-
-const employeeBreakSlots: Record<string, number> = {
-  TM001: 0,
-  TM002: 1,
-  TM003: 2,
-  TM004: 3,
-};
-
-const employeeOutsideSlots: Record<string, number> = {
-  TM001: 0,
-  TM002: 1,
-  TM003: 2,
-  TM004: 3,
+const officeMapPositions: Record<WorkStatus, OfficeMapPosition[]> = {
+  working: [
+    { left: "14%", top: "29%" },
+    { left: "30%", top: "29%" },
+    { left: "14%", top: "49%" },
+    { left: "30%", top: "49%" },
+    { left: "14%", top: "68%" },
+    { left: "30%", top: "68%" },
+  ],
+  break: [
+    { left: "51%", top: "55%" },
+    { left: "63%", top: "55%" },
+    { left: "51%", top: "70%" },
+    { left: "63%", top: "70%" },
+  ],
+  outside: [
+    { left: "78%", top: "39%" },
+    { left: "89%", top: "39%" },
+    { left: "78%", top: "58%" },
+    { left: "89%", top: "58%" },
+  ],
+  offline: [],
 };
 
 const formatWorkTime = (value: string) =>
@@ -495,8 +483,8 @@ function EmployeeProfilePopover({
 
   const opensLeft = Number.parseFloat(position.left) > 58;
 
-  return <section role="dialog" aria-labelledby="employee-profile-title" onClick={(event) => event.stopPropagation()} style={position} className={`absolute z-40 w-72 -translate-y-1/2 rounded-2xl border border-white/80 bg-white/95 p-4 shadow-xl shadow-slate-950/25 ${opensLeft ? '-translate-x-[calc(100%+2.5rem)]' : 'translate-x-10'} dark:border-slate-600 dark:bg-slate-900/95`}>
-    <span className={`absolute top-1/2 h-3 w-3 -translate-y-1/2 rotate-45 border-b border-l border-white/80 bg-white/95 dark:border-slate-600 dark:bg-slate-900/95 ${opensLeft ? '-right-1.5 rotate-[225deg]' : '-left-1.5'}`} />
+  return <section role="dialog" aria-labelledby="employee-profile-title" onClick={(event) => event.stopPropagation()} style={position} className={`absolute z-40 w-72 -translate-y-1/2 rounded-xl border border-white/80 bg-white/95 p-4 shadow-xl shadow-slate-950/25 max-sm:!inset-x-2 max-sm:!bottom-2 max-sm:!top-auto max-sm:!w-auto max-sm:!translate-x-0 max-sm:!translate-y-0 ${opensLeft ? '-translate-x-[calc(100%+2.5rem)]' : 'translate-x-10'} dark:border-slate-600 dark:bg-slate-900/95`}>
+    <span className={`absolute top-1/2 h-3 w-3 -translate-y-1/2 rotate-45 border-b border-l border-white/80 bg-white/95 max-sm:hidden dark:border-slate-600 dark:bg-slate-900/95 ${opensLeft ? '-right-1.5 rotate-[225deg]' : '-left-1.5'}`} />
     <div className="relative flex items-start gap-3">
       <img src={getEmployeeAvatar(attendance)} alt={employeeName} className="h-11 w-11 shrink-0 rounded-xl object-cover ring-1 ring-indigo-100 dark:ring-indigo-500/30" />
       <div className="min-w-0 flex-1"><p className="text-[9px] font-bold tracking-wider text-indigo-500">EMPLOYEE PROFILE</p><h2 id="employee-profile-title" className="mt-0.5 truncate text-sm font-bold text-slate-900 dark:text-white">{employeeName}</h2><p className="truncate text-[10px] text-slate-400">{attendance.employee?.full_name_kana || attendance.employee?.employee_code || "社員情報"}</p></div>
@@ -511,13 +499,10 @@ function EmployeeProfilePopover({
 const BASE_URL = import.meta.env.BASE_URL
 
 const getEmployeeAvatar = (attendance: Attendance) => {
-  const fallbackAvatar =
-    attendance.employee?.gender === "female"
-      ? "/images/girl.png"
-      : "/images/boy.png";
-  const avatarPath = attendance.employee?.avatar_path || fallbackAvatar;
-
-  return `${BASE_URL}${avatarPath.replace(/^\/+/, "")}`;
+  return getEmployeeAvatarUrl(
+    attendance.employee?.avatar_path,
+    attendance.employee?.gender,
+  );
 };
 
 const formatEmploymentType = (type?: string | null) => {
@@ -531,37 +516,26 @@ const formatEmploymentType = (type?: string | null) => {
   return (type && labels[type]) || "雇用形態未登録";
 };
 
-const getEmployeePosition = (attendance: Attendance) => {
-  const employeeCode = attendance.employee?.employee_code;
+const getOfficeMapPositions = (attendances: Attendance[]) => {
+  const positionByAttendanceId = new Map<number, OfficeMapPosition>();
 
-  if (attendance.status === "break") {
-    const fallbackBreakSlot =
-      (attendance.employee?.id ?? attendance.id) % breakPositions.length;
-    const breakSlot = employeeCode
-      ? employeeBreakSlots[employeeCode] ?? fallbackBreakSlot
-      : fallbackBreakSlot;
+  (Object.keys(officeMapPositions) as WorkStatus[]).forEach((status) => {
+    const positions = officeMapPositions[status];
+    if (positions.length === 0) return;
 
-    return breakPositions[breakSlot];
-  }
+    attendances
+      .filter((attendance) => attendance.status === status)
+      .sort((left, right) => {
+        const leftKey = left.employee?.employee_code ?? String(left.id);
+        const rightKey = right.employee?.employee_code ?? String(right.id);
+        return leftKey.localeCompare(rightKey);
+      })
+      .forEach((attendance, index) => {
+        positionByAttendanceId.set(attendance.id, positions[index % positions.length]);
+      });
+  });
 
-  if (attendance.status === "outside") {
-    const fallbackOutsideSlot =
-      (attendance.employee?.id ?? attendance.id) % outsidePositions.length;
-    const outsideSlot = employeeCode
-      ? employeeOutsideSlots[employeeCode] ?? fallbackOutsideSlot
-      : fallbackOutsideSlot;
-
-    return outsidePositions[outsideSlot];
-  }
-
-  const isFemale = attendance.employee?.gender === "female";
-  const positions = isFemale ? femaleDeskPositions : maleDeskPositions;
-  const fallbackSlot = (attendance.employee?.id ?? attendance.id) % 2;
-  const slot = employeeCode
-    ? employeeDeskSlots[employeeCode] ?? fallbackSlot
-    : fallbackSlot;
-
-  return positions[slot];
+  return positionByAttendanceId;
 };
 
 const offices: Record<OfficeId, Office> = {
@@ -593,6 +567,55 @@ const officeCodeToRoom: Record<string, OfficeId> = {
 
 const resolveOfficeRoom = (officeCode?: string | null): OfficeId =>
   officeCode ? (officeCodeToRoom[officeCode] ?? "themis") : "themis";
+
+
+const formatJapaneseDate = () => {
+  const now = new Date();
+  return new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+    timeZone: "Asia/Tokyo",
+  }).format(now);
+};
+
+const formatJapaneseTime = () => {
+  const now = new Date();
+  return new Intl.DateTimeFormat("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Tokyo",
+  }).format(now);
+};
+
+const weatherLabelByCode: Record<number, string> = {
+  0: "晴れ",
+  1: "ほぼ晴れ",
+  2: "晴れ時々くもり",
+  3: "くもり",
+  45: "霧",
+  48: "霧",
+  51: "小雨",
+  53: "小雨",
+  55: "強い小雨",
+  61: "雨",
+  63: "雨",
+  65: "強い雨",
+  71: "雪",
+  73: "雪",
+  75: "強い雪",
+  80: "にわか雨",
+  81: "にわか雨",
+  82: "強いにわか雨",
+  95: "雷雨",
+};
+
+const defaultOsakaWeather: OsakaWeather = {
+  temperature: null,
+  label: "天気情報を取得中",
+};
 
 export default function EmployeeRoom() {
   const { user } = useAuth();
@@ -637,6 +660,13 @@ export default function EmployeeRoom() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [errorMessage, setErrorMessage] = useState("");
+  const [dateTimeDisplay, setDateTimeDisplay] = useState(() => ({
+    date: formatJapaneseDate(),
+    time: formatJapaneseTime(),
+  }));
+  const [osakaWeather, setOsakaWeather] =
+    useState<OsakaWeather>(defaultOsakaWeather);
+  const [memberActivityTab, setMemberActivityTab] = useState<"all" | WorkStatus>("all");
   const [activeAttendances, setActiveAttendances] = useState<Attendance[]>([]);
   const [selectedAttendanceId, setSelectedAttendanceId] = useState<
     number | null
@@ -669,6 +699,10 @@ export default function EmployeeRoom() {
   const knownPendingTaskIdsRef = useRef<Set<number> | null>(null);
   const questAudioContextRef = useRef<AudioContext | null>(null);
   const knownRemoteNotificationIdsRef = useRef<Set<number> | null>(null);
+  const officeMapRef = useRef<HTMLDivElement | null>(null);
+  const [isOfficeMapFullscreen, setIsOfficeMapFullscreen] = useState(false);
+  const [officeMapOrientationHint, setOfficeMapOrientationHint] =
+    useState(false);
 
   const unreadNotificationCount = notifications.filter(
     (notification) => !notification.isRead,
@@ -1183,6 +1217,54 @@ export default function EmployeeRoom() {
   }, [assignedTasks]);
 
   useEffect(() => {
+    const clockId = window.setInterval(() => {
+      setDateTimeDisplay({ date: formatJapaneseDate(), time: formatJapaneseTime() });
+    }, 30_000);
+    return () => window.clearInterval(clockId);
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadOsakaWeather = async () => {
+      try {
+        const response = await fetch(
+          "https://api.open-meteo.com/v1/forecast?latitude=34.6937&longitude=135.5023&current=temperature_2m,weather_code&timezone=Asia%2FTokyo",
+          { signal: controller.signal },
+        );
+
+        if (!response.ok) throw new Error("Weather request failed");
+
+        const payload = (await response.json()) as {
+          current?: { temperature_2m?: number; weather_code?: number };
+        };
+        const temperature = payload.current?.temperature_2m;
+        const weatherCode = payload.current?.weather_code;
+
+        setOsakaWeather({
+          temperature: typeof temperature === "number" ? temperature : null,
+          label:
+            typeof weatherCode === "number"
+              ? (weatherLabelByCode[weatherCode] ?? "天気情報")
+              : "天気情報",
+        });
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setOsakaWeather({ temperature: null, label: "天気情報を取得できません" });
+        }
+      }
+    };
+
+    void loadOsakaWeather();
+    const refreshId = window.setInterval(loadOsakaWeather, 10 * 60 * 1_000);
+
+    return () => {
+      controller.abort();
+      window.clearInterval(refreshId);
+    };
+  }, []);
+
+  useEffect(() => {
     const hasOutsideEmployee = activeAttendances.some(
       (attendance) => attendance.status === "outside" && attendance.outside_start,
     );
@@ -1193,6 +1275,19 @@ export default function EmployeeRoom() {
 
     return () => window.clearInterval(intervalId);
   }, [activeAttendances]);
+
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      setIsOfficeMapFullscreen(document.fullscreenElement === officeMapRef.current);
+    };
+
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreenState);
+      screen.orientation?.unlock?.();
+    };
+  }, []);
 
   // Khôi phục trạng thái chấm công của người đang đăng nhập sau khi tải lại trang.
   useEffect(() => {
@@ -1766,169 +1861,236 @@ export default function EmployeeRoom() {
     closeStatusModal();
   };
 
+  const memberStatusColor = (status: WorkStatus) => {
+    switch (status) {
+      case "working": return "bg-emerald-500";
+      case "break": return "bg-amber-400";
+      case "outside": return "bg-blue-500";
+      default: return "bg-slate-400";
+    }
+  };
+
+  const memberStatusLabel = (status: WorkStatus) => statusLabels[status];
+
+  const filteredMembers = memberActivityTab === "all"
+    ? activeAttendances
+    : activeAttendances.filter((a) => a.status === memberActivityTab);
+
+  const memberCounts = {
+    all: activeAttendances.length,
+    working: activeAttendances.filter((a) => a.status === "working").length,
+    break: activeAttendances.filter((a) => a.status === "break").length,
+    outside: activeAttendances.filter((a) => a.status === "outside").length,
+    offline: activeAttendances.filter((a) => a.status === "offline").length,
+  };
+  const officeMapPositionByAttendanceId = getOfficeMapPositions(visibleAttendances);
+
+  const openOfficeMapLandscape = async () => {
+    const officeMap = officeMapRef.current;
+    if (!officeMap) return;
+
+    setOfficeMapOrientationHint(false);
+
+    try {
+      await officeMap.requestFullscreen();
+      await screen.orientation?.lock?.("landscape");
+
+      window.setTimeout(() => {
+        if (window.matchMedia("(orientation: portrait)").matches) {
+          void document.exitFullscreen();
+          setOfficeMapOrientationHint(true);
+        }
+      }, 450);
+    } catch {
+      const isPortrait = window.matchMedia("(orientation: portrait)").matches;
+      if (isPortrait && document.fullscreenElement === officeMap) {
+        void document.exitFullscreen();
+      }
+      setOfficeMapOrientationHint(isPortrait);
+    }
+  };
+
   return (
     <div className="min-h-screen overflow-x-clip bg-slate-50 pb-16 dark:bg-[#090B0E]">
-      <header className="mx-auto max-w-[1600px] px-3 pt-5 sm:px-6 lg:px-8">
-        <div className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:gap-4 sm:p-5">
-          <div className="min-w-0">
-            <div className="truncate text-[10px] font-semibold text-indigo-500 sm:text-xs sm:font-medium">
-              THEMIS株式会社 × 中華総合法律事務所
+      {/* ── Page header ── */}
+      <header className="border-b border-slate-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="mx-auto max-w-[1600px] px-3 sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:gap-4 sm:py-5">
+            {/* Title */}
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl font-bold leading-tight text-gray-800 dark:text-slate-100 sm:text-2xl">
+                合同事務所・社員ルーム
+              </h1>
+              <p className="mt-0.5 hidden text-xs text-slate-400 sm:block">
+                メンバーの勤務・業務状況を確認し、スマートなチーム運営を実現します。
+              </p>
             </div>
-            <h1 className="mt-1 text-xl font-bold leading-tight text-gray-800 dark:text-slate-100 sm:mt-0 sm:text-2xl">
-              合同事務所・社員ルーム
-            </h1>
-          </div>
 
-          <div className="flex w-full items-center gap-2 sm:w-auto sm:gap-3">
-          <div className="relative z-50">
-            <button
-              type="button"
-              aria-label="通知を表示"
-              aria-expanded={isNotificationPanelOpen}
-              onClick={toggleNotificationPanel}
-              className={`workspace-bell-button relative flex h-10 w-10 items-center justify-center rounded-xl bg-white text-gray-600 shadow-sm transition hover:bg-gray-50 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 ${
-                isNotificationPanelOpen
-                  ? "is-open text-indigo-600 ring-2 ring-indigo-100 dark:text-indigo-300 dark:ring-indigo-500/30"
-                  : ""
-              }`}
-            >
-              <Bell size={20} />
-
-              {unreadNotificationCount > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white dark:ring-slate-900">
-                  {unreadNotificationCount > 99
-                    ? "99+"
-                    : unreadNotificationCount}
+            {/* Actions */}
+            <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
+              <div className="flex min-w-0 items-center gap-2 whitespace-nowrap text-[10px] text-slate-500 dark:text-slate-400 sm:text-[11px]">
+                <span>
+                  {dateTimeDisplay.date}
+                  <span className="ml-1 font-mono font-semibold text-slate-700 dark:text-slate-200">
+                    {dateTimeDisplay.time}
+                  </span>
                 </span>
-              )}
-            </button>
-
-            {(isNotificationPanelOpen || isNotificationPanelClosing) && (
-              <div className={`workspace-notification-panel fixed inset-x-3 top-20 z-50 w-auto overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl shadow-slate-900/15 sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[min(24rem,calc(100vw-2rem))] ${isNotificationPanelClosing ? "is-closing" : ""}`}>
-                <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3.5">
-                  <div>
-                    <h2 className="font-bold text-gray-800">通知</h2>
-                    <p className="text-[11px] text-gray-400">
-                      {unreadNotificationCount > 0
-                        ? `未読 ${unreadNotificationCount}件`
-                        : "新しい通知はありません"}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    {(unreadNotificationCount > 0 || isMarkingAllNotifications) && (
-                      <button
-                        type="button"
-                        onClick={markAllNotificationsAsRead}
-                        disabled={isMarkingAllNotifications}
-                        className={`workspace-mark-all inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-default sm:px-2.5 sm:text-xs ${isMarkingAllNotifications ? "is-complete" : ""}`}
-                      >
-                        {isMarkingAllNotifications && <CheckCircle2 size={13} />}
-                        {isMarkingAllNotifications ? "既読にしました" : "すべて既読"}
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      aria-label="通知パネルを閉じる"
-                      onClick={closeNotificationPanel}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-                    >
-                      <X size={17} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="max-h-[26rem] overflow-y-auto">
-                  {notifications.length === 0 ? (
-                    <div className="px-6 py-10 text-center">
-                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100 text-gray-400">
-                        <Bell size={21} />
-                      </div>
-                      <p className="mt-3 text-sm font-semibold text-gray-500">
-                        通知はまだありません
-                      </p>
-                      <p className="mt-1 text-xs text-gray-400">
-                        勤怠状況や外出予定をお知らせします
-                      </p>
-                    </div>
-                  ) : (
-                    visibleNotifications.map((notification) => (
-                      <button
-                        key={notification.id}
-                        type="button"
-                        onClick={() => handleNotificationClick(notification)}
-                        className={`flex w-full gap-3 border-b border-gray-50 px-4 py-3 text-left transition last:border-b-0 hover:bg-gray-50 ${
-                          notification.isRead ? "bg-white" : "bg-indigo-50/45"
-                        }`}
-                      >
-                        <span
-                          className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-                            notification.kind === "success"
-                              ? "bg-emerald-100 text-emerald-600"
-                              : notification.kind === "warning"
-                                ? "bg-amber-100 text-amber-600"
-                                : notification.kind === "error"
-                                  ? "bg-red-100 text-red-600"
-                                  : "bg-blue-100 text-blue-600"
-                          }`}
-                        >
-                          {notification.kind === "success" ? (
-                            <CheckCircle2 size={18} />
-                          ) : notification.kind === "warning" ||
-                            notification.kind === "error" ? (
-                            <AlertTriangle size={18} />
-                          ) : (
-                            <Info size={18} />
-                          )}
-                        </span>
-
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-start justify-between gap-2">
-                            <span className="text-sm font-bold text-gray-800">
-                              {notification.title}
-                            </span>
-                            {!notification.isRead && (
-                              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
-                            )}
-                          </span>
-                          <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">
-                            {notification.message}
-                          </span>
-                          <span className="mt-1.5 block text-[10px] text-gray-400">
-                            {formatNotificationTime(notification.createdAt)}
-                          </span>
-                        </span>
-                      </button>
-                    ))
-                  )}
-                  {notifications.length > 6 && (
-                    <button
-                      type="button"
-                      onClick={() => setIsShowingAllNotifications((current) => !current)}
-                      className="workspace-show-more flex w-full items-center justify-center gap-1.5 border-t border-gray-100 px-4 py-3 text-xs font-bold text-indigo-600 transition hover:bg-indigo-50"
-                    >
-                      {isShowingAllNotifications ? "閉じる" : `もっと見る（残り ${notifications.length - 6}件）`}
-                    </button>
-                  )}
-                </div>
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300">
+                  <Sun size={12} className="shrink-0" />
+                  <span className="font-semibold">
+                    大阪 {osakaWeather.temperature === null ? "--" : Math.round(osakaWeather.temperature)}°C
+                  </span>
+                  <span className="text-amber-500/70">{osakaWeather.label}</span>
+                </span>
               </div>
-            )}
-          </div>
 
-          {(isNotificationPanelOpen || isNotificationPanelClosing) && (
-            <button
-              type="button"
-              aria-label="通知を閉じる"
-              onClick={closeNotificationPanel}
-              className="fixed inset-0 z-40 cursor-default"
-            />
-          )}
+              {/* Notification bell */}
+              <div className="relative z-50">
+                <button
+                  type="button"
+                  aria-label="通知を表示"
+                  aria-expanded={isNotificationPanelOpen}
+                  onClick={toggleNotificationPanel}
+                  className={`workspace-bell-button relative flex h-9 w-9 items-center justify-center rounded-xl bg-white text-gray-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-gray-50 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700 ${
+                    isNotificationPanelOpen
+                      ? "is-open text-indigo-600 ring-indigo-100 dark:text-indigo-300 dark:ring-indigo-500/30"
+                      : ""
+                  }`}
+                >
+                  <Bell size={18} />
 
-          <button className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-[#635BFF] px-3 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 transition hover:bg-indigo-600 active:scale-[0.98] sm:flex-none sm:px-4">
-            <Plus size={18} />
-            <span className="truncate">事務所が増築</span>
-          </button>
+                  {unreadNotificationCount > 0 && (
+                    <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white dark:ring-slate-900">
+                      {unreadNotificationCount > 99
+                        ? "99+"
+                        : unreadNotificationCount}
+                    </span>
+                  )}
+                </button>
+
+                {(isNotificationPanelOpen || isNotificationPanelClosing) && (
+                  <div className={`workspace-notification-panel fixed inset-x-3 top-28 z-50 w-auto overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl shadow-slate-900/15 sm:absolute sm:inset-x-auto sm:right-0 sm:top-11 sm:w-[min(24rem,calc(100vw-2rem))] ${isNotificationPanelClosing ? "is-closing" : ""}`}>
+                    <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3.5">
+                      <div>
+                        <h2 className="font-bold text-gray-800">通知</h2>
+                        <p className="text-[11px] text-gray-400">
+                          {unreadNotificationCount > 0
+                            ? `未読 ${unreadNotificationCount}件`
+                            : "新しい通知はありません"}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        {(unreadNotificationCount > 0 || isMarkingAllNotifications) && (
+                          <button
+                            type="button"
+                            onClick={markAllNotificationsAsRead}
+                            disabled={isMarkingAllNotifications}
+                            className={`workspace-mark-all inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-default sm:px-2.5 sm:text-xs ${isMarkingAllNotifications ? "is-complete" : ""}`}
+                          >
+                            {isMarkingAllNotifications && <CheckCircle2 size={13} />}
+                            {isMarkingAllNotifications ? "既読にしました" : "すべて既読"}
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          aria-label="通知パネルを閉じる"
+                          onClick={closeNotificationPanel}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                        >
+                          <X size={17} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="max-h-[26rem] overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="px-6 py-10 text-center">
+                          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100 text-gray-400">
+                            <Bell size={21} />
+                          </div>
+                          <p className="mt-3 text-sm font-semibold text-gray-500">
+                            通知はまだありません
+                          </p>
+                          <p className="mt-1 text-xs text-gray-400">
+                            勤怠状況や外出予定をお知らせします
+                          </p>
+                        </div>
+                      ) : (
+                        visibleNotifications.map((notification) => (
+                          <button
+                            key={notification.id}
+                            type="button"
+                            onClick={() => handleNotificationClick(notification)}
+                            className={`flex w-full gap-3 border-b border-gray-50 px-4 py-3 text-left transition last:border-b-0 hover:bg-gray-50 ${
+                              notification.isRead ? "bg-white" : "bg-indigo-50/45"
+                            }`}
+                          >
+                            <span
+                              className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                                notification.kind === "success"
+                                  ? "bg-emerald-100 text-emerald-600"
+                                  : notification.kind === "warning"
+                                    ? "bg-amber-100 text-amber-600"
+                                    : notification.kind === "error"
+                                      ? "bg-red-100 text-red-600"
+                                      : "bg-blue-100 text-blue-600"
+                              }`}
+                            >
+                              {notification.kind === "success" ? (
+                                <CheckCircle2 size={18} />
+                              ) : notification.kind === "warning" ||
+                                notification.kind === "error" ? (
+                                <AlertTriangle size={18} />
+                              ) : (
+                                <Info size={18} />
+                              )}
+                            </span>
+
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-start justify-between gap-2">
+                                <span className="text-sm font-bold text-gray-800">
+                                  {notification.title}
+                                </span>
+                                {!notification.isRead && (
+                                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
+                                )}
+                              </span>
+                              <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">
+                                {notification.message}
+                              </span>
+                              <span className="mt-1.5 block text-[10px] text-gray-400">
+                                {formatNotificationTime(notification.createdAt)}
+                              </span>
+                            </span>
+                          </button>
+                        ))
+                      )}
+                      {notifications.length > 6 && (
+                        <button
+                          type="button"
+                          onClick={() => setIsShowingAllNotifications((current) => !current)}
+                          className="workspace-show-more flex w-full items-center justify-center gap-1.5 border-t border-gray-100 px-4 py-3 text-xs font-bold text-indigo-600 transition hover:bg-indigo-50"
+                        >
+                          {isShowingAllNotifications ? "閉じる" : `もっと見る（残り ${notifications.length - 6}件）`}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {(isNotificationPanelOpen || isNotificationPanelClosing) && (
+                <button
+                  type="button"
+                  aria-label="通知を閉じる"
+                  onClick={closeNotificationPanel}
+                  className="fixed inset-0 z-40 cursor-default"
+                />
+              )}
+
+            </div>
           </div>
         </div>
       </header>
@@ -1942,23 +2104,11 @@ export default function EmployeeRoom() {
         summary="2法人・1チーム"
       />
 
-      {/* 3. Notification Banner */}
-      <div className="mb-5 flex flex-col justify-between gap-2.5 rounded-2xl border border-indigo-100/80 bg-indigo-50/70 px-3.5 py-3 text-xs text-indigo-900 sm:mb-6 sm:flex-row sm:items-center sm:gap-3 sm:px-4">
-        <div className="flex min-w-0 items-start gap-2 sm:items-center">
-          <Sparkles size={16} className="mt-0.5 shrink-0 text-indigo-600 sm:mt-0" />
-
-          <span className="leading-relaxed">AIサブマネージャーが改善候補を3件見つけました</span>
-        </div>
-
-        <button className="w-fit self-end rounded-lg bg-indigo-100/70 px-3 py-1.5 font-semibold text-indigo-600 transition hover:bg-indigo-100 sm:self-auto sm:bg-transparent sm:px-0 sm:py-0 sm:hover:bg-transparent sm:hover:underline">
-          確認する
-        </button>
-      </div>
 
       {/* 4. Main Grid Section */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left Column */}
-        <div key={`office-scene-${selectedOffice}`} className="workspace-office-scene rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5 lg:col-span-2">
+        <div key={`office-scene-${selectedOffice}`} className="workspace-office-scene rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/[0.03] dark:border-slate-800 dark:bg-slate-900 sm:p-5 lg:col-span-2">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500">
@@ -1982,7 +2132,12 @@ export default function EmployeeRoom() {
 
           {/* Map Container */}
           <div
-            className="relative aspect-[16/9] min-h-[220px] w-full overflow-visible rounded-xl border border-gray-200 bg-slate-900 sm:min-h-0"
+            ref={officeMapRef}
+            className={`relative w-full overflow-visible bg-slate-950 shadow-inner ${
+              isOfficeMapFullscreen
+                ? "h-[100dvh] max-h-[100dvh] rounded-none border-0"
+                : "aspect-[16/9] min-h-[220px] rounded-lg border border-slate-200 dark:border-slate-700 sm:min-h-0"
+            }`}
             onClick={() => setSelectedAttendanceId(null)}
           >
             <img
@@ -1993,8 +2148,31 @@ export default function EmployeeRoom() {
                 event.currentTarget.onerror = null;
                 event.currentTarget.src = `${BASE_URL}images/room.png`;
               }}
-              className="absolute inset-0 h-full w-full rounded-xl object-cover brightness-90 contrast-105"
+              className={`absolute inset-0 h-full w-full object-cover brightness-[0.82] contrast-[1.06] saturate-[0.9] ${
+                isOfficeMapFullscreen ? "" : "rounded-lg"
+              }`}
             />
+
+            <div className={`pointer-events-none absolute inset-0 bg-slate-950/10 ${isOfficeMapFullscreen ? "" : "rounded-lg"}`} />
+
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                void openOfficeMapLandscape();
+              }}
+              className="absolute right-2 top-2 z-20 inline-flex items-center gap-1.5 rounded-md border border-white/20 bg-slate-950/80 px-2 py-1.5 text-[10px] font-semibold text-white shadow-sm backdrop-blur-sm sm:hidden"
+              aria-label="オフィスマップを横向きの全画面で表示"
+            >
+              <Maximize2 size={13} />
+              横向きで表示
+            </button>
+
+            {officeMapOrientationHint && (
+              <div className="absolute inset-x-3 bottom-3 z-20 rounded-md border border-white/15 bg-slate-950/85 px-3 py-2 text-center text-[11px] font-medium text-white shadow-sm backdrop-blur-sm sm:hidden">
+                端末を横向きにしてから、もう一度お試しください。
+              </div>
+            )}
 
             {/* <div
               className={`pointer-events-none absolute left-3 top-3 z-10 rounded-xl border px-3 py-2 shadow-lg backdrop-blur-md ${
@@ -2015,8 +2193,10 @@ export default function EmployeeRoom() {
               const vietnameseName =
                 attendance.employee?.full_name?.trim() ||
                 attendance.employee_name;
-              const position = getEmployeePosition(attendance);
+              const position = officeMapPositionByAttendanceId.get(attendance.id);
               const isSelected = selectedAttendanceId === attendance.id;
+
+              if (!position) return null;
 
               return (
                 <button
@@ -2028,12 +2208,13 @@ export default function EmployeeRoom() {
                     setSelectedAttendanceId(isSelected ? null : attendance.id);
                   }}
                   style={position}
-                  className={`group absolute -translate-x-1/2 -translate-y-1/2 transition-all duration-700 ease-out hover:scale-110 focus:outline-none ${
+                  title={`${vietnameseName} — ${statusLabels[attendance.status]}`}
+                  className={`group absolute -translate-x-1/2 -translate-y-1/2 transition duration-150 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                     isSelected ? "z-30" : "z-10"
                   }`}
                 >
                   <span
-                    className={`absolute -right-1 top-0 h-3 w-3 rounded-full border-2 border-white shadow-sm ${
+                    className={`absolute -right-0.5 -top-0.5 z-10 h-2.5 w-2.5 rounded-full border-2 border-white shadow-sm ${
                       attendance.status === "break"
                         ? "bg-amber-400"
                         : attendance.status === "outside"
@@ -2044,12 +2225,14 @@ export default function EmployeeRoom() {
 
                   <img
                     src={getEmployeeAvatar(attendance)}
-                    alt={vietnameseName}
-                    className="h-auto w-12 select-none drop-shadow-[0_5px_5px_rgba(15,23,42,0.45)] sm:w-16 lg:w-20"
+                    alt=""
+                    className="h-10 w-10 rounded-full border-2 border-white/90 object-cover shadow-md shadow-slate-950/50 sm:h-12 sm:w-12"
                     draggable={false}
                   />
 
-                  <span className="absolute left-1/2 top-full mt-1 max-w-24 -translate-x-1/2 truncate rounded-full bg-slate-950/75 px-2 py-0.5 text-[9px] font-semibold text-white sm:text-[10px]">
+                  <span className={`absolute left-1/2 top-full mt-1 max-w-28 -translate-x-1/2 truncate rounded-md border border-white/10 bg-slate-950/90 px-1.5 py-0.5 text-[9px] font-semibold text-white shadow-sm transition-opacity sm:text-[10px] ${
+                    isSelected ? "opacity-100" : "pointer-events-none opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+                  }`}>
                     {vietnameseName}
                   </span>
                 </button>
@@ -2059,7 +2242,7 @@ export default function EmployeeRoom() {
               <EmployeeProfilePopover
                 attendance={selectedAttendance}
                 statusLabel={statusLabels[selectedAttendance.status]}
-                position={getEmployeePosition(selectedAttendance)}
+                position={officeMapPositionByAttendanceId.get(selectedAttendance.id) ?? { left: "50%", top: "50%" }}
                 now={taskClock}
                 onClose={() => setSelectedAttendanceId(null)}
               />
@@ -2469,28 +2652,128 @@ export default function EmployeeRoom() {
           </div>
           )}
 
-          {/* AI assistant */}
-          <div className="order-1 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-sm font-bold text-white shadow-sm">
-                AI
+          {/* Member Activity Card — replaces AI card */}
+          <div className="order-1 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+            {/* Card header */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <Users size={16} className="text-indigo-500" />
+                <div>
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
+                    MEMBER STATUS
+                  </span>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-white">
+                    メンバーの稼働状況
+                  </h3>
+                </div>
               </div>
-              <div>
-                <span className="block text-[10px] font-medium text-gray-400 dark:text-slate-500">AI社員</span>
-                <h3 className="text-base font-bold text-gray-800 dark:text-white">業務改善AI</h3>
-                <span className="text-xs text-gray-400 dark:text-slate-500">AIサブマネージャー</span>
-              </div>
+              <button
+                type="button"
+                className="text-[11px] font-semibold text-indigo-600 hover:underline dark:text-indigo-300"
+              >
+                全メンバーを見る →
+              </button>
             </div>
-            <div className="mt-4 rounded-xl border border-indigo-50 bg-indigo-50/40 p-3.5 dark:border-indigo-500/15 dark:bg-indigo-500/[0.08]">
-              <span className="block text-[10px] font-bold tracking-wider text-indigo-500 dark:text-indigo-300">CURRENT WORK</span>
-              <p className="mt-1 text-xs font-bold leading-relaxed text-gray-800 dark:text-slate-100">改善候補と不足マニュアルを分析しています</p>
+
+            {/* Filter tabs */}
+            <div className="flex gap-1 overflow-x-auto border-b border-slate-100 px-4 pb-0 pt-3 dark:border-slate-800">
+              {([
+                { key: "all", label: "全体" },
+                { key: "working", label: "出社" },
+                { key: "outside", label: "外出" },
+                { key: "break", label: "休憩" },
+              ] as const).map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setMemberActivityTab(key)}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-t-lg px-3 pb-2.5 pt-1 text-[11px] font-semibold transition ${
+                    memberActivityTab === key
+                      ? "border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-300"
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  }`}
+                >
+                  {label}
+                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                    memberActivityTab === key
+                      ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300"
+                      : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                  }`}>
+                    {key === "all"
+                      ? memberCounts.all
+                      : key === "working"
+                      ? memberCounts.working
+                      : key === "outside"
+                      ? memberCounts.outside
+                      : memberCounts.break}
+                  </span>
+                </button>
+              ))}
             </div>
-            <div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs dark:border-slate-700">
-              <div className="flex justify-between gap-3"><span className="text-slate-400 dark:text-slate-500">所属</span><span className="font-semibold text-slate-700 dark:text-slate-200">共通AI</span></div>
-              <div className="flex justify-between gap-3"><span className="text-slate-400 dark:text-slate-500">状態</span><span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-300"><span className="h-2 w-2 rounded-full bg-emerald-500" />観察中</span></div>
-              <div className="flex justify-between gap-3"><span className="text-slate-400 dark:text-slate-500">権限</span><span className="font-semibold text-slate-700 dark:text-slate-200">提案・下書き</span></div>
+
+            {/* Member list */}
+            <div className="max-h-[260px] overflow-y-auto">
+              {filteredMembers.length === 0 ? (
+                <div className="px-5 py-6 text-center">
+                  <p className="text-xs text-slate-400 dark:text-slate-500">
+                    該当するメンバーはいません
+                  </p>
+                </div>
+              ) : (
+                filteredMembers.slice(0, 8).map((attendance) => {
+                  const name =
+                    attendance.employee?.full_name?.trim() ||
+                    attendance.employee_name;
+                  const position =
+                    attendance.employee?.position_title || "社員";
+                  const task =
+                    attendance.active_work_session?.task_description || null;
+                  const clockInTime = formatWorkTime(attendance.clock_in);
+
+                  return (
+                    <div
+                      key={attendance.id}
+                      className="flex items-center gap-3 border-b border-slate-50 px-5 py-3 last:border-b-0 hover:bg-slate-50/70 dark:border-slate-800 dark:hover:bg-slate-800/50"
+                    >
+                      <div className="relative shrink-0">
+                        <img
+                          src={getEmployeeAvatar(attendance)}
+                          alt={name}
+                          className="h-9 w-9 rounded-xl object-cover"
+                        />
+                        <span
+                          className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-slate-900 ${memberStatusColor(attendance.status)}`}
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="truncate text-xs font-bold text-slate-800 dark:text-white">
+                            {name}
+                          </p>
+                          <span className="shrink-0 font-mono text-[10px] text-slate-400">
+                            {clockInTime}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 truncate text-[10px] text-slate-400 dark:text-slate-500">
+                          <span className={`mr-1.5 inline-flex items-center gap-0.5 font-semibold ${
+                            attendance.status === "working"
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : attendance.status === "break"
+                              ? "text-amber-600 dark:text-amber-400"
+                              : attendance.status === "outside"
+                              ? "text-blue-600 dark:text-blue-400"
+                              : "text-slate-500"
+                          }`}>
+                            ● {memberStatusLabel(attendance.status)}
+                          </span>
+                          {task || position}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
-            <button type="button" className="mt-4 w-full rounded-xl border border-slate-200 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">プロフィールを開く</button>
           </div>
         </div>
       </div>
