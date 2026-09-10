@@ -8,7 +8,7 @@ export default function AppFooter() {
       <p className="flex flex-wrap items-center justify-end gap-x-2">
         <span>社内専用</span><span aria-hidden="true">·</span>
         <span className="flex flex-col text-right">
-          <span className="font-medium text-slate-600 dark:text-[var(--tm-text-secondary)]">THEMIS {appReleaseName}</span>
+          <span className="font-medium text-slate-600 dark:text-[var(--tm-text-secondary)]">{appReleaseName}</span>
           <span>{appBuildLabel}</span>
         </span>
       </p>

@@ -378,3 +378,32 @@ Ví dụ đăng nhập thành công (đã rút gọn):
 ```
 
 Tất cả API response được thêm các security header, không cache, và lỗi 401/403/429 được audit (có khử trùng lặp). Xem chi tiết trong [DATA_MODEL.md](DATA_MODEL.md).
+
+## Generic document creation persistence
+
+Các route dưới đây dùng Sanctum, kiểm tra `case_document` thuộc đúng `case_file` và không trộn workflow tạo văn bản với các trạng thái thu thập tài liệu:
+
+| Method | Route | Permission | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/api/case-files/{case}/document-collection/{document}/creation` | `case.view` | Trả active template, instance hiện tại hoặc prefill `not_created`; không tạo record. |
+| `PATCH` | `.../creation/draft` | `case.update` | Tạo/cập nhật draft và chuyển trạng thái về `draft`. |
+| `POST` | `.../creation/review` | `case.update` | Validate field bắt buộc, lưu draft và chuyển sang `review`. |
+| `POST` | `.../creation/approve` | `case.update` | Chỉ nhận document ở `review`; transaction đóng băng `approved_data`, actor và thời gian. |
+| `POST` | `.../creation/revision` | `case.update` | Chỉ nhận phiên bản mới nhất đã approved; tạo draft phiên bản kế tiếp từ approved snapshot mà không sửa phiên bản cũ. |
+| `GET` | `.../creation/approved` | `case.view` | Trả approved snapshot đã đóng băng; `404` nếu chưa từng approve. |
+| `GET` | `.../creation/pdf` | `case.view` | PDF A4 từ approved_data + template đã pin; attachment UTF-8 filename. `404` nếu sai case/item hoặc chưa có instance, `422` nếu chưa approved hoặc renderer/template không hỗ trợ. |
+| `POST` | `.../creation/google-drive` | `case.update` | Lưu PDF approved lên Drive; trả artifact đã có nếu lưu trước đó. `404` sai case/item hoặc thiếu instance; `422` chưa approved; `503` Drive chưa khả dụng/lỗi upload hoặc cần reconciliation; `500` lỗi tạo PDF nội bộ. |
+
+`GET creation` trả `{ supported, template, document, current_version, versions }`. `supported=false` khi document type không có active generation template. `document.workflow_status` là `not_created`, `draft`, `review` hoặc `approved`; `draft_data`/`approved_data` là JSON field-value thuần, không chứa label React. `versions` liệt kê lịch sử theo phiên bản, trạng thái, người/thời gian approve và Drive artifact. GET creation/approved/pdf và POST google-drive nhận query `version` tùy chọn để đọc hoặc lưu đúng phiên bản; bỏ query luôn dùng phiên bản mới nhất. API list/detail 資料収集 bổ sung `document_type.creation_supported`, được tính từ active template hoặc instance đã pin, không hardcode code C‑001.
+
+`document_type` trên API list/detail 資料収集 còn trả `handling_type` và `capabilities`: `generation_supported`, `collection_only`, `official_form`, `reference_only`, `source_available`. `creation_supported` được giữ để tương thích frontend và bằng `generation_supported`. Chỉ `office_generated` có active generation template mới mở luồng tạo/chỉnh sửa; `collected` vẫn dùng luồng receive/upload và bị chặn khỏi mutation editor kể cả khi gắn nhầm template. Các route view/PDF của instance lịch sử không bị xóa. Registry source chưa có CRUD/import API trong phase chuẩn bị này; `DocumentSourceImportPlanner` là dry-run nội bộ, không ghi DB hoặc Drive.
+
+API tạo Client/Case trả thêm `drive.status` (`ready` hoặc `failed`) sau khi record MySQL đã commit; lỗi Drive không rollback record. `POST /clients/{client}/google-drive/provision` và `POST /case-files/{caseFile}/google-drive/provision` (`case.update`) retry idempotent. Artifact Drive trả `external_file_id`, `url`, `filename`, `uploaded_at`; không trả OAuth token. OAuth admin local dùng `GET /google-drive/oauth/authorize` và callback cố định `GET /google-drive/oauth/callback`, không khả dụng ngoài environment local/testing.
+
+C‑001 v1, renderer `generic_legal_document`, format `html`, vẫn là skeleton lịch sử và không bị sửa. C‑001 v2 là template active mới cho instance chưa được tạo: đây là `参考テンプレート / 事務所承認前`, chỉ mô tả cấu trúc và các placeholder do operator nhập, không phải nội dung được văn phòng phê duyệt. Instance đã tồn tại tiếp tục dùng template version đã pin.
+
+Mỗi phiên bản `approved` là bất biến: PATCH draft và POST review không sửa phiên bản đã approve; POST approve lặp lại trả `422` và giữ nguyên actor/thời gian. Muốn sửa phải POST revision trên phiên bản mới nhất đã approved; API tạo `vN+1` ở trạng thái draft, copy dữ liệu từ approved snapshot và tiếp tục dùng template đã pin. Unique `(case_document_id, version)` cùng khóa transaction ngăn tạo trùng phiên bản.
+
+PDF tạo on-demand bằng mPDF; không lưu binary trong DB hoặc lưu PDF lâu dài. Response `application/pdf`, `Content-Disposition: attachment` có filename ASCII fallback và `filename*` UTF-8; CORS đã expose header này. Frontend dùng Axios có Sanctum token, nhận Blob và tải theo tên backend; chỉ bản approved có nút tải, Drive phụ thuộc capability backend bên dưới. Lỗi nhận JSON không được lưu nhầm thành PDF.
+
+Creation state hỗ trợ thêm `drive: { available: boolean, artifact: { url, filename, uploaded_at } | null }`. available chỉ true khi instance approved, người gọi có case.update, chưa có artifact và backend xác minh destination Shared Drive folder cho phép thêm file. Thiếu write config không gọi Google. Artifact cũ vẫn hiển thị với case.view khi write bị tắt. POST trả `{ drive }` sau khi metadata commit thành công; frontend không đọc env hoặc giả lập thành công. Nút PDF không đổi; nút Drive dùng capability, busy guard và mở link HTTPS Drive bằng noopener/noreferrer.

@@ -1767,36 +1767,35 @@ export default function EmployeeRoom() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f6fa] px-3 pb-4 pt-20 sm:p-6">
-      {/* 1. Header Top Area */}
-      <div className="mb-3 flex flex-col justify-between gap-3 sm:mb-4 sm:flex-row sm:items-center sm:gap-4">
-        <div className="min-w-0">
-          <div className="truncate text-[10px] font-semibold text-indigo-500 sm:text-xs sm:font-medium">
-            THEMIS株式会社 × 中華総合法律事務所
+    <div className="min-h-screen overflow-x-clip bg-slate-50 pb-16 dark:bg-[#090B0E]">
+      <header className="mx-auto max-w-[1600px] px-3 pt-5 sm:px-6 lg:px-8">
+        <div className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:gap-4 sm:p-5">
+          <div className="min-w-0">
+            <div className="truncate text-[10px] font-semibold text-indigo-500 sm:text-xs sm:font-medium">
+              THEMIS株式会社 × 中華総合法律事務所
+            </div>
+            <h1 className="mt-1 text-xl font-bold leading-tight text-gray-800 dark:text-slate-100 sm:mt-0 sm:text-2xl">
+              合同事務所・社員ルーム
+            </h1>
           </div>
 
-          <h1 className="mt-1 text-xl font-bold leading-tight text-gray-800 sm:mt-0 sm:text-2xl">
-            合同事務所・社員ルーム
-          </h1>
-        </div>
-
-        <div className="flex w-full items-center gap-2 sm:w-auto sm:gap-3">
+          <div className="flex w-full items-center gap-2 sm:w-auto sm:gap-3">
           <div className="relative z-50">
             <button
               type="button"
               aria-label="通知を表示"
               aria-expanded={isNotificationPanelOpen}
               onClick={toggleNotificationPanel}
-              className={`workspace-bell-button relative flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm transition hover:bg-gray-50 ${
+              className={`workspace-bell-button relative flex h-10 w-10 items-center justify-center rounded-xl bg-white text-gray-600 shadow-sm transition hover:bg-gray-50 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 ${
                 isNotificationPanelOpen
-                  ? "is-open text-indigo-600 ring-2 ring-indigo-100"
-                  : "text-gray-600"
+                  ? "is-open text-indigo-600 ring-2 ring-indigo-100 dark:text-indigo-300 dark:ring-indigo-500/30"
+                  : ""
               }`}
             >
               <Bell size={20} />
 
               {unreadNotificationCount > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-[#f5f6fa]">
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white dark:ring-slate-900">
                   {unreadNotificationCount > 99
                     ? "99+"
                     : unreadNotificationCount}
@@ -1930,9 +1929,11 @@ export default function EmployeeRoom() {
             <Plus size={18} />
             <span className="truncate">事務所が増築</span>
           </button>
+          </div>
         </div>
-      </div>
+      </header>
 
+      <main className="mx-auto max-w-[1600px] px-3 pt-5 sm:px-6 lg:px-8">
       {/* 2. Office selector — selection/data handling remains in this page. */}
       <OfficeSwitcher
         offices={Object.values(offices)}
@@ -3053,6 +3054,7 @@ export default function EmployeeRoom() {
           </div>
         </div>
       )}
+      </main>
     </div>
   );
 }

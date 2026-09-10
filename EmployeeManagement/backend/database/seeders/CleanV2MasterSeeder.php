@@ -17,6 +17,7 @@ class CleanV2MasterSeeder extends Seeder
             $this->call(RolePermissionSeeder::class);
         }
         $this->call([CaseTypeSeeder::class, PersonaSeeder::class, DocumentTypeMasterSeeder::class, DocumentPurposeSeeder::class, CaseTypeDocumentRuleMasterSeeder::class]);
+        $this->call(DocumentGenerationTemplateSeeder::class);
         if (! DB::table('document_templates')->exists()) {
             $this->call(CaseWorkspaceTemplateSeeder::class);
             // Template bootstrap has its own ordering; keep the canonical tree repeatable.

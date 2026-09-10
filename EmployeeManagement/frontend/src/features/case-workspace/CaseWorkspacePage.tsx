@@ -19,7 +19,7 @@ import type {
 } from './types'
 
 type DialogKind = 'task' | 'deadline' | 'party' | 'activity'
-type Props = { caseId: number; user?: CaseViewer; onBack: () => void; onEdit?: () => void; initialNotice?: string }
+type Props = { caseId: number; user?: CaseViewer; onBack: () => void; onEdit?: () => void; initialNotice?: string; initialTab?: WorkspaceTab; initialCollectionItemId?: number }
 const DocumentCollectionPanel = lazy(() => import('../document-collection/DocumentCollectionPanel'))
 const RequiredDocumentsPanel = lazy(() => import('../document-collection/components/RequiredDocumentsPanel'))
 
@@ -43,10 +43,10 @@ export function CaseWorkspaceView(props: Props) {
 }
 
 export default function CaseWorkspacePage(props: Props) {
-  const { caseId, onBack, onEdit, initialNotice } = props
+  const { caseId, onBack, onEdit, initialNotice, initialTab, initialCollectionItemId } = props
   const { user } = useAuth()
   const { t } = useTranslation()
-  const [tab, setTab] = useState<WorkspaceTab>('overview')
+  const [tab, setTab] = useState<WorkspaceTab>(initialTab ?? 'overview')
   const [data, setData] = useState<WorkspaceResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
@@ -130,7 +130,7 @@ export default function CaseWorkspacePage(props: Props) {
       </nav>
 
       <div className="cm-tab-content">
-        {tab === 'collection' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingCollection')}</p>}><DocumentCollectionPanel key={caseId} caseId={caseId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onHistory={() => setTab('timeline')} onBack={onBack} onChanged={() => void reload(true)} /></Suspense>}
+        {tab === 'collection' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingCollection')}</p>}><DocumentCollectionPanel key={caseId} caseId={caseId} initialSelectedId={initialCollectionItemId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onHistory={() => setTab('timeline')} onBack={onBack} onChanged={() => void reload(true)} /></Suspense>}
         {tab === 'overview' && <OverviewPanel caseFile={caseFile} summary={data.summary} onOpenTab={setTab}/>}
         {tab === 'documents' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingDocuments')}</p>}><RequiredDocumentsPanel key={caseId} caseId={caseId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onCandidates={() => setTab('collection')} onHistory={() => setTab('timeline')} onChanged={() => void reload(true)}/></Suspense>}
         {tab === 'tasks' && <TasksPanel tasks={caseFile.case_tasks} canUpdate={canUpdate} working={working} onAdd={() => setDialog('task')} onStatus={(task, status) => void run(() => caseWorkspaceApi.updateTask(caseId, task.id, { status }), 'タスクを更新しました。')} onDelete={(task) => confirmDelete(task.title) && void run(() => caseWorkspaceApi.deleteTask(caseId, task.id), 'タスクを削除しました。')}/>}

@@ -6,7 +6,7 @@ export type CollectionResult = 'not_exist' | 'not_disclosed' | 'partially_disclo
 export type CollectionPriority = 'low' | 'normal' | 'high' | 'critical'
 export type EmployeeOption = { id: number; display_name: string }
 export type Purpose = { id: number; code: string; name_ja: string }
-export type DocumentType = { id: number; code: string; name_ja: string }
+export type DocumentType = { id: number; code: string; name_ja: string; creation_supported: boolean }
 
 export interface CollectionItem {
   id: number

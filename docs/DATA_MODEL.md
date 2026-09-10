@@ -233,6 +233,7 @@ Không có bảng MySQL nào cho dữ liệu 在留申請 trong Phase 1. Workboo
 | `DB_*` | Backend | Driver, máy chủ, database, user và password của cơ sở dữ liệu. |
 | `FRONTEND_URL` | Backend | Origin frontend production được phép CORS. |
 | `FILESYSTEM_DISK` | Backend | Disk mặc định Laravel; Excel vận hành đang dùng storage local của ứng dụng. |
+| `GOOGLE_DRIVE_DOCUMENT_SOURCES_FOLDER_ID` | Backend | Folder Drive riêng cho nguồn master; không dùng folder artifact `Client/Case/作成書類`. |
 | `VITE_BACKEND_URL` | Frontend | Gốc backend, ví dụ `https://api.example.com`; được ghép thêm `/api` nếu không đặt `VITE_API_URL`. |
 | `VITE_API_URL` | Frontend | URL API đầy đủ; ưu tiên hơn `VITE_BACKEND_URL`, ví dụ `https://api.example.com/api`. |
 
@@ -275,3 +276,37 @@ npm run preview
 | `DocumentPurposeTest` | Phase 1C-0: 11 purpose, seed lặp, quan hệ nhiều–nhiều độc lập, unique/FK, detach/soft delete và bảo toàn 78 document_types/dữ liệu cũ. |
 
 Khi sửa API hoặc schema, hãy thêm test vào đúng nhóm và chạy toàn bộ `php artisan test` trước khi deploy.
+
+## Generic generated documents
+
+`document_templates`/`document_template_items` hiện hữu tiếp tục là checklist template theo loại案件. Nội dung sinh văn bản dùng miền riêng để không thay đổi ý nghĩa của checklist:
+
+- `document_types` 1—N `document_generation_templates`: versioned reusable generation template. Unique `(document_type_id, version)`; `field_schema` là JSON, `template_body` là skeleton/template content, `is_active` quyết định khả năng tạo mới.
+- `case_documents` 1—N `case_generated_documents`: mỗi row là một phiên bản văn bản của đúng checklist item. `version` tăng tuần tự và unique cùng `case_document_id`; quan hệ compatibility `generatedDocument` luôn trỏ phiên bản mới nhất. Mỗi phiên bản pin `document_generation_template_id`, nên template version mới không thay đổi lịch sử.
+- `case_generated_documents.draft_data`: dữ liệu chỉnh sửa theo field schema.
+- `approved_data`, `approved_at`, `approved_by`: snapshot tại lần approve duy nhất của từng phiên bản và user thực hiện. Phiên bản approved là bất biến; revision tạo row phiên bản mới từ snapshot, không reopen hoặc sửa row cũ. Thay đổi Client/CaseFile sau đó không tự cập nhật snapshot lịch sử.
+- `workflow_status`: `draft`, `review`, `approved`; trạng thái `not_created` được biểu diễn bằng việc chưa có instance. Đây là workflow độc lập với necessity/collection/fulfillment/review trên `case_documents`.
+
+C‑001 v1 và v2 được seed idempotent bằng stable code `C-001`; seeder không tạo thêm document master và không sửa v1. v2 là reference template (`参考テンプレート / 事務所承認前`), không phải bản chính thức của văn phòng. Các source mapping dùng cột đã tồn tại: `clients.name`, `clients.address`, `case_files.title`, `case_files.reference_number` và `employees.full_name` qua assignee của case document/case. Field về phạm vi, phí, chi phí, chấm dứt và thanh toán giữa kỳ luôn do operator nhập; không tự sinh mức tiền hoặc nội dung điều khoản.
+
+Generation template được coi là published khi insert: Eloquent chặn sửa document_type_id/version/renderer_type/format/template_body/field_schema của version đã tồn tại; thay nội dung cần version mới. Có thể bật/tắt is_active mà không ảnh hưởng instance đã pin. Seeder chỉ firstOrCreate, không ghi đè hoặc kích hoạt lại v1 hiện hữu. Đây là bảo vệ tầng ứng dụng, không phải DB trigger: raw SQL/query-builder bulk update vẫn có thể bypass, không được dùng để chỉnh published template. Tên/code hiển thị vẫn lấy từ document_types; chưa snapshot master metadata hoặc renderer implementation để tái tạo pixel-identical dài hạn.
+
+`generated_document_artifacts` lưu kết quả xuất PDF đã được Google Drive xác nhận: FK case_generated_document_id (restrict delete), artifact_type, storage_provider, external_file_id/url, filename, mime_type, checksum SHA-256 nullable, uploaded_by (user nullable), uploaded_at và timestamps. Unique (instance, artifact_type, storage_provider); mỗi revision có instance/artifact riêng, filename chứa `vN`, nên upload phiên bản mới không overwrite hoặc xóa file phiên bản cũ. Không duplicate case_file_id hoặc binary PDF. `CaseGeneratedDocument::artifacts` là hasMany, artifact liên kết instance và uploader. `received_documents` tiếp tục biểu diễn tài liệu nhận vào, không bị dùng sai cho output. Migration additive `2026_09_06_100000_create_generated_document_artifacts_table`; down chỉ dành cho rollback được operator cho phép, vì có thể mất metadata.
+
+`external_storage_locations` là mapping generic cho folder ngoài hệ thống: provider, entity_type/entity_id, location_type, external_folder_id/url, display_name và timestamps. Unique `(provider, entity_type, entity_id, location_type)` bảo đảm mỗi Client/Case/location chỉ có một mapping. Bảng không dùng FK đa hình để vẫn hỗ trợ system root (`entity_type=system`, `entity_id=0`). Migration additive `2026_09_07_100000_create_external_storage_locations_table` đã chạy trên MySQL local; không thay đổi dữ liệu Client/Case lịch sử.
+
+## Document source registry
+
+Migration `2026_09_08_110000_create_document_source_registry.php` bổ sung `document_types.handling_type` nullable/indexed và bảng `document_source_files`. Các handling type hợp lệ là `office_generated`, `collected`, `official_form`, `reference_only`; null giữ nghĩa chưa phân loại để không tạo dữ liệu giả cho master chưa được audit.
+
+| Cột `document_source_files` | Ý nghĩa |
+| --- | --- |
+| `document_type_id` | FK tới stable document master; restrict delete |
+| `source_version`, `source_kind` | Phiên bản nguồn và loại `original`/`derived_template`/`reference`; unique cùng document type |
+| `original_filename`, `mime_type` | Tên file nguyên bản và loại nội dung; hỗ trợ DOCX, PDF, HTML/TXT, XLSX, XLSM |
+| `storage_provider` | `google_drive` hoặc `local_reference`; binary không lưu trong MySQL |
+| `external_file_id`, `external_url`, `local_reference` | Tham chiếu vật lý; local reference bắt buộc là đường dẫn tương đối an toàn |
+| `checksum` | SHA‑256 nullable để phát hiện file trùng |
+| `is_active`, `effective_from`, `notes`, `created_by` | Metadata vòng đời và audit |
+
+Source version độc lập hoàn toàn với `case_generated_documents.version`: ví dụ C‑001 source v2 và một case document revision 4 có thể cùng tồn tại mà không dùng chung cột version. Registry không sửa `document_generation_templates`, approved snapshot, PDF hay Drive artifact lịch sử. Trường nhận dạng/vị trí/checksum/creator của source đã đăng ký là bất biến qua model; `is_active`, `effective_from` và `notes` được phép quản trị. Bảo vệ bất biến nằm ở Eloquent, nên code vận hành không được bypass bằng raw update.

@@ -6,12 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\CaseFile;
 use App\Models\CaseType;
 use App\Models\Client;
+use App\Services\GoogleDriveProvisioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class CaseFileController extends Controller
 {
@@ -23,7 +26,7 @@ class CaseFileController extends Controller
             ->latest()->get()]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, GoogleDriveProvisioningService $drive): JsonResponse
     {
         $data = $this->validated($request);
 
@@ -42,7 +45,10 @@ class CaseFileController extends Controller
         });
 
         // Checklist initialization is an explicit action, never a side effect of case creation.
-        return response()->json(['case_file' => $caseFile->load(['client', 'caseTypeOption.parent', 'department', 'assignedEmployee', 'createdByEmployee'])->loadCount($this->documentProgressCounts())], 201);
+        return response()->json([
+            'case_file' => $caseFile->load(['client', 'caseTypeOption.parent', 'department', 'assignedEmployee', 'createdByEmployee'])->loadCount($this->documentProgressCounts()),
+            'drive' => $this->attemptDriveProvisioning($caseFile, $drive),
+        ], 201);
     }
 
     public function show(CaseFile $caseFile): JsonResponse
@@ -82,6 +88,11 @@ class CaseFileController extends Controller
         return response()->json([
             'case_file' => $caseFile->load(['client', 'caseTypeOption', 'department', 'assignedEmployee', 'createdByEmployee']),
         ]);
+    }
+
+    public function provisionDrive(CaseFile $caseFile, GoogleDriveProvisioningService $drive): JsonResponse
+    {
+        return response()->json(['drive' => $this->attemptDriveProvisioning($caseFile, $drive)]);
     }
 
     public function destroy(CaseFile $caseFile): JsonResponse
@@ -158,5 +169,21 @@ class CaseFileController extends Controller
                 ->whereIn('fulfillment_status', ['satisfied', 'satisfied_by_alternative'])
                 ->where('review_status', 'reviewed'),
         ];
+    }
+
+    private function attemptDriveProvisioning(CaseFile $caseFile, GoogleDriveProvisioningService $drive): array
+    {
+        try {
+            $location = $drive->provisionCaseStructure($caseFile);
+
+            return ['status' => 'ready', 'url' => $location->external_url];
+        } catch (Throwable $error) {
+            Log::warning('Case Google Drive provisioning failed.', [
+                'case_file_id' => $caseFile->id,
+                'exception' => $error::class,
+            ]);
+
+            return ['status' => 'failed', 'url' => null, 'retryable' => true];
+        }
     }
 }

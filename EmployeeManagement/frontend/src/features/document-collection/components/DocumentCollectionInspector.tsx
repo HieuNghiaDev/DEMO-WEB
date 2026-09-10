@@ -13,6 +13,7 @@ import CollectionEditor from './CollectionEditor'
 import type { InspectorEditSection } from './CollectionEditor'
 import ReceivedDocumentsList from './ReceivedDocumentsList'
 import ReceivedDocumentRegistration from './ReceivedDocumentRegistration'
+import DocumentCreationSection from '../../document-creation/components/DocumentCreationSection'
 
 export default function DocumentCollectionInspector({ caseId, itemId, canUpdate, canReviewDocuments, employees, employeeError, activities, onHistory, onClose, onSaved, onEditState }: {
   caseId: number; itemId: number; canUpdate: boolean; canReviewDocuments: boolean; employees: EmployeeOption[]; employeeError: string | null
@@ -28,6 +29,7 @@ export default function DocumentCollectionInspector({ caseId, itemId, canUpdate,
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState('')
   const [revision, setRevision] = useState(0)
+  const [currentTime] = useState(Date.now)
   const saveLock = useRef(false)
   const dirty = detail !== null && draft !== null && Object.keys(changedFields(detail, draft)).length > 0
 
@@ -64,7 +66,8 @@ export default function DocumentCollectionInspector({ caseId, itemId, canUpdate,
   }
   const close = () => { if (!saving && (!dirty || window.confirm(t('documentCollection.editor.discardAndClose')))) onClose() }
   const history = activities.filter(activity => activity.metadata?.event === 'document_collection.updated' && activity.metadata.document_id === itemId)
-  const overdue = !!detail?.collection.response_deadline && new Date(detail.collection.response_deadline).getTime() < Date.now() && !['received', 'closed'].includes(detail.collection.status)
+  const overdue = !!detail?.collection.response_deadline && new Date(detail.collection.response_deadline).getTime() < currentTime && !['received', 'closed'].includes(detail.collection.status)
+  const hasDocumentCreation = detail?.document_type?.creation_supported ?? false
 
   return <InspectorShell title={detail?.document_type?.name_ja ?? detail?.title ?? t('documentCollection.editor.detailTitle')} code={detail?.document_type?.code ?? '—'} subtitle={detail?.collection.source ?? t('documentCollection.list.sourceUnset')} onClose={close} footer={editing ? <>
     {Object.keys(errors).length > 0 && <p role="alert" className="dc-danger">{t('documentCollection.editor.invalid')}</p>}
@@ -82,8 +85,8 @@ export default function DocumentCollectionInspector({ caseId, itemId, canUpdate,
         <div className={overdue ? 'is-overdue' : undefined}><small>{t('documentCollection.editor.responseDeadline')}</small><strong>{formatDate(detail.collection.response_deadline, true)}</strong>{overdue && <em>{t('documentCollection.list.deadlineExceeded')}</em>}</div>
       </section>
       {detail.collection.preservation_priority && <div className="dc-priority-note"><ShieldAlert size={18} /><div><strong>{t('documentCollection.preservationPriority')}</strong><p>{detail.collection.preservation_reason || t('documentCollection.editor.priorityReasonUnset')}</p></div></div>}
-      <CollectionEditor detail={detail} draft={draft} onChange={value => { setDraft(value); setNotice('') }} errors={errors} employees={employees} employeeError={employeeError} disabled={!canUpdate || saving} canReviewDocuments={canReviewDocuments} editing={editing} onStartEdit={startEdit} receivedDocuments={<><ReceivedDocumentsList caseId={caseId} itemId={itemId} files={detail.received_documents} hideTitle /><ReceivedDocumentRegistration caseId={caseId} itemId={itemId} canUpdate={canUpdate} onRegistered={updated => { setDetail(updated); setDraft(draftFromDetail(updated)); setNotice(t('documentCollection.receivedDocuments.registered')); onSaved() }} /></>} />
-      <section className="dc-detail-section dc-inspector-section"><div className="dc-section-heading"><h3><span>G</span>{t('documentCollection.editor.history')}</h3></div>{history.length ? <ol className="dc-history">{history.slice(0, 3).map(entry => <li key={entry.id}><time>{formatDate(entry.occurred_at, true)}</time><strong>{entry.title}</strong><p>{entry.content}</p><span>{entry.created_by_employee?.full_name ?? '—'}</span></li>)}</ol> : <p className="dc-meta">{t('documentCollection.editor.noHistory')}</p>}<button type="button" className="dc-text-action" onClick={() => { if (!dirty || window.confirm(t('documentCollection.editor.discardAndOpenHistory'))) onHistory() }}>{t('documentCollection.editor.viewAllHistory')}</button></section>
+      <CollectionEditor detail={detail} draft={draft} onChange={value => { setDraft(value); setNotice('') }} errors={errors} employees={employees} employeeError={employeeError} disabled={!canUpdate || saving} canReviewDocuments={canReviewDocuments} editing={editing} onStartEdit={startEdit} receivedDocuments={<><ReceivedDocumentsList caseId={caseId} itemId={itemId} files={detail.received_documents} hideTitle /><ReceivedDocumentRegistration caseId={caseId} itemId={itemId} canUpdate={canUpdate} onRegistered={updated => { setDetail(updated); setDraft(draftFromDetail(updated)); setNotice(t('documentCollection.receivedDocuments.registered')); onSaved() }} /></>} documentCreationSection={hasDocumentCreation ? <DocumentCreationSection caseId={caseId} documentId={itemId} canUpdate={canUpdate} blocked={dirty || editing !== null || saving}/> : undefined} />
+      <section className="dc-detail-section dc-inspector-section"><div className="dc-section-heading"><h3><span>{hasDocumentCreation ? 'H' : 'G'}</span>{t('documentCollection.editor.history')}</h3></div>{history.length ? <ol className="dc-history">{history.slice(0, 3).map(entry => <li key={entry.id}><time>{formatDate(entry.occurred_at, true)}</time><strong>{entry.title}</strong><p>{entry.content}</p><span>{entry.created_by_employee?.full_name ?? '—'}</span></li>)}</ol> : <p className="dc-meta">{t('documentCollection.editor.noHistory')}</p>}<button type="button" className="dc-text-action" onClick={() => { if (!dirty || window.confirm(t('documentCollection.editor.discardAndOpenHistory'))) onHistory() }}>{t('documentCollection.editor.viewAllHistory')}</button></section>
       <details className="dc-rule-details dc-inspector-rule-details"><summary>{t('documentCollection.editor.ruleDetails')}</summary><dl className="dc-facts"><dt>{t('documentCollection.editor.purpose')}</dt><dd>{detail.purposes.length ? detail.purposes.map(p => <span key={p.id}>{p.code} · {p.name_ja}</span>) : '—'}</dd><dt>{t('documentCollection.editor.condition')}</dt><dd>{detail.rule.applicability_condition_snapshot ?? t('documentCollection.editor.conditionUnset')}</dd><dt>{t('documentCollection.editor.retentionRule')}</dt><dd>{detail.rule.version_snapshot === null ? '—' : `v${detail.rule.version_snapshot}`}<br /><small>{detail.rule.source_snapshot ?? t('documentCollection.editor.sourceUnset')}</small></dd></dl></details>
     </>}
   </InspectorShell>

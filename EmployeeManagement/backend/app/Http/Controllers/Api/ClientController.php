@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Services\GoogleDriveProvisioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class ClientController extends Controller
 {
@@ -15,16 +18,27 @@ class ClientController extends Controller
         return response()->json(['clients' => Client::query()->latest()->get()]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, GoogleDriveProvisioningService $drive): JsonResponse
     {
         $client = Client::create($this->validated($request));
 
-        return response()->json(['client' => $client], 201);
+        return response()->json([
+            'client' => $client,
+            'drive' => $this->attemptDriveProvisioning($client, $drive),
+        ], 201);
     }
 
-    public function show(Client $client): JsonResponse
+    public function show(Client $client, GoogleDriveProvisioningService $drive): JsonResponse
     {
-        return response()->json(['client' => $client->load('caseFiles')]);
+        return response()->json([
+            'client' => $client->load('caseFiles'),
+            'drive' => $drive->clientState($client),
+        ]);
+    }
+
+    public function provisionDrive(Client $client, GoogleDriveProvisioningService $drive): JsonResponse
+    {
+        return response()->json(['drive' => $this->attemptDriveProvisioning($client, $drive)]);
     }
 
     public function update(Request $request, Client $client): JsonResponse
@@ -62,5 +76,21 @@ class ClientController extends Controller
             'email' => ['nullable', 'email', 'max:255'], 'nationality' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
         ]);
+    }
+
+    private function attemptDriveProvisioning(Client $client, GoogleDriveProvisioningService $drive): array
+    {
+        try {
+            $location = $drive->provisionClient($client);
+
+            return ['status' => 'ready', 'url' => $location->external_url];
+        } catch (Throwable $error) {
+            Log::warning('Client Google Drive provisioning failed.', [
+                'client_id' => $client->id,
+                'exception' => $error::class,
+            ]);
+
+            return ['status' => 'failed', 'url' => null, 'retryable' => true];
+        }
     }
 }

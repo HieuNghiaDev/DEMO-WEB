@@ -3,7 +3,9 @@ import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 're
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 import { CaseWorkspaceView } from '../features/case-workspace/CaseWorkspacePage'
+import type { WorkspaceTab } from '../features/case-workspace/types'
 import CaseFormPage from '../features/case-management/CaseFormPage'
+import DocumentEditorPage from '../features/document-creation/DocumentEditorPage'
 import NewCaseDialog from '../features/case-management/NewCaseDialog'
 import { caseApi, caseError } from '../features/case-management/api'
 import { caseTypeOptions, filterCases } from '../features/case-management/helpers'
@@ -25,17 +27,25 @@ export function CaseManagement({ user }: { user: CaseViewer }) {
   return <Routes>
     <Route index element={<CaseListPage user={user}/>}/>
     <Route path="new" element={<Navigate to="/quests" replace/>}/>
+    <Route path=":caseId/documents/:documentId/edit" element={<DocumentEditorRoute user={user}/>}/>
     <Route path=":caseId/edit" element={<CaseFormPage key="edit" user={user}/>}/>
     <Route path=":caseId" element={<CaseDetailRoute user={user}/>}/>
     <Route path="*" element={<Navigate to="/quests" replace/>}/>
   </Routes>
 }
+type CaseDetailLocationState = { caseNotice?: string; workspaceTab?: WorkspaceTab; collectionItemId?: number }
 function CaseDetailRoute({ user }: { user: CaseViewer }) {
   const { caseId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
   if (!caseId || !/^[1-9]\d*$/.test(caseId)) return <Navigate to="/quests" replace/>
-  return <CaseWorkspaceView key={caseId} user={user} caseId={Number(caseId)} onBack={() => navigate('/quests')} onEdit={() => navigate(`/quests/${caseId}/edit`)} initialNotice={location.state?.caseNotice}/>
+  const routeState = location.state as CaseDetailLocationState | null
+  return <CaseWorkspaceView key={caseId} user={user} caseId={Number(caseId)} onBack={() => navigate('/quests')} onEdit={() => navigate(`/quests/${caseId}/edit`)} initialNotice={routeState?.caseNotice} initialTab={routeState?.workspaceTab} initialCollectionItemId={routeState?.collectionItemId}/>
+}
+function DocumentEditorRoute({ user }: { user: CaseViewer }) {
+  const { caseId, documentId } = useParams()
+  if (!caseId || !documentId || !/^[1-9]\d*$/.test(caseId) || !/^[1-9]\d*$/.test(documentId)) return <Navigate to="/quests" replace/>
+  return <DocumentEditorPage key={`${caseId}:${documentId}`} caseId={Number(caseId)} documentId={Number(documentId)} canUpdate={user?.permission_names.includes('case.update') ?? false}/>
 }
 function CaseListPage({ user }: { user: CaseViewer }) {
   const { t } = useTranslation()

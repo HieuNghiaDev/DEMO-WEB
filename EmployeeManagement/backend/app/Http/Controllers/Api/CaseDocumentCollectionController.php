@@ -23,7 +23,14 @@ use Throwable;
 
 class CaseDocumentCollectionController extends Controller
 {
-    private const RELATIONS = ['documentType:id,code,name_ja,description', 'purposes:id,code,name_ja,sort_order', 'assignedEmployee:id,full_name'];
+    private const RELATIONS = [
+        'documentType:id,code,name_ja,description,handling_type',
+        'documentType.activeGenerationTemplates:id,document_type_id',
+        'documentType.activeSourceFiles:id,document_type_id,source_version,source_kind,mime_type',
+        'generatedDocument:id,case_document_id',
+        'purposes:id,code,name_ja,sort_order',
+        'assignedEmployee:id,full_name',
+    ];
 
     public function index(Request $request, CaseFile $caseFile): JsonResponse
     {

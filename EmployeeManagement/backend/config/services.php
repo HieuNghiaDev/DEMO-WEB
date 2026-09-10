@@ -37,8 +37,18 @@ return [
 
     'google_drive' => [
         'enabled' => env('GOOGLE_DRIVE_ENABLED', false),
+        'auth_mode' => env('GOOGLE_DRIVE_AUTH_MODE', 'service_account'),
         'file_id' => env('GOOGLE_DRIVE_FILE_ID'),
         'service_account_json' => env('GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON'),
+        'oauth_client_json_path' => env('GOOGLE_DRIVE_OAUTH_CLIENT_JSON_PATH'),
+        'oauth_token_path' => env('GOOGLE_DRIVE_OAUTH_TOKEN_PATH', 'google-drive/oauth-token.json'),
+        'oauth_redirect_uri' => env('GOOGLE_DRIVE_OAUTH_REDIRECT_URI', 'http://localhost:8000/google-drive/oauth/callback'),
+        'oauth_scope' => env('GOOGLE_DRIVE_OAUTH_SCOPE', 'https://www.googleapis.com/auth/drive'),
+        'root_folder_id' => env('GOOGLE_DRIVE_ROOT_FOLDER_ID'),
+        'write_enabled' => env('GOOGLE_DRIVE_WRITE_ENABLED', false),
+        'write_scope' => env('GOOGLE_DRIVE_WRITE_SCOPE', 'https://www.googleapis.com/auth/drive.file'),
+        'generated_documents_folder_id' => env('GOOGLE_DRIVE_GENERATED_DOCUMENTS_FOLDER_ID'),
+        'document_sources_folder_id' => env('GOOGLE_DRIVE_DOCUMENT_SOURCES_FOLDER_ID'),
         'visa_progress_sheet' => env('GOOGLE_DRIVE_VISA_PROGRESS_SHEET'),
         'visa_progress_cache_seconds' => env('GOOGLE_DRIVE_CACHE_SECONDS', 60),
     ],

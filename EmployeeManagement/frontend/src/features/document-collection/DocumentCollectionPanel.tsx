@@ -14,13 +14,13 @@ import DocumentCollectionInspector from './components/DocumentCollectionInspecto
 import BulkNecessityDialog, { type BulkNecessityAction } from './components/BulkNecessityDialog'
 import './documentCollection.css'
 
-export default function DocumentCollectionPanel({ caseId, canUpdate, canReviewDocuments, canReadEmployees, activities, onHistory, onBack, onChanged }: {
-  caseId: number; canUpdate: boolean; canReviewDocuments: boolean; canReadEmployees: boolean; activities: CaseActivity[]
+export default function DocumentCollectionPanel({ caseId, initialSelectedId, canUpdate, canReviewDocuments, canReadEmployees, activities, onHistory, onBack, onChanged }: {
+  caseId: number; initialSelectedId?: number; canUpdate: boolean; canReviewDocuments: boolean; canReadEmployees: boolean; activities: CaseActivity[]
   onHistory: () => void; onBack: () => void; onChanged: () => void
 }) {
   const { t } = useTranslation()
   const state = useDocumentCollection(caseId, canReadEmployees)
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [selectedId, setSelectedId] = useState<number | null>(initialSelectedId ?? null)
   const [selectionMode, setSelectionMode] = useState(false)
   const [bulkSelectedIds, setBulkSelectedIds] = useState<number[]>([])
   const [bulkAction, setBulkAction] = useState<BulkNecessityAction | null>(null)

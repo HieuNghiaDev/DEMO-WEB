@@ -14,6 +14,30 @@ flowchart LR
 
 Frontend chỉ giữ token ở `sessionStorage` hoặc `localStorage`; mọi quyết định về nhân viên, quyền sở hữu chấm công và dữ liệu nhạy cảm đều được thực hiện ở backend.
 
+## Generic PDF generation
+
+`CaseDocumentCreationController::pdf` kiểm tra ownership và middleware Sanctum/case.view. `DocumentPdfRenderer` chỉ nhận instance approved, dùng template relation đã pin và chọn renderer bằng `renderer_type`. `GenericLegalDocumentRenderer` xử lý `generic_legal_document`: parse template_body bằng DOM không nạp external entities, chỉ giữ tag cho phép và bỏ mọi attribute; thay `{{ field_key }}` trong text node bằng approved_data đã escape (không Blade/eval). Marker `<section data-template-fields>` hiện hữu mở rộng thành các field của pinned schema. Script/style/image/link/PDF directive và tài nguyên bên ngoài không được chuyển tới mPDF.
+
+mPDF 8.2.x nhúng subset font Sun-ExtA được cung cấp trong dependency (không copy font hệ thống). PDF là A4 dọc; template skeleton v1 có ghi chú chưa có nội dung hợp đồng chính thức, còn C‑001 v2 hiển thị rõ đây là `参考テンプレート / 事務所承認前` và chỉ chứa cấu trúc cùng giá trị do operator nhập, không tự thêm điều khoản pháp lý. Bộ đệm metrics font tại `storage/framework/cache/document-pdf` cần writable; bytes PDF chỉ tồn tại trong memory/response. Không đọc Client/CaseFile live để dựng nội dung hoặc tên khách hàng; filename dùng case ID ổn định và tên trong approved_data. Tên/code văn bản vẫn từ metadata document type liên kết với pinned template, như API editor hiện có; không đảm bảo title bất biến nếu quản trị sửa master trực tiếp. Muốn tái tạo pixel-identical dài hạn vẫn cần pin renderer/font và đóng băng metadata trong phase riêng.
+
+## Generated-document Drive storage
+
+`GeneratedDocumentStorageService` tái sử dụng `DocumentPdfRenderer::render/filename` và client `GoogleDriveService` hiện hữu. Không có PDF/Drive service theo C-001. Xác thực được chọn bằng `GOOGLE_DRIVE_AUTH_MODE`: `service_account` giữ nguyên JWT cho Shared Drive/company, còn `oauth_user` chỉ được phép ở local và lưu refresh token trong private Laravel storage. OAuth callback dùng state theo session, retry ngắn chỉ cho lỗi transport và không trả credential/token qua API. Không thêm Google SDK.
+
+`GoogleDriveProvisioningService` dùng `external_storage_locations` để giữ folder ID theo provider/entity/location, không dò theo tên ở mỗi request. Local OAuth tái sử dụng root `THEMIS_TESTING`, rồi tạo/reuse `Client/CL-<ID>_<name>/CASE-<ID>_<title>/作成書類`. Tạo Client/Case trong MySQL hoàn tất trước khi gọi Drive; lỗi Drive không rollback entity và có endpoint retry. Service Account vẫn dùng `GOOGLE_DRIVE_GENERATED_DOCUMENTS_FOLDER_ID` cho destination Shared Drive. Không chia sẻ public hoặc overwrite file.
+
+Lưu artifact chỉ sau upload; lock case → checklist item → instance tương thích collection, unique artifact bảo vệ DB. POST file không tự retry. File có appProperties định danh từ hash app key + instance + approval time; request sau tra tag trước để phục hồi upload đã thành công nhưng DB thất bại. DB lỗi sau Drive thành công ghi log chỉ instance ID/file ID/recovery key, không credential, token, PDF hay thông tin khách hàng. Marker trong cache được ghi trước upload và giữ lại cho kết quả chưa rõ/success; khi marker tồn tại nhưng file chưa tìm thấy, yêu cầu can thiệp thay vì tạo bản trùng. Cần shared persistent cache giữa các worker; không flush marker khi đang xử lý sự cố. Mất cả cache và artifact trong lúc Google chưa trả kết quả tìm kiếm không bảo đảm exactly-once; không có distributed transaction với Drive. Thay APP_KEY/destination trong lúc cần recovery cũng cần operator kiểm tra trước.
+
+Artifact đã lưu được coi là tham chiếu lịch sử; mỗi revision approved tạo một `case_generated_documents` riêng và có thể lưu một Drive artifact riêng với filename chứa `vN`. Revision mới copy approved snapshot vào draft mới, giữ nguyên row, PDF và Drive link của mọi phiên bản trước. Hệ thống không tự kiểm tra file đã bị xóa ngoài Drive. Quyền Drive link vẫn do Shared Drive quản lý. Không upload thật từ automated tests.
+
+## Document source master preparation
+
+`document_types` là master duy nhất (78 mã hiện tại). Cột nullable `handling_type` phân loại capability theo `office_generated`, `collected`, `official_form`, `reference_only`; null có nghĩa là chưa được operator phân loại, không phải một giá trị ngầm định. Chỉ C‑001 được seed `office_generated` vì đây là loại duy nhất hiện có generation template làm bằng chứng xác định. Không suy đoán 77 loại còn lại từ code hoặc filename.
+
+`document_source_files` là registry metadata của nguồn master, không chứa binary. Mỗi row liên kết bằng `document_type_id`, có source version/kind, tên gốc, MIME, provider, Drive file ID/URL hoặc relative local reference, SHA‑256 và metadata vận hành. Unique `(document_type_id, source_version, source_kind)` ngăn ghi đè cùng identity; các trường nguồn vật lý bất biến ở Eloquent, thay file phải đăng ký source version mới. `original`, `derived_template`, và case-specific `generated_document_artifacts` là ba khái niệm tách biệt.
+
+`DocumentSourceImportPlanner` chỉ đọc folder thật, liệt kê file, nhận mapping exact relative path → stable document code, kiểm tra format/target/checksum/duplicate và báo unmapped hoặc ambiguous. Nó có thể đưa ra gợi ý khi đường dẫn chứa đúng một token code master, nhưng mọi gợi ý đều `requires_confirmation` và `plan()` vẫn bắt buộc manifest xác định; planner không tự tạo row, upload hoặc dùng filename làm identity. Master source Drive phải dùng root riêng qua `GOOGLE_DRIVE_DOCUMENT_SOURCES_FOLDER_ID`, khuyến nghị `THEMIS_TESTING/Master/DocumentSources`; không trỏ vào `Client/Case/作成書類`. Chưa có mapping master tương đương trong local DB nên migration/config không tạo folder Drive.
+
 ## Frontend
 
 | Tệp/khu vực | Trách nhiệm |
@@ -79,7 +103,7 @@ Mọi URL khác được chuyển về `/`. `BrowserRouter` dùng `import.meta.e
 | `app/Http/Middleware/SecurityEventAudit.php` | Ghi các response 401/403/429, khử trùng lặp theo IP/method/path/người dùng trong một phút. |
 | `app/Services/AttendanceExcelService.php` | Đồng bộ attendance và work session vào workbook dùng chung `storage/app/attendance/attendance.xlsx`. |
 | `app/Services/PersonalAttendanceReportService.php` | Tạo workbook trong bộ nhớ chỉ gồm dữ liệu của nhân viên hiện tại, phục vụ download. |
-| `app/Services/GoogleDriveService.php` | Xác thực Service Account chỉ với scope `drive.readonly`, lấy metadata và tải workbook Google Drive vào temporary storage rồi xoá sau khi parse. |
+| `app/Services/GoogleDriveService.php` | Service-account JWT: đọc workbook với `drive.readonly`; upload PDF approved qua write scope riêng khi operator bật cấu hình. Workbook tạm được xóa sau khi parse. |
 | `app/Services/VisaProgressSpreadsheetService.php` | Dò sheet/header Excel, chuẩn hoá ngày/giá trị, chọn deadline vận hành, giữ nguyên status lạ và dựng summary cho dashboard. |
 | `app/Services/SecurityAuditLogger.php` | Lưu audit log theo hướng fail-open, băm định danh và bỏ các khóa nhạy cảm trước khi ghi. |
 | `app/Models/*.php` | Eloquent model, mass-assignable fields, casts và các quan hệ được mô tả trong [mô hình dữ liệu](DATA_MODEL.md). |

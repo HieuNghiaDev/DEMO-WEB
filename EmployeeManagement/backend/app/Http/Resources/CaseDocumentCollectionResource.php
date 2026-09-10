@@ -10,12 +10,27 @@ class CaseDocumentCollectionResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $handlingType = $this->documentType?->handling_type;
+        $generationSupported = $handlingType === 'office_generated'
+            && ($this->generatedDocument !== null
+                || $this->documentType->activeGenerationTemplates->isNotEmpty());
+
         return [
             'id' => $this->id,
             'title' => $this->title,
             'document_type' => $this->documentType ? [
                 'id' => $this->documentType->id, 'code' => $this->documentType->code,
                 'name_ja' => $this->documentType->name_ja,
+                'handling_type' => $handlingType,
+                // Compatibility field retained for the existing frontend.
+                'creation_supported' => $generationSupported,
+                'capabilities' => [
+                    'generation_supported' => $generationSupported,
+                    'collection_only' => $handlingType === 'collected',
+                    'official_form' => $handlingType === 'official_form',
+                    'reference_only' => $handlingType === 'reference_only',
+                    'source_available' => $this->documentType->activeSourceFiles->isNotEmpty(),
+                ],
             ] : null,
             'purposes' => $this->purposes->map(fn ($purpose) => [
                 'id' => $purpose->id, 'code' => $purpose->code, 'name_ja' => $purpose->name_ja,

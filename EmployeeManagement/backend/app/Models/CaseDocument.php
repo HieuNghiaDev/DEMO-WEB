@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class CaseDocument extends Model
@@ -93,9 +95,20 @@ class CaseDocument extends Model
         return $this->belongsTo(Employee::class, 'assigned_employee_id');
     }
 
-    public function employeeTasks(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function employeeTasks(): HasMany
     {
         return $this->hasMany(EmployeeTask::class);
+    }
+
+    public function generatedDocument(): HasOne
+    {
+        // Compatibility relation used by collection resources; mutations use generatedDocuments().
+        return $this->hasOne(CaseGeneratedDocument::class)->orderByDesc('version')->orderByDesc('id');
+    }
+
+    public function generatedDocuments(): HasMany
+    {
+        return $this->hasMany(CaseGeneratedDocument::class);
     }
 
     public function necessityDecidedBy(): BelongsTo

@@ -21,6 +21,7 @@ import {
   Scale,
   Search,
   ShieldCheck,
+  SlidersHorizontal,
   UserCog,
   UserRound,
   Users,
@@ -421,9 +422,12 @@ export default function OrganizationDesign() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-5 px-4 pb-12 pt-4 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-[1600px] space-y-4 px-2.5 pb-12 pt-14 sm:px-4 sm:pt-5 lg:px-6">
       {/* 1. Header Area */}
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900" aria-labelledby="organization-title">
+      <section
+        className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+        aria-labelledby="organization-title"
+      >
         <header className="flex flex-col justify-between gap-4 border-b border-slate-100 p-4 dark:border-slate-800/80 sm:flex-row sm:items-center sm:p-5">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
@@ -461,75 +465,71 @@ export default function OrganizationDesign() {
             </button>
           </div>
         </header>
-
-        {/* KPI Summary Cards */}
-        <div className="grid grid-cols-2 divide-y divide-slate-100 bg-slate-50/50 dark:divide-slate-800 dark:bg-slate-950/20 sm:grid-cols-5 sm:divide-x sm:divide-y-0">
-          <KpiSummaryCard
-            title="全社員"
-            value={summary.total}
-            icon={<Users size={16} />}
-            isActive={statusFilter === 'all'}
-            onClick={() => setStatusFilter('all')}
-            dotClass="bg-slate-400"
-          />
-          <KpiSummaryCard
-            title="勤務中"
-            value={summary.working}
-            icon={<BriefcaseBusiness size={16} />}
-            isActive={statusFilter === 'working'}
-            onClick={() => handleKpiStatusClick('working')}
-            dotClass="bg-emerald-500"
-            badgeClass="text-emerald-600 dark:text-emerald-400"
-          />
-          <KpiSummaryCard
-            title="休憩中"
-            value={summary.break}
-            icon={<Coffee size={16} />}
-            isActive={statusFilter === 'break'}
-            onClick={() => handleKpiStatusClick('break')}
-            dotClass="bg-amber-500"
-            badgeClass="text-amber-600 dark:text-amber-400"
-          />
-          <KpiSummaryCard
-            title="外出中"
-            value={summary.outside}
-            icon={<MapPin size={16} />}
-            isActive={statusFilter === 'outside'}
-            onClick={() => handleKpiStatusClick('outside')}
-            dotClass="bg-sky-500"
-            badgeClass="text-sky-600 dark:text-sky-400"
-          />
-          <KpiSummaryCard
-            title="オフライン"
-            value={summary.offline}
-            icon={<UserRound size={16} />}
-            isActive={statusFilter === 'offline'}
-            onClick={() => handleKpiStatusClick('offline')}
-            dotClass="bg-slate-400"
-            className="col-span-2 sm:col-span-1"
-          />
-        </div>
       </section>
 
       {errorMessage && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
           {errorMessage}
         </div>
       )}
 
-      {/* 2. Search, Filter Toolbar & Office Selector */}
-      <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        {/* Office Segmented Switcher */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+      {/* 2. KPI Summary Cards */}
+      <section className="organization-kpi-grid grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <KpiSummaryCard
+          title="全社員"
+          value={summary.total}
+          icon={<Users size={16} />}
+          isActive={statusFilter === 'all'}
+          onClick={() => setStatusFilter('all')}
+          accentColor="indigo"
+        />
+        <KpiSummaryCard
+          title="勤務中"
+          value={summary.working}
+          icon={<BriefcaseBusiness size={16} />}
+          isActive={statusFilter === 'working'}
+          onClick={() => handleKpiStatusClick('working')}
+          accentColor="emerald"
+        />
+        <KpiSummaryCard
+          title="休憩中"
+          value={summary.break}
+          icon={<Coffee size={16} />}
+          isActive={statusFilter === 'break'}
+          onClick={() => handleKpiStatusClick('break')}
+          accentColor="amber"
+        />
+        <KpiSummaryCard
+          title="外出中"
+          value={summary.outside}
+          icon={<MapPin size={16} />}
+          isActive={statusFilter === 'outside'}
+          onClick={() => handleKpiStatusClick('outside')}
+          accentColor="sky"
+        />
+        <KpiSummaryCard
+          title="オフライン"
+          value={summary.offline}
+          icon={<UserRound size={16} />}
+          isActive={statusFilter === 'offline'}
+          onClick={() => handleKpiStatusClick('offline')}
+          accentColor="slate"
+        />
+      </section>
+
+      {/* 3. Office Selector & Search Toolbar */}
+      <section className="space-y-4 pt-1">
+        {/* Office Segmented Switcher & View Switcher */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 text-xs font-semibold text-slate-500 dark:text-slate-400">所属事務所:</span>
+            <span className="mr-2 text-[12px] font-bold text-slate-700 dark:text-slate-300">所属事務所:</span>
             <button
               type="button"
               onClick={() => setSelectedOfficeId(null)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              className={`rounded-full px-3.5 py-1 text-xs font-semibold transition ${
                 selectedOfficeId === null
-                  ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-500/20'
-                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-white/[0.08] dark:bg-[#15191F] dark:text-slate-400 dark:hover:bg-slate-800'
               }`}
             >
               全事務所 ({employees.length})
@@ -542,15 +542,19 @@ export default function OrganizationDesign() {
                   key={office.id}
                   type="button"
                   onClick={() => setSelectedOfficeId(isSelected ? null : office.id)}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-semibold transition ${
                     isSelected
-                      ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-500/20'
-                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-white/[0.08] dark:bg-[#15191F] dark:text-slate-400 dark:hover:bg-slate-800'
                   }`}
                 >
-                  <Building2 size={13} className={isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'} />
+                  <Building2 size={13} className={isSelected ? 'text-white' : 'text-slate-400'} />
                   <span>{office.name}</span>
-                  <span className="rounded-full bg-slate-200/60 px-1.5 py-0.2 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  <span
+                    className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                      isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600 dark:bg-white/[0.08] dark:text-slate-300'
+                    }`}
+                  >
                     {count}
                   </span>
                 </button>
@@ -558,66 +562,78 @@ export default function OrganizationDesign() {
             })}
           </div>
 
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-800/60">
+          {/* Right tools: 組織図で見る + View Mode Toggle */}
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              aria-label="テーブル表示"
-              title="テーブル表示"
-              onClick={() => setViewMode('table')}
-              className={`rounded-md p-1.5 transition ${
-                viewMode === 'table'
-                  ? 'bg-white text-indigo-600 shadow-xs dark:bg-slate-700 dark:text-indigo-300'
-                  : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-              }`}
+              onClick={() => setViewMode((m) => (m === 'table' ? 'grid' : 'table'))}
+              className="inline-flex h-[34px] items-center gap-1.5 rounded-lg bg-white border border-slate-200 px-3 text-xs font-semibold text-indigo-600 transition hover:bg-slate-50 dark:border-white/[0.08] dark:bg-[#15191F] dark:text-indigo-400 dark:hover:bg-slate-800/60"
             >
-              <LayoutList size={15} />
+              <Building2 size={13} className="text-indigo-500 dark:text-indigo-400" />
+              <span>組織図で見る</span>
             </button>
-            <button
-              type="button"
-              aria-label="カード表示"
-              title="カード表示"
-              onClick={() => setViewMode('grid')}
-              className={`rounded-md p-1.5 transition ${
-                viewMode === 'grid'
-                  ? 'bg-white text-indigo-600 shadow-xs dark:bg-slate-700 dark:text-indigo-300'
-                  : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-              }`}
-            >
-              <LayoutGrid size={15} />
-            </button>
+
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-1 rounded-lg bg-white border border-slate-200 p-0.5 dark:border-white/[0.08] dark:bg-[#15191F]">
+              <button
+                type="button"
+                aria-label="テーブル表示"
+                title="テーブル表示"
+                onClick={() => setViewMode('table')}
+                className={`rounded-md p-1.5 transition ${
+                  viewMode === 'table'
+                    ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400'
+                    : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                }`}
+              >
+                <LayoutList size={15} />
+              </button>
+              <button
+                type="button"
+                aria-label="カード表示"
+                title="カード表示"
+                onClick={() => setViewMode('grid')}
+                className={`rounded-md p-1.5 transition ${
+                  viewMode === 'grid'
+                    ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400'
+                    : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                }`}
+              >
+                <LayoutGrid size={15} />
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Toolbar Inputs */}
-        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           {/* Search Box */}
-          <div className="relative min-w-0 flex-1">
-            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <div className="relative min-w-0 flex-1 max-w-[600px]">
+            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
-              type="text"
+              type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="社員名・フリガナ・社員コード・役職・メールで検索..."
-              className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-xs text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+              className="h-[36px] w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-[13px] text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 dark:border-white/[0.08] dark:bg-[#15191F] dark:text-slate-100 dark:placeholder:text-slate-500"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               >
                 <X size={14} />
               </button>
             )}
           </div>
 
-          {/* Status Filter */}
-          <div className="flex items-center gap-2">
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as WorkStatus | 'all')}
-              className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              className="h-[36px] rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 dark:border-white/[0.08] dark:bg-[#15191F] dark:text-slate-200"
             >
               <option value="all">すべての勤務状態</option>
               <option value="working">勤務中</option>
@@ -626,11 +642,10 @@ export default function OrganizationDesign() {
               <option value="offline">オフライン</option>
             </select>
 
-            {/* Role Filter */}
             <select
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
-              className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              className="h-[36px] rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 dark:border-white/[0.08] dark:bg-[#15191F] dark:text-slate-200"
             >
               <option value="all">すべてのアクセスレベル</option>
               <option value="level_5">レベル 5 (システム管理)</option>
@@ -640,24 +655,30 @@ export default function OrganizationDesign() {
               <option value="level_1">レベル 1 (基本業務)</option>
             </select>
 
-            {/* Reset Button */}
+            <button
+              type="button"
+              className="inline-flex h-[36px] items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-white/[0.08] dark:bg-[#15191F] dark:text-slate-200 dark:hover:bg-slate-800/50"
+            >
+              <SlidersHorizontal size={14} className="text-slate-400" />
+              <span>詳細条件</span>
+            </button>
+
             {hasActiveFilters && (
               <button
                 type="button"
                 onClick={resetAllFilters}
-                className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                className="inline-flex h-[36px] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-white/[0.08] dark:bg-[#181b20] dark:text-slate-300 dark:hover:bg-slate-800"
                 title="条件をクリア"
               >
                 <RotateCcw size={13} />
-                <span className="hidden md:inline">リセット</span>
               </button>
             )}
           </div>
         </div>
       </section>
 
-      {/* 3. Access-Level Guide Collapsible */}
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
+{/* 3. Access-Level Guide Collapsible */}
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs dark:border-white/[0.08] dark:bg-[#101217]">
         <button
           type="button"
           aria-expanded={isAccessGuideOpen}
@@ -832,43 +853,72 @@ export default function OrganizationDesign() {
 function KpiSummaryCard({
   title,
   value,
+  unit = '名',
   icon,
   isActive = false,
   onClick,
-  dotClass = 'bg-slate-400',
-  badgeClass = 'text-slate-900 dark:text-white',
-  className = '',
+  accentColor = 'indigo',
 }: {
   title: string
   value: number
+  unit?: string
   icon: ReactNode
   isActive?: boolean
   onClick?: () => void
-  dotClass?: string
-  badgeClass?: string
-  className?: string
+  accentColor?: 'indigo' | 'emerald' | 'amber' | 'sky' | 'slate'
 }) {
+  const colorMap = {
+    indigo: {
+      box: 'bg-indigo-50 text-indigo-600 border-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20',
+      active: 'border-indigo-500 ring-1 ring-inset ring-indigo-500/30 bg-white dark:border-indigo-500/60 dark:bg-[#181D24]',
+    },
+    emerald: {
+      box: 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20',
+      active: 'border-emerald-500 ring-1 ring-inset ring-emerald-500/30 bg-white dark:border-emerald-500/60 dark:bg-[#181D24]',
+    },
+    amber: {
+      box: 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20',
+      active: 'border-amber-500 ring-1 ring-inset ring-amber-500/30 bg-white dark:border-amber-500/60 dark:bg-[#181D24]',
+    },
+    sky: {
+      box: 'bg-sky-50 text-sky-600 border-sky-100 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20',
+      active: 'border-sky-500 ring-1 ring-inset ring-sky-500/30 bg-white dark:border-sky-500/60 dark:bg-[#181D24]',
+    },
+    slate: {
+      box: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-[#181b20] dark:text-slate-400 dark:border-slate-700',
+      active: 'border-slate-400 ring-1 ring-inset ring-slate-500/20 bg-white dark:border-slate-700 dark:bg-[#181D24]',
+    },
+  }
+
+  const currentTheme = colorMap[accentColor]
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`group relative flex items-center gap-3 p-3.5 text-left transition hover:bg-slate-100/60 dark:hover:bg-slate-800/40 sm:p-4 ${className} ${
-        isActive ? 'bg-indigo-50/50 dark:bg-indigo-950/20' : ''
+      className={`group flex min-h-[82px] h-[84px] items-center gap-3.5 rounded-xl border px-4 py-3 text-left transition ${
+        isActive
+          ? currentTheme.active
+          : 'border-slate-200 bg-white hover:border-slate-300 dark:border-white/[0.08] dark:bg-[#15191F] dark:hover:border-white/[0.14]'
       }`}
     >
-      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300`}>
+      <div
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border text-sm ${currentTheme.box}`}
+      >
         {icon}
       </div>
-      <div className="min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />
-          <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{title}</span>
+
+      <div className="flex min-w-0 flex-col">
+        <span className="truncate text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-0.5">
+          {title}
+        </span>
+        <div className="flex items-baseline gap-1">
+          <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums leading-none">
+            {value}
+          </span>
+          <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">{unit}</span>
         </div>
-        <p className={`mt-0.5 text-xl font-semibold tabular-nums ${badgeClass}`}>{value}</p>
       </div>
-      {isActive && (
-        <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400" />
-      )}
     </button>
   )
 }
