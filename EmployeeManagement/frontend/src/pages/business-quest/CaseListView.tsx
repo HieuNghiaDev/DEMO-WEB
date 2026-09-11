@@ -2,21 +2,25 @@ import { useEffect, useRef, useState } from 'react'
 import {
   Briefcase,
   Check,
+  CircleAlert,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
+  FileCheck2,
+  Files,
   MoreHorizontal,
   Plus,
   RefreshCw,
   Search,
   SlidersHorizontal,
+  TimerReset,
   UserCheck,
   X,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { CaseEmployee } from '../../features/case-management/types'
-import { CasePageHeader } from '../../features/case-management/CasePrimitives'
+import { CasePageHeader, CaseSummaryStrip } from '../../features/case-management/CasePrimitives'
 import { safeProgress, statusConfig } from './helpers'
 import { generatedCaseTitle } from '../../features/case-management/helpers'
 import type { BusinessCase, CaseQuickFilter, CaseStatus } from './types'
@@ -88,6 +92,8 @@ export default function CaseListView(props: Props) {
   const totalDocuments = props.cases.reduce((total, item) => total + item.documentsTotal, 0)
   const confirmed = props.cases.reduce((total, item) => total + item.documentsDone, 0)
   const docConfirmationRate = totalDocuments ? safeProgress(confirmed, totalDocuments) : 29
+  const inProgressCount = count('in_progress')
+  const needsAttentionCount = count('waiting') + count('reviewing')
 
   const statusLabel = (status: CaseStatus) =>
     t(`cases.status.${status === 'in_progress' ? 'inProgress' : status === 'waiting_payment' ? 'waitingPayment' : status}`)
@@ -105,14 +111,14 @@ export default function CaseListView(props: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-16 text-slate-800 dark:bg-[#0B0F19] dark:text-slate-100" aria-label={t('cases.list.ariaLabel')}>
-      <div className="mx-auto max-w-[1550px] px-6 pt-5 sm:px-8">
-        <section className="cm-surface" aria-label={t('cases.list.ariaLabel')}>
+    <div className="cm-case-list-page min-h-screen pb-16 text-slate-800 dark:text-slate-100" aria-label={t('cases.list.ariaLabel')}>
+      <div className="cm-case-list-shell">
+        <section className="cm-case-list-hero" aria-label={t('cases.list.ariaLabel')}>
           <CasePageHeader
             title={t('cases.list.title')}
             description={t('cases.list.description')}
             kicker={<><Briefcase size={12} />{t('cases.list.kicker')}</>}
-            showIllustration={false}
+            showIllustration
             actions={<>
               <button type="button" className="dc-button" disabled={props.loading} onClick={props.onRefresh}>
                 <RefreshCw size={15} />{t('cases.list.refresh')}
@@ -122,130 +128,111 @@ export default function CaseListView(props: Props) {
               </button>
             </>}
           />
+          <CaseSummaryStrip items={[
+            { label: '全案件', value: props.cases.length, unit: '件', icon: Files, iconVariant: 'blue', sparkline: true },
+            { label: '対応中', value: inProgressCount, unit: '件', icon: TimerReset, iconVariant: 'purple' },
+            { label: '要確認', value: needsAttentionCount, unit: '件', icon: CircleAlert, iconVariant: 'amber' },
+            { label: '書類確認率', value: `${docConfirmationRate}%`, icon: FileCheck2, iconVariant: 'green', progress: docConfirmationRate },
+          ]} />
         </section>
       </div>
 
       {/* Main Workspace Area */}
-      <main className="mx-auto max-w-[1550px] space-y-4 px-6 pt-5 sm:px-8">
-        {/* 2. Compact KPI & Quick Status Filter Strip */}
-        <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200/90 bg-white px-5 py-3 shadow-xs dark:border-slate-800 dark:bg-[#131B2E]">
+      <main className="cm-case-list-shell cm-case-list-workspace">
+        {/* Search, filters and quick statuses share one operational toolbar. */}
+        <section className="cm-case-toolbar">
+          <div className="cm-case-toolbar-primary">
+            <div className="relative min-w-0 flex-1">
+              <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                value={props.keyword}
+                onChange={event => props.onKeywordChange(event.target.value)}
+                placeholder="依頼者・案件番号・担当者で検索…"
+                className="cm-case-control w-full pl-10 pr-9"
+              />
+              {props.keyword && (
+                <button
+                  type="button"
+                  aria-label="検索語をクリア"
+                  onClick={() => props.onKeywordChange('')}
+                  className="cm-case-clear"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            <div className="cm-case-filter-controls">
+              <div className="relative min-w-0">
+                <select
+                  aria-label="案件状態"
+                  value={props.status}
+                  onChange={event => props.onStatusChange(event.target.value as 'all' | CaseStatus)}
+                  className="cm-case-control cm-case-select"
+                >
+                  <option value="all">{t('cases.list.allStatuses')}</option>
+                  {Object.keys(statusConfig).map(value => (
+                    <option key={value} value={value}>{statusLabel(value as CaseStatus)}</option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="cm-case-select-icon" />
+              </div>
+
+              <div className="relative min-w-0">
+                <select
+                  aria-label="事件類型"
+                  value={props.caseType}
+                  onChange={event => props.onCaseTypeChange(event.target.value)}
+                  className="cm-case-control cm-case-select"
+                >
+                  <option value="all">{t('cases.list.allCaseTypes')}</option>
+                  {props.caseTypes.map(type => (
+                    <option key={type} value={type}>{caseTypeLabel(type)}</option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="cm-case-select-icon" />
+              </div>
+
+              <button
+                type="button"
+                aria-expanded={isAdvancedFilterOpen}
+                onClick={() => setIsAdvancedFilterOpen(!isAdvancedFilterOpen)}
+                className={`cm-case-filter-button ${isAdvancedFilterOpen ? 'is-active' : ''}`}
+              >
+                <SlidersHorizontal size={14} />
+                <span>詳細条件</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="cm-case-toolbar-secondary">
           {/* Quick Filters */}
-          <nav className="flex flex-wrap items-center gap-1 sm:gap-2" aria-label={t('cases.list.quickFiltersAria')}>
-            {quickTabs.map((tab, index) => {
+          <nav className="cm-case-quick-filters" aria-label={t('cases.list.quickFiltersAria')}>
+            {quickTabs.map(tab => {
               const isSelected = tab === props.quickFilter
               return (
-                <div key={tab} className="flex items-center">
-                  {index > 0 && <div className="mx-2 h-4 w-px bg-slate-200 dark:bg-slate-700" />}
-                  <button
-                    type="button"
-                    aria-pressed={isSelected}
-                    onClick={() => props.onQuickFilterChange(tab)}
-                    className={`inline-flex items-center gap-1.5 py-1 px-1.5 text-xs font-medium transition ${
-                      isSelected
-                        ? 'font-bold text-[#2563EB] dark:text-blue-400'
-                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    <span>{tabLabel(tab)}</span>
-                    <span
-                      className={`inline-flex h-4 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11px] tabular-nums ${
-                        isSelected
-                          ? 'bg-[#2563EB] font-bold text-white shadow-xs'
-                          : 'bg-slate-100 font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-                      }`}
-                    >
-                      {count(tab)}
-                    </span>
-                  </button>
-                </div>
+                <button
+                  key={tab}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => props.onQuickFilterChange(tab)}
+                  className={`cm-case-quick-filter ${isSelected ? 'is-active' : ''}`}
+                >
+                  <span>{tabLabel(tab)}</span>
+                  <span className="cm-case-quick-count">{count(tab)}</span>
+                </button>
               )
             })}
           </nav>
-
-          {/* Secondary KPI metric: Document Confirmation Rate */}
-          <div className="flex items-center gap-3 self-end sm:self-auto">
-            <div className="hidden h-5 w-px bg-slate-200 dark:bg-slate-700 lg:block" />
-            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">書類確認率</span>
-            <span className="text-sm font-extrabold tabular-nums text-slate-900 dark:text-white">
-              {docConfirmationRate}%
+            <span className="cm-case-result-count" aria-live="polite">
+              表示中 <strong>{props.filteredCases.length}</strong> / {props.cases.length}件
             </span>
-            <div className="h-2.5 w-36 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-              <div
-                className="h-full rounded-full bg-[#10B981] transition-all duration-500"
-                style={{ width: `${docConfirmationRate}%` }}
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* 3. Search & Filter Bar */}
-        <section className="flex flex-wrap items-center justify-between gap-3">
-          {/* Search Box */}
-          <div className="relative min-w-[280px] flex-1">
-            <Search size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="search"
-              value={props.keyword}
-              onChange={event => props.onKeywordChange(event.target.value)}
-              placeholder="依頼者・案件番号・担当者で検索..."
-              className="h-10 w-full rounded-lg border border-slate-200/90 bg-white pl-10 pr-8 text-xs text-slate-800 shadow-2xs outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-[#131B2E] dark:text-slate-100 dark:placeholder:text-slate-500"
-            />
-            {props.keyword && (
-              <button
-                type="button"
-                onClick={() => props.onKeywordChange('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
-
-          {/* Dropdown Filters */}
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            <div className="relative">
-              <select
-                value={props.status}
-                onChange={event => props.onStatusChange(event.target.value as 'all' | CaseStatus)}
-                className="h-10 appearance-none rounded-lg border border-slate-200/90 bg-white pl-3.5 pr-8 text-xs font-medium text-slate-700 shadow-2xs outline-none transition focus:border-blue-500 dark:border-slate-800 dark:bg-[#131B2E] dark:text-slate-200 cursor-pointer"
-              >
-                <option value="all">{t('cases.list.allStatuses')}</option>
-                {Object.keys(statusConfig).map(value => (
-                  <option key={value} value={value}>{statusLabel(value as CaseStatus)}</option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            </div>
-
-            <div className="relative">
-              <select
-                value={props.caseType}
-                onChange={event => props.onCaseTypeChange(event.target.value)}
-                className="h-10 appearance-none rounded-lg border border-slate-200/90 bg-white pl-3.5 pr-8 text-xs font-medium text-slate-700 shadow-2xs outline-none transition focus:border-blue-500 dark:border-slate-800 dark:bg-[#131B2E] dark:text-slate-200 cursor-pointer"
-              >
-                <option value="all">{t('cases.list.allCaseTypes')}</option>
-                {props.caseTypes.map(type => (
-                  <option key={type} value={type}>{caseTypeLabel(type)}</option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsAdvancedFilterOpen(!isAdvancedFilterOpen)}
-              className={`inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200/90 bg-white px-4 text-xs font-medium text-slate-700 shadow-2xs transition hover:bg-slate-50 dark:border-slate-800 dark:bg-[#131B2E] dark:text-slate-200 dark:hover:bg-slate-800/60 ${
-                isAdvancedFilterOpen ? 'border-blue-500 text-blue-600 bg-blue-50/40' : ''
-              }`}
-            >
-              <SlidersHorizontal size={14} className={isAdvancedFilterOpen ? 'text-blue-500' : 'text-slate-400'} />
-              <span>詳細条件</span>
-            </button>
           </div>
         </section>
 
         {/* 4. Table / Customer Case List (Primary Visual Focus) */}
-        <section className="relative overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-xs dark:border-slate-800 dark:bg-[#131B2E]" ref={menuRef}>
+        <section className="cm-case-table" ref={menuRef}>
           {props.loading && (
             <div className="p-8 text-center" role="status" aria-label={t('cases.list.loading')}>
               <RefreshCw size={24} className="mx-auto animate-spin text-indigo-500" />
@@ -280,8 +267,8 @@ export default function CaseListView(props: Props) {
 
           {!props.loading && !props.error && !!visible.length && (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-slate-200/80 bg-[#FAFBFD] text-xs font-bold text-slate-700 dark:border-slate-800 dark:bg-[#0F172A] dark:text-slate-300">
+              <table className="cm-case-data-table w-full text-left text-xs">
+                <thead>
                   <tr>
                     <th scope="col" className="py-4 pl-6 pr-4">依頼者 / 案件</th>
                     <th scope="col" className="px-4 py-4">事件類型 / 目標完了日</th>
@@ -303,7 +290,7 @@ export default function CaseListView(props: Props) {
                         key={item.id}
                         data-status={item.status}
                         onClick={() => props.onOpen(item.id)}
-                        className="group cursor-pointer transition hover:bg-[#F8FAFC] dark:hover:bg-white/[0.02]"
+                        className="group cursor-pointer"
                       >
                         {/* 1. Client & Case */}
                         <td className="py-4 pl-6 pr-4">
@@ -410,7 +397,7 @@ export default function CaseListView(props: Props) {
 
                         {/* 4. State Badge (Pixel-matched soft blue pill) */}
                         <td className="px-4 py-4 align-middle">
-                          <span className="inline-flex items-center justify-center rounded-md bg-[#E0F2FE] px-3 py-1 text-xs font-semibold text-[#0284C7] dark:bg-sky-950/50 dark:text-sky-300">
+                          <span className={`inline-flex items-center justify-center rounded-md border px-2.5 py-1 text-xs font-semibold ${statusConfig[item.status].badge}`}>
                             {statusLabel(item.status)}
                           </span>
                         </td>
@@ -511,7 +498,7 @@ export default function CaseListView(props: Props) {
           )}
 
           {/* 5. Pagination Footer */}
-          <footer className="flex flex-col gap-3 border-t border-slate-100 bg-white px-6 py-3.5 text-xs text-slate-500 dark:border-slate-800 dark:bg-[#131B2E] dark:text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+          <footer className="cm-case-pagination flex flex-col gap-3 px-6 py-3.5 text-xs sm:flex-row sm:items-center sm:justify-between">
             <div className="font-medium text-slate-500 dark:text-slate-400">
               {props.filteredCases.length ? (current - 1) * PAGE_SIZE + 1 : 0}-{Math.min(current * PAGE_SIZE, props.filteredCases.length)} / {props.filteredCases.length}件・1ページ{PAGE_SIZE}件
             </div>

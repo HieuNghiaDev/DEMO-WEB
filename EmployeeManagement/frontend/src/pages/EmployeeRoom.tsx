@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
@@ -3199,8 +3200,9 @@ export default function EmployeeRoom() {
       )}
 
       {/* Status Confirmation Modal */}
-      {(pendingStatus || isStatusModalClosing) && (
-        <div
+      {(pendingStatus || isStatusModalClosing) &&
+        createPortal(
+          <div
           className={`workspace-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isStatusModalClosing ? "is-closing" : ""}`}
           onClick={handleCancelStatus}
         >
@@ -3335,8 +3337,9 @@ export default function EmployeeRoom() {
               </button>
             </div>
           </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
       </main>
     </div>
   );

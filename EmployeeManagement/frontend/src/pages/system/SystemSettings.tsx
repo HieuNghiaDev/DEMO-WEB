@@ -9,6 +9,7 @@ import LogoutConfirmationDialog from '../../components/settings/LogoutConfirmati
 import SettingsLogoutAction from '../../components/settings/SettingsLogoutAction'
 import api from '../../services/api'
 import { getEmployeeAvatarUrl } from '../../utils/employeeAvatar'
+import { PageHeader } from '../../components/ui'
 
 const categories = [
   { id: 'account', label: 'アカウント', caption: 'Account', icon: UserRound },
@@ -81,150 +82,314 @@ export default function SystemSettings() {
   }
 
   return (
-    <div className="px-4 pb-8 pt-20 text-slate-900 dark:text-slate-100 md:p-6 xl:p-8">
-      <header className="mb-6 border-b border-slate-200 pb-6 dark:border-slate-800">
-        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">設定</h1>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">システム・アカウント設定</p>
-      </header>
+    <div className="min-h-full pb-10">
+      <PageHeader
+        breadcrumb="設定"
+        domainKicker="SYSTEM SETTINGS"
+        title="システム設定"
+        description="システム・アカウント設定、セキュリティ、外観のカスタマイズ"
+      />
 
-      <div className="grid min-w-0 gap-6 lg:grid-cols-[180px_minmax(0,1fr)] xl:gap-10">
-        <div className="lg:sticky lg:top-6 lg:flex lg:min-h-80 lg:self-start lg:flex-col">
-          <nav aria-label="設定カテゴリー" className="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800/50 lg:grid-cols-1 lg:gap-2 lg:bg-transparent lg:p-0 lg:dark:bg-transparent">
-            {categories.map(({ id, label, caption, icon: Icon }) => (
-              <Link key={id} to={`/system?section=${id}`} aria-current={section === id ? 'page' : undefined}
-                className={`flex min-w-0 flex-col items-center justify-center gap-1.5 rounded-md px-1 py-3 text-xs font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 sm:flex-row sm:gap-2 sm:text-sm lg:justify-start lg:px-3 ${section === id
-                  ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-700 dark:text-indigo-200 lg:bg-indigo-50 lg:shadow-none lg:dark:bg-indigo-500/10'
-                  : 'text-slate-500 hover:bg-white/60 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700/50 dark:hover:text-slate-100'}`}>
-                <Icon size={18} className="shrink-0" aria-hidden="true" />
-                <span>{label}<span className="mt-0.5 hidden text-[10px] font-normal tracking-wide opacity-70 lg:block">{caption}</span></span>
-              </Link>
-            ))}
-          </nav>
-          <div className="mt-auto hidden pt-8 lg:block">
-            <div className="border-t border-slate-200 pt-3 dark:border-slate-800">
-              <SettingsLogoutAction onClick={() => setIsLogoutConfirmationOpen(true)} disabled={isLoggingOut} />
+      <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[200px_minmax(0,1fr)] xl:gap-8">
+          {/* Side navigation */}
+          <div className="lg:sticky lg:top-6 lg:flex lg:min-h-80 lg:self-start lg:flex-col">
+            <nav
+              aria-label="設定カテゴリー"
+              className="grid grid-cols-3 gap-1 rounded-xl bg-[var(--tm-surface-elevated)] p-1 border border-[var(--tm-border)] lg:grid-cols-1 lg:gap-1.5 lg:bg-transparent lg:border-0 lg:p-0"
+            >
+              {categories.map(({ id, label, caption, icon: Icon }) => {
+                const isActive = section === id
+                return (
+                  <Link
+                    key={id}
+                    to={`/system?section=${id}`}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`
+                      flex min-w-0 flex-col items-center justify-center gap-1.5 rounded-lg px-2 py-3 text-xs font-medium transition-all duration-150 sm:flex-row sm:gap-2.5 sm:text-sm lg:justify-start lg:px-3.5
+                      ${
+                        isActive
+                          ? 'bg-[var(--tm-surface)] text-[var(--tm-primary)] shadow-xs border border-[var(--tm-border)] font-semibold'
+                          : 'text-[var(--tm-text-secondary)] hover:bg-[var(--tm-surface-hover)] hover:text-[var(--tm-text-primary)] border border-transparent'
+                      }
+                    `.trim()}
+                  >
+                    <Icon size={17} className={`shrink-0 ${isActive ? 'text-[var(--tm-primary)]' : 'text-[var(--tm-text-muted)]'}`} aria-hidden="true" />
+                    <span>
+                      {label}
+                      <span className="mt-0.5 hidden text-[10px] font-normal tracking-wide opacity-70 lg:block">
+                        {caption}
+                      </span>
+                    </span>
+                  </Link>
+                )
+              })}
+            </nav>
+
+            <div className="mt-auto hidden pt-8 lg:block">
+              <div className="border-t border-[var(--tm-border)] pt-4">
+                <SettingsLogoutAction onClick={() => setIsLogoutConfirmationOpen(true)} disabled={isLoggingOut} />
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="min-w-0 max-w-4xl">
-          <section aria-labelledby={`settings-${section}-title`} className="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-            {section === 'account' && <>
-              <div className="border-b border-slate-200 px-5 py-5 dark:border-slate-700 sm:px-6">
-                <h2 id="settings-account-title" className="text-lg font-semibold">アカウント情報</h2>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">登録されている社員情報を確認できます。</p>
-              </div>
-              <div className="px-5 py-6 sm:px-6">
-                <div className="mb-6 flex items-center gap-4">
-                  <div className="relative shrink-0">
-                    <img
-                      src={getEmployeeAvatarUrl(user?.employee?.avatar_path, user?.employee?.gender)}
-                      alt=""
-                      className="h-14 w-14 rounded-xl border border-slate-200 object-cover dark:border-slate-700"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => avatarInputRef.current?.click()}
-                      disabled={isUploadingAvatar}
-                      className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-indigo-600 text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-wait dark:border-slate-900"
-                      aria-label="プロフィール画像を変更"
-                    >
-                      <Camera size={13} aria-hidden="true" />
-                    </button>
-                    <input
-                      ref={avatarInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="sr-only"
-                      onChange={(event) => void handleAvatarChange(event.target.files?.[0])}
-                    />
+          {/* Section details */}
+          <div className="min-w-0 max-w-4xl">
+            <section
+              aria-labelledby={`settings-${section}-title`}
+              className="rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface)] shadow-xs"
+            >
+              {section === 'account' && (
+                <>
+                  <div className="border-b border-[var(--tm-border)] px-5 py-5 sm:px-6">
+                    <h2 id="settings-account-title" className="text-base font-semibold text-[var(--tm-text-primary)]">
+                      アカウント情報
+                    </h2>
+                    <p className="mt-0.5 text-xs text-[var(--tm-text-secondary)]">
+                      登録されている社員情報を確認できます。
+                    </p>
                   </div>
-                  <div className="min-w-0">
-                    <p className="break-words text-base font-semibold">{employeeName}</p>
-                    <p className="mt-1 break-all text-sm text-slate-500 dark:text-slate-400">{user?.login_id}</p>
-                    <button type="button" onClick={() => avatarInputRef.current?.click()} disabled={isUploadingAvatar} className="mt-1 text-xs font-medium text-indigo-600 hover:underline disabled:cursor-wait disabled:text-slate-400 dark:text-indigo-300">
-                      {isUploadingAvatar ? 'アップロード中…' : 'プロフィール画像を変更'}
-                    </button>
+                  <div className="px-5 py-6 sm:px-6">
+                    <div className="mb-6 flex items-center gap-4">
+                      <div className="relative shrink-0">
+                        <img
+                          src={getEmployeeAvatarUrl(user?.employee?.avatar_path, user?.employee?.gender)}
+                          alt=""
+                          className="h-14 w-14 rounded-xl border border-[var(--tm-border)] object-cover shadow-2xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => avatarInputRef.current?.click()}
+                          disabled={isUploadingAvatar}
+                          className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-[var(--tm-surface)] bg-[var(--tm-primary)] text-white shadow-sm transition hover:opacity-90 disabled:cursor-wait"
+                          aria-label="プロフィール画像を変更"
+                        >
+                          <Camera size={12} aria-hidden="true" />
+                        </button>
+                        <input
+                          ref={avatarInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="sr-only"
+                          onChange={(event) => void handleAvatarChange(event.target.files?.[0])}
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="break-words text-base font-semibold text-[var(--tm-text-primary)]">
+                          {employeeName}
+                        </p>
+                        <p className="mt-0.5 break-all text-xs text-[var(--tm-text-secondary)]">
+                          {user?.login_id}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => avatarInputRef.current?.click()}
+                          disabled={isUploadingAvatar}
+                          className="mt-1 text-xs font-medium text-[var(--tm-primary)] hover:underline disabled:cursor-wait disabled:text-[var(--tm-text-muted)]"
+                        >
+                          {isUploadingAvatar ? 'アップロード中…' : 'プロフィール画像を変更'}
+                        </button>
+                      </div>
+                    </div>
+                    {avatarUploadError && (
+                      <p role="alert" className="-mt-3 mb-5 text-xs text-[var(--tm-danger)]">
+                        {avatarUploadError}
+                      </p>
+                    )}
+                    <dl className="divide-y divide-[var(--tm-border)] border-t border-[var(--tm-border)]">
+                      {accountFields.map(({ label, value }) => (
+                        <div key={label} className="grid gap-1 py-3.5 sm:grid-cols-[140px_minmax(0,1fr)] sm:gap-4">
+                          <dt className="text-xs text-[var(--tm-text-secondary)]">{label}</dt>
+                          <dd className="min-w-0 break-words text-xs sm:text-sm font-medium text-[var(--tm-text-primary)] [overflow-wrap:anywhere]">
+                            {value}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
                   </div>
-                </div>
-                {avatarUploadError && <p role="alert" className="-mt-3 mb-5 text-xs text-red-600 dark:text-red-300">{avatarUploadError}</p>}
-                <dl className="divide-y divide-slate-100 border-t border-slate-100 dark:divide-slate-800 dark:border-slate-800">
-                  {accountFields.map(({ label, value }) => <div key={label} className="grid gap-1 py-4 sm:grid-cols-[140px_minmax(0,1fr)] sm:gap-4">
-                    <dt className="text-xs text-slate-500 dark:text-slate-400 sm:text-sm">{label}</dt>
-                    <dd className="min-w-0 break-words text-sm font-medium [overflow-wrap:anywhere]">{value}</dd>
-                  </div>)}
-                </dl>
-              </div>
-            </>}
+                </>
+              )}
 
-            {section === 'security' && <>
-              <div className="border-b border-slate-200 px-5 py-5 dark:border-slate-700 sm:px-6">
-                <h2 id="settings-security-title" className="text-lg font-semibold">セキュリティ</h2>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">アカウントとログインに関する設定</p>
-              </div>
-              <Link to="/system/password" className="group flex items-center gap-4 px-5 py-6 transition-colors duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 dark:hover:bg-slate-800/50 sm:px-6">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"><KeyRound size={20} aria-hidden="true" /></span>
-                <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">パスワードを変更</span><span className="mt-1 block text-xs leading-5 text-slate-500 dark:text-slate-400">現在のパスワードを確認し、新しいパスワードを設定します。</span></span>
-                <ChevronRight size={18} className="shrink-0 text-slate-400 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transform-none" aria-hidden="true" />
-              </Link>
-              <p className="border-t border-slate-100 px-5 py-4 text-xs leading-5 text-slate-500 dark:border-slate-800 dark:text-slate-400 sm:px-6">変更後は、すべての端末で再ログインが必要です。</p>
-            </>}
-
-            {section === 'appearance' && <>
-              <div className="border-b border-slate-200 px-5 py-5 dark:border-slate-700 sm:px-6">
-                <h2 id="settings-appearance-title" className="text-lg font-semibold">外観</h2>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">ワークスペースの表示を設定します。</p>
-              </div>
-              <fieldset className="px-5 py-6 sm:px-6">
-                <legend className="float-left mb-1 w-full text-sm font-semibold">テーマ</legend>
-                <p className="clear-both mb-5 text-xs leading-5 text-slate-500 dark:text-slate-400">選択するとすぐに反映され、このブラウザーに保存されます。</p>
-                <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                  {([{ id: 'light', label: 'ライト', icon: Sun }, { id: 'dark', label: 'ダーク', icon: Moon }] as const).map(({ id, label, icon: Icon }) => (
-                    <label key={id} className="relative cursor-pointer">
-                      <input type="radio" name="theme" value={id} checked={theme === id} onChange={(event) => setTheme(id, event.currentTarget.closest('label') ?? undefined)} className="peer sr-only" />
-                      <span className="block rounded-lg border border-slate-200 p-3 transition-colors duration-200 hover:border-indigo-300 peer-checked:border-indigo-500 peer-checked:ring-1 peer-checked:ring-indigo-500 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-4 peer-focus-visible:outline-indigo-500 dark:border-slate-700 dark:peer-checked:border-indigo-400">
-                        <span aria-hidden="true" className={`mb-3 flex h-24 overflow-hidden rounded-md border ${id === 'light' ? 'border-slate-200 bg-slate-50' : 'border-slate-600 bg-slate-950'}`}>
-                          <span className={`w-1/4 space-y-2 border-r p-2 ${id === 'light' ? 'border-slate-200 bg-slate-100' : 'border-slate-700 bg-slate-800'}`}>
-                            <span className="block h-2 rounded-sm bg-indigo-400" /><span className="block h-1 rounded-sm bg-slate-400/40" /><span className="block h-1 rounded-sm bg-slate-400/40" />
-                          </span>
-                          <span className="flex-1 space-y-2 p-3"><span className={`block h-2 w-2/3 rounded-sm ${id === 'light' ? 'bg-slate-300' : 'bg-slate-500'}`} /><span className={`block h-10 rounded-sm border ${id === 'light' ? 'border-slate-200 bg-slate-100' : 'border-slate-700 bg-slate-800'}`} /></span>
-                        </span>
-                        <span className="flex items-center gap-2 text-sm font-medium"><Icon size={16} aria-hidden="true" />{label}{theme === id && <Check size={16} className="ml-auto text-indigo-600 dark:text-indigo-300" aria-hidden="true" />}</span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-              <fieldset className="mt-6 border-t border-slate-100 px-5 pt-6 dark:border-slate-800 sm:px-6">
-                <legend className="float-left mb-1 w-full text-sm font-semibold">{t('settings.display.title')}</legend>
-                <p className="clear-both mb-5 text-xs leading-5 text-slate-500 dark:text-slate-400">{t('settings.display.description')}</p>
-                <label className="block max-w-sm space-y-2">
-                  <span className="block text-sm font-medium">{t('settings.language.label')}</span>
-                  <span className="block text-xs leading-5 text-slate-500 dark:text-slate-400">{t('settings.language.description')}</span>
-                  <select
-                    aria-label={t('settings.language.label')}
-                    value={language}
-                    onChange={(event) => void setAppLanguage(event.target.value as SupportedLocale)}
-                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              {section === 'security' && (
+                <>
+                  <div className="border-b border-[var(--tm-border)] px-5 py-5 sm:px-6">
+                    <h2 id="settings-security-title" className="text-base font-semibold text-[var(--tm-text-primary)]">
+                      セキュリティ
+                    </h2>
+                    <p className="mt-0.5 text-xs text-[var(--tm-text-secondary)]">
+                      アカウントとログインに関する設定
+                    </p>
+                  </div>
+                  <Link
+                    to="/system/password"
+                    className="group flex items-center gap-4 px-5 py-6 transition-colors duration-150 hover:bg-[var(--tm-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--tm-focus-ring)] sm:px-6"
                   >
-                    <option value="ja">{t('settings.language.japanese')}</option>
-                    <option value="vi">{t('settings.language.vietnamese')}</option>
-                  </select>
-                </label>
-              </fieldset>
-            </>}
-          </section>
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--tm-surface-elevated)] border border-[var(--tm-border)] text-[var(--tm-text-secondary)]">
+                      <KeyRound size={18} aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-[var(--tm-text-primary)]">
+                        パスワードを変更
+                      </span>
+                      <span className="mt-1 block text-xs leading-5 text-[var(--tm-text-secondary)]">
+                        現在のパスワードを確認し、新しいパスワードを設定します。
+                      </span>
+                    </span>
+                    <ChevronRight
+                      size={18}
+                      className="shrink-0 text-[var(--tm-text-muted)] transition-transform duration-200 group-hover:translate-x-0.5"
+                      aria-hidden="true"
+                    />
+                  </Link>
+                  <p className="border-t border-[var(--tm-border)] px-5 py-4 text-xs leading-5 text-[var(--tm-text-secondary)] sm:px-6">
+                    変更後は、すべての端末で再ログインが必要です。
+                  </p>
+                </>
+              )}
 
-          <section aria-labelledby="settings-session-title" className="mt-8 border-t border-slate-200 pt-5 dark:border-slate-800 lg:hidden">
-            <h2 id="settings-session-title" className="text-xs font-medium text-slate-500 dark:text-slate-400">アカウント操作</h2>
-            <div className="mt-3 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-              <div><p className="text-sm font-medium">ログアウト</p><p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">現在のセッションを終了します。</p></div>
-              <div className="w-full shrink-0 sm:w-auto"><SettingsLogoutAction onClick={() => setIsLogoutConfirmationOpen(true)} disabled={isLoggingOut} /></div>
-            </div>
-          </section>
+              {section === 'appearance' && (
+                <>
+                  <div className="border-b border-[var(--tm-border)] px-5 py-5 sm:px-6">
+                    <h2 id="settings-appearance-title" className="text-base font-semibold text-[var(--tm-text-primary)]">
+                      外観
+                    </h2>
+                    <p className="mt-0.5 text-xs text-[var(--tm-text-secondary)]">
+                      ワークスペースの表示を設定します。
+                    </p>
+                  </div>
+                  <fieldset className="px-5 py-6 sm:px-6">
+                    <legend className="float-left mb-1 w-full text-sm font-semibold text-[var(--tm-text-primary)]">
+                      テーマ
+                    </legend>
+                    <p className="clear-both mb-5 text-xs leading-5 text-[var(--tm-text-secondary)]">
+                      選択するとすぐに反映され、このブラウザーに保存されます。
+                    </p>
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                      {(
+                        [
+                          { id: 'light', label: 'ライト', icon: Sun },
+                          { id: 'dark', label: 'ダーク', icon: Moon },
+                        ] as const
+                      ).map(({ id, label, icon: Icon }) => (
+                        <label key={id} className="relative cursor-pointer">
+                          <input
+                            type="radio"
+                            name="theme"
+                            value={id}
+                            checked={theme === id}
+                            onChange={(event) => setTheme(id, event.currentTarget.closest('label') ?? undefined)}
+                            className="peer sr-only"
+                          />
+                          <span className="block rounded-lg border border-[var(--tm-border)] p-3 transition-all duration-150 hover:border-[var(--tm-border-strong)] peer-checked:border-[var(--tm-primary)] peer-checked:ring-2 peer-checked:ring-[var(--tm-focus-ring)]/25">
+                            <span
+                              aria-hidden="true"
+                              className={`mb-3 flex h-24 overflow-hidden rounded-md border ${
+                                id === 'light'
+                                  ? 'border-slate-200 bg-slate-50'
+                                  : 'border-slate-700 bg-[#090b0f]'
+                              }`}
+                            >
+                              <span
+                                className={`w-1/4 space-y-2 border-r p-2 ${
+                                  id === 'light'
+                                    ? 'border-slate-200 bg-slate-100'
+                                    : 'border-slate-800 bg-[#0d1015]'
+                                }`}
+                              >
+                                <span className="block h-2 rounded-sm bg-indigo-500" />
+                                <span className="block h-1 rounded-sm bg-slate-400/40" />
+                                <span className="block h-1 rounded-sm bg-slate-400/40" />
+                              </span>
+                              <span className="flex-1 space-y-2 p-3">
+                                <span
+                                  className={`block h-2 w-2/3 rounded-sm ${
+                                    id === 'light' ? 'bg-slate-300' : 'bg-slate-700'
+                                  }`}
+                                />
+                                <span
+                                  className={`block h-10 rounded-sm border ${
+                                    id === 'light'
+                                      ? 'border-slate-200 bg-white'
+                                      : 'border-slate-800 bg-[#101217]'
+                                  }`}
+                                />
+                              </span>
+                            </span>
+                            <span className="flex items-center gap-2 text-xs sm:text-sm font-medium text-[var(--tm-text-primary)]">
+                              <Icon size={16} aria-hidden="true" />
+                              {label}
+                              {theme === id && (
+                                <Check size={16} className="ml-auto text-[var(--tm-primary)]" aria-hidden="true" />
+                              )}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <fieldset className="mt-6 border-t border-[var(--tm-border)] px-5 pt-6 sm:px-6">
+                    <legend className="float-left mb-1 w-full text-sm font-semibold text-[var(--tm-text-primary)]">
+                      {t('settings.display.title')}
+                    </legend>
+                    <p className="clear-both mb-5 text-xs leading-5 text-[var(--tm-text-secondary)]">
+                      {t('settings.display.description')}
+                    </p>
+                    <label className="block max-w-sm space-y-2">
+                      <span className="block text-xs sm:text-sm font-medium text-[var(--tm-text-primary)]">
+                        {t('settings.language.label')}
+                      </span>
+                      <span className="block text-xs leading-5 text-[var(--tm-text-secondary)]">
+                        {t('settings.language.description')}
+                      </span>
+                      <select
+                        aria-label={t('settings.language.label')}
+                        value={language}
+                        onChange={(event) => void setAppLanguage(event.target.value as SupportedLocale)}
+                        className="h-9 w-full rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] px-3 text-xs sm:text-sm text-[var(--tm-text-primary)] outline-none transition focus:border-[var(--tm-border-focus)] focus:ring-2 focus:ring-[var(--tm-focus-ring)]/25"
+                      >
+                        <option value="ja" className="bg-[var(--tm-surface)] text-[var(--tm-text-primary)]">
+                          {t('settings.language.japanese')}
+                        </option>
+                        <option value="vi" className="bg-[var(--tm-surface)] text-[var(--tm-text-primary)]">
+                          {t('settings.language.vietnamese')}
+                        </option>
+                      </select>
+                    </label>
+                  </fieldset>
+                </>
+              )}
+            </section>
+
+            <section
+              aria-labelledby="settings-session-title"
+              className="mt-8 border-t border-[var(--tm-border)] pt-5 lg:hidden"
+            >
+              <h2 id="settings-session-title" className="text-xs font-medium text-[var(--tm-text-secondary)]">
+                アカウント操作
+              </h2>
+              <div className="mt-3 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                <div>
+                  <p className="text-sm font-medium text-[var(--tm-text-primary)]">ログアウト</p>
+                  <p className="mt-0.5 text-xs leading-5 text-[var(--tm-text-secondary)]">
+                    現在のセッションを終了します。
+                  </p>
+                </div>
+                <div className="w-full shrink-0 sm:w-auto">
+                  <SettingsLogoutAction onClick={() => setIsLogoutConfirmationOpen(true)} disabled={isLoggingOut} />
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
-      {isLogoutConfirmationOpen && <LogoutConfirmationDialog isLoggingOut={isLoggingOut} onCancel={() => setIsLogoutConfirmationOpen(false)} onConfirm={() => void handleLogout()} />}
+
+      {isLogoutConfirmationOpen && (
+        <LogoutConfirmationDialog
+          isLoggingOut={isLoggingOut}
+          onCancel={() => setIsLogoutConfirmationOpen(false)}
+          onConfirm={() => void handleLogout()}
+        />
+      )}
     </div>
   )
 }

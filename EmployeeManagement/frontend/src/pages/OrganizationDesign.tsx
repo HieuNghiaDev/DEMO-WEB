@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import { Button } from '../components/ui'
 
 type WorkStatus = 'working' | 'break' | 'outside' | 'offline'
 
@@ -443,26 +444,27 @@ export default function OrganizationDesign() {
           </div>
 
           <div className="flex items-center gap-2.5 sm:shrink-0">
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="md"
               disabled={refreshing}
+              loading={refreshing}
               onClick={() => void loadOrganization(true)}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              icon={!refreshing ? <RefreshCw size={14} className="text-[var(--tm-primary)]" /> : undefined}
             >
-              <RefreshCw size={14} className={refreshing ? 'animate-spin text-indigo-500' : 'text-slate-500'} />
-              <span>{refreshing ? '更新中...' : '最新取得'}</span>
-            </button>
+              {refreshing ? '更新中...' : '最新取得'}
+            </Button>
 
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="md"
               disabled={!user?.permission_names.includes('employee.create')}
               title={user?.permission_names.includes('employee.create') ? '新規社員を登録' : '社員登録の権限がありません'}
               onClick={() => setIsCreateEmployeeOpen(true)}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 text-xs font-medium text-white transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-300 dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:disabled:bg-slate-800"
+              icon={<Plus size={15} />}
             >
-              <Plus size={15} />
-              <span>新規社員登録</span>
-            </button>
+              新規社員登録
+            </Button>
           </div>
         </header>
       </section>

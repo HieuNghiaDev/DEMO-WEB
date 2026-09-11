@@ -89,19 +89,25 @@ Generic reusable UI belongs in:
 src/components/ui/
 ```
 
-Possible examples:
+Canonical implemented components:
 
 ```text
-Button.tsx
-Input.tsx
-Modal.tsx
-Badge.tsx
-EmptyState.tsx
-Spinner.tsx
-ConfirmDialog.tsx
+Button.tsx         # Primary, secondary, outline, ghost, danger (sizes: sm, md, lg)
+IconButton.tsx     # Accessible icon button with title & aria-label (sm, md, lg)
+StatusBadge.tsx    # Semantic statuses (working, break, outside, offline, approved, rejected, etc.)
+SearchInput.tsx    # Standard search input with clear (X) and shortcut hint
+MetricCard.tsx     # Operational KPI card with status dot and accent tone
+MetricStrip.tsx    # Responsive grid container for MetricCards
+PageHeader.tsx     # Canonical page header with kicker, breadcrumb, actions, and hero variant
+SectionHeader.tsx  # In-page operational section dividers
+ModalShell.tsx     # Accessible modal container with backdrop blur and ESC dismiss
+EmptyState.tsx     # Calm empty operational state with icon and action slot
+LoadingState.tsx   # Operational loading spinner with message
+index.ts           # Barrel export for clean imports
 ```
 
-Do not make a component shared until its responsibility is genuinely reusable.
+Do not handwriting arbitrary button styles or badges in pages. Always import from `@/components/ui`.
+
 
 ---
 
