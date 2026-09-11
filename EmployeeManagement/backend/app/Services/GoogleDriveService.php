@@ -160,9 +160,9 @@ class GoogleDriveService
             return false;
         }
         if ($this->authMode() === 'oauth_user') {
-            return app()->environment(['local', 'testing'])
+            return $this->oauthUserAllowed()
                 && preg_match('/^[A-Za-z0-9_-]+$/', (string) config('services.google_drive.root_folder_id'))
-                && is_file((string) config('services.google_drive.oauth_client_json_path'))
+                && $this->hasOAuthClientCredentials()
                 && $this->hasOAuthRefreshToken()
                 && config('services.google_drive.oauth_scope') === 'https://www.googleapis.com/auth/drive';
         }
@@ -319,7 +319,7 @@ class GoogleDriveService
         }
 
         return $this->authMode() === 'oauth_user'
-            ? app()->environment(['local', 'testing']) && $this->hasOAuthRefreshToken()
+            ? $this->oauthUserAllowed() && $this->hasOAuthClientCredentials() && $this->hasOAuthRefreshToken()
             : $this->authMode() === 'service_account'
                 && trim((string) config('services.google_drive.service_account_json')) !== '';
     }
@@ -418,8 +418,8 @@ class GoogleDriveService
 
     private function oauthAccessToken(): string
     {
-        if (! app()->environment(['local', 'testing'])) {
-            throw new VisaProgressConfigurationException('OAuth user Drive access is local-only.');
+        if (! $this->oauthUserAllowed()) {
+            throw new VisaProgressConfigurationException('OAuth user Drive access is not enabled in this environment.');
         }
         $data = $this->oauthTokenData();
         $accessToken = $data['access_token'] ?? null;
@@ -454,11 +454,15 @@ class GoogleDriveService
     /** @return array{client_id: string, client_secret: string, token_uri: string} */
     private function oauthClientCredentials(): array
     {
-        $path = trim((string) config('services.google_drive.oauth_client_json_path'));
-        if ($path === '' || ! is_file($path) || ! is_readable($path)) {
-            throw new VisaProgressConfigurationException('Google Drive OAuth client is not configured.');
+        $rawJson = trim((string) config('services.google_drive.oauth_client_json'));
+        if ($rawJson === '') {
+            $path = trim((string) config('services.google_drive.oauth_client_json_path'));
+            if ($path === '' || ! is_file($path) || ! is_readable($path)) {
+                throw new VisaProgressConfigurationException('Google Drive OAuth client is not configured.');
+            }
+            $rawJson = (string) file_get_contents($path);
         }
-        $decoded = json_decode((string) file_get_contents($path), true);
+        $decoded = json_decode($this->decodeSecret($rawJson), true);
         $web = is_array($decoded) && is_array($decoded['web'] ?? null) ? $decoded['web'] : null;
         if (! is_array($web)
             || ! is_string($web['client_id'] ?? null)
@@ -500,7 +504,32 @@ class GoogleDriveService
 
     private function oauthTokenData(bool $throwWhenMissing = true): ?array
     {
+        $configuredToken = trim((string) config('services.google_drive.oauth_token_json'));
+        if ($configuredToken !== '') {
+            $cached = Cache::get($this->oauthTokenCacheKey());
+            if (is_array($cached)) {
+                return $cached;
+            }
+
+            $data = json_decode($this->decodeSecret($configuredToken), true);
+            if (is_array($data)) {
+                return $data;
+            }
+            if ($throwWhenMissing) {
+                throw new VisaProgressConfigurationException('Google Drive OAuth token secret is invalid.');
+            }
+
+            return null;
+        }
+
         $path = trim((string) config('services.google_drive.oauth_token_path', 'google-drive/oauth-token.json'));
+        if (! Storage::disk('local')->exists($path)) {
+            if ($throwWhenMissing) {
+                throw new VisaProgressConfigurationException('Google Drive OAuth authorization is required.');
+            }
+
+            return null;
+        }
         $contents = Storage::disk('local')->get($path);
         if (! is_string($contents) || $contents === '') {
             if ($throwWhenMissing) {
@@ -523,10 +552,49 @@ class GoogleDriveService
 
     private function storeOAuthToken(array $data): void
     {
+        if (trim((string) config('services.google_drive.oauth_token_json')) !== '') {
+            Cache::put($this->oauthTokenCacheKey(), $data, now()->addSeconds(3500));
+
+            return;
+        }
+
         $path = trim((string) config('services.google_drive.oauth_token_path', 'google-drive/oauth-token.json'));
         if (! Storage::disk('local')->put($path, json_encode($data, JSON_THROW_ON_ERROR))) {
             throw new GeneratedDocumentDriveException('Google Driveの認証情報を保存できませんでした。');
         }
+    }
+
+    private function oauthUserAllowed(): bool
+    {
+        return app()->environment(['local', 'testing'])
+            || (bool) config('services.google_drive.oauth_production_enabled');
+    }
+
+    private function hasOAuthClientCredentials(): bool
+    {
+        try {
+            $this->oauthClientCredentials();
+
+            return true;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function oauthTokenCacheKey(): string
+    {
+        return 'google_drive.oauth_user_token.'.hash('sha256', (string) config('services.google_drive.oauth_token_json'));
+    }
+
+    private function decodeSecret(string $value): string
+    {
+        if (! str_starts_with($value, 'base64:')) {
+            return $value;
+        }
+
+        $decoded = base64_decode(substr($value, 7), true);
+
+        return $decoded === false ? '' : $decoded;
     }
 
     /** @return array{client_email: string, private_key: string, token_uri: string} */

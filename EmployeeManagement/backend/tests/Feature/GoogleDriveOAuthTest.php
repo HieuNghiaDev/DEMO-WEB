@@ -116,6 +116,59 @@ class GoogleDriveOAuthTest extends TestCase
         }
     }
 
+    public function test_production_oauth_uses_environment_secrets_and_refreshes_without_local_files(): void
+    {
+        app()->detectEnvironment(fn () => 'production');
+        config([
+            'services.google_drive.write_enabled' => true,
+            'services.google_drive.root_folder_id' => 'production_root',
+            'services.google_drive.oauth_production_enabled' => true,
+            'services.google_drive.oauth_client_json' => 'base64:'.base64_encode(json_encode([
+                'web' => ['client_id' => 'production-client', 'client_secret' => 'production-secret'],
+            ], JSON_THROW_ON_ERROR)),
+            'services.google_drive.oauth_client_json_path' => null,
+            'services.google_drive.oauth_token_json' => 'base64:'.base64_encode(json_encode([
+                'refresh_token' => 'production-refresh',
+            ], JSON_THROW_ON_ERROR)),
+            'services.google_drive.oauth_token_path' => 'missing/token.json',
+        ]);
+        Http::fake(function ($request) {
+            if ($request->url() === 'https://oauth2.googleapis.com/token') {
+                $this->assertSame('production-refresh', $request['refresh_token']);
+
+                return Http::response(['access_token' => 'production-access', 'expires_in' => 3600]);
+            }
+
+            $this->assertSame('Bearer production-access', $request->header('Authorization')[0]);
+
+            return Http::response([
+                'id' => 'production_root',
+                'mimeType' => 'application/vnd.google-apps.folder',
+                'trashed' => false,
+                'capabilities' => ['canAddChildren' => true],
+            ]);
+        });
+
+        $this->assertTrue(app(GoogleDriveService::class)->canWriteGeneratedDocuments());
+        Storage::disk('local')->assertMissing('missing/token.json');
+        Http::assertSentCount(2);
+    }
+
+    public function test_production_oauth_requires_explicit_opt_in(): void
+    {
+        app()->detectEnvironment(fn () => 'production');
+        config([
+            'services.google_drive.write_enabled' => true,
+            'services.google_drive.root_folder_id' => 'production_root',
+            'services.google_drive.oauth_production_enabled' => false,
+            'services.google_drive.oauth_client_json' => '{}',
+            'services.google_drive.oauth_token_json' => '{}',
+        ]);
+
+        $this->assertFalse(app(GoogleDriveService::class)->canWriteGeneratedDocuments());
+        Http::assertNothingSent();
+    }
+
     public function test_callback_returns_safe_message_after_transport_failure(): void
     {
         Http::fakeSequence()
