@@ -90,7 +90,7 @@ function CaseListPage({ user }: { user: CaseViewer }) {
     } catch (requestError) { setError(caseError(requestError).message) } finally { setAssigning(null) }
   }
   return <>
-    <CaseListView cases={cases} filteredCases={filtered} loading={canRead && loading} error={canRead ? error : t('cases.list.readPermissionRequired')} keyword={keyword} status={status} caseType={caseType} quickFilter={quick} caseTypes={types} canCreate={canCreate} canAssign={canAssign && employees.length > 0} assignees={employees} assigningCaseId={assigning} onKeywordChange={setKeyword} onStatusChange={setStatus} onCaseTypeChange={setCaseType} onQuickFilterChange={setQuick} onRefresh={() => { setLoading(true); setRefresh(value => value + 1) }} onCreate={() => setCreating(true)} onOpen={id => navigate(`/quests/${id}`)} onAssign={(id, employeeId) => void assign(id, employeeId)}/>
+    <CaseListView cases={cases} filteredCases={filtered} loading={canRead && loading} error={canRead ? error : t('cases.list.readPermissionRequired')} keyword={keyword} status={status} caseType={caseType} quickFilter={quick} caseTypes={types} canCreate={canCreate} canAssign={canAssign && employees.length > 0} assignees={employees} assigningCaseId={assigning} onKeywordChange={setKeyword} onStatusChange={setStatus} onCaseTypeChange={setCaseType} onQuickFilterChange={setQuick} onRefresh={() => { setLoading(true); setRefresh(value => value + 1) }} onCreate={() => setCreating(true)} onOpen={id => navigate(`/quests/${id}`)} onOpenCollection={id => navigate(`/quests/${id}`, { state: { workspaceTab: 'collection' } })} onAssign={(id, employeeId) => void assign(id, employeeId)}/>
     {creating && <NewCaseDialog
       user={user}
       onClose={() => setCreating(false)}

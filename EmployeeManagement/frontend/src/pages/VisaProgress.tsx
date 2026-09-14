@@ -11,6 +11,7 @@ import VisaProgressSummary from '../features/visa-progress/VisaProgressSummary'
 import VisaProgressTable from '../features/visa-progress/VisaProgressTable'
 import type { VisaDeadlineLevel, VisaProgressApplication, VisaProgressDashboard } from '../features/visa-progress/types'
 import { isAttentionDeadline } from '../features/visa-progress/visaProgressUi'
+import { LoadingState as SharedLoadingState } from '../components/ui'
 
 const deadlineOrder: Record<VisaDeadlineLevel, number> = {
   overdue: 0,
@@ -227,34 +228,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 function LoadingState() {
-  return (
-    <div className="animate-pulse" aria-label="在留申請データを読み込み中">
-      <div className="mt-6 grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 sm:grid-cols-5">
-        {Array.from({ length: 5 }, (_, index) => (
-          <div key={index} className="border-b border-slate-100 px-4 py-4 dark:border-slate-800 sm:border-b-0 sm:border-r sm:last:border-r-0">
-            <div className="h-3 w-16 rounded bg-slate-200 dark:bg-slate-700" />
-            <div className="mt-3 h-7 w-10 rounded bg-slate-200 dark:bg-slate-700" />
-          </div>
-        ))}
-      </div>
-      <div className="mt-6 grid overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 lg:grid-cols-2">
-        <div className="space-y-4 p-5 lg:border-r lg:border-slate-200 dark:lg:border-slate-700">
-          <div className="h-4 w-32 rounded bg-slate-200 dark:bg-slate-700" />
-          {Array.from({ length: 4 }, (_, index) => <div key={index} className="h-8 rounded bg-slate-100 dark:bg-slate-800" />)}
-        </div>
-        <div className="space-y-3 border-t border-slate-200 p-5 dark:border-slate-700 lg:border-t-0">
-          <div className="h-4 w-44 rounded bg-slate-200 dark:bg-slate-700" />
-          {Array.from({ length: 4 }, (_, index) => <div key={index} className="h-11 rounded bg-slate-100 dark:bg-slate-800" />)}
-        </div>
-      </div>
-      <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
-        <div className="h-10 rounded-lg bg-slate-100 dark:bg-slate-800" />
-        <div className="mt-5 space-y-2">
-          {Array.from({ length: 6 }, (_, index) => <div key={index} className="h-12 rounded bg-slate-100 dark:bg-slate-800" />)}
-        </div>
-      </div>
-    </div>
-  )
+  return <SharedLoadingState className="mt-6" message="在留申請データを読み込み中…" variant="page" />
 }
 
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {

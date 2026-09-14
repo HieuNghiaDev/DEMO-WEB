@@ -1,8 +1,8 @@
+import { ButtonSpinner } from '../loading'
 import {
   Bot,
   ChevronDown,
   ExternalLink,
-  LoaderCircle,
   SendHorizontal,
   X,
 } from 'lucide-react'
@@ -262,7 +262,7 @@ function ThemisAiAssistant() {
             <div className="flex min-h-0 flex-1 flex-col bg-slate-50 dark:bg-[#0d1426]">
               {isLoadingPersonas ? (
                 <div className="flex flex-1 items-center justify-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">
-                  <LoaderCircle className="animate-spin text-indigo-500" size={19} />
+                  <ButtonSpinner className="text-indigo-500" size={19} />
                   AI秘書を準備しています…
                 </div>
               ) : loadError ? (
@@ -316,7 +316,7 @@ function ThemisAiAssistant() {
                     ))}
                     {isSending && (
                       <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                        <LoaderCircle className="animate-spin text-indigo-500" size={16} />
+                        <ButtonSpinner className="text-indigo-500" size={16} />
                         AIが考えています…
                       </div>
                     )}
@@ -340,7 +340,7 @@ function ThemisAiAssistant() {
                         value={messageInput}
                       />
                       <button aria-label="メッセージを送信" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/20 transition hover:-translate-y-0.5 hover:shadow-indigo-500/30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 dark:focus-visible:ring-indigo-500/30" disabled={isSending || !selectedSkill || messageInput.trim() === ''} type="submit">
-                        {isSending ? <LoaderCircle className="animate-spin" size={18} /> : <SendHorizontal size={18} />}
+                        {isSending ? <ButtonSpinner size={18} /> : <SendHorizontal size={18} />}
                       </button>
                     </form>
                     <button className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl py-1.5 text-xs font-bold text-indigo-600 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-500/10" onClick={() => { closePanel(); navigate('/ai') }} type="button">

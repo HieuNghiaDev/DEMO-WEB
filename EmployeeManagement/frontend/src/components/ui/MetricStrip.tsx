@@ -3,6 +3,9 @@ import React, { type ReactNode } from 'react'
 export interface MetricStripProps {
   children: ReactNode
   columns?: 2 | 3 | 4 | 5
+  title?: ReactNode
+  description?: ReactNode
+  hint?: ReactNode
   className?: string
 }
 
@@ -16,18 +19,34 @@ const columnClasses: Record<number, string> = {
 export const MetricStrip: React.FC<MetricStripProps> = ({
   children,
   columns = 4,
+  title,
+  description,
+  hint,
   className = '',
 }) => {
-  return (
-    <div
-      className={`
-        grid gap-3 sm:gap-4
-        ${columnClasses[columns] || columnClasses[4]}
-        ${className}
-      `.trim()}
-    >
+  const grid = (
+    <div className={`grid gap-2 sm:gap-3 ${columnClasses[columns] || columnClasses[4]}`}>
       {children}
     </div>
+  )
+
+  if (!title && !description && !hint) {
+    return <div className={className}>{grid}</div>
+  }
+
+  return (
+    <section
+      className={`rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] p-3 sm:p-4 ${className}`.trim()}
+    >
+      <header className="mb-3 flex items-end justify-between gap-3 px-0.5">
+        <div className="min-w-0">
+          {title && <h2 className="text-xs font-semibold text-[var(--tm-text-primary)]">{title}</h2>}
+          {description && <p className="mt-0.5 text-[11px] text-[var(--tm-text-secondary)]">{description}</p>}
+        </div>
+        {hint && <span className="hidden shrink-0 text-[11px] font-medium text-[var(--tm-text-secondary)] sm:inline">{hint}</span>}
+      </header>
+      {grid}
+    </section>
   )
 }
 

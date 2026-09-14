@@ -26,7 +26,7 @@ class GoogleDriveService
 
     public function configuredRootFolderId(): string
     {
-        $folderId = trim((string) config('services.google_drive.root_folder_id'));
+        $folderId = $this->effectiveRootFolderId();
         if (! preg_match('/^[A-Za-z0-9_-]+$/', $folderId)) {
             throw new GeneratedDocumentDriveException('Google Driveのルート保存先が設定されていません。');
         }
@@ -161,7 +161,7 @@ class GoogleDriveService
         }
         if ($this->authMode() === 'oauth_user') {
             return $this->oauthUserAllowed()
-                && preg_match('/^[A-Za-z0-9_-]+$/', (string) config('services.google_drive.root_folder_id'))
+                && preg_match('/^[A-Za-z0-9_-]+$/', $this->effectiveRootFolderId())
                 && $this->hasOAuthClientCredentials()
                 && $this->hasOAuthRefreshToken()
                 && config('services.google_drive.oauth_scope') === 'https://www.googleapis.com/auth/drive';
@@ -171,6 +171,18 @@ class GoogleDriveService
             && preg_match('/^[A-Za-z0-9_-]+$/', (string) config('services.google_drive.generated_documents_folder_id'))
             && trim((string) config('services.google_drive.service_account_json')) !== ''
             && in_array(config('services.google_drive.write_scope'), ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive'], true);
+    }
+
+    private function effectiveRootFolderId(): string
+    {
+        if (app()->environment(['local', 'testing'])) {
+            $localFolderId = trim((string) config('services.google_drive.local_root_folder_id'));
+            if ($localFolderId !== '') {
+                return $localFolderId;
+            }
+        }
+
+        return trim((string) config('services.google_drive.root_folder_id'));
     }
 
     private function writeRequest(): PendingRequest

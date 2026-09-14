@@ -1,5 +1,5 @@
 import React, { type ButtonHTMLAttributes, type ReactNode } from 'react'
-import { Loader2 } from 'lucide-react'
+import { ButtonSpinner } from '../loading/ButtonSpinner'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger'
 export type ButtonSize = 'sm' | 'md' | 'lg'
@@ -68,7 +68,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
       {...rest}
     >
       {loading ? (
-        <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden="true" />
+        <ButtonSpinner className="h-4 w-4" />
       ) : (
         icon && iconPosition === 'left' && <span className="shrink-0 flex items-center">{icon}</span>
       )}

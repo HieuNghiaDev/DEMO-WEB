@@ -1,4 +1,5 @@
 import axios from "axios";
+import { ButtonSpinner } from '../components/loading'
 import {
   ArrowRight,
   BadgeCheck,
@@ -7,7 +8,6 @@ import {
   Eye,
   EyeOff,
   KeyRound,
-  LoaderCircle,
   LockKeyhole,
   LogOut,
   ShieldCheck,
@@ -386,7 +386,7 @@ export default function ChangePassword() {
               >
                 {isSubmitting ? (
                   <>
-                    <LoaderCircle size={18} className="animate-spin" />
+                    <ButtonSpinner size={18} />
                     変更中...
                   </>
                 ) : (
@@ -408,7 +408,7 @@ export default function ChangePassword() {
                 className="flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
               >
                 {isLoggingOut ? (
-                  <LoaderCircle size={16} className="animate-spin" />
+                  <ButtonSpinner size={16} />
                 ) : (
                   <LogOut size={16} />
                 )}

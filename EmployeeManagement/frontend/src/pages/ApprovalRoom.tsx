@@ -4,6 +4,7 @@ import api from '../services/api'
 import {
   Button,
   EmptyState,
+  LoadingState,
   MetricCard,
   MetricStrip,
   PageHeader,
@@ -312,17 +313,7 @@ function ApprovalRoom() {
 }
 
 function ApprovalLoadingState() {
-  return (
-    <div className="animate-pulse px-4 py-3 sm:px-5" aria-label="承認申請を読み込み中">
-      {Array.from({ length: 4 }, (_, index) => (
-        <div key={index} className="border-b border-[var(--tm-border)] py-4 last:border-b-0">
-          <div className="h-3 w-36 rounded bg-[var(--tm-border)]" />
-          <div className="mt-3 h-5 w-52 rounded bg-[var(--tm-border)]" />
-          <div className="mt-3 h-10 rounded bg-[var(--tm-surface-elevated)]" />
-        </div>
-      ))}
-    </div>
-  )
+  return <LoadingState message="承認申請を読み込み中…" variant="section" />
 }
 
 export default ApprovalRoom

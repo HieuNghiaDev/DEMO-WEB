@@ -1,5 +1,6 @@
+import { ButtonSpinner } from '../loading'
 import { useEffect, useRef } from 'react'
-import { LoaderCircle, LogOut } from 'lucide-react'
+import {  LogOut } from 'lucide-react'
 
 export default function LogoutConfirmationDialog({ isLoggingOut, onCancel, onConfirm }: {
   isLoggingOut: boolean
@@ -37,7 +38,7 @@ export default function LogoutConfirmationDialog({ isLoggingOut, onCancel, onCon
             className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">キャンセル</button>
           <button type="button" disabled={isLoggingOut} onClick={onConfirm}
             className="flex items-center justify-center gap-2 rounded-lg bg-rose-600 px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:opacity-60">
-            {isLoggingOut && <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />}
+            {isLoggingOut && <ButtonSpinner size={16} />}
             {isLoggingOut ? '処理中...' : 'ログアウト'}
           </button>
         </div>

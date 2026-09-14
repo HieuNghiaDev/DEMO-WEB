@@ -1,3 +1,4 @@
+import { ButtonSpinner } from '../components/loading'
 import { useEffect, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -8,7 +9,6 @@ import {
   Clock3,
   Eye,
   EyeOff,
-  LoaderCircle,
   LockKeyhole,
   Mail,
   ShieldCheck,
@@ -381,7 +381,7 @@ export default function Login() {
               >
                 {isSubmitting ? (
                   <>
-                    <LoaderCircle size={18} className="animate-spin" />
+                    <ButtonSpinner size={18} />
                     処理中...
                   </>
                 ) : (

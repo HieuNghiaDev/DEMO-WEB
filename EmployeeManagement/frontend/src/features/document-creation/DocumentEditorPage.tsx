@@ -16,9 +16,36 @@ import DocumentReviewRenderer from './components/DocumentReviewRenderer'
 import DocumentWorkflowBadge from './components/DocumentWorkflowBadge'
 import DocumentPdfDownloadButton from './components/DocumentPdfDownloadButton'
 import DocumentDriveButton from './components/DocumentDriveButton'
+import { LoadingState } from '../../components/ui'
 
 type LoadedContext = { caseFile: CaseWorkspace; document: CollectionDetail; template: DocumentTemplateDefinition }
 type FieldErrors = Record<string, string | undefined>
+
+const C001_DEMO_VISIBLE_FIELDS = new Set(['contract_date', 'engagement_scope'])
+const C001_DEMO_DEFAULTS: Record<string, string> = {
+  client_name: 'デモ依頼者',
+  responsible_person: 'デモ担当者',
+  case_title: 'デモ案件',
+  fee_type: 'デモ用',
+  fee_amount: 'デモ用',
+  fee_calculation_method: 'デモ用の仮入力',
+  fee_payment_timing: 'デモ用の仮入力',
+  termination_notes: 'デモ用の仮入力',
+  early_termination_settlement: 'デモ用の仮入力',
+}
+
+function prepareDocumentDraft(template: DocumentTemplateDefinition, draft: DocumentDraft): DocumentDraft {
+  if (template.documentCode !== 'C-001') return draft
+
+  const prepared = { ...draft }
+  for (const field of template.fields) {
+    if (!field.required || C001_DEMO_VISIBLE_FIELDS.has(field.key) || prepared[field.key]?.trim()) continue
+    prepared[field.key] = C001_DEMO_DEFAULTS[field.key] ?? 'デモ用の仮入力'
+  }
+  prepared.client_signature_name ||= prepared.client_name || C001_DEMO_DEFAULTS.client_name
+  prepared.lawyer_signature_name ||= prepared.responsible_person || C001_DEMO_DEFAULTS.responsible_person
+  return prepared
+}
 
 function requestMessage(error: unknown): string {
   if (isAxiosError<{ message?: string }>(error) && error.response?.data?.message) return error.response.data.message
@@ -103,18 +130,23 @@ export default function DocumentEditorPage({ caseId, documentId, canUpdate }: { 
     finally { actionInFlight.current = false; setSaving(false) }
   }
   const saveDraft = async () => {
-    if (!draft || !canUpdate) return
-    if (await perform(() => documentDraftStore.saveDraft({ caseId, documentId }, draft))) setNotice('下書きを保存しました。')
+    if (!draft || !context || !canUpdate) return
+    const prepared = prepareDocumentDraft(context.template, draft)
+    if (await perform(() => documentDraftStore.saveDraft({ caseId, documentId }, prepared))) setNotice('下書きを保存しました。')
   }
   const review = async () => {
     if (!draft || !context || !canUpdate) return
     setNotice(''); setActionError('')
-    const next = Object.fromEntries(context.template.fields
-      .filter(field => field.required && !draft[field.key]?.trim())
+    const prepared = prepareDocumentDraft(context.template, draft)
+    const fieldsToValidate = context.template.documentCode === 'C-001'
+      ? context.template.fields.filter(field => C001_DEMO_VISIBLE_FIELDS.has(field.key))
+      : context.template.fields
+    const next = Object.fromEntries(fieldsToValidate
+      .filter(field => field.required && !prepared[field.key]?.trim())
       .map(field => [field.key, `${field.label}を入力してください。`]))
     setErrors(next)
     if (Object.keys(next).length) return
-    if (await perform(() => documentDraftStore.moveToReview({ caseId, documentId }, draft))) {
+    if (await perform(() => documentDraftStore.moveToReview({ caseId, documentId }, prepared))) {
       setNotice(''); window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }
@@ -137,7 +169,7 @@ export default function DocumentEditorPage({ caseId, documentId, canUpdate }: { 
     }
   }
 
-  if (loadingVersion) return <main className="dc-preview c001-page"><p className="c001-page-state" role="status">文書作成画面を読み込み中…</p></main>
+  if (loadingVersion) return <main className="dc-preview c001-page"><LoadingState message="文書作成画面を読み込み中…" variant="page" /></main>
   if (error || !context || !draft) return <main className="dc-preview c001-page"><button type="button" className="c001-back" onClick={returnToCollection}><ArrowLeft size={16}/>資料収集へ戻る</button><p className="c001-page-state is-error" role="alert">{error || '文書情報がありません。'}</p></main>
 
   const approvedSource = (source: string) => {
@@ -184,19 +216,24 @@ export default function DocumentEditorPage({ caseId, documentId, canUpdate }: { 
 }
 
 function EditorForm({ template, draft, errors, disabled, busy, onChange, onCancel, onSave, onReview }: { template: DocumentTemplateDefinition; draft: DocumentDraft; errors: FieldErrors; disabled: boolean; busy: boolean; onChange: (field: string, value: string) => void; onCancel: () => void; onSave: () => void; onReview: () => void }) {
+  const isCompactDemo = template.documentCode === 'C-001'
+  const primaryFields = isCompactDemo ? template.fields.filter(field => C001_DEMO_VISIBLE_FIELDS.has(field.key)) : template.fields
+
+  const fieldControl = (field: DocumentTemplateDefinition['fields'][number]) => <label key={field.key} className={field.wide ? 'is-wide' : undefined}>
+    {field.label}{field.required ? ' *' : ''}
+    {field.type === 'textarea'
+      ? <textarea value={draft[field.key] ?? ''} disabled={disabled} rows={field.rows ?? 5} aria-invalid={!!errors[field.key]} onChange={event => onChange(field.key, event.target.value)}/>
+      : <input value={draft[field.key] ?? ''} disabled={disabled} type={field.type} aria-invalid={!!errors[field.key]} onChange={event => onChange(field.key, event.target.value)}/>}
+    {errors[field.key] && <small role="alert">{errors[field.key]}</small>}
+  </label>
+
   return <section className="c001-editor" aria-labelledby="document-editor-title">
-    <div className="c001-section-heading"><div><span>文書作成</span><h2 id="document-editor-title">基本情報を入力</h2></div><span>事務所作成書類</span></div>
-    <div className="c001-form-grid">
-      {template.fields.map(field => <label key={field.key} className={field.wide ? 'is-wide' : undefined}>
-        {field.label}{field.required ? ' *' : ''}
-        {field.type === 'textarea'
-          ? <textarea value={draft[field.key] ?? ''} disabled={disabled} rows={field.rows ?? 5} aria-invalid={!!errors[field.key]} onChange={event => onChange(field.key, event.target.value)}/>
-          : <input value={draft[field.key] ?? ''} disabled={disabled} type={field.type} aria-invalid={!!errors[field.key]} onChange={event => onChange(field.key, event.target.value)}/>}
-        {errors[field.key] && <small role="alert">{errors[field.key]}</small>}
-      </label>)}
+    <div className="c001-section-heading"><div><span>文書作成</span><h2 id="document-editor-title">{isCompactDemo ? 'デモ用入力' : '基本情報を入力'}</h2><p>{isCompactDemo ? '契約日と委任範囲だけ入力してください。その他の項目はデモ値で自動補完されます。' : '文書に反映する情報を入力してください。'}</p></div><span>{isCompactDemo ? '必須 2項目' : '事務所作成書類'}</span></div>
+    <div className={`c001-form-grid ${isCompactDemo ? 'is-compact' : ''}`}>
+      {primaryFields.map(fieldControl)}
     </div>
     <div className="c001-bottom-actions">
-      <p>保存すると変更内容がサーバーに反映されます。</p>
+      <p>{isCompactDemo ? 'まず下書き保存、内容が整ったら確認へ進みます。' : '保存すると変更内容がサーバーに反映されます。'}</p>
       <div><button type="button" className="dc-button" disabled={busy} onClick={onCancel}>キャンセル</button><button type="button" className="dc-button" disabled={disabled} onClick={onSave}><Save size={15}/>{busy ? '保存中…' : '下書き保存'}</button><button type="button" className="dc-button dc-primary" disabled={disabled} onClick={onReview}>{busy ? '保存中…' : '確認へ'}</button></div>
     </div>
   </section>

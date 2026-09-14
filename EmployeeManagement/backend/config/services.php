@@ -48,6 +48,7 @@ return [
         'oauth_redirect_uri' => env('GOOGLE_DRIVE_OAUTH_REDIRECT_URI', 'http://localhost:8000/google-drive/oauth/callback'),
         'oauth_scope' => env('GOOGLE_DRIVE_OAUTH_SCOPE', 'https://www.googleapis.com/auth/drive'),
         'root_folder_id' => env('GOOGLE_DRIVE_ROOT_FOLDER_ID'),
+        'local_root_folder_id' => env('GOOGLE_DRIVE_LOCAL_ROOT_FOLDER_ID'),
         'write_enabled' => env('GOOGLE_DRIVE_WRITE_ENABLED', false),
         'write_scope' => env('GOOGLE_DRIVE_WRITE_SCOPE', 'https://www.googleapis.com/auth/drive.file'),
         'generated_documents_folder_id' => env('GOOGLE_DRIVE_GENERATED_DOCUMENTS_FOLDER_ID'),

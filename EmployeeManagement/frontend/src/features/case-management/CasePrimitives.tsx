@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { ArrowLeft, type LucideIcon } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import '../document-collection/documentCollection.css'
 import './caseManagement.css'
 
@@ -50,59 +50,6 @@ export function CasePageHeader({
         </div>
       </div>
     </header>
-  )
-}
-
-export type CaseSummaryItem = {
-  label: string
-  value: ReactNode
-  unit?: string
-  icon?: LucideIcon
-  iconVariant?: 'blue' | 'purple' | 'amber' | 'green'
-  sparkline?: boolean
-  progress?: number
-}
-
-export function CaseSummaryStrip({ items }: { items: CaseSummaryItem[] }) {
-  return (
-    <div className="cm-summary-grid">
-      {items.map((item, index) => (
-        <article key={item.label || index} className="cm-summary-card">
-          <div className="cm-summary-card-left">
-            {item.icon && (
-              <div className={`cm-summary-icon cm-summary-icon--${item.iconVariant ?? 'blue'}`}>
-                <item.icon size={20} strokeWidth={2} />
-              </div>
-            )}
-            <div className="cm-summary-card-body">
-              <span className="cm-summary-label">{item.label}</span>
-              <div className="cm-summary-val-row">
-                <span className="cm-summary-val">{item.value}</span>
-                {item.unit && <span className="cm-summary-unit">{item.unit}</span>}
-              </div>
-            </div>
-          </div>
-          {item.sparkline && (
-            <div className="cm-summary-sparkline" aria-hidden="true">
-              <svg width="68" height="32" viewBox="0 0 68 32" fill="none">
-                <path d="M2 26C16 26 24 16 38 18C50 20 54 6 66 4" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M2 26C16 26 24 16 38 18C50 20 54 6 66 4V30H2V26Z" fill="currentColor" fillOpacity="0.12"/>
-              </svg>
-            </div>
-          )}
-          {item.progress !== undefined && (
-            <div className="cm-summary-progress" aria-hidden="true">
-              <div className="cm-summary-progress-bar">
-                <div
-                  className="cm-summary-progress-fill"
-                  style={{ width: `${Math.min(100, Math.max(0, item.progress))}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </article>
-      ))}
-    </div>
   )
 }
 

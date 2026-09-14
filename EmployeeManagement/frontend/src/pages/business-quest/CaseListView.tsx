@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ExternalLink,
   FileCheck2,
   Files,
   MoreHorizontal,
@@ -15,15 +14,17 @@ import {
   Search,
   SlidersHorizontal,
   TimerReset,
-  UserCheck,
   X,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { CaseEmployee } from '../../features/case-management/types'
-import { CasePageHeader, CaseSummaryStrip } from '../../features/case-management/CasePrimitives'
+import { TableSkeleton } from '../../components/loading'
+import { MetricCard, MetricStrip } from '../../components/ui'
+import { CasePageHeader } from '../../features/case-management/CasePrimitives'
 import { safeProgress, statusConfig } from './helpers'
 import { generatedCaseTitle } from '../../features/case-management/helpers'
 import type { BusinessCase, CaseQuickFilter, CaseStatus } from './types'
+import CaseQuickViewDrawer from './CaseQuickViewDrawer'
 
 type Props = {
   cases: BusinessCase[]
@@ -46,6 +47,7 @@ type Props = {
   onRefresh: () => void
   onCreate: () => void
   onOpen: (id: number) => void
+  onOpenCollection: (id: number) => void
   onAssign: (id: number, employeeId: number | null) => void
 }
 
@@ -55,9 +57,9 @@ const quickTabs: CaseQuickFilter[] = ['all', 'in_progress', 'waiting', 'reviewin
 export default function CaseListView(props: Props) {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)
-  const [activeMenuId, setActiveMenuId] = useState<number | null>(null)
   const [assigningCaseId, setAssigningCaseId] = useState<number | null>(null)
   const [isAdvancedFilterOpen, setIsAdvancedFilterOpen] = useState(false)
+  const [quickViewCase, setQuickViewCase] = useState<BusinessCase | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
 
   const pages = Math.max(1, Math.ceil(props.filteredCases.length / PAGE_SIZE))
@@ -73,7 +75,6 @@ export default function CaseListView(props: Props) {
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setActiveMenuId(null)
         setAssigningCaseId(null)
       }
     }
@@ -118,7 +119,7 @@ export default function CaseListView(props: Props) {
             title={t('cases.list.title')}
             description={t('cases.list.description')}
             kicker={<><Briefcase size={12} />{t('cases.list.kicker')}</>}
-            showIllustration
+            showIllustration={false}
             actions={<>
               <button type="button" className="dc-button" disabled={props.loading} onClick={props.onRefresh}>
                 <RefreshCw size={15} />{t('cases.list.refresh')}
@@ -128,13 +129,19 @@ export default function CaseListView(props: Props) {
               </button>
             </>}
           />
-          <CaseSummaryStrip items={[
-            { label: '全案件', value: props.cases.length, unit: '件', icon: Files, iconVariant: 'blue', sparkline: true },
-            { label: '対応中', value: inProgressCount, unit: '件', icon: TimerReset, iconVariant: 'purple' },
-            { label: '要確認', value: needsAttentionCount, unit: '件', icon: CircleAlert, iconVariant: 'amber' },
-            { label: '書類確認率', value: `${docConfirmationRate}%`, icon: FileCheck2, iconVariant: 'green', progress: docConfirmationRate },
-          ]} />
         </section>
+
+        <MetricStrip
+          columns={4}
+          title="案件サマリー"
+          description="案件の進行状況を確認できます"
+          className="mt-3.5"
+        >
+          <MetricCard label="全案件" value={props.cases.length} subtext="件" icon={<Files size={16} />} status="info" />
+          <MetricCard label="対応中" value={inProgressCount} subtext="件" icon={<TimerReset size={16} />} status="info" />
+          <MetricCard label="要確認" value={needsAttentionCount} subtext="件" icon={<CircleAlert size={16} />} status="warning" />
+          <MetricCard label="書類確認率" value={`${docConfirmationRate}%`} icon={<FileCheck2 size={16} />} status="success" />
+        </MetricStrip>
       </div>
 
       {/* Main Workspace Area */}
@@ -234,9 +241,8 @@ export default function CaseListView(props: Props) {
         {/* 4. Table / Customer Case List (Primary Visual Focus) */}
         <section className="cm-case-table" ref={menuRef}>
           {props.loading && (
-            <div className="p-8 text-center" role="status" aria-label={t('cases.list.loading')}>
-              <RefreshCw size={24} className="mx-auto animate-spin text-indigo-500" />
-              <p className="mt-2 text-xs text-slate-500">データを読み込み中...</p>
+            <div className="p-4 animate-in fade-in">
+              <TableSkeleton rows={10} columns={7} className="border-0 shadow-none dark:bg-transparent" />
             </div>
           )}
 
@@ -266,238 +272,208 @@ export default function CaseListView(props: Props) {
           )}
 
           {!props.loading && !props.error && !!visible.length && (
-            <div className="overflow-x-auto">
-              <table className="cm-case-data-table w-full text-left text-xs">
-                <thead>
-                  <tr>
-                    <th scope="col" className="py-4 pl-6 pr-4">依頼者 / 案件</th>
-                    <th scope="col" className="px-4 py-4">事件類型 / 目標完了日</th>
-                    <th scope="col" className="px-4 py-4">担当者</th>
-                    <th scope="col" className="px-4 py-4">状態</th>
-                    <th scope="col" className="px-4 py-4">資料状況</th>
-                    <th scope="col" className="px-4 py-4">更新日時</th>
-                    <th scope="col" className="py-4 pl-4 pr-6 text-right">操作</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                  {visible.map(item => {
-                    const title = item.title === generatedCaseTitle(item.customerName, item.caseType.split(' / ').at(-1) ?? '') ? '案件名未設定' : item.title
-                    const isAssigningThis = assigningCaseId === item.id
-                    const isMenuActive = activeMenuId === item.id
+            <div className="cm-cc-scroll">
+              {/* Column Headers */}
+              <div className="cm-cc-grid cm-cc-header">
+                <div>依頼者</div>
+                <div>事件類型</div>
+                <div>担当者</div>
+                <div>状態</div>
+                <div>資料状況</div>
+                <div>更新日時</div>
+                <div />
+              </div>
 
-                    return (
-                      <tr
-                        key={item.id}
-                        data-status={item.status}
-                        onClick={() => props.onOpen(item.id)}
-                        className="group cursor-pointer"
-                      >
-                        {/* 1. Client & Case */}
-                        <td className="py-4 pl-6 pr-4">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-sm font-bold text-slate-900 transition-colors group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">
-                              {item.customerName}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                                {item.code}
-                              </span>
+              {/* Card Rows */}
+              <div className="cm-cc-list">
+                {visible.map(item => {
+                  const title = item.title === generatedCaseTitle(item.customerName, item.caseType.split(' / ').at(-1) ?? '') ? null : item.title
+                  const isAssigningThis = assigningCaseId === item.id
+                  const statusCfg = statusConfig[item.status]
+                  const initials = item.customerName.trim().split(/\s+/).slice(0, 2).map((w: string) => w.charAt(0).toUpperCase()).join('')
+                  const docPct   = safeProgress(item.documentsDone, item.documentsTotal)
+                  const docDone  = item.documentsTotal > 0 && item.documentsDone === item.documentsTotal
+                  const isActive = item.status === 'in_progress'
+
+                  const accentMap: Record<string, string> = {
+                    received:        'bg-cyan-400',
+                    in_progress:     'bg-indigo-500',
+                    reviewing:       'bg-amber-400',
+                    waiting:         'bg-orange-400',
+                    waiting_payment: 'bg-violet-500',
+                    completed:       'bg-emerald-500',
+                  }
+
+                  const avatarMap: Record<string, string> = {
+                    received:        'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300',
+                    in_progress:     'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300',
+                    reviewing:       'bg-amber-50 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
+                    waiting:         'bg-orange-50 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300',
+                    waiting_payment: 'bg-violet-50 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300',
+                    completed:       'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300',
+                  }
+
+                  const progressFill = docDone
+                    ? 'bg-emerald-500'
+                    : docPct >= 60 ? 'bg-indigo-500'
+                    : docPct > 0   ? 'bg-amber-400'
+                    : 'bg-slate-300 dark:bg-slate-600'
+
+                  return (
+                    <div
+                      key={item.id}
+                      data-status={item.status}
+                      onClick={() => props.onOpen(item.id)}
+                      className="cm-cc-card group"
+                    >
+                      {/* Accent bar */}
+                      <div className={`cm-cc-accent ${accentMap[item.status] ?? 'bg-slate-400'}`} />
+
+                      {/* Grid body */}
+                      <div className="cm-cc-body cm-cc-grid">
+
+                        {/* 1. Client */}
+                        <div className="cm-cc-client">
+                          <div className={`cm-cc-avatar ${avatarMap[item.status] ?? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+                            {initials || '?'}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="cm-cc-client-name">{item.customerName}</span>
+                            <div className="cm-cc-client-sub">
+                              <span className="cm-cc-client-code">{item.code}</span>
                               {item.customerKana && (
-                                <span className="text-xs text-slate-400 dark:text-slate-500">
-                                  {item.customerKana}
-                                </span>
+                                <span className="cm-cc-client-kana">· {item.customerKana}</span>
                               )}
                             </div>
-                            <span className="text-xs text-slate-400 dark:text-slate-500 leading-tight">
-                              {title}
-                            </span>
+                            {title
+                              ? <span className="cm-cc-client-title is-real">{title}</span>
+                              : <span className="cm-cc-client-title">案件名未設定</span>
+                            }
                           </div>
-                        </td>
+                        </div>
 
-                        {/* 2. Type & Target Completion Date */}
-                        <td className="px-4 py-4 align-middle">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-xs font-medium text-slate-800 dark:text-slate-200">
-                              {caseTypeLabel(item.caseType)}
-                            </span>
-                            {item.targetCompletionAt && (
-                              <span className="text-xs text-slate-400 dark:text-slate-500">
-                                {item.targetCompletionAt.slice(0, 10)}
-                              </span>
-                            )}
-                          </div>
-                        </td>
+                        {/* 2. Case Type */}
+                        <div>
+                          <span className="cm-cc-type-tag">{caseTypeLabel(item.caseType)}</span>
+                          {item.targetCompletionAt && (
+                            <span className="cm-cc-target-date">目標: {item.targetCompletionAt.slice(0, 10)}</span>
+                          )}
+                        </div>
 
                         {/* 3. Assignee */}
-                        <td className="relative px-4 py-4 align-middle" onClick={event => event.stopPropagation()}>
-                          <div className="flex flex-col gap-0.5">
-                            {props.canAssign ? (
-                              <div className="relative">
-                                <button
-                                  type="button"
-                                  onClick={() => setAssigningCaseId(isAssigningThis ? null : item.id)}
-                                  className="group/assign inline-flex items-center gap-1.5 text-left text-xs font-bold text-slate-800 transition hover:text-blue-600 dark:text-slate-200 dark:hover:text-blue-400"
-                                >
-                                  <span>{item.assignedEmployeeId ? item.assignee : '未割当'}</span>
-                                  <ChevronDown size={12} className="text-slate-400 transition group-hover/assign:text-blue-600" />
-                                </button>
-                                <span className="block text-xs text-slate-400 dark:text-slate-500">
-                                  {item.assignedEmployeeId ? item.role : '担当者'}
-                                </span>
-
-                                {/* Assignee Dropdown Popover */}
-                                {isAssigningThis && (
-                                  <div className="absolute left-0 top-full z-50 mt-1.5 w-56 rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-[#1A2338]">
-                                    <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 border-b border-slate-100 dark:border-slate-700/60">
-                                      担当者を変更
-                                    </div>
+                        <div className="relative" onClick={e => e.stopPropagation()}>
+                          {props.canAssign ? (
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setAssigningCaseId(isAssigningThis ? null : item.id)}
+                                className="group/assign inline-flex items-center gap-1 text-left text-xs font-bold text-slate-800 transition hover:text-[var(--tm-primary)] dark:text-slate-200 dark:hover:text-indigo-300"
+                              >
+                                <span>{item.assignedEmployeeId ? item.assignee : '未割当'}</span>
+                                <ChevronDown size={11} className="text-slate-400 transition group-hover/assign:text-[var(--tm-primary)]" />
+                              </button>
+                              <span className="block text-[11px] text-slate-400 dark:text-slate-500">
+                                {item.assignedEmployeeId ? item.role : '担当者'}
+                              </span>
+                              {isAssigningThis && (
+                                <div className="absolute left-0 top-full z-50 mt-1.5 w-56 rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-[#1A2338]">
+                                  <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 border-b border-slate-100 dark:border-slate-700/60">担当者を変更</div>
+                                  <button
+                                    type="button"
+                                    onClick={() => { props.onAssign(item.id, null); setAssigningCaseId(null) }}
+                                    className="flex w-full items-center justify-between px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/50"
+                                  >
+                                    <span>未割当</span>
+                                    {!item.assignedEmployeeId && <Check size={14} className="text-blue-600" />}
+                                  </button>
+                                  {props.assignees.map(emp => (
                                     <button
+                                      key={emp.id}
                                       type="button"
-                                      onClick={() => {
-                                        props.onAssign(item.id, null)
-                                        setAssigningCaseId(null)
-                                      }}
+                                      onClick={() => { props.onAssign(item.id, emp.id); setAssigningCaseId(null) }}
                                       className="flex w-full items-center justify-between px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/50"
                                     >
-                                      <span>未割当</span>
-                                      {!item.assignedEmployeeId && <Check size={14} className="text-blue-600" />}
+                                      <div className="flex flex-col text-left">
+                                        <span className="font-semibold">{emp.full_name}</span>
+                                        <span className="text-[10px] text-slate-400">{emp.position_title || '担当者'}</span>
+                                      </div>
+                                      {item.assignedEmployeeId === emp.id && <Check size={14} className="text-blue-600" />}
                                     </button>
-                                    {props.assignees.map(emp => (
-                                      <button
-                                        key={emp.id}
-                                        type="button"
-                                        onClick={() => {
-                                          props.onAssign(item.id, emp.id)
-                                          setAssigningCaseId(null)
-                                        }}
-                                        className="flex w-full items-center justify-between px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/50"
-                                      >
-                                        <div className="flex flex-col text-left">
-                                          <span className="font-semibold">{emp.full_name}</span>
-                                          <span className="text-[10px] text-slate-400">{emp.position_title || '担当者'}</span>
-                                        </div>
-                                        {item.assignedEmployeeId === emp.id && <Check size={14} className="text-blue-600" />}
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <>
-                                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                                  {item.assignedEmployeeId ? item.assignee : '未割当'}
-                                </span>
-                                <span className="text-xs text-slate-400 dark:text-slate-500">
-                                  {item.assignedEmployeeId ? item.role : '担当者'}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </td>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <>
+                              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                                {item.assignedEmployeeId ? item.assignee : '未割当'}
+                              </span>
+                              <span className="block text-[11px] text-slate-400 dark:text-slate-500">
+                                {item.assignedEmployeeId ? item.role : '担当者'}
+                              </span>
+                            </>
+                          )}
+                        </div>
 
-                        {/* 4. State Badge (Pixel-matched soft blue pill) */}
-                        <td className="px-4 py-4 align-middle">
-                          <span className={`inline-flex items-center justify-center rounded-md border px-2.5 py-1 text-xs font-semibold ${statusConfig[item.status].badge}`}>
+                        {/* 4. Status */}
+                        <div>
+                          <span className={`cm-cc-status ${statusCfg.badge}`}>
+                            <span className={`cm-cc-dot ${statusCfg.dot} ${isActive ? 'animate-pulse' : ''}`} />
                             {statusLabel(item.status)}
                           </span>
-                        </td>
+                        </div>
 
                         {/* 5. Document Progress */}
-                        <td className="px-4 py-4 align-middle">
-                          <div className="flex flex-col gap-1">
-                            <div className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                              {item.documentsDone} / {item.documentsTotal}件
-                            </div>
-                            {item.documentsTotal > 0 ? (
-                              <>
-                                <div className="h-1.5 w-28 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                                  <div
-                                    className="h-full rounded-full bg-sky-400 transition-all"
-                                    style={{ width: `${safeProgress(item.documentsDone, item.documentsTotal)}%` }}
-                                  />
-                                </div>
-                                <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                                  {item.documentsDone === item.documentsTotal
-                                    ? '必要資料はすべて確認済み'
-                                    : `未完了の必要資料 ${item.documentsTotal - item.documentsDone} 件`}
-                                </span>
-                              </>
-                            ) : (
-                              <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                                必要資料は未選択
-                              </span>
-                            )}
+                        <div>
+                          <div className="flex items-baseline">
+                            <span className={`cm-cc-prog-num ${docDone ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                              {item.documentsDone}
+                            </span>
+                            <span className="cm-cc-prog-denom">/ {item.documentsTotal}件</span>
                           </div>
-                        </td>
+                          {item.documentsTotal > 0 ? (
+                            <>
+                              <div className="cm-cc-prog-track">
+                                <div className={`cm-cc-prog-fill ${progressFill}`} style={{ width: `${docPct}%` }} />
+                              </div>
+                              <span className={`cm-cc-prog-label ${docDone ? '!text-emerald-600 dark:!text-emerald-400' : ''}`}>
+                                {docDone ? '✓ 確認完了' : `残り ${item.documentsTotal - item.documentsDone} 件`}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="cm-cc-prog-label">資料未選択</span>
+                          )}
+                        </div>
 
-                        {/* 6. Updated At */}
-                        <td className="px-4 py-4 align-middle">
-                          <time className="text-xs text-slate-600 dark:text-slate-400" dateTime={item.rawUpdatedAt}>
+                        {/* 6. Date */}
+                        <div>
+                          <time className="cm-cc-date" dateTime={item.rawUpdatedAt}>
                             {dateTime(item.rawUpdatedAt)}
                           </time>
-                        </td>
+                        </div>
 
-                        {/* 7. Action Button */}
-                        <td className="relative py-4 pl-4 pr-6 text-right align-middle" onClick={event => event.stopPropagation()}>
+                        {/* 7. Action */}
+                        <div className="flex justify-end" onClick={e => e.stopPropagation()}>
                           <button
                             type="button"
-                            aria-label="操作メニュー"
-                            onClick={() => setActiveMenuId(isMenuActive ? null : item.id)}
-                            className="inline-flex h-8 w-9 items-center justify-center rounded-lg border border-slate-200/90 bg-white text-slate-400 shadow-2xs transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-600 dark:border-slate-700 dark:bg-[#131B2E] dark:text-slate-400 dark:hover:bg-slate-800"
+                            aria-label={`${item.customerName}の案件詳細を表示`}
+                            title="案件詳細を表示"
+                            onClick={() => setQuickViewCase(item)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200/90 bg-white text-slate-400 shadow-2xs transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-600 dark:border-slate-700 dark:bg-[#131B2E] dark:text-slate-400 dark:hover:bg-slate-800"
                           >
-                            <MoreHorizontal size={16} />
+                            <MoreHorizontal size={15} />
                           </button>
+                        </div>
 
-                          {/* Action Dropdown Menu */}
-                          {isMenuActive && (
-                            <div className="absolute right-6 top-full z-50 mt-1 w-44 rounded-lg border border-slate-200 bg-white py-1.5 text-left shadow-lg dark:border-slate-700 dark:bg-[#1A2338]">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveMenuId(null)
-                                  props.onOpen(item.id)
-                                }}
-                                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/50"
-                              >
-                                <ExternalLink size={13} className="text-slate-400" />
-                                <span>詳細を見る</span>
-                              </button>
-                              {props.canAssign && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveMenuId(null)
-                                    setAssigningCaseId(item.id)
-                                  }}
-                                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/50"
-                                >
-                                  <UserCheck size={13} className="text-slate-400" />
-                                  <span>担当者を変更</span>
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveMenuId(null)
-                                  props.onOpen(item.id)
-                                }}
-                                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/50"
-                              >
-                                <Check size={13} className="text-emerald-500" />
-                                <span>進捗を更新</span>
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
 
-          {/* 5. Pagination Footer */}
+          {/* 5. Pagination Footeration Footer */}
           <footer className="cm-case-pagination flex flex-col gap-3 px-6 py-3.5 text-xs sm:flex-row sm:items-center sm:justify-between">
             <div className="font-medium text-slate-500 dark:text-slate-400">
               {props.filteredCases.length ? (current - 1) * PAGE_SIZE + 1 : 0}-{Math.min(current * PAGE_SIZE, props.filteredCases.length)} / {props.filteredCases.length}件・1ページ{PAGE_SIZE}件
@@ -551,6 +527,13 @@ export default function CaseListView(props: Props) {
           </footer>
         </section>
       </main>
+
+      <CaseQuickViewDrawer
+        caseItem={quickViewCase}
+        onClose={() => setQuickViewCase(null)}
+        onOpen={props.onOpen}
+        onOpenCollection={props.onOpenCollection}
+      />
     </div>
   )
 }

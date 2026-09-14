@@ -102,6 +102,20 @@ class GoogleDriveOAuthTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_local_root_folder_override_does_not_replace_the_default_root(): void
+    {
+        config([
+            'services.google_drive.root_folder_id' => 'production_root',
+            'services.google_drive.local_root_folder_id' => 'local_root',
+        ]);
+
+        $this->assertSame('local_root', app(GoogleDriveService::class)->configuredRootFolderId());
+
+        app()->detectEnvironment(fn () => 'production');
+
+        $this->assertSame('production_root', app(GoogleDriveService::class)->configuredRootFolderId());
+    }
+
     public function test_invalid_grant_is_not_retried(): void
     {
         Http::fake(['https://oauth2.googleapis.com/token' => Http::response([

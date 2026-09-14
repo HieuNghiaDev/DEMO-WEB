@@ -404,6 +404,8 @@ Các route dưới đây dùng Sanctum, kiểm tra `case_document` thuộc đún
 
 API tạo Client/Case trả thêm `drive.status` (`ready` hoặc `failed`) sau khi record MySQL đã commit; lỗi Drive không rollback record. `POST /clients/{client}/google-drive/provision` và `POST /case-files/{caseFile}/google-drive/provision` (`case.update`) retry idempotent. Artifact Drive trả `external_file_id`, `url`, `filename`, `uploaded_at`; không trả OAuth token. OAuth admin local dùng `GET /google-drive/oauth/authorize` và callback cố định `GET /google-drive/oauth/callback`, không khả dụng ngoài environment local/testing.
 
+Local/testing có thể đặt `GOOGLE_DRIVE_LOCAL_ROOT_FOLDER_ID` để dùng thư mục Drive riêng; nếu để trống sẽ dùng `GOOGLE_DRIVE_ROOT_FOLDER_ID`. Production luôn bỏ qua override local.
+
 C‑001 v1, renderer `generic_legal_document`, format `html`, vẫn là skeleton lịch sử và không bị sửa. C‑001 v2 là template active mới cho instance chưa được tạo: đây là `参考テンプレート / 事務所承認前`, chỉ mô tả cấu trúc và các placeholder do operator nhập, không phải nội dung được văn phòng phê duyệt. Instance đã tồn tại tiếp tục dùng template version đã pin.
 
 Mỗi phiên bản `approved` là bất biến: PATCH draft và POST review không sửa phiên bản đã approve; POST approve lặp lại trả `422` và giữ nguyên actor/thời gian. Muốn sửa phải POST revision trên phiên bản mới nhất đã approved; API tạo `vN+1` ở trạng thái draft, copy dữ liệu từ approved snapshot và tiếp tục dùng template đã pin. Unique `(case_document_id, version)` cùng khóa transaction ngăn tạo trùng phiên bản.
