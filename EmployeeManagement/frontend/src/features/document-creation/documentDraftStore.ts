@@ -53,7 +53,7 @@ export interface DocumentDraftStore {
   createRevision(identity: DocumentDraftIdentity): Promise<DocumentCreationState>
   previewC001(identity: DocumentDraftIdentity, official: boolean, signal?: AbortSignal): Promise<C001WorkbookPreview>
   syncC001(identity: DocumentDraftIdentity, percentage: string): Promise<DocumentCreationState>
-  rejectC001(identity: DocumentDraftIdentity): Promise<DocumentCreationState>
+  rejectC001(identity: DocumentDraftIdentity, reason: string): Promise<DocumentCreationState>
 }
 
 type ApiTemplate = {
@@ -151,8 +151,8 @@ export const apiDocumentDraftStore: DocumentDraftStore = {
   async syncC001(identity, percentage) {
     return mapState((await api.post<ApiCreationState>(`${path(identity)}/c001/sync`, { success_fee_percentage: percentage })).data)
   },
-  async rejectC001(identity) {
-    return mapState((await api.post<ApiCreationState>(`${path(identity)}/c001/reject`)).data)
+  async rejectC001(identity, reason) {
+    return mapState((await api.post<ApiCreationState>(`${path(identity)}/c001/reject`, { reason })).data)
   },
 }
 

@@ -761,6 +761,55 @@ class CaseDocumentCreationApiTest extends TestCase
         $this->assertNotNull($instance->fresh()->approved_at);
     }
 
+    public function test_official_c001_rejection_requires_and_returns_an_audited_reason(): void
+    {
+        config()->set('services.google_drive.c001_template_folder_id', 'official_template_folder');
+        $template = DocumentGenerationTemplate::where('version', 2)->sole();
+        $instance = $this->document->generatedDocuments()->create([
+            'document_generation_template_id' => $template->id,
+            'version' => 1,
+            'workflow_status' => 'review',
+            'draft_data' => ['client_name' => '依頼者株式会社', 'client_address' => '大阪市北区'],
+            'success_fee_percentage' => 22,
+            'created_by' => $this->user->id,
+            'updated_by' => $this->user->id,
+        ]);
+        foreach ([['source_workbook', 'xlsx'], ['pdf', 'pdf']] as [$type, $suffix]) {
+            $instance->artifacts()->create([
+                'artifact_type' => $type,
+                'storage_provider' => 'google_drive',
+                'external_file_id' => 'official-'.$suffix,
+                'external_url' => 'https://drive.google.com/file/d/official-'.$suffix.'/view',
+                'filename' => 'C-001.'.$suffix,
+                'mime_type' => $type === 'pdf' ? 'application/pdf' : GoogleDriveService::XLSX_MIME_TYPE,
+                'uploaded_by' => $this->user->id,
+                'uploaded_at' => now(),
+            ]);
+        }
+
+        $admin = User::factory()->withRole('level_5')->create();
+        Sanctum::actingAs($admin);
+        $this->getJson('/api/approvals')->assertOk()
+            ->assertJsonPath('c001_documents.0.document_id', $this->document->id)
+            ->assertJsonPath('c001_documents.0.status', 'pending_approval')
+            ->assertJsonPath('c001_documents.0.version', 1);
+        Sanctum::actingAs($this->user);
+
+        $this->postJson($this->url().'/c001/reject')->assertUnprocessable()->assertJsonValidationErrors('reason');
+        $this->assertSame('review', $instance->fresh()->workflow_status);
+
+        $this->postJson($this->url().'/c001/reject', ['reason' => '委任者住所を再確認してください。'])
+            ->assertOk()
+            ->assertJsonPath('c001.status', 'rejected')
+            ->assertJsonPath('c001.rejection_reason', '委任者住所を再確認してください。')
+            ->assertJsonPath('c001.rejected_by.name', '担当 太郎');
+
+        $activity = $this->case->activities()->where('metadata->event', 'c001.rejected')->firstOrFail();
+        $this->assertSame('委任者住所を再確認してください。', $activity->metadata['reason']);
+        $this->assertSame('draft', $instance->fresh()->workflow_status);
+        $this->assertSame('returned', $this->document->fresh()->review_status);
+    }
+
     public function test_c001_sync_validates_percentage_and_customer_before_drive_access(): void
     {
         config()->set('services.google_drive.c001_template_folder_id', 'official_template_folder');

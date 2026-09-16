@@ -1,23 +1,25 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-export default function InspectorShell({ title, code, subtitle, children, footer, onClose, breakpoint = 1280 }: {
-  title: string; code: ReactNode; subtitle?: string; children: ReactNode; footer?: ReactNode; onClose: () => void; breakpoint?: number
+export default function InspectorShell({ title, code, subtitle, children, footer, onClose, breakpoint = 1280, forceOverlay = false, className = '' }: {
+  title: string; code: ReactNode; subtitle?: string; children: ReactNode; footer?: ReactNode; onClose: () => void; breakpoint?: number; forceOverlay?: boolean; className?: string
 }) {
   const { t } = useTranslation()
-  const [overlay, setOverlay] = useState(() => window.innerWidth < breakpoint)
+  const [overlay, setOverlay] = useState(() => forceOverlay || window.innerWidth < breakpoint)
   const panel = useRef<HTMLElement>(null)
   const close = useRef(onClose)
   const titleId = useId()
   useEffect(() => { close.current = onClose }, [onClose])
   useEffect(() => {
     const media = window.matchMedia(`(max-width: ${breakpoint - 1}px)`)
-    const change = () => setOverlay(media.matches)
+    const change = () => setOverlay(forceOverlay || media.matches)
+    change()
     media.addEventListener('change', change)
     return () => media.removeEventListener('change', change)
-  }, [breakpoint])
+  }, [breakpoint, forceOverlay])
   useEffect(() => {
     const origin = document.activeElement as HTMLElement | null
     const previousOverflow = document.body.style.overflow
@@ -34,12 +36,14 @@ export default function InspectorShell({ title, code, subtitle, children, footer
     document.addEventListener('keydown', keydown)
     return () => { document.removeEventListener('keydown', keydown); document.body.style.overflow = previousOverflow; if (origin?.isConnected) origin.focus({ preventScroll: true }) }
   }, [overlay])
-  return <>
+  const inspector = <>
     {overlay && <div className="dc-backdrop" onClick={onClose} aria-hidden="true" />}
-    <aside className={`dc-inspector ${overlay ? 'is-overlay' : ''}`} ref={panel} tabIndex={-1} role={overlay ? 'dialog' : 'region'} aria-modal={overlay || undefined} aria-labelledby={titleId}>
+    <aside className={`dc-inspector ${overlay ? 'is-overlay' : ''} ${className}`.trim()} ref={panel} tabIndex={-1} role={overlay ? 'dialog' : 'region'} aria-modal={overlay || undefined} aria-labelledby={titleId}>
       <header className="dc-inspector-head"><div><span className="dc-code">{code}</span><h2 id={titleId}>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><button type="button" className="dc-icon-button" aria-label={t('documentCollection.editor.closeDetail')} onClick={onClose}><X size={20} /></button></header>
       <div className="dc-inspector-body">{children}</div>
       {footer && <footer className="dc-inspector-footer">{footer}</footer>}
     </aside>
   </>
+
+  return overlay ? createPortal(inspector, document.body) : inspector
 }

@@ -335,11 +335,15 @@ class CaseDocumentCreationController extends Controller
     ): JsonResponse {
         $this->assertBelongsToCase($caseFile, $caseDocument);
         $this->assertC001Approver($request);
+        $payload = $request->validate([
+            'reason' => ['required', 'string', 'max:2000'],
+        ]);
         $instance = $workflow->reject($caseFile, $caseDocument, $request->user());
         $audit->record($caseFile, $request, 'C-001を差戻し', '委任契約書', [
             'event' => 'c001.rejected',
             'document_id' => $caseDocument->id,
             'generated_document_id' => $instance->id,
+            'reason' => trim($payload['reason']),
         ]);
         $caseDocument->refresh();
 
@@ -525,6 +529,14 @@ class CaseDocumentCreationController extends Controller
                         && $artifact->storage_provider === 'google_drive')))?->version
             : null;
         $instance?->loadMissing('updatedBy:id,name');
+        $rejectionActivity = $isC001 && $instance
+            ? $caseDocument->caseFile?->activities()
+                ->with('createdByEmployee:id,full_name')
+                ->where('metadata->event', 'c001.rejected')
+                ->where('metadata->generated_document_id', $instance->id)
+                ->latest('occurred_at')
+                ->first()
+            : null;
 
         return response()->json([
             'supported' => true,
@@ -568,6 +580,13 @@ class CaseDocumentCreationController extends Controller
                 ] : null,
                 'draft_updated_at' => $instance?->updated_at?->toISOString(),
                 'draft_updated_by' => $instance?->updatedBy ? ['id' => $instance->updatedBy->id, 'name' => $instance->updatedBy->name] : null,
+                'approved_at' => $instance?->approved_at?->toISOString(),
+                'approved_by' => $instance?->approvedBy ? ['id' => $instance->approvedBy->id, 'name' => $instance->approvedBy->name] : null,
+                'rejection_reason' => $rejectionActivity?->metadata['reason'] ?? null,
+                'rejected_at' => $rejectionActivity?->occurred_at?->toISOString(),
+                'rejected_by' => $rejectionActivity?->createdByEmployee
+                    ? ['id' => $rejectionActivity->createdByEmployee->id, 'name' => $rejectionActivity->createdByEmployee->full_name]
+                    : null,
             ] : null,
             'drive' => app(GeneratedDocumentStorageService::class)->state($instance, auth()->user()?->hasPermission('case.update') ?? false),
             'current_version' => $currentVersion,

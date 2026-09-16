@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ApprovalRequest;
+use App\Models\CaseDocument;
+use App\Models\CaseGeneratedDocument;
 use App\Models\User;
+use App\Services\C001DocumentWorkflowService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +24,10 @@ class ApprovalRequestController extends Controller
             ->get()
             ->map(fn (ApprovalRequest $approval): array => $this->serialize($approval));
 
-        return response()->json(['approvals' => $approvals]);
+        return response()->json([
+            'approvals' => $approvals,
+            'c001_documents' => $this->c001Documents(),
+        ]);
     }
 
     public function approve(Request $request, ApprovalRequest $approval): JsonResponse
@@ -118,5 +124,59 @@ class ApprovalRequestController extends Controller
             'id' => $user->id,
             'name' => (string) ($user->name ?: $user->email),
         ];
+    }
+
+    /** @return \Illuminate\Support\Collection<int, array<string, mixed>> */
+    private function c001Documents()
+    {
+        return CaseDocument::query()
+            ->whereHas('documentType', fn ($query) => $query->where('code', 'C-001'))
+            ->whereHas('generatedDocuments.artifacts', fn ($query) => $query
+                ->where('storage_provider', 'google_drive')
+                ->whereIn('artifact_type', [C001DocumentWorkflowService::ARTIFACT_TYPE, C001DocumentWorkflowService::PDF_ARTIFACT_TYPE]))
+            ->with([
+                'documentType:id,code,name_ja',
+                'caseFile:id,title,reference_number,client_id',
+                'caseFile.client:id,name',
+                'generatedDocuments' => fn ($query) => $query
+                    ->with(['createdBy:id,name', 'approvedBy:id,name', 'artifacts'])
+                    ->orderByDesc('version'),
+            ])
+            ->latest('updated_at')
+            ->limit(100)
+            ->get()
+            ->map(function (CaseDocument $document): ?array {
+                $officialVersions = $document->generatedDocuments->filter(fn (CaseGeneratedDocument $version) =>
+                    $version->artifacts->contains(fn ($artifact) => $artifact->storage_provider === 'google_drive'
+                        && $artifact->artifact_type === C001DocumentWorkflowService::ARTIFACT_TYPE)
+                    && $version->artifacts->contains(fn ($artifact) => $artifact->storage_provider === 'google_drive'
+                        && $artifact->artifact_type === C001DocumentWorkflowService::PDF_ARTIFACT_TYPE)
+                );
+                /** @var CaseGeneratedDocument|null $version */
+                $version = $officialVersions->sortByDesc('version')->first();
+                if (! $version) return null;
+
+                $status = $version->workflow_status === 'approved'
+                    ? 'complete'
+                    : ($document->review_status === 'returned' ? 'rejected' : 'pending_approval');
+
+                return [
+                    'case_id' => $document->case_file_id,
+                    'case_reference' => $document->caseFile?->reference_number,
+                    'case_title' => $document->caseFile?->title,
+                    'document_id' => $document->id,
+                    'document_title' => $document->documentType?->name_ja ?? $document->title,
+                    'client_name' => $document->caseFile?->client?->name,
+                    'status' => $status,
+                    'version' => $version->version,
+                    'success_fee_percentage' => $version->success_fee_percentage,
+                    'generated_at' => $version->created_at?->toISOString(),
+                    'generated_by' => $version->createdBy?->name,
+                    'approved_at' => $version->approved_at?->toISOString(),
+                    'approved_by' => $version->approvedBy?->name,
+                ];
+            })
+            ->filter()
+            ->values();
     }
 }

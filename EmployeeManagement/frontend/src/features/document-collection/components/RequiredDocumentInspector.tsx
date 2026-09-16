@@ -13,6 +13,7 @@ import ReceivedDocumentsList from './ReceivedDocumentsList'
 import ReceivedDocumentRegistration from './ReceivedDocumentRegistration'
 import { SectionSkeleton } from '../../../components/loading'
 import C001DocumentPanel from '../../document-creation/components/C001DocumentPanel'
+import C001DocumentReviewDrawer from '../../document-creation/components/C001DocumentReviewDrawer'
 
 export default function RequiredDocumentInspector({ caseId, itemId, canUpdate, canReviewDocuments, activities, onCandidates, onHistory, onClose, onSaved }: {
   caseId: number; itemId: number; canUpdate: boolean; canReviewDocuments: boolean; activities: CaseActivity[]
@@ -47,6 +48,10 @@ export default function RequiredDocumentInspector({ caseId, itemId, canUpdate, c
     finally { setSaving(false) }
   }
   const relevantHistory = activities.filter(activity => activity.metadata?.event === 'document_collection.updated' && activity.metadata.document_id === itemId).length
+
+  if (detail?.c001 && ['pending_approval', 'complete', 'rejected'].includes(detail.c001.status)) {
+    return <C001DocumentReviewDrawer caseId={caseId} documentId={itemId} canUpdate={canUpdate} onClose={onClose} onChanged={() => { onSaved(); setRevision(value => value + 1) }}/>
+  }
 
   return <InspectorShell breakpoint={1560} title={detail?.document_type?.name_ja ?? detail?.title ?? '必要資料'} code={detail?.document_type?.code ?? '—'} subtitle={detail ? '必要' : undefined} onClose={onClose} footer={<div><span className="dc-meta">{notice || (canUpdate ? '変更は明示的に保存されます。' : '閲覧のみ')}</span><button type="button" className="dc-button" onClick={onClose}>閉じる</button></div>}>
     {loading && <SectionSkeleton className="border-0" label="必要資料の詳細を読み込み中…" rows={5} showHeader={false} />}

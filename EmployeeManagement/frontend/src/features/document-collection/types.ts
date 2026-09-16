@@ -32,7 +32,10 @@ export type C001State = {
   pdf_artifact?: C001FileArtifact | null
   workbook_artifact?: C001FileArtifact | null
   approved_at?: string | null
-  approved_by?: string | null
+  approved_by?: { id: number; name: string } | null
+  rejection_reason?: string | null
+  rejected_at?: string | null
+  rejected_by?: { id: number; name: string } | null
   can_approve?: boolean
   draft_updated_at?: string | null
   draft_updated_by?: { id: number; name: string } | null

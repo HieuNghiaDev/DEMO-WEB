@@ -3,10 +3,11 @@ import { useRef, useState } from 'react'
 import { ButtonSpinner } from '../../../components/loading'
 import { fetchC001Workbook, saveWorkbookDownload } from '../c001Workbook'
 
-export default function C001WorkbookDownloadButton({ caseId, documentId, version }: {
+export default function C001WorkbookDownloadButton({ caseId, documentId, version, label = 'ダウンロード' }: {
   caseId: number
   documentId: number
   version: number
+  label?: string
 }) {
   const inFlight = useRef(false)
   const [busy, setBusy] = useState(false)
@@ -30,7 +31,7 @@ export default function C001WorkbookDownloadButton({ caseId, documentId, version
 
   return <span>
     <button type="button" className="dc-button" disabled={busy} onClick={() => void download()}>
-      {busy ? <ButtonSpinner size={14}/> : <Download size={14}/>} {busy ? '取得中…' : 'ダウンロード'}
+      {busy ? <ButtonSpinner size={14}/> : <Download size={14}/>} {busy ? '取得中…' : label}
     </button>
     {error && <p className="dc-danger" role="alert">{error}</p>}
   </span>

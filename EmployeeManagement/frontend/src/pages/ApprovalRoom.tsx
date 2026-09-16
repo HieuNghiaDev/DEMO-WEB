@@ -10,6 +10,8 @@ import {
   StatusBadge,
 } from '../components/ui'
 import { SectionSkeleton } from '../components/loading'
+import { useAuth } from '../contexts/AuthContext'
+import C001DocumentReviewDrawer from '../features/document-creation/components/C001DocumentReviewDrawer'
 
 type ApprovalStatus = 'pending' | 'approved' | 'rejected'
 type ApprovalAction = 'approve' | 'reject'
@@ -28,6 +30,22 @@ type ApprovalRequest = {
   rejected_at: string | null
   executed_by: ApprovalUser | null
   executed_at: string | null
+}
+
+type C001ApprovalSummary = {
+  case_id: number
+  case_reference: string | null
+  case_title: string | null
+  document_id: number
+  document_title: string
+  client_name: string | null
+  status: 'pending_approval' | 'complete' | 'rejected'
+  version: number
+  success_fee_percentage: string | null
+  generated_at: string | null
+  generated_by: string | null
+  approved_at: string | null
+  approved_by: string | null
 }
 
 const statusMeta: Record<ApprovalStatus, { label: string; variant: 'warning' | 'success' | 'danger' }> = {
@@ -59,7 +77,10 @@ const summarizePayload = (payload: Record<string, unknown> | null) => {
 }
 
 function ApprovalRoom() {
+  const { user } = useAuth()
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([])
+  const [c001Documents, setC001Documents] = useState<C001ApprovalSummary[]>([])
+  const [selectedC001, setSelectedC001] = useState<C001ApprovalSummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeAction, setActiveAction] = useState<{ id: number; action: ApprovalAction } | null>(null)
@@ -68,8 +89,9 @@ function ApprovalRoom() {
     setIsLoading(true)
     setError(null)
     try {
-      const response = await api.get<{ approvals: ApprovalRequest[] }>('/approvals')
+      const response = await api.get<{ approvals: ApprovalRequest[]; c001_documents?: C001ApprovalSummary[] }>('/approvals')
       setApprovals(response.data.approvals)
+      setC001Documents(response.data.c001_documents ?? [])
     } catch {
       setError('承認申請を読み込めませんでした。アクセス権限と接続状況を確認してください。')
     } finally {
@@ -100,7 +122,8 @@ function ApprovalRoom() {
     }
   }
 
-  const pendingCount = approvals.filter((approval) => approval.status === 'pending').length
+  const pendingC001Count = c001Documents.filter((document) => document.status === 'pending_approval').length
+  const pendingCount = approvals.filter((approval) => approval.status === 'pending').length + pendingC001Count
   const approvedCount = approvals.filter((approval) => approval.status === 'approved').length
   const rejectedCount = approvals.filter((approval) => approval.status === 'rejected').length
   const executedCount = approvals.filter((approval) => approval.executed_at !== null).length
@@ -158,6 +181,33 @@ function ApprovalRoom() {
             icon={<XCircle size={18} />}
           />
         </MetricStrip>
+
+        <section className="overflow-hidden rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface)] shadow-xs" aria-labelledby="c001-approval-title">
+          <div className="flex items-center justify-between gap-4 border-b border-[var(--tm-border)] bg-[var(--tm-surface-elevated)]/50 px-4 py-3.5 sm:px-5">
+            <div>
+              <h2 id="c001-approval-title" className="text-sm font-semibold text-[var(--tm-text-primary)]">C-001 文書承認</h2>
+              <p className="mt-0.5 text-xs text-[var(--tm-text-secondary)]">公式PDFを確認して承認・差戻しを行います</p>
+            </div>
+            <span className="shrink-0 text-xs font-semibold tabular-nums text-amber-600 dark:text-amber-400">要確認 {pendingC001Count}件</span>
+          </div>
+          {isLoading && c001Documents.length === 0 ? <ApprovalLoadingState /> : c001Documents.length === 0 ? (
+            <div className="p-7"><EmptyState icon={<CheckCircle2 className="h-7 w-7 text-emerald-500" />} title="C-001の承認対象はありません" description="作成済みのC-001が承認待ちになると、ここに表示されます。" /></div>
+          ) : (
+            <div className="divide-y divide-[var(--tm-border)]">
+              {c001Documents.map((document) => {
+                const meta = document.status === 'pending_approval' ? statusMeta.pending : document.status === 'complete' ? statusMeta.approved : statusMeta.rejected
+                return <button type="button" key={document.document_id} onClick={() => setSelectedC001(document)} className="flex w-full flex-col gap-3 px-4 py-4 text-left transition-colors hover:bg-[var(--tm-surface-hover)] sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-[11px] text-[var(--tm-primary)]">C-001 · v{document.version}</span><StatusBadge variant={meta.variant} dot>{meta.label}</StatusBadge></div>
+                    <strong className="mt-1.5 block truncate text-sm text-[var(--tm-text-primary)]">{document.client_name || document.case_title || '依頼者未登録'}</strong>
+                    <span className="mt-1 block truncate text-xs text-[var(--tm-text-muted)]">{document.case_reference || `CASE-${document.case_id}`} · 報酬金 {document.success_fee_percentage ?? '—'}%</span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3 text-xs text-[var(--tm-text-secondary)]"><span>{formatDate(document.generated_at)}</span><span className="font-semibold text-[var(--tm-primary)]">文書を確認 →</span></div>
+                </button>
+              })}
+            </div>
+          )}
+        </section>
 
         {/* Approval Requests Queue */}
         <section
@@ -308,6 +358,7 @@ function ApprovalRoom() {
           )}
         </section>
       </div>
+      {selectedC001 && <C001DocumentReviewDrawer caseId={selectedC001.case_id} documentId={selectedC001.document_id} canUpdate={Boolean(user?.permission_names.includes('case.update'))} onClose={() => setSelectedC001(null)} onChanged={() => void loadApprovals()} />}
     </div>
   )
 }
