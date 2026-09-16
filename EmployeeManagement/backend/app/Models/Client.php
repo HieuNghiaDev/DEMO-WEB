@@ -19,4 +19,12 @@ class Client extends Model
     {
         return $this->hasMany(CaseFile::class);
     }
+
+    public function employments(): HasMany
+    {
+        return $this->hasMany(ClientEmployment::class)
+            ->orderByDesc('is_current')
+            ->orderByDesc('start_date')
+            ->orderByDesc('id');
+    }
 }

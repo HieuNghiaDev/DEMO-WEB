@@ -39,7 +39,7 @@ export default function LogoutConfirmationDialog({ isLoggingOut, onCancel, onCon
           <button type="button" disabled={isLoggingOut} onClick={onConfirm}
             className="flex items-center justify-center gap-2 rounded-lg bg-rose-600 px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:opacity-60">
             {isLoggingOut && <ButtonSpinner size={16} />}
-            {isLoggingOut ? '処理中...' : 'ログアウト'}
+            {isLoggingOut ? '処理中…' : 'ログアウト'}
           </button>
         </div>
       </div>

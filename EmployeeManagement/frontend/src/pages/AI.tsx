@@ -1,4 +1,4 @@
-import { ButtonSpinner } from '../components/loading'
+import { InlineLoader, SectionSkeleton } from '../components/loading'
 import { Bot,  SendHorizontal } from 'lucide-react'
 import { type FormEvent, type KeyboardEvent, useEffect, useState } from 'react'
 import {
@@ -11,7 +11,7 @@ import {
   type AiChatMessage,
   type AiPersona,
 } from '../features/ai/aiChat'
-import { Button, LoadingState, PageHeader } from '../components/ui'
+import { Button, PageHeader } from '../components/ui'
 
 function AIEmployees() {
   const [personas, setPersonas] = useState<AiPersona[]>([])
@@ -122,7 +122,7 @@ function AIEmployees() {
       <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
         <div className="rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface)] shadow-xs overflow-hidden">
           {isLoading ? (
-            <LoadingState className="min-h-72" message="AI社員の情報を読み込み中です…" variant="section" />
+            <SectionSkeleton className="min-h-72 border-0" label="AI社員の情報を読み込み中です…" rows={4} />
           ) : error ? (
             <div className="p-8 text-sm text-[var(--tm-danger)]">{error}</div>
           ) : personas.length === 0 ? (
@@ -237,9 +237,8 @@ function AIEmployees() {
                     )}
 
                     {isSending && (
-                      <div className="flex items-center gap-2 text-xs text-[var(--tm-text-secondary)] bg-[var(--tm-surface)] w-fit px-3 py-1.5 rounded-lg border border-[var(--tm-border)]">
-                        <ButtonSpinner className="text-[var(--tm-primary)]" size={15} />
-                        AIが回答を生成中…
+                      <div className="w-fit rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] px-3 py-2">
+                        <InlineLoader ai label="AIが回答を生成中…" />
                       </div>
                     )}
                   </div>

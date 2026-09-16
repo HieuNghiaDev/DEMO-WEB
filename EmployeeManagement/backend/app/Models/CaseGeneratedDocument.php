@@ -17,12 +17,18 @@ class CaseGeneratedDocument extends Model
 
     protected $fillable = [
         'case_document_id', 'document_generation_template_id', 'version', 'workflow_status',
-        'draft_data', 'approved_data', 'approved_at', 'approved_by', 'created_by', 'updated_by',
+        'draft_data', 'approved_data', 'success_fee_percentage', 'approved_at', 'approved_by', 'created_by', 'updated_by',
     ];
 
     protected function casts(): array
     {
-        return ['version' => 'integer', 'draft_data' => 'array', 'approved_data' => 'array', 'approved_at' => 'datetime'];
+        return [
+            'version' => 'integer',
+            'draft_data' => 'array',
+            'approved_data' => 'array',
+            'success_fee_percentage' => 'decimal:2',
+            'approved_at' => 'datetime',
+        ];
     }
 
     public function caseDocument(): BelongsTo

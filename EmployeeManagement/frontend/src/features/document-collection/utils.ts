@@ -2,6 +2,9 @@ import type { CollectionDetail, CollectionDraft, CollectionItem, CollectionPatch
 import { collectionLabels, fulfillmentLabels, necessityLabels, resultLabels, reviewLabels } from './labels.ts'
 import type { CollectionRowView } from './components/CollectionListView'
 
+export const C001_DOCUMENT_CODE = 'C-001'
+export function isC001DocumentCode(code?: string | null): boolean { return code === C001_DOCUMENT_CODE }
+
 export function initializationMode(preview: InitializationPreview) {
   const state = preview.initialization
   if (state.total_existing_collection_items > 0) return 'existing'

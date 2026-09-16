@@ -10,6 +10,7 @@ import SettingsLogoutAction from '../../components/settings/SettingsLogoutAction
 import api from '../../services/api'
 import { getEmployeeAvatarUrl } from '../../utils/employeeAvatar'
 import { PageHeader } from '../../components/ui'
+import { ButtonSpinner } from '../../components/loading'
 
 const categories = [
   { id: 'account', label: 'アカウント', caption: 'Account', icon: UserRound },
@@ -185,8 +186,9 @@ export default function SystemSettings() {
                           type="button"
                           onClick={() => avatarInputRef.current?.click()}
                           disabled={isUploadingAvatar}
-                          className="mt-1 text-xs font-medium text-[var(--tm-primary)] hover:underline disabled:cursor-wait disabled:text-[var(--tm-text-muted)]"
+                          className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-[var(--tm-primary)] hover:underline disabled:cursor-wait disabled:text-[var(--tm-text-muted)]"
                         >
+                          {isUploadingAvatar && <ButtonSpinner size={13} />}
                           {isUploadingAvatar ? 'アップロード中…' : 'プロフィール画像を変更'}
                         </button>
                       </div>

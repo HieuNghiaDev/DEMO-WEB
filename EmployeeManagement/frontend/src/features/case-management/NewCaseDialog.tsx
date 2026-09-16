@@ -2,7 +2,10 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronRight, Search, UserRound, X } from 'lucide-react'
 import { caseApi, caseError } from './api'
 import { caseTypeOptions, generatedCaseTitle, newClientDraft, newDraft, validateClient } from './helpers'
-import type { CaseClient, CaseDraft, CaseEmployee, CaseFieldErrors, CaseTypeOption, CaseViewer, ClientDraft } from './types'
+import type { CaseClient, CaseDraft, CaseEmployee, CaseFieldErrors, CaseTypeOption, CaseViewer, ClientDraft, ClientEmploymentDraft } from './types'
+import { ButtonSpinner, SectionSkeleton } from '../../components/loading'
+import ClientEmploymentEditor from './ClientEmploymentEditor'
+import { employmentPayload } from './clientEmployment'
 
 type Props = { user: CaseViewer; onClose: () => void; onCreated: (id: number) => void }
 const canonicalNames = new Set(['労災', '交通事故'])
@@ -22,6 +25,7 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
   const [clientDraft, setClientDraft] = useState<ClientDraft>(newClientDraft)
   const [selectedClient, setSelectedClient] = useState<CaseClient | null>(null)
   const [draft, setDraft] = useState<CaseDraft>(newDraft)
+  const [employments, setEmployments] = useState<ClientEmploymentDraft[]>([])
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [contactOpen, setContactOpen] = useState(false)
@@ -77,23 +81,19 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
     if (Object.keys(next).length) { showErrors(next); return false }
     setFields({}); setError(''); return true
   }
-  const createPayload = (clientId: number) => ({
-    client_id: clientId,
+  const createPayload = () => ({
+    ...(selectedClient ? { client_id: selectedClient.id } : { client: Object.fromEntries(Object.entries(clientDraft).map(([key, value]) => [key, value.trim() || null])) }),
     title,
     case_type_id: Number(draft.case_type_id),
     summary: draft.summary.trim() || null,
+    ...(employments.length ? { employments: employments.map(employmentPayload) } : {}),
     ...(canAssign && draft.assigned_employee_id ? { assigned_employee_id: Number(draft.assigned_employee_id) } : {}),
   })
   const confirmCreate = async () => {
     if (submitLock.current) return
     submitLock.current = true; setSaving(true); setError('')
     try {
-      let client = selectedClient
-      if (!client) {
-        client = await caseApi.createClient(clientDraft)
-        setSelectedClient(client); setClients(current => [client!, ...current.filter(item => item.id !== client!.id)])
-      }
-      const item = await caseApi.create(createPayload(client.id))
+      const item = await caseApi.create(createPayload())
       onCreated(item.id)
     } catch (requestError) {
       const result = caseError(requestError)
@@ -106,7 +106,7 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
 
   return <dialog ref={dialog} className="dc-confirm cm-new-case-dialog cm-simple-case-dialog" aria-labelledby="new-case-title" onCancel={event => { event.preventDefault(); close() }}>
     <header className="cm-simple-header"><div><h2 id="new-case-title">新規案件</h2><p>依頼者と案件の基本情報を登録します。</p></div><button type="button" className="cm-icon-button" aria-label="閉じる" disabled={saving} onClick={close}><X size={19}/></button></header>
-    {loading ? <p role="status" className="cm-new-case-state">入力フォームを準備中…</p> : loadError ? <div role="alert" className="cm-new-case-state cm-message">{loadError}<button type="button" className="dc-button" onClick={() => { setLoading(true); setLoadError(''); setRetry(value => value + 1) }}>再試行</button></div> : <form ref={form} noValidate onSubmit={event => { event.preventDefault(); if (validateForReview()) setReviewing(true) }}>
+    {loading ? <SectionSkeleton className="m-5 border-0" label="入力フォームを準備中…" rows={4} /> : loadError ? <div role="alert" className="cm-new-case-state cm-message">{loadError}<button type="button" className="dc-button" onClick={() => { setLoading(true); setLoadError(''); setRetry(value => value + 1) }}>再試行</button></div> : <form ref={form} noValidate onSubmit={event => { event.preventDefault(); if (validateForReview()) setReviewing(true) }}>
       <fieldset disabled={saving}>
         {error && <p role="alert" className="cm-new-case-error">{error}</p>}
         <section className="cm-simple-section" aria-labelledby="new-client-heading"><h3 id="new-client-heading"><span>01</span>依頼者</h3>
@@ -120,17 +120,19 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
           </div>}
           {!selectedClient && <details className="cm-simple-contact" open={contactOpen} onToggle={event => setContactOpen(event.currentTarget.open)}><summary>依頼者情報を追加</summary><div className="cm-simple-fields"><label><span>電話番号</span><input {...common('phone')} inputMode="tel" maxLength={30} value={clientDraft.phone} onChange={event => changeClient('phone', event.target.value)}/>{errorFor('phone')}</label><label><span>メールアドレス</span><input {...common('email')} type="email" maxLength={255} value={clientDraft.email} onChange={event => changeClient('email', event.target.value)}/>{errorFor('email')}</label><label><span>住所</span><input {...common('address')} maxLength={255} value={clientDraft.address} onChange={event => changeClient('address', event.target.value)}/>{errorFor('address')}</label></div></details>}
         </section>
-        <section className="cm-simple-section" aria-labelledby="new-type-heading"><h3 id="new-type-heading"><span>02</span>事件類型</h3><div className="cm-type-tiles cm-simple-type-tiles" role="group" aria-label="事件類型">{quickTypes.map(type => <button type="button" key={type.id} aria-pressed={draft.case_type_id === String(type.id)} onClick={() => changeCase('case_type_id', String(type.id))}><strong>{type.name}</strong><small>{type.name === '労災' ? '労働・通勤事故' : '交通事故案件'}</small></button>)}</div>{quickTypes.length === 0 && <p role="alert" className="cm-field-error">利用できる事件類型を取得できませんでした。</p>}{errorFor('case_type_id')}</section>
-        <section className="cm-simple-section" aria-labelledby="new-assignee-heading"><h3 id="new-assignee-heading"><span>03</span>担当者</h3><div className="cm-assignee-picker"><button type="button" className="cm-picker-trigger cm-simple-picker" disabled={!canAssign} aria-expanded={pickerOpen} onClick={() => setPickerOpen(open => !open)}><span><UserRound size={17}/>{selectedEmployee?.full_name ?? '担当者を選択'}</span><ChevronRight size={17}/></button>{!canAssign && <p className="dc-meta">担当者の設定はレベル4以上が行います。</p>}{pickerOpen && <div className="cm-assignee-popover"><div className="cm-search-control"><Search size={15}/><input aria-label="担当者を検索" value={employeeQuery} placeholder="社員を検索" onChange={event => setEmployeeQuery(event.target.value)}/></div><button type="button" onClick={() => { changeCase('assigned_employee_id', ''); setPickerOpen(false) }}>未割当</button>{matchingEmployees.map(employee => <button type="button" key={employee.id} onClick={() => { changeCase('assigned_employee_id', String(employee.id)); setPickerOpen(false) }}><strong>{employee.full_name}</strong><span>{[employee.department?.name, employee.position_title].filter(Boolean).join(' · ')}</span></button>)}</div>}</div></section>
+        <section className="cm-simple-section" aria-labelledby="new-type-heading"><h3 id="new-type-heading"><span>02</span>案件</h3><div className="cm-type-tiles cm-simple-type-tiles" role="group" aria-label="事件類型">{quickTypes.map(type => <button type="button" key={type.id} aria-pressed={draft.case_type_id === String(type.id)} onClick={() => changeCase('case_type_id', String(type.id))}><strong>{type.name}</strong><small>{type.name === '労災' ? '労働・通勤事故' : '交通事故案件'}</small></button>)}</div>{quickTypes.length === 0 && <p role="alert" className="cm-field-error">利用できる事件類型を取得できませんでした。</p>}{errorFor('case_type_id')}<div className="cm-assignee-picker cm-inline-assignee"><button type="button" className="cm-picker-trigger cm-simple-picker" disabled={!canAssign} aria-expanded={pickerOpen} onClick={() => setPickerOpen(open => !open)}><span><UserRound size={17}/>{selectedEmployee?.full_name ?? '担当者を選択'}</span><ChevronRight size={17}/></button>{!canAssign && <p className="dc-meta">担当者は作成後にレベル4以上の担当者が設定できます。</p>}{pickerOpen && <div className="cm-assignee-popover"><div className="cm-search-control"><Search size={15}/><input aria-label="担当者を検索" value={employeeQuery} placeholder="社員を検索" onChange={event => setEmployeeQuery(event.target.value)}/></div><button type="button" onClick={() => { changeCase('assigned_employee_id', ''); setPickerOpen(false) }}>未割当</button>{matchingEmployees.map(employee => <button type="button" key={employee.id} onClick={() => { changeCase('assigned_employee_id', String(employee.id)); setPickerOpen(false) }}><strong>{employee.full_name}</strong><span>{[employee.department?.name, employee.position_title].filter(Boolean).join(' · ')}</span></button>)}</div>}</div></section>
+        <section className="cm-simple-section cm-employment-section" aria-labelledby="new-employment-heading"><h3 id="new-employment-heading"><span>03</span>勤務先情報 <small>任意</small></h3><ClientEmploymentEditor key={selectedType?.name === '労災' ? 'recommended' : 'optional'} value={employments} onChange={setEmployments} recommended={selectedType?.name === '労災'}/></section>
         <section className="cm-simple-section" aria-labelledby="new-summary-heading"><h3 id="new-summary-heading"><span>04</span>案件メモ <small>任意</small></h3><textarea {...common('summary')} aria-label="案件メモ" rows={3} maxLength={10000} placeholder="相談内容・事故の概要など" value={draft.summary} onChange={event => changeCase('summary', event.target.value)}/>{errorFor('summary')}</section>
       </fieldset>
       <footer className="cm-new-case-footer"><button type="button" className="dc-button" onClick={close}>キャンセル</button><button type="submit" className="dc-button dc-primary">入力内容を確認</button></footer>
     </form>}
-    {reviewing && <ReviewDialog client={selectedClient} clientDraft={clientDraft} type={selectedType} employee={selectedEmployee} summary={draft.summary} onBack={() => setReviewing(false)} onConfirm={() => void confirmCreate()} saving={saving}/>} 
+    {reviewing && (
+      <ReviewDialog client={selectedClient} clientDraft={clientDraft} type={selectedType} employee={selectedEmployee} employments={employments} summary={draft.summary} onBack={() => setReviewing(false)} onConfirm={() => void confirmCreate()} saving={saving}/>
+    )}
   </dialog>
 }
 
-function ReviewDialog({ client, clientDraft, type, employee, summary, onBack, onConfirm, saving }: { client: CaseClient | null; clientDraft: ClientDraft; type?: CaseTypeOption; employee?: CaseEmployee; summary: string; onBack: () => void; onConfirm: () => void; saving: boolean }) {
+function ReviewDialog({ client, clientDraft, type, employee, employments, summary, onBack, onConfirm, saving }: { client: CaseClient | null; clientDraft: ClientDraft; type?: CaseTypeOption; employee?: CaseEmployee; employments: ClientEmploymentDraft[]; summary: string; onBack: () => void; onConfirm: () => void; saving: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null)
   useEffect(() => { const element = dialog.current; element?.showModal(); return () => { if (element?.open) element.close() } }, [])
   const source = client ?? clientDraft
@@ -138,8 +140,8 @@ function ReviewDialog({ client, clientDraft, type, employee, summary, onBack, on
     .filter(([, value]) => Boolean(value)).map(([label, value]) => [label, value ?? ''])
   return <dialog ref={dialog} className="dc-confirm cm-review-dialog cm-simple-review" aria-labelledby="case-review-title" onCancel={event => { event.preventDefault(); if (!saving) onBack() }}>
     <header><div><h2 id="case-review-title">登録内容の確認</h2><p className="dc-meta">以下の内容で案件を作成します。内容をご確認ください。</p></div></header>
-    <div className="cm-review-body"><ReviewBlock title="依頼者" rows={[[client ? '依頼者種別' : '登録方法', client ? '既存の依頼者' : '新規依頼者として登録'], ['氏名 / 組織名', source.name], ...(source.name_kana ? [['フリガナ', source.name_kana]] : []), ['区分', source.client_type === 'corporate' ? '組織' : '個人'], ...contact]}/><ReviewBlock title="案件" rows={[["事件類型", type?.name ?? ''], ['担当者', employee?.full_name ?? '未割当'], ...(summary.trim() ? [['案件メモ', summary.trim()]] : [])]}/></div>
-    <footer><button type="button" className="dc-button" disabled={saving} onClick={onBack}>修正する</button><button type="button" className="dc-button dc-primary" disabled={saving} onClick={onConfirm}>{saving ? '作成中…' : 'この内容で案件を作成'}</button></footer>
+    <div className="cm-review-body"><ReviewBlock title="依頼者" rows={[[client ? '依頼者種別' : '登録方法', client ? '既存の依頼者' : '新規依頼者として登録'], ['氏名 / 組織名', source.name], ...(source.name_kana ? [['フリガナ', source.name_kana]] : []), ['区分', source.client_type === 'corporate' ? '組織' : '個人'], ...contact]}/><ReviewBlock title="案件" rows={[["事件類型", type?.name ?? ''], ['担当者', employee?.full_name ?? '未割当'], ...(summary.trim() ? [['案件メモ', summary.trim()]] : [])]}/>{employments.length > 0 && <ReviewBlock title="勤務先・職歴" rows={employments.map((item, index) => [`${index + 1}. ${item.is_current ? '現在' : '過去'}`, `${item.company_name}\n${item.company_address}`])}/>}</div>
+    <footer><button type="button" className="dc-button" disabled={saving} onClick={onBack}>修正する</button><button type="button" className="dc-button dc-primary" disabled={saving} onClick={onConfirm}>{saving && <ButtonSpinner size={14} />}{saving ? '作成中…' : 'この内容で案件を作成'}</button></footer>
   </dialog>
 }
 

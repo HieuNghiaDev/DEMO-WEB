@@ -52,6 +52,7 @@ class CaseDocumentCollectionDetailResource extends CaseDocumentCollectionResourc
                 'registered_by_employee' => self::employee($file->registeredByEmployee),
                 'notes' => $file->notes, 'relationship_type' => $file->pivot->relationship_type,
             ])->values()->all(),
+            'c001' => $item['c001'],
             'created_at' => $item['created_at'], 'updated_at' => $item['updated_at'],
         ];
     }

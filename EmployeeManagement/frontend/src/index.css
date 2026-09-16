@@ -554,6 +554,228 @@ html.theme-revealing::view-transition-new(themis-theme-icon) {
   }
 }
 
+/* Unified loading language ------------------------------------------------
+   Scope-aware feedback for app boot, routes, sections, lists and AI work. */
+.themis-loading-mark {
+  position: relative;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--tm-primary);
+}
+
+.themis-loading-mark__frame {
+  position: absolute;
+  inset: 10%;
+  border: 1px solid color-mix(in srgb, var(--tm-primary) 34%, var(--tm-border));
+  border-radius: 27%;
+  transform: rotate(45deg);
+  animation: themis-loading-frame 1800ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.themis-loading-mark__frame::before,
+.themis-loading-mark__frame::after {
+  position: absolute;
+  background: var(--tm-primary);
+  content: '';
+  opacity: 0.72;
+}
+
+.themis-loading-mark__frame::before {
+  top: -1px;
+  left: 22%;
+  width: 56%;
+  height: 1px;
+}
+
+.themis-loading-mark__frame::after {
+  right: -1px;
+  top: 22%;
+  width: 1px;
+  height: 56%;
+}
+
+.themis-loading-mark__scan {
+  width: 42%;
+  height: 1px;
+  background: currentColor;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--tm-primary) 46%, transparent);
+  animation: themis-loading-scan 1200ms ease-in-out infinite;
+}
+
+.themis-loading-mark__core {
+  position: absolute;
+  width: 9%;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--tm-primary) 48%, transparent);
+  animation: themis-loading-core 1200ms ease-in-out infinite;
+}
+
+.themis-app-loader__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(22rem, 100%);
+  flex-direction: column;
+  align-items: center;
+  animation: themis-loader-enter 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.themis-app-loader__ambient {
+  position: absolute;
+  width: min(32rem, 86vw);
+  aspect-ratio: 1.6;
+  border-radius: 999px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--tm-primary) 9%, transparent), transparent 68%);
+  filter: blur(20px);
+  opacity: 0.75;
+}
+
+.themis-app-loader__track {
+  width: 10rem;
+  height: 2px;
+  overflow: hidden;
+  background: var(--tm-border);
+}
+
+.themis-app-loader__track > span {
+  display: block;
+  width: 44%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, var(--tm-primary), transparent);
+  animation: themis-loading-progress 1150ms ease-in-out infinite;
+}
+
+.themis-route-progress {
+  position: fixed;
+  z-index: 45;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.themis-route-progress > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left;
+  background: var(--tm-primary);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--tm-primary) 42%, transparent);
+  animation: themis-route-progress 620ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.themis-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--tm-text-dim) 13%, var(--tm-surface-elevated));
+}
+
+.themis-skeleton::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 22%, color-mix(in srgb, var(--tm-surface) 74%, transparent) 48%, transparent 74%);
+  content: '';
+  transform: translateX(-105%);
+  animation: themis-skeleton-shimmer 1550ms ease-in-out infinite;
+}
+
+.themis-loading-overlay {
+  background: color-mix(in srgb, var(--tm-bg) 38%, transparent);
+  backdrop-filter: blur(2px);
+  animation: themis-overlay-in 160ms ease-out both;
+}
+
+.themis-ai-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--tm-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.themis-ai-thinking > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.themis-ai-thinking i {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--tm-ai);
+  animation: themis-ai-pulse 1050ms ease-in-out infinite;
+}
+
+.themis-ai-thinking i:nth-child(2) { animation-delay: 140ms; }
+.themis-ai-thinking i:nth-child(3) { animation-delay: 280ms; }
+
+@keyframes themis-loading-frame {
+  0%, 100% { opacity: 0.58; transform: rotate(45deg) scale(0.92); }
+  50% { opacity: 1; transform: rotate(45deg) scale(1); }
+}
+
+@keyframes themis-loading-scan {
+  0%, 100% { opacity: 0.35; transform: translateY(-450%); }
+  50% { opacity: 1; transform: translateY(450%); }
+}
+
+@keyframes themis-loading-core {
+  0%, 100% { opacity: 0.46; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.25); }
+}
+
+@keyframes themis-loader-enter {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes themis-route-progress {
+  0% { opacity: 0; transform: scaleX(0); }
+  12% { opacity: 1; }
+  72% { opacity: 1; transform: scaleX(0.82); }
+  100% { opacity: 0; transform: scaleX(1); }
+}
+
+@keyframes themis-skeleton-shimmer {
+  to { transform: translateX(105%); }
+}
+
+@keyframes themis-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes themis-ai-pulse {
+  0%, 72%, 100% { opacity: 0.32; transform: scale(0.82); }
+  36% { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .themis-loading-mark__frame,
+  .themis-loading-mark__scan,
+  .themis-loading-mark__core,
+  .themis-app-loader__content,
+  .themis-app-loader__track > span,
+  .themis-route-progress > span,
+  .themis-skeleton::after,
+  .themis-ai-thinking i {
+    animation: none !important;
+  }
+
+  .themis-loading-mark__frame,
+  .themis-loading-mark__scan,
+  .themis-loading-mark__core { opacity: 0.82; }
+  .themis-route-progress > span { opacity: 0.72; transform: scaleX(1); }
+  .themis-skeleton::after { display: none; }
+}
+
 /* Login atmosphere ------------------------------------------------------- */
 .themis-login-glow {
   will-change: transform, opacity;
@@ -819,6 +1041,11 @@ html.theme-revealing::view-transition-new(themis-theme-icon) {
 }
 
 /* Organization: compact access levels with a deliberate, calm reveal. */
+.organization-page {
+  container-name: organization-page;
+  container-type: inline-size;
+}
+
 .organization-tap {
   transition:
     transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -848,13 +1075,13 @@ html.theme-revealing::view-transition-new(themis-theme-icon) {
 }
 
 .organization-modal-backdrop {
-  animation: organization-backdrop-in 680ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: organization-backdrop-in 180ms ease-out both;
 }
 
 .organization-modal-panel {
   transform-origin: center bottom;
   will-change: transform, opacity, filter;
-  animation: organization-modal-in 1180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: organization-modal-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .organization-modal-backdrop.is-closing {
@@ -1042,6 +1269,90 @@ html.theme-revealing::view-transition-new(themis-theme-icon) {
   border-radius: 999px;
   background: rgb(99 102 241 / 0.45);
   background-clip: padding-box;
+}
+
+.organization-table-scroll {
+  scrollbar-color: rgb(100 116 139 / 0.45) transparent;
+  scrollbar-width: thin;
+}
+
+@container organization-page (max-width: 760px) {
+  .organization-page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .organization-header-actions {
+    width: 100%;
+  }
+
+  .organization-header-actions > button {
+    flex: 1 1 0;
+  }
+
+  .organization-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .organization-kpi-grid > button:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .organization-filter-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .organization-filter-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .organization-filter-controls > select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .organization-list-header > p {
+    display: none;
+  }
+}
+
+@container organization-page (max-width: 480px) {
+  .organization-header-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .organization-header-actions > button {
+    width: 100%;
+  }
+
+  .organization-office-switcher {
+    align-items: flex-start;
+  }
+
+  .organization-filter-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .organization-dialog-header {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .organization-dialog-title-line {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .organization-dialog-tabs {
+    padding-inline: 8px;
+  }
 }
 
 /* Shared workspace interactions: responsive, tactile, and intentionally subtle. */

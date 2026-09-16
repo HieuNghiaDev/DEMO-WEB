@@ -31,7 +31,7 @@ class ClientController extends Controller
     public function show(Client $client, GoogleDriveProvisioningService $drive): JsonResponse
     {
         return response()->json([
-            'client' => $client->load('caseFiles'),
+            'client' => $client->load(['caseFiles', 'employments']),
             'drive' => $drive->clientState($client),
         ]);
     }

@@ -1,7 +1,7 @@
 import axios from 'axios'
 import api from '../../services/api'
 import type { ApiCaseFile } from '../../pages/business-quest/types'
-import type { CaseClient, CaseEmployee, CaseFieldErrors, CaseTypeOption, ClientDraft, EditableCase } from './types'
+import type { CaseClient, CaseEmployee, CaseFieldErrors, CaseTypeOption, ClientDraft, ClientEmployment, EditableCase } from './types'
 
 export const caseApi = {
   list: async () => (await api.get<{ case_files: ApiCaseFile[] }>('/case-files')).data.case_files,
@@ -13,6 +13,9 @@ export const caseApi = {
   create: async (payload: object) => (await api.post<{ case_file: EditableCase }>('/case-files', payload)).data.case_file,
   update: async (id: number, payload: object) => (await api.put<{ case_file: EditableCase }>(`/case-files/${id}`, payload)).data.case_file,
   assign: async (id: number, employeeId: number | null) => (await api.patch<{ case_file: ApiCaseFile }>(`/case-files/${id}/assignee`, { assigned_employee_id: employeeId })).data.case_file,
+  createEmployment: async (clientId: number, payload: object) => (await api.post<{ employment: ClientEmployment }>(`/clients/${clientId}/employments`, payload)).data.employment,
+  updateEmployment: async (clientId: number, employmentId: number, payload: object) => (await api.patch<{ employment: ClientEmployment }>(`/clients/${clientId}/employments/${employmentId}`, payload)).data.employment,
+  deleteEmployment: async (clientId: number, employmentId: number) => { await api.delete(`/clients/${clientId}/employments/${employmentId}`) },
 }
 export function caseError(error: unknown): { message: string; fields: CaseFieldErrors } {
   const fields: CaseFieldErrors = {}

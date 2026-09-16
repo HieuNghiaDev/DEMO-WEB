@@ -6,12 +6,14 @@ import {
   Clock3, Mail, MessageSquareText, Pencil, Phone,
   Plus, RefreshCw, ShieldCheck, Trash2, UserRound, X,
   Globe, MapPin, Files, ListChecks, CalendarDays,
-  Compass, Layers, Folder, FileText
+  Compass, Layers, Folder, FileText, BriefcaseBusiness, ChevronRight
 } from 'lucide-react'
 
 import { useAuth } from '../../contexts/AuthContext'
 import i18n from '../../i18n'
-import type { CaseViewer } from '../case-management/types'
+import { ButtonSpinner } from '../../components/loading'
+import ClientEmploymentPanel from './ClientEmploymentPanel'
+import type { CaseViewer, ClientEmployment } from '../case-management/types'
 import { caseWorkspaceApi } from './api'
 import type {
   CaseActivity, CaseDeadline, CaseParty, CaseTask, CaseWorkspace,
@@ -95,6 +97,12 @@ export default function CaseWorkspacePage(props: Props) {
   if (!data) return <WorkspaceFailure error={error} onBack={onBack} onRetry={() => void reload()}/>
 
   const caseFile = data.case_file
+  const openEmploymentManagement = () => {
+    setTab('overview')
+    window.setTimeout(() => {
+      document.getElementById('client-employment-management')?.scrollIntoView({ block: 'start' })
+    }, 0)
+  }
   const dialogTitle: Record<DialogKind, string> = {
     task: 'タスクを追加', deadline: '期限を追加',
     party: '関係者を追加', activity: '連絡・イベントを記録',
@@ -110,7 +118,12 @@ export default function CaseWorkspacePage(props: Props) {
     {(error || notice) && <div className={`cm-alert-banner ${error ? 'is-error' : 'is-success'}`}>{error ?? notice}</div>}
 
     <div className="cm-workspace-shell">
-      <WorkspaceHeader caseFile={caseFile} onEdit={canUpdate ? onEdit : undefined}/>
+      <WorkspaceHeader
+        caseFile={caseFile}
+        canUpdate={canUpdate}
+        onEdit={canUpdate ? onEdit : undefined}
+        onOpenEmployment={openEmploymentManagement}
+      />
 
       <nav className="cm-command-rail" aria-label={t('cases.workspace.ariaLabel')} role="tablist">
         {tabs.map(({ id, icon: Icon }) => (
@@ -131,7 +144,7 @@ export default function CaseWorkspacePage(props: Props) {
 
       <div className="cm-tab-content">
         {tab === 'collection' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingCollection')}</p>}><DocumentCollectionPanel key={caseId} caseId={caseId} initialSelectedId={initialCollectionItemId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onHistory={() => setTab('timeline')} onBack={onBack} onChanged={() => void reload(true)} /></Suspense>}
-        {tab === 'overview' && <OverviewPanel caseFile={caseFile} summary={data.summary} onOpenTab={setTab}/>}
+        {tab === 'overview' && <OverviewPanel caseFile={caseFile} summary={data.summary} canUpdate={canUpdate} onEmploymentChanged={() => reload(true)} onOpenTab={setTab}/>}
         {tab === 'documents' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingDocuments')}</p>}><RequiredDocumentsPanel key={caseId} caseId={caseId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onCandidates={() => setTab('collection')} onHistory={() => setTab('timeline')} onChanged={() => void reload(true)}/></Suspense>}
         {tab === 'tasks' && <TasksPanel tasks={caseFile.case_tasks} canUpdate={canUpdate} working={working} onAdd={() => setDialog('task')} onStatus={(task, status) => void run(() => caseWorkspaceApi.updateTask(caseId, task.id, { status }), 'タスクを更新しました。')} onDelete={(task) => confirmDelete(task.title) && void run(() => caseWorkspaceApi.deleteTask(caseId, task.id), 'タスクを削除しました。')}/>}
         {tab === 'deadlines' && <DeadlinesPanel deadlines={caseFile.deadlines} canUpdate={canUpdate} working={working} onAdd={() => setDialog('deadline')} onComplete={(deadline) => void run(() => caseWorkspaceApi.updateDeadline(caseId, deadline.id, { status: deadline.status === 'completed' ? 'open' : 'completed' }), '期限の状態を更新しました。')} onDelete={(deadline) => confirmDelete(deadline.title) && void run(() => caseWorkspaceApi.deleteDeadline(caseId, deadline.id), '期限を削除しました。')}/>}
@@ -146,7 +159,7 @@ export default function CaseWorkspacePage(props: Props) {
   </main>
 }
 
-function WorkspaceHeader({ caseFile, onEdit }: { caseFile: CaseWorkspace; onEdit?: () => void }) {
+function WorkspaceHeader({ caseFile, canUpdate, onEdit, onOpenEmployment }: { caseFile: CaseWorkspace; canUpdate: boolean; onEdit?: () => void; onOpenEmployment: () => void }) {
   const { t } = useTranslation()
   const code = caseFile.reference_number || `CASE-${String(caseFile.id).padStart(6, '0')}`
 
@@ -199,11 +212,53 @@ function WorkspaceHeader({ caseFile, onEdit }: { caseFile: CaseWorkspace; onEdit
           <span className="cm-dh-contact-val">{caseFile.client.address || t('cases.workspace.notRegistered')}</span>
         </span>
       </div>
+
+      <EmploymentSummary
+        records={caseFile.client.employments ?? []}
+        canUpdate={canUpdate}
+        onOpen={onOpenEmployment}
+      />
     </header>
   )
 }
 
-function OverviewPanel({ caseFile, summary, onOpenTab }: { caseFile: CaseWorkspace; summary: WorkspaceSummary; onOpenTab: (tab: WorkspaceTab) => void }) {
+function EmploymentSummary({ records, canUpdate, onOpen }: { records: ClientEmployment[]; canUpdate: boolean; onOpen: () => void }) {
+  const current = records.find((item) => item.is_current)
+    ?? records.find((item) => item.employment_status === 'employed' || item.employment_status === 'leave')
+  const pastCount = current ? records.filter((item) => item.id !== current.id).length : records.length
+
+  return (
+    <section className="cm-dh-employment" aria-labelledby="client-employment-summary-title">
+      <div className="cm-dh-employment-heading">
+        <BriefcaseBusiness size={16} aria-hidden="true" />
+        <span id="client-employment-summary-title">勤務先・職歴</span>
+      </div>
+      <div className="cm-dh-employment-primary">
+        <strong>{current?.company_name ?? '現在の勤務先は未登録'}</strong>
+        <span>{current?.company_address ?? '勤務先情報を確認してください'}</span>
+      </div>
+      <div className="cm-dh-employment-period">
+        <span>在籍期間</span>
+        <strong>{current ? employmentPeriod(current) : '—'}</strong>
+      </div>
+      {pastCount > 0 && <span className="cm-dh-employment-count">過去 {pastCount}件</span>}
+      <button type="button" className="cm-dh-employment-action" onClick={onOpen}>
+        <span>{canUpdate ? '編集' : '一覧を見る'}</span>
+        <ChevronRight size={14} aria-hidden="true" />
+      </button>
+    </section>
+  )
+}
+
+function employmentPeriod(item: ClientEmployment) {
+  if (!item.start_date && item.is_current) return '現在勤務中'
+  if (!item.start_date && !item.end_date) return '期間未登録'
+  const start = item.start_date ? shortDate(item.start_date) : '開始日未登録'
+  const end = item.is_current ? '現在勤務中' : item.end_date ? shortDate(item.end_date) : '終了日未登録'
+  return `${start} 〜 ${end}`
+}
+
+function OverviewPanel({ caseFile, summary, canUpdate, onEmploymentChanged, onOpenTab }: { caseFile: CaseWorkspace; summary: WorkspaceSummary; canUpdate: boolean; onEmploymentChanged: () => void | Promise<void>; onOpenTab: (tab: WorkspaceTab) => void }) {
   const { t } = useTranslation()
   const urgent = caseFile.deadlines.filter((item) => item.status === 'open' && remainingDays(item.due_at) <= 7)
 
@@ -342,6 +397,8 @@ function OverviewPanel({ caseFile, summary, onOpenTab }: { caseFile: CaseWorkspa
           </div>
         </div>
       </section>
+
+      <ClientEmploymentPanel clientId={caseFile.client.id} records={caseFile.client.employments ?? []} canUpdate={canUpdate} onChanged={onEmploymentChanged}/>
     </div>
   )
 }
@@ -392,7 +449,7 @@ function CreateItemForm({ kind, working, onSubmit }: { kind: DialogKind; working
     {kind === 'deadline' && <><Field label="期限名 *"><input required value={fields.title ?? ''} onChange={(e) => update('title', e.target.value)} className={inputClass}/></Field><div className="grid gap-3 sm:grid-cols-2"><Field label="期限種別"><select value={fields.deadline_type} onChange={(e) => update('deadline_type', e.target.value)} className={inputClass}><option value="residence">在留期限</option><option value="submission">提出期限</option><option value="additional">追加資料期限</option><option value="limitation">時効</option><option value="document">書類期限</option><option value="internal">内部期限</option><option value="other">その他</option></select></Field><Field label="優先度"><PrioritySelect value={fields.priority} onChange={(value) => update('priority', value)}/></Field></div><Field label="日時 *"><input required type="datetime-local" value={fields.due_at ?? ''} onChange={(e) => update('due_at', e.target.value)} className={inputClass}/></Field><Field label="補足"><textarea value={fields.notes ?? ''} onChange={(e) => update('notes', e.target.value)} className={textareaClass}/></Field></>}
     {kind === 'party' && <><div className="grid gap-3 sm:grid-cols-2"><Field label="関係者区分"><select value={fields.party_type} onChange={(e) => update('party_type', e.target.value)} className={inputClass}><option value="family">家族</option><option value="employer">勤務先</option><option value="opponent">相手方</option><option value="insurer">保険会社</option><option value="medical">医療機関</option><option value="supporter">支援者</option><option value="other">その他</option></select></Field><Field label="氏名 *"><input required value={fields.name ?? ''} onChange={(e) => update('name', e.target.value)} className={inputClass}/></Field></div><Field label="組織名"><input value={fields.organization ?? ''} onChange={(e) => update('organization', e.target.value)} className={inputClass}/></Field><div className="grid gap-3 sm:grid-cols-2"><Field label="電話"><input value={fields.phone ?? ''} onChange={(e) => update('phone', e.target.value)} className={inputClass}/></Field><Field label="メール"><input type="email" value={fields.email ?? ''} onChange={(e) => update('email', e.target.value)} className={inputClass}/></Field></div></>}
     {kind === 'activity' && <><div className="grid gap-3 sm:grid-cols-2"><Field label="記録種別"><select value={fields.activity_type} onChange={(e) => update('activity_type', e.target.value)} className={inputClass}><option value="communication">連絡</option><option value="event">イベント</option><option value="submission">提出</option><option value="medical">通院・医療</option><option value="incident">事故・事実</option><option value="note">内部メモ</option></select></Field><Field label="チャネル"><select value={fields.channel} onChange={(e) => update('channel', e.target.value)} className={inputClass}><option value="meeting">面談</option><option value="phone">電話</option><option value="email">メール</option><option value="line">LINE</option><option value="internal">社内</option><option value="other">その他</option></select></Field></div><Field label="タイトル *"><input required value={fields.title ?? ''} onChange={(e) => update('title', e.target.value)} className={inputClass}/></Field><Field label="日時 *"><input required type="datetime-local" value={fields.occurred_at ?? ''} onChange={(e) => update('occurred_at', e.target.value)} className={inputClass}/></Field><Field label="内容"><textarea value={fields.content ?? ''} onChange={(e) => update('content', e.target.value)} className={textareaClass}/></Field></>}
-    <div className="flex justify-end border-t border-slate-200 pt-4 dark:border-white/10"><button type="submit" disabled={working} className={primaryButton}>{working ? '保存中…' : '保存する'}</button></div>
+    <div className="flex justify-end border-t border-slate-200 pt-4 dark:border-white/10"><button type="submit" disabled={working} className={primaryButton}>{working && <ButtonSpinner size={14}/>} {working ? '保存中…' : '保存する'}</button></div>
   </form>
 }
 

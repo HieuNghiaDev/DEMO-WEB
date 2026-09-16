@@ -26,9 +26,18 @@ Tài khoản có `must_change_password=true` chỉ được gọi `/me`, `/passw
 
 ## Hồ sơ khách hàng và案件
 
-Form案件 một trang dùng `GET /clients` để tìm theo tên/kana/điện thoại/email phía frontend. Modal **登録して選択** gọi API hiện có `POST /clients` (quyền `case.create`), nhận HTTP 201 `{client}` rồi tự chọn `client.id`. Tên là bắt buộc; kana, phone, email, client_type, nationality, address, notes dùng các trường backend đã hỗ trợ, không có trường language. Khách hàng được lưu riêng, nên hủy form案件 sau đó không xóa khách hàng vừa đăng ký. Khi tạo案件, frontend gửi `client_id` và tự ghép `title` từ tên khách hàng + subtype/parent trong giới hạn 255 ký tự; không thay đổi hợp đồng backend. Xem [CASE_MANAGEMENT_UI.md](frontend/CASE_MANAGEMENT_UI.md).
+Popup tạo案件 dùng progressive profiling và chỉ gửi **một** `POST /case-files`. Với khách hàng đã có, payload dùng `client_id`; với khách hàng mới, payload dùng object `client`. Trường `employments` là mảng tùy chọn nên quick intake vẫn hợp lệ khi không nhập勤務先. Khi có dữ liệu, backend tạo Client, CaseFile và toàn bộ勤務先 trong cùng transaction; validation lỗi rollback cả ba. Frontend tự ghép `title` từ tên khách hàng + loại案件 trong giới hạn 255 ký tự và vẫn giữ bước xác nhận cuối trước khi gửi. Xem [CASE_MANAGEMENT_UI.md](frontend/CASE_MANAGEMENT_UI.md).
 
 Khách hàng (`clients`) lưu dữ liệu liên hệ: `phone`, `email`, `address`, `nationality`, cùng `name`, `name_kana` và `client_type` (`individual`/`corporate`). Khi tạo mới `case-files`, payload `client` có thể bao gồm các trường này; email hợp lệ, điện thoại tối đa 30 ký tự, địa chỉ tối đa 255 ký tự. `GET /case-files/{id}` trả toàn bộ thông tin liên hệ của khách hàng để hiển thị trong hồ sơ; `PUT /clients/{client}` cập nhật hồ sơ khi người gọi có `case.update`.
+
+Mỗi client có nhiều勤務先 (`client_employments`). Item gồm `company_name` (bắt buộc), `company_address` (bắt buộc), `company_phone`, `employment_status` (`employed`, `leave`, `former`, `unknown`), `start_date`, `end_date`, `is_current` và `notes`. Bản ghi hiện tại luôn có `end_date=null`; bản ghi quá khứ luôn có `is_current=false`. Các route lồng sau kiểm tra employment thuộc đúng client:
+
+| Method & path | Quyền | Hành vi |
+| --- | --- | --- |
+| `GET /clients/{client}/employments` | `case.view` | Danh sách勤務先, ưu tiên nơi đang làm rồi ngày bắt đầu mới nhất. |
+| `POST /clients/{client}/employments` | `case.update` | Thêm勤務先 sau khi案件 đã được tạo. |
+| `PATCH /clients/{client}/employments/{employment}` | `case.update` | Cập nhật toàn bộ dữ liệu của một勤務先 thuộc client. |
+| `DELETE /clients/{client}/employments/{employment}` | `case.update` | Xóa một勤務先 thuộc client; không xóa client hoặc案件. |
 
 Mỗi hồ sơ có thể có tab tự do ngoài ba tab mặc định. `POST /case-files/{caseFile}/custom-sections` tạo tab với `title` (bắt buộc, tối đa 80 ký tự) và `content` (tùy chọn). `PATCH` hoặc `DELETE /case-files/{caseFile}/custom-sections/{customSection}` cập nhật hoặc xóa tab; các thao tác này yêu cầu quyền `case.update`.
 
@@ -390,15 +399,22 @@ Các route dưới đây dùng Sanctum, kiểm tra `case_document` thuộc đún
 | Method | Route | Permission | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/api/case-files/{case}/document-collection/{document}/creation` | `case.view` | Trả active template, instance hiện tại hoặc prefill `not_created`; không tạo record. |
-| `PATCH` | `.../creation/draft` | `case.update` | Tạo/cập nhật draft và chuyển trạng thái về `draft`. |
-| `POST` | `.../creation/review` | `case.update` | Validate field bắt buộc, lưu draft và chuyển sang `review`. |
-| `POST` | `.../creation/approve` | `case.update` | Chỉ nhận document ở `review`; transaction đóng băng `approved_data`, actor và thời gian. |
+| `PATCH` | `.../creation/draft` | `case.update` | Tạo/cập nhật draft và chuyển trạng thái về `draft`. Với C‑001 nhận thêm `success_fee_percentage`; không tạo hoặc cập nhật file Drive. |
+| `POST` | `.../creation/review` | `case.update` | Validate field bắt buộc, lưu draft hiện tại và chuyển sang preview `review`; không yêu cầu Drive. Với C‑001 nhận thêm `success_fee_percentage`. |
+| `POST` | `.../creation/approve` | `case.update` | Chỉ nhận document ở `review`; C‑001 còn bắt buộc working workbook hiện tại đã được sync sau lần sửa cuối. Transaction đóng băng `approved_data`, actor và thời gian. |
 | `POST` | `.../creation/revision` | `case.update` | Chỉ nhận phiên bản mới nhất đã approved; tạo draft phiên bản kế tiếp từ approved snapshot mà không sửa phiên bản cũ. |
 | `GET` | `.../creation/approved` | `case.view` | Trả approved snapshot đã đóng băng; `404` nếu chưa từng approve. |
 | `GET` | `.../creation/pdf` | `case.view` | PDF A4 từ approved_data + template đã pin; attachment UTF-8 filename. `404` nếu sai case/item hoặc chưa có instance, `422` nếu chưa approved hoặc renderer/template không hỗ trợ. |
 | `POST` | `.../creation/google-drive` | `case.update` | Lưu PDF approved lên Drive; trả artifact đã có nếu lưu trước đó. `404` sai case/item hoặc thiếu instance; `422` chưa approved; `503` Drive chưa khả dụng/lỗi upload hoặc cần reconciliation; `500` lỗi tạo PDF nội bộ. |
+| `GET` | `.../creation/c001/preview?version=N` | `case.view` | Trả PDF `inline` tạm thời được chuyển trực tiếp từ working XLSX hiện tại. Response `no-store`; không tạo artifact, không chốt version và không ghi vào Drive. |
+| `GET` | `.../creation/c001/pdf?version=N` | `case.view` | Trả đúng PDF chính thức của version đã chọn để viewer hiển thị/tải; nếu bỏ version thì chọn bản có PDF mới nhất. |
+| `GET` | `.../creation/c001/download?version=N` | `case.view` | Tải đúng XLSX nguồn C‑001 đã chốt của version yêu cầu; nếu bỏ version thì chọn bản đã chốt mới nhất. |
+| `POST` | `.../creation/c001/sync` | `case.update` | Hành động `確定・保存`: chỉ nhận working draft ở trạng thái `review`, tạo artifact XLSX của version kế tiếp trong `作成書類`. Body `{ success_fee_percentage }`; chấp nhận preset 20/22/24 hoặc giá trị custom `> 0`, `<= 100`, tối đa 2 chữ số thập phân. Artifact đã tồn tại làm request idempotent và không bị ghi đè; muốn thay đổi phải chuẩn bị working draft của version tiếp theo. |
+| `POST` | `.../creation/c001/reject` | Lawyer/Admin + `case.update` | Trả C‑001 đang chờ duyệt về draft/rejected để nhân viên chỉnh sửa thành version tiếp theo. |
 
 `GET creation` trả `{ supported, template, document, current_version, versions }`. `supported=false` khi document type không có active generation template. `document.workflow_status` là `not_created`, `draft`, `review` hoặc `approved`; `draft_data`/`approved_data` là JSON field-value thuần, không chứa label React. `versions` liệt kê lịch sử theo phiên bản, trạng thái, người/thời gian approve và Drive artifact. GET creation/approved/pdf và POST google-drive nhận query `version` tùy chọn để đọc hoặc lưu đúng phiên bản; bỏ query luôn dùng phiên bản mới nhất. API list/detail 資料収集 bổ sung `document_type.creation_supported`, được tính từ active template hoặc instance đã pin, không hardcode code C‑001.
+
+Với C‑001 chính thức, `GET creation` và API list/detail 資料収集 còn trả `c001`: trạng thái `missing|draft|pending_approval|complete|rejected`, phần trăm success fee, tên/địa chỉ khách hàng, `latest_version`, `next_version`, `working_version`, metadata `artifact` PDF chính, `pdf_artifact`, `workbook_artifact`, thời gian/người cập nhật draft, thông tin duyệt và `can_approve`. Luồng là auto-fill → cấu hình fee → lưu working draft (tùy chọn) → PDF tạm từ working XLSX → `確定・保存` cặp XLSX/PDF lên Drive thành vN → lawyer review tại 承認室 → approve. Dòng C‑001 chưa có đủ artifact `source_workbook` + `pdf` chỉ là working draft và không xuất hiện trong danh sách version chính thức; nếu hủy trước xác nhận cuối thì không có artifact chính thức và số kế tiếp được tái sử dụng. Khi chỉnh bản đã chốt vN, PATCH draft/POST review tạo hoặc cập nhật working draft vN+1, không sửa row/artifact vN. C‑001 chỉ ghi `client_name`, `client_address` lấy lại từ Case DB và `success_fee_percentage`; generic fields không được đưa trở lại. Chỉ role luật sư (`level_3`) hoặc admin (`level_5`) được approve/reject, và giao diện tạo/xem C‑001 không chứa nút duyệt. Approve hoàn tất đồng thời workflow instance và các trạng thái collection/fulfillment/review; manager không được duyệt C‑001.
 
 `document_type` trên API list/detail 資料収集 còn trả `handling_type` và `capabilities`: `generation_supported`, `collection_only`, `official_form`, `reference_only`, `source_available`. `creation_supported` được giữ để tương thích frontend và bằng `generation_supported`. Chỉ `office_generated` có active generation template mới mở luồng tạo/chỉnh sửa; `collected` vẫn dùng luồng receive/upload và bị chặn khỏi mutation editor kể cả khi gắn nhầm template. Các route view/PDF của instance lịch sử không bị xóa. Registry source chưa có CRUD/import API trong phase chuẩn bị này; `DocumentSourceImportPlanner` là dry-run nội bộ, không ghi DB hoặc Drive.
 

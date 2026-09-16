@@ -1,4 +1,4 @@
-import { ButtonSpinner } from '../loading'
+import { ButtonSpinner, InlineLoader } from '../loading'
 import {
   Bot,
   ChevronDown,
@@ -261,9 +261,8 @@ function ThemisAiAssistant() {
 
             <div className="flex min-h-0 flex-1 flex-col bg-slate-50 dark:bg-[#0d1426]">
               {isLoadingPersonas ? (
-                <div className="flex flex-1 items-center justify-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">
-                  <ButtonSpinner className="text-indigo-500" size={19} />
-                  AI秘書を準備しています…
+                <div className="flex flex-1 items-center justify-center">
+                  <InlineLoader ai label="AI秘書を準備しています…" />
                 </div>
               ) : loadError ? (
                 <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
@@ -315,9 +314,8 @@ function ThemisAiAssistant() {
                       </div>
                     ))}
                     {isSending && (
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                        <ButtonSpinner className="text-indigo-500" size={16} />
-                        AIが考えています…
+                      <div className="flex items-center">
+                        <InlineLoader ai label="AIが考えています…" />
                       </div>
                     )}
                     <div ref={messagesEndRef} />

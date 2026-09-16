@@ -6,6 +6,22 @@ export type CaseViewer = Pick<AuthUser, 'permission_names' | 'role_names'> | nul
 export type CasePriority = 'low' | 'normal' | 'high' | 'critical'
 export type CaseTypeOption = { id: number; name: string; parent_id?: number | null; parent?: { id: number; name: string } | null; children?: CaseTypeOption[] }
 export type CaseClient = ClientProfile & { notes?: string | null }
+export type ClientEmploymentStatus = 'employed' | 'leave' | 'former' | 'unknown'
+export type ClientEmployment = {
+  id: number
+  client_id: number
+  company_name: string
+  company_address: string
+  company_phone: string | null
+  employment_status: ClientEmploymentStatus
+  start_date: string | null
+  end_date: string | null
+  is_current: boolean
+  notes: string | null
+  created_at?: string
+  updated_at?: string
+}
+export type ClientEmploymentDraft = Omit<ClientEmployment, 'id' | 'client_id' | 'created_at' | 'updated_at'> & { key: string }
 export type CaseEmployee = { id: number; full_name: string; full_name_kana: string | null; position_title: string | null; employee_status: string; department?: { id: number; name: string } | null }
 export type EditableCase = ApiCaseFile & { client_id?: number; assigned_employee_id?: number | null; department_id?: number | null; department?: { id: number; name: string } | null; priority?: CasePriority; summary?: string | null; opened_at?: string | null; target_completion_at?: string | null }
 export type ClientDraft = { name: string; name_kana: string; client_type: 'individual' | 'corporate'; phone: string; email: string; address: string; nationality: string; notes: string }

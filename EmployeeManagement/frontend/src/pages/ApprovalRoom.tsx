@@ -4,12 +4,12 @@ import api from '../services/api'
 import {
   Button,
   EmptyState,
-  LoadingState,
   MetricCard,
   MetricStrip,
   PageHeader,
   StatusBadge,
 } from '../components/ui'
+import { SectionSkeleton } from '../components/loading'
 
 type ApprovalStatus = 'pending' | 'approved' | 'rejected'
 type ApprovalAction = 'approve' | 'reject'
@@ -119,7 +119,7 @@ function ApprovalRoom() {
             onClick={() => void loadApprovals()}
             disabled={isLoading}
             loading={isLoading}
-            icon={<RefreshCw size={15} className={isLoading ? 'animate-spin' : 'text-[var(--tm-primary)]'} />}
+            icon={!isLoading ? <RefreshCw size={15} className="text-[var(--tm-primary)]" /> : undefined}
           >
             {isLoading ? '更新中…' : '最新データを取得'}
           </Button>
@@ -313,7 +313,7 @@ function ApprovalRoom() {
 }
 
 function ApprovalLoadingState() {
-  return <LoadingState message="承認申請を読み込み中…" variant="section" />
+  return <SectionSkeleton className="border-0" label="承認申請を読み込み中…" rows={4} showHeader={false} />
 }
 
 export default ApprovalRoom

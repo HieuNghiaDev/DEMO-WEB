@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Contracts\C001WorkbookPdfConverter;
 use App\Exceptions\GeneratedDocumentDriveException;
 use App\Models\CaseDocument;
 use App\Models\CaseFile;
@@ -15,6 +16,7 @@ use App\Models\ExternalStorageLocation;
 use App\Models\GeneratedDocumentArtifact;
 use App\Models\Office;
 use App\Models\User;
+use App\Services\C001WorkbookService;
 use App\Services\DocumentPdfRenderer;
 use App\Services\GenericLegalDocumentRenderer;
 use App\Services\GoogleDriveProvisioningService;
@@ -46,6 +48,11 @@ class CaseDocumentCreationApiTest extends TestCase
     {
         parent::setUp();
         Http::preventStrayRequests();
+        // Generic persistence tests remain independent from a developer's local Drive configuration.
+        config()->set('services.google_drive.c001_template_folder_id', null);
+        $converter = Mockery::mock(C001WorkbookPdfConverter::class);
+        $converter->shouldReceive('convert')->andReturn('%PDF-1.4 C-001 test PDF');
+        $this->app->instance(C001WorkbookPdfConverter::class, $converter);
         $this->seed([RolePermissionSeeder::class, DocumentTypeMasterSeeder::class, DocumentGenerationTemplateSeeder::class]);
         $office = Office::create(['office_code' => 'GEN', 'name' => 'Generation test office', 'status' => 'active']);
         $employee = Employee::create([
@@ -102,7 +109,8 @@ class CaseDocumentCreationApiTest extends TestCase
         $this->assertSame($approved, $instance->fresh()->approved_data);
         $this->getJson($this->url())->assertOk()
             ->assertJsonPath('template.version', 1)
-            ->assertJsonPath('document.approved_data', $approved);
+            ->assertJsonPath('document.approved_data', $approved)
+            ->assertJsonPath('c001.status', 'missing');
     }
 
     public function test_active_template_and_real_model_prefill_are_returned_without_creating_an_instance(): void
@@ -627,6 +635,430 @@ class CaseDocumentCreationApiTest extends TestCase
             Event::forget($event);
         }
         $this->assertDatabaseCount('generated_document_artifacts', 0);
+    }
+
+    public function test_official_c001_approval_is_lawyer_only_and_completes_collection(): void
+    {
+        config()->set('services.google_drive.c001_template_folder_id', 'official_template_folder');
+        $template = DocumentGenerationTemplate::where('version', 2)->sole();
+        $instance = $this->document->generatedDocuments()->create([
+            'document_generation_template_id' => $template->id,
+            'version' => 1,
+            'workflow_status' => 'review',
+            'draft_data' => ['client_name' => '依頼者株式会社'],
+            'success_fee_percentage' => 22,
+            'created_by' => $this->user->id,
+            'updated_by' => $this->user->id,
+        ]);
+        $instance->artifacts()->create([
+            'artifact_type' => 'source_workbook',
+            'storage_provider' => 'google_drive',
+            'external_file_id' => 'working_copy',
+            'external_url' => 'https://drive.google.com/file/d/working_copy/view',
+            'filename' => 'C-001.xlsx',
+            'mime_type' => GoogleDriveService::XLSX_MIME_TYPE,
+            'uploaded_by' => $this->user->id,
+            'uploaded_at' => now(),
+        ]);
+        $instance->artifacts()->create([
+            'artifact_type' => 'pdf',
+            'storage_provider' => 'google_drive',
+            'external_file_id' => 'working_copy_pdf',
+            'external_url' => 'https://drive.google.com/file/d/working_copy_pdf/view',
+            'filename' => 'C-001.pdf',
+            'mime_type' => 'application/pdf',
+            'uploaded_by' => $this->user->id,
+            'uploaded_at' => now(),
+        ]);
+
+        $manager = User::factory()->withRole('level_4')->create();
+        Sanctum::actingAs($manager);
+        $this->postJson($this->url().'/approve')->assertForbidden();
+
+        Sanctum::actingAs($this->user);
+        $this->postJson($this->url().'/approve')->assertOk()
+            ->assertJsonPath('document.workflow_status', 'approved')
+            ->assertJsonPath('c001.status', 'complete')
+            ->assertJsonPath('permissions.can_approve', true);
+        $this->assertDatabaseHas('case_documents', [
+            'id' => $this->document->id,
+            'collection_status' => 'received',
+            'fulfillment_status' => 'satisfied',
+            'review_status' => 'reviewed',
+        ]);
+        $this->assertSame($this->user->id, $instance->fresh()->approved_by);
+        $this->assertNotNull($instance->fresh()->approved_at);
+    }
+
+    public function test_c001_sync_validates_percentage_and_customer_before_drive_access(): void
+    {
+        config()->set('services.google_drive.c001_template_folder_id', 'official_template_folder');
+        $this->postJson($this->url().'/c001/sync', ['success_fee_percentage' => 0])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('success_fee_percentage');
+
+        $this->case->client->update(['address' => '']);
+        $this->postJson($this->url().'/c001/sync', ['success_fee_percentage' => 24])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('client_address');
+        $this->assertDatabaseCount('case_generated_documents', 0);
+    }
+
+    public function test_c001_sync_requires_preview_and_preserves_legacy_approval_through_revision(): void
+    {
+        config()->set('services.google_drive.c001_template_folder_id', 'official_template_folder');
+        config()->set('services.google_drive.c001_template_file_name', 'official-c001.xlsx');
+        $legacyTemplate = DocumentGenerationTemplate::where('version', 2)->sole();
+        $legacyData = $this->validDraft();
+        $legacy = $this->document->generatedDocuments()->create([
+            'document_generation_template_id' => $legacyTemplate->id,
+            'version' => 1,
+            'workflow_status' => 'approved',
+            'draft_data' => $legacyData,
+            'approved_data' => $legacyData,
+            'approved_at' => now(),
+            'approved_by' => $this->user->id,
+            'created_by' => $this->user->id,
+            'updated_by' => $this->user->id,
+        ]);
+        $legacy->artifacts()->create([
+            'artifact_type' => 'pdf',
+            'storage_provider' => 'google_drive',
+            'external_file_id' => 'legacy-pdf',
+            'external_url' => 'https://drive.google.com/file/d/legacy-pdf/view',
+            'filename' => 'legacy.pdf',
+            'mime_type' => 'application/pdf',
+            'uploaded_by' => $this->user->id,
+            'uploaded_at' => now(),
+        ]);
+
+        $this->postJson($this->url().'/c001/sync', ['success_fee_percentage' => 20])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('workflow_status');
+        $this->postJson($this->url().'/revision')->assertOk()
+            ->assertJsonPath('document.version', 2)
+            ->assertJsonPath('document.workflow_status', 'draft');
+        $this->postJson($this->url().'/review', [
+            'draft_data' => ['client_name' => '依頼者株式会社', 'client_address' => '大阪市北区'],
+            'success_fee_percentage' => 20,
+        ])->assertOk()
+            ->assertJsonPath('c001.status', 'draft');
+
+        $drive = Mockery::mock(GoogleDriveService::class);
+        $drive->shouldReceive('resolveExactTemplateFile')->once()->andReturn(['id' => 'master', 'name' => 'official-c001.xlsx']);
+        $drive->shouldReceive('downloadFileContent')->once()->with('master')->andReturn('master-bytes');
+        $drive->shouldReceive('ensureGeneratedWorkbookCopy')->once()->andReturn([
+            'id' => 'official-copy',
+            'url' => 'https://drive.google.com/file/d/official-copy/view',
+            'name' => 'C-001.xlsx',
+        ]);
+        $drive->shouldReceive('replaceWorkbookContent')->once()->with('official-copy', 'master', 'filled-bytes');
+        $drive->shouldReceive('storeGeneratedPdf')->once()->andReturn([
+            'external_file_id' => 'official-pdf',
+            'external_url' => 'https://drive.google.com/file/d/official-pdf/view',
+            'filename' => 'C-001.pdf',
+        ]);
+        $this->app->instance(GoogleDriveService::class, $drive);
+        $this->mock(C001WorkbookService::class)->shouldReceive('fill')->once()
+            ->with('master-bytes', '依頼者株式会社', '大阪市北区', '20')->andReturn('filled-bytes');
+        $this->mockGeneratedFolder();
+
+        $this->postJson($this->url().'/c001/sync', ['success_fee_percentage' => 20])
+            ->assertOk()
+            ->assertJsonPath('document.version', 2)
+            ->assertJsonPath('document.workflow_status', 'review')
+            ->assertJsonPath('c001.status', 'pending_approval');
+
+        $this->assertSame('approved', $legacy->fresh()->workflow_status);
+        $this->assertSame($legacyData, $legacy->fresh()->approved_data);
+        $this->assertDatabaseHas('case_generated_documents', [
+            'case_document_id' => $this->document->id,
+            'version' => 2,
+            'workflow_status' => 'review',
+            'success_fee_percentage' => 20,
+        ]);
+        $this->assertDatabaseHas('generated_document_artifacts', [
+            'artifact_type' => 'source_workbook',
+            'external_file_id' => 'official-copy',
+        ]);
+        $this->assertDatabaseHas('generated_document_artifacts', [
+            'artifact_type' => 'pdf',
+            'external_file_id' => 'official-pdf',
+        ]);
+    }
+
+    public function test_c001_draft_saves_fee_without_generating_drive_artifact_and_records_audit(): void
+    {
+        config()->set('services.google_drive.c001_template_folder_id', 'official_template_folder');
+
+        $response = $this->patchJson($this->url().'/draft', [
+            'draft_data' => ['client_name' => '依頼者株式会社', 'client_address' => '大阪市北区'],
+            'success_fee_percentage' => 22,
+        ]);
+        $response->assertOk()
+            ->assertJsonPath('document.workflow_status', 'draft')
+            ->assertJsonPath('c001.status', 'draft')
+            ->assertJsonPath('c001.success_fee_percentage', '22');
+
+        $this->assertDatabaseHas('case_generated_documents', [
+            'case_document_id' => $this->document->id,
+            'workflow_status' => 'draft',
+            'success_fee_percentage' => 22,
+        ]);
+        $this->assertDatabaseCount('generated_document_artifacts', 0);
+        $this->assertDatabaseHas('case_activities', ['title' => 'C-001の下書きを更新']);
+    }
+
+    public function test_c001_preview_renders_a_temporary_working_copy_without_saving_to_drive(): void
+    {
+        config()->set('services.google_drive.c001_template_folder_id', 'official_template_folder');
+        config()->set('services.google_drive.c001_template_file_name', '委任契約書簡易版完全成功報酬-空欄.xlsx');
+        $this->postJson($this->url().'/review', [
+            'draft_data' => ['client_name' => 'ignored', 'client_address' => 'ignored'],
+            'success_fee_percentage' => 22,
+        ])->assertOk();
+
+        $drive = Mockery::mock(GoogleDriveService::class);
+        $drive->shouldReceive('resolveExactTemplateFile')->once()->andReturn([
+            'id' => 'master',
+            'name' => '委任契約書簡易版完全成功報酬-空欄.xlsx',
+        ]);
+        $drive->shouldReceive('downloadFileContent')->once()->with('master')->andReturn('master-bytes');
+        $this->app->instance(GoogleDriveService::class, $drive);
+        $workbook = Mockery::mock(C001WorkbookService::class);
+        $workbook->shouldReceive('fill')->once()
+            ->with('master-bytes', '依頼者株式会社', '大阪市北区', '22')
+            ->andReturn('temporary-workbook');
+        $this->app->instance(C001WorkbookService::class, $workbook);
+        $converter = Mockery::mock(C001WorkbookPdfConverter::class);
+        $converter->shouldReceive('convert')->once()->with('temporary-workbook')->andReturn('%PDF-1.4 temporary C-001');
+        $this->app->instance(C001WorkbookPdfConverter::class, $converter);
+
+        $this->get($this->url().'/c001/preview')->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertHeader('x-c001-preview-source', 'temporary_working_copy')
+            ->assertHeader('cache-control', 'no-store, private')
+            ->assertContent('%PDF-1.4 temporary C-001');
+        $this->assertDatabaseCount('generated_document_artifacts', 0);
+    }
+
+    public function test_c001_is_not_finalized_when_pdf_upload_fails_after_workbook_upload(): void
+    {
+        config()->set('services.google_drive.c001_template_folder_id', 'official_template_folder');
+        config()->set('services.google_drive.c001_template_file_name', 'official-c001.xlsx');
+        $draft = ['client_name' => 'ignored', 'client_address' => 'ignored'];
+        $this->postJson($this->url().'/review', ['draft_data' => $draft, 'success_fee_percentage' => 20])->assertOk();
+
+        $drive = Mockery::mock(GoogleDriveService::class);
+        $drive->shouldReceive('resolveExactTemplateFile')->once()->andReturn(['id' => 'master', 'name' => 'official-c001.xlsx']);
+        $drive->shouldReceive('downloadFileContent')->once()->with('master')->andReturn('master-bytes');
+        $drive->shouldReceive('ensureGeneratedWorkbookCopy')->once()->andReturn([
+            'id' => 'staged-workbook-v1',
+            'url' => 'https://drive.google.com/file/d/staged-workbook-v1/view',
+            'name' => 'C-001_v1.xlsx',
+        ]);
+        $drive->shouldReceive('replaceWorkbookContent')->once()->with('staged-workbook-v1', 'master', 'filled-bytes');
+        $drive->shouldReceive('storeGeneratedPdf')->once()->andThrow(new GeneratedDocumentDriveException('PDF upload failed'));
+        $this->app->instance(GoogleDriveService::class, $drive);
+        $this->mock(C001WorkbookService::class)->shouldReceive('fill')->once()->andReturn('filled-bytes');
+        $this->mockGeneratedFolder();
+
+        $this->postJson($this->url().'/c001/sync', ['success_fee_percentage' => 20])
+            ->assertStatus(503)
+            ->assertJsonPath('message', 'PDF upload failed');
+
+        $this->assertDatabaseCount('generated_document_artifacts', 0);
+        $this->getJson($this->url())->assertOk()
+            ->assertJsonPath('current_version', null)
+            ->assertJsonPath('c001.working_version', 1)
+            ->assertJsonCount(0, 'versions');
+    }
+
+    public function test_c001_final_confirmation_creates_separate_versions_without_overwriting_history(): void
+    {
+        config()->set('services.google_drive.c001_template_folder_id', 'official_template_folder');
+        config()->set('services.google_drive.c001_template_file_name', 'official-c001.xlsx');
+
+        $drive = Mockery::mock(GoogleDriveService::class);
+        $drive->shouldReceive('resolveExactTemplateFile')->times(3)
+            ->andReturn(['id' => 'master', 'name' => 'official-c001.xlsx']);
+        $drive->shouldReceive('downloadFileContent')->times(3)->with('master')->andReturn('master-bytes');
+        $drive->shouldReceive('ensureGeneratedWorkbookCopy')->times(3)
+            ->andReturnUsing(function (string $masterId, string $folderId, string $filename): array {
+                preg_match('/_v(\d+)\.xlsx$/', $filename, $matches);
+                $version = $matches[1] ?? 'unknown';
+
+                return [
+                    'id' => 'official-copy-v'.$version,
+                    'url' => 'https://drive.google.com/file/d/official-copy-v'.$version.'/view',
+                    'name' => $filename,
+                ];
+            });
+        $drive->shouldReceive('replaceWorkbookContent')->times(3);
+        $drive->shouldReceive('storeGeneratedPdf')->times(3)
+            ->andReturnUsing(function (string $bytes, string $filename): array {
+                preg_match('/_v(\d+)\.pdf$/', $filename, $matches);
+                $version = $matches[1] ?? 'unknown';
+                $expectedFee = ['1' => '20', '2' => '22', '3' => '24'][$version] ?? 'unknown';
+                $this->assertSame('%PDF-filled-'.$expectedFee, $bytes);
+
+                return [
+                    'external_file_id' => 'official-pdf-v'.$version,
+                    'external_url' => 'https://drive.google.com/file/d/official-pdf-v'.$version.'/view',
+                    'filename' => $filename,
+                ];
+            });
+        $this->app->instance(GoogleDriveService::class, $drive);
+        $this->mock(C001WorkbookService::class)->shouldReceive('fill')->times(3)
+            ->andReturnUsing(fn (string $bytes, string $name, string $address, string $fee) => 'filled-'.$fee);
+        $converter = Mockery::mock(C001WorkbookPdfConverter::class);
+        $converter->shouldReceive('convert')->once()->with('filled-20')->andReturn('%PDF-filled-20');
+        $converter->shouldReceive('convert')->once()->with('filled-22')->andReturn('%PDF-filled-22');
+        $converter->shouldReceive('convert')->once()->with('filled-24')->andReturn('%PDF-filled-24');
+        $this->app->instance(C001WorkbookPdfConverter::class, $converter);
+        $location = new ExternalStorageLocation(['external_folder_id' => 'generated_folder']);
+        $folders = Mockery::mock(GoogleDriveProvisioningService::class);
+        $folders->shouldReceive('provisionGeneratedDocuments')->times(3)->andReturn($location);
+        $this->app->instance(GoogleDriveProvisioningService::class, $folders);
+
+        $draft = ['client_name' => 'ignored', 'client_address' => 'ignored'];
+        $this->postJson($this->url().'/review', ['draft_data' => $draft, 'success_fee_percentage' => 20])
+            ->assertOk()
+            ->assertJsonPath('current_version', null)
+            ->assertJsonPath('c001.working_version', 1)
+            ->assertJsonPath('c001.next_version', 1)
+            ->assertJsonCount(0, 'versions');
+        $this->assertDatabaseCount('generated_document_artifacts', 0);
+
+        $this->postJson($this->url().'/c001/sync', ['success_fee_percentage' => 20])
+            ->assertOk()
+            ->assertJsonPath('current_version', 1)
+            ->assertJsonPath('c001.latest_version', 1)
+            ->assertJsonPath('c001.working_version', null)
+            ->assertJsonCount(1, 'versions');
+        $v1 = CaseGeneratedDocument::where('version', 1)->sole();
+        $v1Artifacts = $v1->artifacts()->orderBy('artifact_type')->get()->map->getAttributes()->all();
+
+        $this->postJson($this->url().'/review', ['draft_data' => $draft, 'success_fee_percentage' => 22])
+            ->assertOk()
+            ->assertJsonPath('document.version', 2)
+            ->assertJsonPath('current_version', 1)
+            ->assertJsonPath('c001.working_version', 2)
+            ->assertJsonPath('c001.next_version', 2)
+            ->assertJsonCount(1, 'versions');
+        $this->assertDatabaseCount('generated_document_artifacts', 2);
+        $this->assertSame($v1Artifacts, $v1->artifacts()->orderBy('artifact_type')->get()->map->getAttributes()->all());
+
+        $this->postJson($this->url().'/c001/sync', ['success_fee_percentage' => 22])
+            ->assertOk()
+            ->assertJsonPath('current_version', 2)
+            ->assertJsonPath('c001.latest_version', 2)
+            ->assertJsonCount(2, 'versions');
+        $v2 = CaseGeneratedDocument::where('version', 2)->sole();
+        $v2Artifacts = $v2->artifacts()->orderBy('artifact_type')->get()->map->getAttributes()->all();
+
+        // Starting and cancelling the next edit leaves only v1/v2 finalized.
+        $this->patchJson($this->url().'/draft', ['draft_data' => $draft, 'success_fee_percentage' => 24])
+            ->assertOk()
+            ->assertJsonPath('document.version', 3)
+            ->assertJsonPath('current_version', 2)
+            ->assertJsonPath('c001.working_version', 3)
+            ->assertJsonCount(2, 'versions');
+        $this->assertDatabaseCount('generated_document_artifacts', 4);
+        $this->getJson("/api/case-files/{$this->case->id}/document-collection/{$this->document->id}")
+            ->assertOk()
+            ->assertJsonPath('document.c001.status', 'draft')
+            ->assertJsonPath('document.c001.latest_version', 2)
+            ->assertJsonPath('document.c001.working_version', 3)
+            ->assertJsonPath('document.c001.artifact.external_file_id', 'official-pdf-v2');
+
+        // Reopening the same working draft does not consume v4.
+        $this->patchJson($this->url().'/draft', ['draft_data' => $draft, 'success_fee_percentage' => 24])
+            ->assertOk()
+            ->assertJsonPath('document.version', 3)
+            ->assertJsonPath('c001.working_version', 3);
+        $this->assertDatabaseCount('case_generated_documents', 3);
+
+        $this->postJson($this->url().'/review', ['draft_data' => $draft, 'success_fee_percentage' => 24])->assertOk();
+        $this->postJson($this->url().'/c001/sync', ['success_fee_percentage' => 24])
+            ->assertOk()
+            ->assertJsonPath('current_version', 3)
+            ->assertJsonPath('c001.latest_version', 3)
+            ->assertJsonCount(3, 'versions');
+
+        $this->assertSame($v1Artifacts, $v1->artifacts()->orderBy('artifact_type')->get()->map->getAttributes()->all());
+        $this->assertSame($v2Artifacts, $v2->artifacts()->orderBy('artifact_type')->get()->map->getAttributes()->all());
+        $this->assertSame(
+            ['official-copy-v1', 'official-copy-v2', 'official-copy-v3'],
+            GeneratedDocumentArtifact::query()->where('artifact_type', 'source_workbook')->orderBy('id')->pluck('external_file_id')->all()
+        );
+        $this->assertSame(
+            ['official-pdf-v1', 'official-pdf-v2', 'official-pdf-v3'],
+            GeneratedDocumentArtifact::query()->where('artifact_type', 'pdf')->orderBy('id')->pluck('external_file_id')->all()
+        );
+
+        // Retrying final confirmation is idempotent and does not rewrite v3.
+        $this->postJson($this->url().'/c001/sync', ['success_fee_percentage' => 24])
+            ->assertOk()
+            ->assertJsonCount(3, 'versions');
+        $this->assertDatabaseCount('generated_document_artifacts', 6);
+
+        $this->postJson($this->url().'/approve')->assertOk()
+            ->assertJsonPath('document.version', 3)
+            ->assertJsonPath('document.workflow_status', 'approved')
+            ->assertJsonPath('c001.status', 'complete');
+        $this->assertSame('review', $v1->fresh()->workflow_status);
+        $this->assertSame('review', $v2->fresh()->workflow_status);
+    }
+
+    public function test_c001_historical_preview_and_download_use_the_requested_version(): void
+    {
+        config()->set('services.google_drive.c001_template_folder_id', 'official_template_folder');
+        $template = DocumentGenerationTemplate::where('version', 2)->sole();
+        foreach ([1, 2] as $version) {
+            $instance = $this->document->generatedDocuments()->create([
+                'document_generation_template_id' => $template->id,
+                'version' => $version,
+                'workflow_status' => 'review',
+                'draft_data' => ['client_name' => '依頼者株式会社', 'client_address' => '大阪市北区'],
+                'success_fee_percentage' => 20 + $version,
+                'created_by' => $this->user->id,
+                'updated_by' => $this->user->id,
+            ]);
+            $instance->artifacts()->create([
+                'artifact_type' => 'source_workbook',
+                'storage_provider' => 'google_drive',
+                'external_file_id' => 'workbook-v'.$version,
+                'external_url' => 'https://drive.google.com/file/d/workbook-v'.$version.'/view',
+                'filename' => 'C-001_v'.$version.'.xlsx',
+                'mime_type' => GoogleDriveService::XLSX_MIME_TYPE,
+                'uploaded_by' => $this->user->id,
+                'uploaded_at' => now(),
+            ]);
+            $instance->artifacts()->create([
+                'artifact_type' => 'pdf',
+                'storage_provider' => 'google_drive',
+                'external_file_id' => 'pdf-v'.$version,
+                'external_url' => 'https://drive.google.com/file/d/pdf-v'.$version.'/view',
+                'filename' => 'C-001_v'.$version.'.pdf',
+                'mime_type' => 'application/pdf',
+                'uploaded_by' => $this->user->id,
+                'uploaded_at' => now(),
+            ]);
+        }
+
+        $drive = Mockery::mock(GoogleDriveService::class);
+        $drive->shouldReceive('downloadFileContent')->once()->with('workbook-v1')->andReturn('workbook-v1-bytes');
+        $drive->shouldReceive('downloadFileContent')->once()->with('pdf-v1')->andReturn('%PDF-v1');
+        $this->app->instance(GoogleDriveService::class, $drive);
+
+        $this->get($this->url().'/c001/pdf?version=1')->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertContent('%PDF-v1');
+        $this->get($this->url().'/c001/download?version=1')->assertOk()
+            ->assertHeader('content-type', GoogleDriveService::XLSX_MIME_TYPE)
+            ->assertDownload('C-001_v1.xlsx')
+            ->assertContent('workbook-v1-bytes');
     }
 
     private function remoteArtifact(): array

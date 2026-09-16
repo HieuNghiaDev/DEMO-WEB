@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { fetchDocumentPdf, savePdfDownload } from '../documentPdf'
+import { ButtonSpinner } from '../../../components/loading'
 
 export default function DocumentPdfDownloadButton({ caseId, documentId, version }: { caseId: number; documentId: number; version?: number }) {
   const inFlight = useRef(false)
@@ -19,7 +20,7 @@ export default function DocumentPdfDownloadButton({ caseId, documentId, version 
     }
   }
   return <span>
-    <button type="button" className="dc-button" disabled={busy} onClick={() => void download()}>{busy ? 'PDFを作成中…' : 'PDFをダウンロード'}</button>
+    <button type="button" className="dc-button" disabled={busy} onClick={() => void download()}>{busy && <ButtonSpinner size={14} />}{busy ? 'PDFを作成中…' : 'PDFをダウンロード'}</button>
     {error && <p className="dc-danger" role="alert">{error}</p>}
   </span>
 }

@@ -101,4 +101,94 @@ class GoogleDriveGeneratedStorageTest extends TestCase
         $this->assertFalse(app(GoogleDriveService::class)->canWriteGeneratedDocuments());
         Http::assertNothingSent();
     }
+
+    public function test_c001_reuses_one_working_copy_and_never_updates_the_master_template(): void
+    {
+        $opensslConfig = tempnam(sys_get_temp_dir(), 'themis-openssl-');
+        file_put_contents($opensslConfig, "[req]\ndistinguished_name = dn\n[dn]\n");
+        try {
+            $key = openssl_pkey_new(['config' => $opensslConfig, 'private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
+            openssl_pkey_export($key, $privateKey, null, ['config' => $opensslConfig]);
+        } finally {
+            unlink($opensslConfig);
+        }
+
+        config([
+            'services.google_drive.enabled' => true,
+            'services.google_drive.write_enabled' => true,
+            'services.google_drive.auth_mode' => 'service_account',
+            'services.google_drive.generated_documents_folder_id' => 'root',
+            'services.google_drive.write_scope' => 'https://www.googleapis.com/auth/drive',
+            'services.google_drive.service_account_json' => json_encode([
+                'client_email' => 'test@example.test',
+                'private_key' => $privateKey,
+                'token_uri' => 'https://oauth2.googleapis.com/token',
+            ]),
+        ]);
+
+        $copyCreated = false;
+        Http::fake(function ($request) use (&$copyCreated) {
+            if (str_contains($request->url(), 'oauth2.googleapis.com')) {
+                return Http::response(['access_token' => 'fake-token', 'expires_in' => 3600]);
+            }
+            if (str_contains($request->url(), '/files/master_template/copy')) {
+                $copyCreated = true;
+
+                return Http::response([
+                    'id' => 'working_copy',
+                    'name' => 'C-001.xlsx',
+                    'mimeType' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'createdTime' => '2026-09-15T00:00:00Z',
+                ]);
+            }
+            if (str_contains($request->url(), '/files/master_template')) {
+                return Http::response([
+                    'id' => 'master_template',
+                    'name' => '委任契約書簡易版完全成功報酬-空欄.xlsx',
+                    'mimeType' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'trashed' => false,
+                    'parents' => ['template_folder'],
+                ]);
+            }
+            if (str_contains($request->url(), '/files/root') || str_contains($request->url(), '/files/case_documents')) {
+                return Http::response([
+                    'id' => str_contains($request->url(), '/files/root') ? 'root' : 'case_documents',
+                    'mimeType' => 'application/vnd.google-apps.folder',
+                    'trashed' => false,
+                    'capabilities' => ['canAddChildren' => true],
+                ]);
+            }
+            if (str_contains($request->url(), '/upload/drive/v3/files/working_copy')) {
+                $this->assertSame('PATCH', $request->method());
+                $this->assertSame('updated-workbook', $request->body());
+
+                return Http::response([], 200);
+            }
+            if (str_contains($request->url(), '/drive/v3/files')) {
+                return Http::response(['incompleteSearch' => false, 'files' => $copyCreated ? [[
+                    'id' => 'working_copy',
+                    'name' => 'C-001.xlsx',
+                    'mimeType' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'createdTime' => '2026-09-15T00:00:00Z',
+                ]] : []]);
+            }
+
+            return Http::response([], 404);
+        });
+
+        $drive = app(GoogleDriveService::class);
+        $resolved = $drive->resolveExactTemplateFile(
+            'template_folder',
+            '委任契約書簡易版完全成功報酬-空欄.xlsx',
+            'master_template'
+        );
+        $first = $drive->ensureGeneratedWorkbookCopy($resolved['id'], 'case_documents', 'C-001.xlsx', str_repeat('b', 64));
+        $again = $drive->ensureGeneratedWorkbookCopy($resolved['id'], 'case_documents', 'C-001.xlsx', str_repeat('b', 64));
+        $drive->replaceWorkbookContent($first['id'], $resolved['id'], 'updated-workbook');
+
+        $this->assertSame('working_copy', $first['id']);
+        $this->assertSame($first, $again);
+        $this->assertCount(1, Http::recorded(fn ($request) => str_contains($request->url(), '/files/master_template/copy')));
+        $this->assertCount(0, Http::recorded(fn ($request) => str_contains($request->url(), '/upload/drive/v3/files/master_template')));
+    }
 }

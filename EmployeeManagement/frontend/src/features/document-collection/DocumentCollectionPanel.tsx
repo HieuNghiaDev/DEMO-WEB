@@ -12,6 +12,7 @@ import CollectionFeedback from './components/CollectionFeedback'
 import InitializationDialog from './components/InitializationDialog'
 import DocumentCollectionInspector from './components/DocumentCollectionInspector'
 import BulkNecessityDialog, { type BulkNecessityAction } from './components/BulkNecessityDialog'
+import { InlineLoader, SectionSkeleton } from '../../components/loading'
 import './documentCollection.css'
 
 export default function DocumentCollectionPanel({ caseId, initialSelectedId, canUpdate, canReviewDocuments, canReadEmployees, activities, onHistory, onBack, onChanged }: {
@@ -105,7 +106,7 @@ export default function DocumentCollectionPanel({ caseId, initialSelectedId, can
     </div>
     {state.notice && <p className="dc-feedback dc-success" role="status">{state.notice}</p>}
     {state.previewError && <CollectionFeedback error={state.previewError} onRetry={state.refresh} onBack={onBack} />}
-    {!preview && state.previewLoading && <p className="dc-empty-results" role="status">{t('documentCollection.checking')}</p>}
+    {!preview && state.previewLoading && <div className="dc-empty-results"><InlineLoader label={t('documentCollection.checking')} /></div>}
     {preview && !state.previewError && <>
       {preview.warnings.map(warning => <p className="dc-context-note" key={warning.code}>{warning.message}</p>)}
       {mode === 'uninitialized' ? <section className="dc-uninitialized"><ClipboardList size={30} /><h3>{t('documentCollection.uninitialized.title')}</h3><p>{t('documentCollection.uninitialized.caseType')} <strong>{preview.case.case_type?.name ?? '—'}</strong><span>{t('documentCollection.uninitialized.candidateDocuments')} <strong>{t('cases.count', { count: preview.initialization.missing_candidate_count })}</strong></span></p><p>{t('documentCollection.uninitialized.guidance').split('\n').map((line, index) => <span key={line}>{index > 0 && <br />}{line}</span>)}</p>{canInitialize ? <button type="button" className="dc-button dc-primary" onClick={() => state.setConfirming(true)}><Plus size={17} />{t('documentCollection.uninitialized.create')}</button> : <p>{t('documentCollection.uninitialized.permissionHint')}</p>}</section> : <>
@@ -179,7 +180,7 @@ export default function DocumentCollectionPanel({ caseId, initialSelectedId, can
                 </div>
               </div>
             )}
-            {state.listError ? <CollectionFeedback error={state.listError} onRetry={state.refresh} onBack={onBack} /> : state.listLoading ? <div className="dc-empty-results" role="status">{t('documentCollection.loadingList')}</div> : data && <CollectionListView items={data.documents.map(item => itemToRow(item))} totalCount={data.summary.total} filteredCount={data.summary.filtered_count} selectedId={selectedId === null ? null : String(selectedId)} canSelect={canUpdate} selectionMode={selectionMode} selectionScope={state.query.necessity_status ?? 'undetermined'} bulkSelectedIds={bulkSelectedIds} onSelectionModeChange={changeSelectionMode} onSelectionScopeChange={changeSelectionScope} onToggleBulkSelection={toggleBulkSelection} onSetVisibleSelection={setVisibleSelection} onSelect={id => { if (Number(id) === selectedId || editState.current.saving) return; if (!editState.current.dirty || window.confirm(t('documentCollection.editor.discardAndClose'))) setSelectedId(Number(id)) }} />}
+            {state.listError ? <CollectionFeedback error={state.listError} onRetry={state.refresh} onBack={onBack} /> : state.listLoading ? <SectionSkeleton className="border-0" label={t('documentCollection.loadingList')} rows={6} showHeader={false} /> : data && <CollectionListView items={data.documents.map(item => itemToRow(item))} totalCount={data.summary.total} filteredCount={data.summary.filtered_count} selectedId={selectedId === null ? null : String(selectedId)} canSelect={canUpdate} selectionMode={selectionMode} selectionScope={state.query.necessity_status ?? 'undetermined'} bulkSelectedIds={bulkSelectedIds} onSelectionModeChange={changeSelectionMode} onSelectionScopeChange={changeSelectionScope} onToggleBulkSelection={toggleBulkSelection} onSetVisibleSelection={setVisibleSelection} onSelect={id => { if (Number(id) === selectedId || editState.current.saving) return; if (!editState.current.dirty || window.confirm(t('documentCollection.editor.discardAndClose'))) setSelectedId(Number(id)) }} />}
           </div>
           {selectedId !== null && <DocumentCollectionInspector key={selectedId} caseId={caseId} itemId={selectedId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} employees={state.employees} employeeError={state.employeeError} activities={activities} onHistory={onHistory} onClose={() => { editState.current = { dirty: false, saving: false }; setSelectedId(null) }} onSaved={saved} onEditState={value => { editState.current = value }} />}
         </div>

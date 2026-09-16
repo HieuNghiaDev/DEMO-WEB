@@ -6,6 +6,7 @@ import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import OfficeSwitcher from "../components/employee-room/OfficeSwitcher";
 import { getEmployeeAvatarUrl } from "../utils/employeeAvatar";
+import { ButtonSpinner } from "../components/loading";
 import {
   Bell,
   Play,
@@ -2285,9 +2286,8 @@ export default function EmployeeRoom() {
                 disabled={!employeeName || isWorkStarted || isSubmitting}
                 className="flex h-11 items-center justify-center gap-2 self-end rounded-xl bg-[#635BFF] px-5 text-sm font-bold text-white shadow-md shadow-indigo-500/20 transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none"
               >
-                <Play size={17} />
-
-                {isSubmitting ? "処理中..." : "勤務開始"}
+                {isSubmitting ? <ButtonSpinner size={17} /> : <Play size={17} />}
+                {isSubmitting ? "処理中…" : "勤務開始"}
               </button>
             </div>
 
@@ -2959,8 +2959,8 @@ export default function EmployeeRoom() {
                 disabled={isSubmitting}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#635BFF] px-4 py-3 text-sm font-bold text-white shadow-md shadow-indigo-500/20 transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <Play size={16} />
-                {isSubmitting ? "処理中..." : "勤務を開始"}
+                {isSubmitting ? <ButtonSpinner size={16} /> : <Play size={16} />}
+                {isSubmitting ? "処理中…" : "勤務を開始"}
               </button>
             </div>
           </div>
@@ -3043,9 +3043,9 @@ export default function EmployeeRoom() {
                   disabled={isDownloadingAttendanceReport}
                   className="flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <Download size={17} />
+                  {isDownloadingAttendanceReport ? <ButtonSpinner size={17} /> : <Download size={17} />}
                   {isDownloadingAttendanceReport
-                    ? "作成中..."
+                    ? "作成中…"
                     : "Excelを保存"}
                 </button>
               </div>
@@ -3187,9 +3187,9 @@ export default function EmployeeRoom() {
                 }
                 className="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-2 py-3 text-[13px] font-bold text-white shadow-md shadow-indigo-500/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none sm:gap-2 sm:px-4 sm:text-sm"
               >
-                <Play size={16} />
+                {isSubmitting ? <ButtonSpinner size={16} /> : <Play size={16} />}
                 {isSubmitting
-                  ? "処理中..."
+                  ? "処理中…"
                   : taskModalMode === "start"
                     ? "作業を開始"
                     : "次の作業を開始"}
@@ -3333,7 +3333,8 @@ export default function EmployeeRoom() {
                       : "bg-[#635BFF] shadow-indigo-500/20 hover:bg-indigo-600"
                 }`}
               >
-                {isSubmitting ? "処理中..." : "変更する"}
+                {isSubmitting && <ButtonSpinner size={16} />}
+                {isSubmitting ? "処理中…" : "変更する"}
               </button>
             </div>
           </div>

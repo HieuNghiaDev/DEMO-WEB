@@ -1,5 +1,7 @@
 import api from '../../services/api'
 import type { DocumentDraft, DocumentFieldDefinition, DocumentRendererType, DocumentTemplateDefinition, DocumentWorkflowStatus } from './documentTemplates'
+import type { C001State } from '../document-collection/types'
+import { pdfFilename } from './documentPdf'
 
 export type DocumentDraftRecord = {
   id: number | null
@@ -31,16 +33,27 @@ export type DocumentCreationState = {
   drive: DocumentDriveState
   currentVersion: number | null
   versions: DocumentVersionSummary[]
+  permissions: { canApprove: boolean }
+  c001: C001State | null
 }
 
 export type DocumentDriveState = { available: boolean; artifact: { url: string; filename: string; uploaded_at: string } | null }
 
+export type C001WorkbookPreview = {
+  blob: Blob
+  filename: string
+  source: 'temporary_working_copy' | 'saved_working_copy'
+}
+
 export interface DocumentDraftStore {
   load(identity: DocumentDraftIdentity, signal?: AbortSignal): Promise<DocumentCreationState>
-  saveDraft(identity: DocumentDraftIdentity, draft: DocumentDraft): Promise<DocumentCreationState>
-  moveToReview(identity: DocumentDraftIdentity, draft: DocumentDraft): Promise<DocumentCreationState>
+  saveDraft(identity: DocumentDraftIdentity, draft: DocumentDraft, successFeePercentage?: string): Promise<DocumentCreationState>
+  moveToReview(identity: DocumentDraftIdentity, draft: DocumentDraft, successFeePercentage?: string): Promise<DocumentCreationState>
   approve(identity: DocumentDraftIdentity): Promise<DocumentCreationState>
   createRevision(identity: DocumentDraftIdentity): Promise<DocumentCreationState>
+  previewC001(identity: DocumentDraftIdentity, official: boolean, signal?: AbortSignal): Promise<C001WorkbookPreview>
+  syncC001(identity: DocumentDraftIdentity, percentage: string): Promise<DocumentCreationState>
+  rejectC001(identity: DocumentDraftIdentity): Promise<DocumentCreationState>
 }
 
 type ApiTemplate = {
@@ -60,6 +73,8 @@ type ApiVersionSummary = {
 type ApiCreationState = {
   supported: boolean; template: ApiTemplate | null; document: ApiDocument | null; drive?: DocumentDriveState
   current_version?: number | null; versions?: ApiVersionSummary[]
+  permissions?: { can_approve?: boolean }
+  c001?: C001State | null
 }
 
 const path = ({ caseId, documentId }: DocumentDraftIdentity) =>
@@ -77,6 +92,8 @@ function mapState(data: ApiCreationState): DocumentCreationState {
       version: version.version, status: version.workflow_status, isCurrent: version.is_current,
       approvedAt: version.approved_at, approvedBy: version.approved_by, driveArtifact: version.drive_artifact,
     })),
+    permissions: { canApprove: data.permissions?.can_approve ?? false },
+    c001: data.c001 ?? null,
     template: data.template ? {
       id: data.template.id, documentTypeId: data.template.document_type_id,
       documentCode: data.template.document_code, name: data.template.name,
@@ -98,17 +115,44 @@ export const apiDocumentDraftStore: DocumentDraftStore = {
     const query = identity.version ? `?version=${identity.version}` : ''
     return mapState((await api.get<ApiCreationState>(`${path(identity)}${query}`, { signal })).data)
   },
-  async saveDraft(identity, draft) {
-    return mapState((await api.patch<ApiCreationState>(`${path(identity)}/draft`, { draft_data: draft })).data)
+  async saveDraft(identity, draft, successFeePercentage) {
+    return mapState((await api.patch<ApiCreationState>(`${path(identity)}/draft`, {
+      draft_data: draft,
+      ...(successFeePercentage ? { success_fee_percentage: successFeePercentage } : {}),
+    })).data)
   },
-  async moveToReview(identity, draft) {
-    return mapState((await api.post<ApiCreationState>(`${path(identity)}/review`, { draft_data: draft })).data)
+  async moveToReview(identity, draft, successFeePercentage) {
+    return mapState((await api.post<ApiCreationState>(`${path(identity)}/review`, {
+      draft_data: draft,
+      ...(successFeePercentage ? { success_fee_percentage: successFeePercentage } : {}),
+    })).data)
   },
   async approve(identity) {
     return mapState((await api.post<ApiCreationState>(`${path(identity)}/approve`)).data)
   },
   async createRevision(identity) {
     return mapState((await api.post<ApiCreationState>(`${path(identity)}/revision`)).data)
+  },
+  async previewC001(identity, official, signal) {
+    const query = identity.version ? `?version=${identity.version}` : ''
+    const endpoint = official ? 'pdf' : 'preview'
+    const response = await api.get<Blob>(`${path(identity)}/c001/${endpoint}${query}`, { signal, responseType: 'blob' })
+    if (!response.data.type.toLowerCase().startsWith('application/pdf') || await response.data.slice(0, 5).text() !== '%PDF-') {
+      throw new Error('C-001 PDFを取得できませんでした。')
+    }
+    return {
+      blob: response.data,
+      filename: pdfFilename(response.headers['content-disposition']),
+      source: official || response.headers['x-c001-preview-source'] === 'saved_working_copy'
+        ? 'saved_working_copy'
+        : 'temporary_working_copy',
+    }
+  },
+  async syncC001(identity, percentage) {
+    return mapState((await api.post<ApiCreationState>(`${path(identity)}/c001/sync`, { success_fee_percentage: percentage })).data)
+  },
+  async rejectC001(identity) {
+    return mapState((await api.post<ApiCreationState>(`${path(identity)}/c001/reject`)).data)
   },
 }
 

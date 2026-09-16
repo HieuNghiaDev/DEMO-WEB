@@ -20,6 +20,7 @@ import ApprovalRoom from "./pages/ApprovalRoom";
 import ChangePassword from "./pages/ChangePassword";
 import SystemSettings from "./pages/system/SystemSettings";
 import { lazy, Suspense } from "react";
+import { LoadingState } from "./components/ui";
 
 const DocumentCollectionMockupPage = lazy(() => import("./features/document-collection-mockup/DocumentCollectionMockupPage"));
 
@@ -46,7 +47,7 @@ function App() {
               <Route path="/ai" element={<AIEmployees />} />
               <Route path="/approvals" element={<ApprovalRoom />} />
               <Route path="/system" element={<SystemSettings />} />
-              <Route path="/design/case-document-collection" element={<Suspense fallback={<p className="p-6">プレビューを読み込み中…</p>}><DocumentCollectionMockupPage /></Suspense>} />
+              <Route path="/design/case-document-collection" element={<Suspense fallback={<LoadingState message="プレビューを読み込み中…" variant="page" />}><DocumentCollectionMockupPage /></Suspense>} />
             </Route>
           </Route>
 

@@ -5,6 +5,7 @@ import { documentDraftStore } from '../documentDraftStore'
 import type { DocumentWorkflowStatus } from '../documentTemplates'
 import '../c001DocumentEditor.css'
 import DocumentWorkflowBadge from './DocumentWorkflowBadge'
+import { InlineLoader } from '../../../components/loading'
 
 const messages: Record<DocumentWorkflowStatus, string> = {
   not_created: 'まだ文書は作成されていません。',
@@ -47,7 +48,7 @@ function CreationStatus({ caseId, documentId, canUpdate, blocked }: { caseId: nu
     <div className="dc-document-creation-status">
       <div className="dc-document-creation-copy">{!loading && !error && <><DocumentWorkflowBadge status={status}/><p>{messages[status]}</p></>}</div>
       <div className="dc-document-creation-actions">
-        {loading && <button type="button" className="dc-button dc-primary" disabled>読込中…</button>}
+        {loading && <span className="dc-button" aria-disabled="true"><InlineLoader label="読込中…" /></span>}
         {!loading && !error && status === 'not_created' && canUpdate && <button type="button" className="dc-button dc-primary" disabled={navigationDisabled} onClick={() => navigate(documentPath)}><FilePenLine size={14}/>文書を作成</button>}
         {!loading && !error && hasDocument && <button type="button" className="dc-button" disabled={navigationDisabled} onClick={() => navigate(status === 'approved' ? documentPath : `${documentPath}?mode=view`)}><Eye size={14}/>文書を見る</button>}
         {!loading && !error && hasDocument && canUpdate && <button type="button" className="dc-button dc-primary" disabled={navigationDisabled} onClick={() => navigate(documentPath)}><FilePenLine size={14}/>文書を編集</button>}

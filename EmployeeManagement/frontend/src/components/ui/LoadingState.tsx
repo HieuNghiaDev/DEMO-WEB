@@ -1,4 +1,4 @@
-import { ButtonSpinner } from '../loading/ButtonSpinner'
+import { ThemisLoadingMark } from '../loading/ThemisLoadingMark'
 
 export interface LoadingStateProps {
   message?: string
@@ -27,15 +27,13 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
       role="status"
       aria-live="polite"
     >
-      <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] text-[var(--tm-primary)] shadow-sm">
-        <ButtonSpinner className="h-5 w-5" size={20} />
-      </span>
+      <ThemisLoadingMark size={variant === 'compact' ? 'sm' : 'md'} />
       {message && (
         <p className="mt-3 text-xs font-semibold text-[var(--tm-text-secondary)]">
           {message}
         </p>
       )}
-      <span className="mt-3 block h-1 w-24 overflow-hidden rounded-full bg-[var(--tm-surface-hover)]" aria-hidden="true">
+      <span className="mt-4 block h-px w-28 overflow-hidden bg-[var(--tm-border)]" aria-hidden="true">
         <span className="block h-full w-1/2 rounded-full bg-[var(--tm-primary)] [animation:themis-loading-progress_1.2s_ease-in-out_infinite] motion-reduce:animate-none" />
       </span>
     </div>

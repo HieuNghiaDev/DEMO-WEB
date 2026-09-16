@@ -11,7 +11,7 @@ import VisaProgressSummary from '../features/visa-progress/VisaProgressSummary'
 import VisaProgressTable from '../features/visa-progress/VisaProgressTable'
 import type { VisaDeadlineLevel, VisaProgressApplication, VisaProgressDashboard } from '../features/visa-progress/types'
 import { isAttentionDeadline } from '../features/visa-progress/visaProgressUi'
-import { LoadingState as SharedLoadingState } from '../components/ui'
+import { SectionSkeleton, Skeleton } from '../components/loading'
 
 const deadlineOrder: Record<VisaDeadlineLevel, number> = {
   overdue: 0,
@@ -228,7 +228,14 @@ function getErrorMessage(error: unknown): string {
 }
 
 function LoadingState() {
-  return <SharedLoadingState className="mt-6" message="在留申請データを読み込み中…" variant="page" />
+  return (
+    <div className="mt-6 space-y-6" role="status" aria-label="在留申請データを読み込み中…" aria-busy="true">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-24 rounded-xl border border-[var(--tm-border)]" />)}
+      </div>
+      <SectionSkeleton rows={6} showHeader />
+    </div>
+  )
 }
 
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {

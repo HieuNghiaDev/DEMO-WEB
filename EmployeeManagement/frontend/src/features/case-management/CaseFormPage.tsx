@@ -9,6 +9,7 @@ import QuickClientDialog from './QuickClientDialog'
 import { caseApi, caseError } from './api'
 import { caseDraft, casePayload, caseTypeOptions, generatedCaseTitle, newDraft, priorityLabels, validateCase } from './helpers'
 import type { CaseClient, CaseDraft, CaseEmployee, CaseFieldErrors, CaseTypeOption, CaseViewer, EditableCase } from './types'
+import { ButtonSpinner, SectionSkeleton } from '../../components/loading'
 
 export default function CaseFormPage({ user }: { user: CaseViewer }) {
   const { caseId } = useParams()
@@ -102,7 +103,7 @@ export default function CaseFormPage({ user }: { user: CaseViewer }) {
 
   return <main className="dc-preview cm-page"><div className="cm-form cm-surface">
     <CasePageHeader title={editing ? '案件を編集' : '新規案件'} description={editing ? '案件の基本情報を変更します。' : '案件の登録に必要な基本情報を入力してください。'} onBack={cancel}/>
-    {!allowed ? <p role="alert" className="cm-message">この操作を行う権限がありません。</p> : loading ? <p role="status" className="cm-empty">案件情報を読み込み中…</p> : !initial ? <div role="alert" className="cm-message">{error}<button className="dc-button" onClick={() => { setLoading(true); setRetry(value => value + 1) }}>再試行</button></div> : <>
+    {!allowed ? <p role="alert" className="cm-message">この操作を行う権限がありません。</p> : loading ? <SectionSkeleton className="mt-5" label="案件情報を読み込み中…" rows={5} /> : !initial ? <div role="alert" className="cm-message">{error}<button className="dc-button" onClick={() => { setLoading(true); setRetry(value => value + 1) }}>再試行</button></div> : <>
       {error && <p role="alert" className="cm-message">{error}{!editing && fields.title && <span> {fields.title}</span>}</p>}
       <form ref={form} noValidate onSubmit={event => { event.preventDefault(); void submit() }}>
         <fieldset disabled={saving}>
@@ -137,7 +138,7 @@ export default function CaseFormPage({ user }: { user: CaseViewer }) {
             </div>
           </details>
         </fieldset>
-        <footer className="cm-form-actions"><button type="button" className="dc-button" disabled={saving} onClick={cancel}>キャンセル</button><button className="dc-button dc-primary" type="submit" disabled={saving}>{saving ? '保存中…' : editing ? '保存' : '案件を作成'}</button></footer>
+        <footer className="cm-form-actions"><button type="button" className="dc-button" disabled={saving} onClick={cancel}>キャンセル</button><button className="dc-button dc-primary" type="submit" disabled={saving}>{saving && <ButtonSpinner size={14} />}{saving ? '保存中…' : editing ? '保存' : '案件を作成'}</button></footer>
       </form>
       {quickClient && <QuickClientDialog onClose={() => setQuickClient(false)} onCreated={client => {
         setClients(current => [client, ...current.filter(item => item.id !== client.id)])

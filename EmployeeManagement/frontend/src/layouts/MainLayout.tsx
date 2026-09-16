@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import ThemisAiAssistant from '../components/ai/ThemisAiAssistant'
 import Sidebar from '../components/layout/Sidebar'
 import AppFooter from '../components/layout/AppFooter'
+import { RouteProgress } from '../components/loading'
 
 function MainLayout() {
   const location = useLocation()
@@ -13,6 +14,7 @@ function MainLayout() {
 
   return (
     <div className="themis-app flex min-h-screen bg-[var(--tm-bg)] text-[var(--tm-text-primary)]">
+      <RouteProgress key={location.key} />
       <Sidebar />
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">

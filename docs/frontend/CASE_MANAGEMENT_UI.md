@@ -9,6 +9,7 @@ Only these fields appear in the default form:
 - 依頼者: 氏名 / 組織名, manual フリガナ, 個人 / 組織 segmented selector.
 - 事件類型: actual catalog-backed canonical `労災` and `交通事故` buttons. There is no subtype picker.
 - 担当者: a clickable picker that searches real active employees and keeps the existing level-4/5 plus `employee.view` restriction.
+- 勤務先情報: optional progressive section supporting multiple current/past employers. It is recommended and initially expanded for 労災; it remains collapsed and optional for 交通事故. Users may skip it and add or edit records in the case workspace later.
 - 案件メモ: optional three-line case-specific note.
 - Collapsed `依頼者情報を追加`: phone, email and address only.
 
@@ -22,19 +23,21 @@ The backend already defaults `case_files.status` to `intake`, `priority` to `nor
 
 `入力内容を確認` validates locally and opens `登録内容の確認`; it makes zero API mutations. The review renders only client identity/contact, case type, assignee and case note.
 
-`修正する` preserves the same draft. Only `この内容で案件を作成` mutates:
+`修正する` preserves the same draft. Only `この内容で案件を作成` mutates. The frontend sends one transactional POST `/case-files`:
 
-- Existing client: POST `/case-files`.
-- New client: POST `/clients`, then POST `/case-files`.
+- Existing client: `client_id` plus optional `employments`.
+- New client: nested `client` plus optional `employments`.
 
-If client creation succeeds but case creation fails, the returned client remains selected; retry sends only the case POST. A submit lock prevents duplicate creation.
+Backend validation failure rolls back Client, CaseFile and all submitted employments together. A submit lock prevents duplicate creation.
 
 Case creation makes zero CaseDocuments and never calls templates, candidate preview or initialization. After success the app opens `/quests/{id}`; document collection remains the existing explicit preview → confirm → initialize workflow.
 
 ## Implementation and verification
 
 - `src/features/case-management/NewCaseDialog.tsx`: simplified popup, picker, final review and guarded API flow.
+- `src/features/case-management/ClientEmploymentEditor.tsx`: progressive multi-employer editor used by intake.
+- `src/features/case-workspace/ClientEmploymentPanel.tsx`: compact employment history CRUD in the real case Overview tab.
 - `src/features/case-management/caseManagement.css`: compact 740px desktop dialog, light/dark tokens and mobile full-screen behavior.
-- `tests/caseManagement.browser.mjs`: checks removed fields, selectors, collapsed contact section, review boundary, one-time creation and no document writes.
+- `backend/tests/Feature/ClientEmploymentApiTest.php`: covers quick intake, multiple employers, transaction rollback and nested CRUD authorization.
 
-The form targets normal desktop height without body scrolling while contact details are closed. At narrow mobile widths it becomes full-screen without horizontal overflow. Backend, database, document collection and deployment are not changed.
+The form targets normal desktop height while optional sections are closed. At narrow mobile widths it becomes full-screen without horizontal overflow. Document collection, C-001, Drive, approval and AI workflows are unchanged.

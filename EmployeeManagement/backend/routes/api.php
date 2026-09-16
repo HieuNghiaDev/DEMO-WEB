@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\CaseTypeController;
 use App\Http\Controllers\Api\CaseWorkspaceController;
 use App\Http\Controllers\Api\CaseWorkspaceItemController;
 use App\Http\Controllers\Api\ClientController;
+use App\Http\Controllers\Api\ClientEmploymentController;
 use App\Http\Controllers\Api\DocumentNameCatalogController;
 use App\Http\Controllers\Api\EmployeeNotificationController;
 use App\Http\Controllers\Api\EmployeeTaskController;
@@ -138,6 +139,14 @@ Route::middleware([
         ->middleware('permission:case.delete');
     Route::post('/clients/{client}/google-drive/provision', [ClientController::class, 'provisionDrive'])
         ->middleware('permission:case.update');
+    Route::get('/clients/{client}/employments', [ClientEmploymentController::class, 'index'])
+        ->middleware('permission:case.view');
+    Route::post('/clients/{client}/employments', [ClientEmploymentController::class, 'store'])
+        ->middleware('permission:case.update');
+    Route::patch('/clients/{client}/employments/{employment}', [ClientEmploymentController::class, 'update'])
+        ->middleware('permission:case.update');
+    Route::delete('/clients/{client}/employments/{employment}', [ClientEmploymentController::class, 'destroy'])
+        ->middleware('permission:case.update');
 
     Route::apiResource('case-files', CaseFileController::class)
         ->only(['index', 'show'])
@@ -185,7 +194,17 @@ Route::middleware([
             ->middleware('permission:case.update');
         Route::post('document-collection/{caseDocument}/creation/review', [CaseDocumentCreationController::class, 'review'])
             ->middleware('permission:case.update');
+        Route::get('document-collection/{caseDocument}/creation/c001/preview', [CaseDocumentCreationController::class, 'previewC001'])
+            ->middleware('permission:case.view');
+        Route::get('document-collection/{caseDocument}/creation/c001/download', [CaseDocumentCreationController::class, 'downloadC001'])
+            ->middleware('permission:case.view');
+        Route::get('document-collection/{caseDocument}/creation/c001/pdf', [CaseDocumentCreationController::class, 'pdfC001'])
+            ->middleware('permission:case.view');
+        Route::post('document-collection/{caseDocument}/creation/c001/sync', [CaseDocumentCreationController::class, 'syncC001'])
+            ->middleware('permission:case.update');
         Route::post('document-collection/{caseDocument}/creation/approve', [CaseDocumentCreationController::class, 'approve'])
+            ->middleware('permission:case.update');
+        Route::post('document-collection/{caseDocument}/creation/c001/reject', [CaseDocumentCreationController::class, 'rejectC001'])
             ->middleware('permission:case.update');
         Route::post('document-collection/{caseDocument}/creation/revision', [CaseDocumentCreationController::class, 'revision'])
             ->middleware('permission:case.update');

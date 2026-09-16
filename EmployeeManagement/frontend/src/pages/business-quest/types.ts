@@ -108,6 +108,7 @@ export type ClientProfile = {
   email: string | null
   address: string | null
   nationality: string | null
+  employments?: import('../../features/case-management/types').ClientEmployment[]
 }
 
 export type CaseDetail = ApiCaseFile & {

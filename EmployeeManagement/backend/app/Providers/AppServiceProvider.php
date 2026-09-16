@@ -3,10 +3,12 @@
 namespace App\Providers;
 
 use App\Contracts\AIModelClient;
+use App\Contracts\C001WorkbookPdfConverter;
 use App\Services\ClaudeClient;
 use App\Services\FailoverAIModelClient;
 use App\Services\GeminiClient;
 use App\Services\GroqClient;
+use App\Services\PhpSpreadsheetC001WorkbookPdfConverter;
 use Illuminate\Support\ServiceProvider;
 use LogicException;
 
@@ -17,6 +19,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(C001WorkbookPdfConverter::class, PhpSpreadsheetC001WorkbookPdfConverter::class);
+
         $this->app->bind(AIModelClient::class, function ($app): AIModelClient {
             $clients = [
                 'claude' => fn (): AIModelClient => $app->make(ClaudeClient::class),

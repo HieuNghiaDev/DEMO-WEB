@@ -13,7 +13,7 @@ class CaseWorkspaceController extends Controller
     public function show(CaseFile $caseFile): JsonResponse
     {
         $caseFile->load([
-            'client', 'caseTypeOption.parent', 'department', 'assignedEmployee', 'createdByEmployee',
+            'client.employments', 'caseTypeOption.parent', 'department', 'assignedEmployee', 'createdByEmployee',
             'documents.createdByEmployee', 'documents.confirmedByEmployee', 'documents.templateItem',
             'parties', 'deadlines', 'caseTasks.assignedEmployee', 'activities.createdByEmployee',
         ]);

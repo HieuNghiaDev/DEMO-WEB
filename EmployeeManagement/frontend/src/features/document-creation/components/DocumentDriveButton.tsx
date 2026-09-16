@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { saveDocumentToDrive } from '../documentDraftStore'
 import type { DocumentDriveState } from '../documentDraftStore'
+import { ButtonSpinner } from '../../../components/loading'
 
 function driveLink(value: string): string | null {
   try {
@@ -27,7 +28,7 @@ export default function DocumentDriveButton({ caseId, documentId, version, drive
   const url = drive.artifact && driveLink(drive.artifact.url)
   if (drive.artifact) return <span><span>Google Drive 保存済み </span>{url && <a className="dc-button" href={url} target="_blank" rel="noopener noreferrer">Google Driveで開く</a>}</span>
   return <span>
-    <button type="button" className="dc-button" disabled={!drive.available || busy} onClick={() => void upload()}>{busy ? 'Google Driveへ保存中…' : 'Google Driveへ保存'}</button>
+    <button type="button" className="dc-button" disabled={!drive.available || busy} onClick={() => void upload()}>{busy && <ButtonSpinner size={14} />}{busy ? 'Google Driveへ保存中…' : 'Google Driveへ保存'}</button>
     {!drive.available && <small className="dc-meta">Google Driveへの保存は現在利用できません。</small>}
     {error && <span className="dc-danger" role="alert">{error}</span>}
   </span>

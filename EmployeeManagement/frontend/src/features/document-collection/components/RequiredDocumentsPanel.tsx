@@ -8,6 +8,7 @@ import { formatDate, isRequiredDocument, itemToRow } from '../utils'
 import { useWorkflowCaseDocuments } from '../hooks/useWorkflowCaseDocuments'
 import CollectionFeedback from './CollectionFeedback'
 import RequiredDocumentInspector from './RequiredDocumentInspector'
+import { SectionSkeleton } from '../../../components/loading'
 
 type DeadlineFilter = 'all' | 'overdue' | 'upcoming' | 'unset'
 
@@ -71,7 +72,12 @@ export default function RequiredDocumentsPanel({ caseId, canUpdate, canReviewDoc
           {filtersOpen && <div id={filterId} className="dc-required-filter-panel"><label>担当者<select aria-label="必要資料の担当者" value={assignee} onChange={event => setAssignee(event.target.value === 'all' || event.target.value === 'unassigned' ? event.target.value : Number(event.target.value))}><option value="all">すべて</option><option value="unassigned">未割当</option>{employees.map(employee => <option key={employee.id} value={employee.id}>{employee.display_name}</option>)}</select></label><label>期限<select aria-label="必要資料の期限" value={deadline} onChange={event => setDeadline(event.target.value as DeadlineFilter)}><option value="all">すべて</option><option value="overdue">期限超過</option><option value="upcoming">7日以内</option><option value="unset">未設定</option></select></label>{activeSecondaryFilters > 0 && <button type="button" className="dc-text-action dc-filter-clear" onClick={clearSecondaryFilters}><X size={14}/>条件をクリア</button>}</div>}
         </div>
         <div className="dc-list-caption"><span>{filtered.length} / {required.length}件</span></div>
-        {collection.error ? <CollectionFeedback error={collection.error} onRetry={collection.retry}/> : collection.loading ? <div className="dc-empty-results" role="status">必要資料を読み込み中…</div> : <RequiredDocumentList items={filtered} selectedId={selectedId} onSelect={setSelectedId}/>} 
+        {collection.error
+          ? <CollectionFeedback error={collection.error} onRetry={collection.retry}/>
+          : collection.loading
+            ? <SectionSkeleton className="border-0" label="必要資料を読み込み中…" rows={5} showHeader={false} />
+            : <RequiredDocumentList items={filtered} selectedId={selectedId} referenceTime={filterClock} onSelect={setSelectedId}/>
+        }
         {!collection.loading && required.length === 0 && <div className="dc-required-empty"><p>必要と判断された資料はまだありません。</p><button type="button" className="dc-button" onClick={onCandidates}>資料収集で候補を確認</button></div>}
       </div>
       {selectedId !== null && (
@@ -81,18 +87,25 @@ export default function RequiredDocumentsPanel({ caseId, canUpdate, canReviewDoc
   </div>
 }
 
-function RequiredDocumentList({ items, selectedId, onSelect }: { items: CollectionItem[]; selectedId: number | null; onSelect: (id: number) => void }) {
+function RequiredDocumentList({ items, selectedId, referenceTime, onSelect }: { items: CollectionItem[]; selectedId: number | null; referenceTime: number; onSelect: (id: number) => void }) {
   if (!items.length) return <div className="dc-empty-results"><Search size={22}/><h3>該当する必要資料がありません</h3><p>検索または絞り込み条件を変更してください。</p></div>
   return <div className="dc-required-list"><div className="dc-required-head"><span>資料</span><span>取得作業</span><span>内容充足</span><span>担当者</span><span>回答期限</span><span>確認</span><span aria-hidden="true" /></div>{items.map(item => {
     const row = itemToRow(item)
     const exception = row.result
-    return <button key={item.id} type="button" className={`dc-required-row ${selectedId === item.id ? 'is-selected' : ''}`} onClick={() => onSelect(item.id)} aria-label={`${row.code} ${row.title} の必要資料詳細`}>
-      <span className="dc-document"><span className="dc-code">{row.code}</span><strong>{row.title}</strong><span className="dc-source">{[item.collection_source, row.period].filter(Boolean).join(' · ') || '取得先・対象期間 未設定'}</span>{exception && <span className="dc-required-exception">{exception}</span>}</span>
-      <StatusLane tone={collectionTone(item.collection_status)} label={collectionLabels[item.collection_status]}/>
-      <StatusLane tone={fulfillmentTone(item.fulfillment_status)} label={fulfillmentLabels[item.fulfillment_status]}/>
+    const c001 = item.c001
+    const collectionLabel = c001?.artifact ? '収集済み' : collectionLabels[item.collection_status]
+    const collectionStatusTone = c001?.artifact ? 'is-progress' : collectionTone(item.collection_status)
+    const fulfillmentLabel = c001?.artifact ? '入力済み' : fulfillmentLabels[item.fulfillment_status]
+    const fulfillmentStatusTone = c001?.artifact ? 'is-progress' : fulfillmentTone(item.fulfillment_status)
+    const reviewLabel = c001 ? ({ missing: '未収集', draft: '下書き', pending_approval: '承認待ち', complete: '完了', rejected: '差戻し' } as const)[c001.status] : reviewLabels[item.review_status]
+    const reviewStatusTone = c001 ? (c001.status === 'complete' ? 'is-positive' : c001.status === 'pending_approval' ? 'is-attention' : c001.status === 'rejected' ? 'is-danger' : 'is-neutral') : reviewTone(item.review_status)
+    return <button key={item.id} type="button" className={`dc-required-row ${c001 ? 'is-c001' : ''} ${selectedId === item.id ? 'is-selected' : ''}`} onClick={() => onSelect(item.id)} aria-label={`${row.code} ${row.title} の必要資料詳細`}>
+      <span className="dc-document"><span className="dc-code">{row.code}</span><strong>{row.title}</strong><span className="dc-source">{c001 ? <>報酬金 <b>{c001.success_fee_percentage}%</b></> : ([item.collection_source, row.period].filter(Boolean).join(' · ') || '取得先・対象期間 未設定')}</span>{exception && <span className="dc-required-exception">{exception}</span>}</span>
+      <StatusLane tone={collectionStatusTone} label={collectionLabel}/>
+      <StatusLane tone={fulfillmentStatusTone} label={fulfillmentLabel}/>
       <span className="dc-owner">{item.assigned_employee?.display_name ?? '未割当'}</span>
-      <Deadline value={item.response_deadline} overdue={row.overdue}/>
-      <StatusLane tone={reviewTone(item.review_status)} label={reviewLabels[item.review_status]}/>
+      <Deadline value={item.response_deadline} overdue={row.overdue} referenceTime={referenceTime}/>
+      <StatusLane tone={reviewStatusTone} label={reviewLabel}/>
       <ChevronRight className="dc-required-chevron" size={15}/>
     </button>
   })}</div>
@@ -100,9 +113,9 @@ function RequiredDocumentList({ items, selectedId, onSelect }: { items: Collecti
 
 function StatusLane({ tone, label }: { tone: string; label: string }) { return <span className={`dc-status-lane ${tone}`}><i aria-hidden="true" />{label}</span> }
 
-function Deadline({ value, overdue }: { value: string | null; overdue: boolean }) {
+function Deadline({ value, overdue, referenceTime }: { value: string | null; overdue: boolean; referenceTime: number }) {
   const due = value ? new Date(value).getTime() : null
-  const days = due === null ? 0 : Math.max(1, Math.ceil((Date.now() - due) / 86_400_000))
+  const days = due === null ? 0 : Math.max(1, Math.ceil((referenceTime - due) / 86_400_000))
   return <span className={`dc-required-deadline ${overdue ? 'is-overdue' : ''}`}><span><CalendarClock size={12}/>{formatDate(value)}</span>{overdue && <small>期限超過 {days}日</small>}</span>
 }
 

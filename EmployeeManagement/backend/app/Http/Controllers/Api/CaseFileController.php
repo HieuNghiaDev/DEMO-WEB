@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CaseFile;
 use App\Models\CaseType;
 use App\Models\Client;
+use App\Models\ClientEmployment;
 use App\Services\GoogleDriveProvisioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,9 +35,27 @@ class CaseFileController extends Controller
 
         $caseFile = DB::transaction(function () use ($data, $request): CaseFile {
             $clientData = Arr::pull($data, 'client');
+            $employments = Arr::pull($data, 'employments', []);
 
             if ($clientData) {
                 $data['client_id'] = Client::query()->create($clientData)->id;
+            }
+
+            $client = Client::query()->findOrFail($data['client_id']);
+            if ($employments !== []) {
+                $client->employments()->createMany(array_map(function (array $employment): array {
+                    $employment['is_current'] = (bool) $employment['is_current'];
+                    if ($employment['is_current']) {
+                        $employment['end_date'] = null;
+                        if ($employment['employment_status'] === 'former') {
+                            $employment['employment_status'] = 'employed';
+                        }
+                    } elseif ($employment['employment_status'] === 'employed') {
+                        $employment['employment_status'] = 'former';
+                    }
+
+                    return $employment;
+                }, $employments));
             }
 
             $data['created_by_employee_id'] = $request->user()?->employee_id;
@@ -46,7 +65,7 @@ class CaseFileController extends Controller
 
         // Checklist initialization is an explicit action, never a side effect of case creation.
         return response()->json([
-            'case_file' => $caseFile->load(['client', 'caseTypeOption.parent', 'department', 'assignedEmployee', 'createdByEmployee'])->loadCount($this->documentProgressCounts()),
+            'case_file' => $caseFile->load(['client.employments', 'caseTypeOption.parent', 'department', 'assignedEmployee', 'createdByEmployee'])->loadCount($this->documentProgressCounts()),
             'drive' => $this->attemptDriveProvisioning($caseFile, $drive),
         ], 201);
     }
@@ -56,7 +75,7 @@ class CaseFileController extends Controller
         $caseFile->loadCount($this->documentProgressCounts());
 
         return response()->json(['case_file' => $caseFile->load([
-            'client', 'caseTypeOption', 'department', 'assignedEmployee', 'createdByEmployee', 'documents.createdByEmployee',
+            'client.employments', 'caseTypeOption', 'department', 'assignedEmployee', 'createdByEmployee', 'documents.createdByEmployee',
             'precedents.createdByEmployee', 'meetingLogs.createdByEmployee', 'customSections.createdByEmployee',
         ])]);
     }
@@ -119,6 +138,15 @@ class CaseFileController extends Controller
             'client.address' => ['nullable', 'string', 'max:255'],
             'client.nationality' => ['nullable', 'string', 'max:50'],
             'client.notes' => ['nullable', 'string'],
+            'employments' => [$partial ? 'prohibited' : 'sometimes', 'array', 'max:20'],
+            'employments.*.company_name' => ['required', 'string', 'max:255'],
+            'employments.*.company_address' => ['required', 'string', 'max:255'],
+            'employments.*.company_phone' => ['nullable', 'string', 'max:30'],
+            'employments.*.employment_status' => ['required', Rule::in(ClientEmployment::STATUSES)],
+            'employments.*.start_date' => ['nullable', 'date'],
+            'employments.*.end_date' => ['nullable', 'date', 'after_or_equal:employments.*.start_date'],
+            'employments.*.is_current' => ['required', 'boolean'],
+            'employments.*.notes' => ['nullable', 'string', 'max:2000'],
             'department_id' => ['nullable', 'exists:departments,id'],
             'assigned_employee_id' => ['nullable', 'exists:employees,id'],
             'status' => ['nullable', Rule::in([

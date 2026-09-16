@@ -7,6 +7,36 @@ export type CollectionPriority = 'low' | 'normal' | 'high' | 'critical'
 export type EmployeeOption = { id: number; display_name: string }
 export type Purpose = { id: number; code: string; name_ja: string }
 export type DocumentType = { id: number; code: string; name_ja: string; creation_supported: boolean }
+export type C001WorkflowStatus = 'missing' | 'draft' | 'pending_approval' | 'complete' | 'rejected'
+export type C001Artifact = {
+  external_file_id: string
+  url: string
+  filename: string
+  generated_at: string | null
+  last_synced_at: string | null
+  generated_by: string | null
+}
+export type C001FileArtifact = Pick<C001Artifact, 'external_file_id' | 'url' | 'filename'>
+export type C001State = {
+  status: C001WorkflowStatus
+  client_name?: string | null
+  client_address?: string | null
+  success_fee_percentage: string
+  master_template_name?: string | null
+  master_read_only?: boolean
+  mapped_fields?: string[]
+  latest_version?: number | null
+  next_version?: number | null
+  working_version?: number | null
+  artifact: C001Artifact | null
+  pdf_artifact?: C001FileArtifact | null
+  workbook_artifact?: C001FileArtifact | null
+  approved_at?: string | null
+  approved_by?: string | null
+  can_approve?: boolean
+  draft_updated_at?: string | null
+  draft_updated_by?: { id: number; name: string } | null
+}
 
 export interface CollectionItem {
   id: number
@@ -33,6 +63,7 @@ export interface CollectionItem {
   applicability_condition_snapshot: string | null
   is_template_generated: boolean
   received_document_count: number
+  c001: C001State | null
   created_at: string | null
   updated_at: string | null
 }
@@ -71,6 +102,7 @@ export interface CollectionDetail {
   is_template_generated: boolean
   received_document_count: number
   received_documents: ReceivedDocument[]
+  c001: C001State | null
   created_at: string | null
   updated_at: string | null
 }

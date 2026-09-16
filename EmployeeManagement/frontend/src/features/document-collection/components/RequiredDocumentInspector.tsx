@@ -11,6 +11,8 @@ import CollectionFeedback from './CollectionFeedback'
 import InspectorShell from './InspectorShell'
 import ReceivedDocumentsList from './ReceivedDocumentsList'
 import ReceivedDocumentRegistration from './ReceivedDocumentRegistration'
+import { SectionSkeleton } from '../../../components/loading'
+import C001DocumentPanel from '../../document-creation/components/C001DocumentPanel'
 
 export default function RequiredDocumentInspector({ caseId, itemId, canUpdate, canReviewDocuments, activities, onCandidates, onHistory, onClose, onSaved }: {
   caseId: number; itemId: number; canUpdate: boolean; canReviewDocuments: boolean; activities: CaseActivity[]
@@ -47,11 +49,19 @@ export default function RequiredDocumentInspector({ caseId, itemId, canUpdate, c
   const relevantHistory = activities.filter(activity => activity.metadata?.event === 'document_collection.updated' && activity.metadata.document_id === itemId).length
 
   return <InspectorShell breakpoint={1560} title={detail?.document_type?.name_ja ?? detail?.title ?? '必要資料'} code={detail?.document_type?.code ?? '—'} subtitle={detail ? '必要' : undefined} onClose={onClose} footer={<div><span className="dc-meta">{notice || (canUpdate ? '変更は明示的に保存されます。' : '閲覧のみ')}</span><button type="button" className="dc-button" onClick={onClose}>閉じる</button></div>}>
-    {loading && <p className="dc-empty-results" role="status">必要資料の詳細を読み込み中…</p>}
+    {loading && <SectionSkeleton className="border-0" label="必要資料の詳細を読み込み中…" rows={5} showHeader={false} />}
     {error && <CollectionFeedback error={error} onRetry={() => { setLoading(true); setError(null); setRevision(value => value + 1) }}/>} 
     {!loading && detail && <>
       {notice && <p className="dc-feedback dc-success" role="status">{notice}</p>}
-      <section className="dc-required-command" aria-label="必要資料の操作">
+      {detail.c001 && <C001DocumentPanel
+        key={`${itemId}-${detail.c001.status}-${detail.c001.success_fee_percentage}-${detail.c001.artifact?.last_synced_at ?? ''}`}
+        caseId={caseId}
+        documentId={itemId}
+        state={detail.c001}
+        canUpdate={canUpdate}
+        onChanged={message => { setNotice(message); onSaved(); setRevision(value => value + 1) }}
+      />}
+      {!detail.c001 && <section className="dc-required-command" aria-label="必要資料の操作">
         <header className="dc-required-command-head"><div><small>必要性</small><strong className="dc-blue">必要資料</strong></div><button type="button" className="dc-text-action dc-text-action--necessity" onClick={onCandidates}>必要性を変更</button></header>
         <div className="dc-required-command-grid">
           <article><ClipboardList size={16}/><div><small>取得作業</small><strong>{collectionLabels[detail.collection.status]}</strong></div>{canUpdate && <button type="button" className="dc-inline-action" onClick={() => setEditingCollectionStatus(value => !value)}>{editingCollectionStatus ? '閉じる' : '変更'}</button>}</article>
@@ -63,7 +73,7 @@ export default function RequiredDocumentInspector({ caseId, itemId, canUpdate, c
         {editingFulfillment && <div className="dc-compact-editor"><select aria-label="必要資料の内容充足" disabled={saving} value={detail.fulfillment_status} onChange={event => void patch({ fulfillment_status: event.target.value as CollectionPatch['fulfillment_status'] }, '内容充足を更新しました。').then(saved => { if (saved) setEditingFulfillment(false) })}>{Object.entries(fulfillmentLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><button type="button" className="dc-button" onClick={() => setEditingFulfillment(false)}>キャンセル</button></div>}
         {detail.fulfillment_status === 'insufficient' && <p className="dc-followup-gap">不足内容の記録・追加依頼の作成は、現在のAPIでは未対応です。</p>}
         {canReviewDocuments && <div className="dc-required-review-bar"><div><small>確認状態</small><strong>{reviewLabels[detail.review_status]}</strong></div><ReviewActions compact status={detail.review_status} saving={saving} onChange={(review_status, message) => void patch({ review_status }, message)}/></div>}
-      </section>
+      </section>}
       <details className="dc-rule-details dc-operational-details">
         <summary><span>資料・取得詳細</span><span>{detail.received_document_count}件</span></summary>
         <dl className="dc-readable-facts">

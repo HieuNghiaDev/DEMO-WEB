@@ -5,6 +5,7 @@ import { caseApi, caseError } from './api'
 import { newClientDraft, validateClient } from './helpers'
 import { toVietnameseFurigana } from './furigana'
 import type { CaseClient, CaseFieldErrors, ClientDraft } from './types'
+import { ButtonSpinner } from '../../components/loading'
 
 export default function QuickClientDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (client: CaseClient) => void }) {
   const [draft, setDraft] = useState(newClientDraft)
@@ -62,7 +63,7 @@ export default function QuickClientDialog({ onClose, onCreated }: { onClose: () 
           {field('notes', '備考', <textarea {...attrs('notes')} rows={3} value={draft.notes} onChange={event => change('notes', event.target.value)}/>, true)}
         </fieldset></details>
       </div>
-      <footer><p className="dc-meta">依頼者は案件とは別に登録されます。</p><div className="cm-actions"><button type="button" className="dc-button" disabled={busy} onClick={close}>キャンセル</button><button type="submit" className="dc-button dc-primary" disabled={busy}>{busy ? '登録中…' : '登録して選択'}</button></div></footer>
+      <footer><p className="dc-meta">依頼者は案件とは別に登録されます。</p><div className="cm-actions"><button type="button" className="dc-button" disabled={busy} onClick={close}>キャンセル</button><button type="submit" className="dc-button dc-primary" disabled={busy}>{busy && <ButtonSpinner size={14} />}{busy ? '登録中…' : '登録して選択'}</button></div></footer>
     </form>
   </dialog>
 }

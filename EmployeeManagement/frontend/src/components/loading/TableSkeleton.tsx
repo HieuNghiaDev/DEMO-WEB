@@ -4,19 +4,20 @@ export interface TableSkeletonProps {
   rows?: number
   columns?: number
   className?: string
+  label?: string
 }
 
-export function TableSkeleton({ rows = 5, columns = 5, className = '' }: TableSkeletonProps) {
+export function TableSkeleton({ rows = 5, columns = 5, className = '', label = '一覧を読み込み中…' }: TableSkeletonProps) {
   return (
-    <div className={`w-full overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 ${className}`}>
-      <div className="flex items-center gap-4 border-b border-slate-100 bg-slate-50/50 p-4 dark:border-slate-800/80 dark:bg-slate-800/20">
+    <div className={`w-full overflow-hidden rounded-[var(--tm-radius-panel)] border border-[var(--tm-border)] bg-[var(--tm-surface)] ${className}`} role="status" aria-label={label} aria-busy="true">
+      <div className="flex items-center gap-4 border-b border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] p-4">
         {Array.from({ length: columns }).map((_, i) => (
           <Skeleton key={`th-${i}`} className="h-4 w-24 rounded" />
         ))}
       </div>
       <div className="flex flex-col">
         {Array.from({ length: rows }).map((_, rowIndex) => (
-          <div key={`tr-${rowIndex}`} className="flex items-center gap-4 border-b border-slate-50 p-4 last:border-0 dark:border-slate-800/40">
+          <div key={`tr-${rowIndex}`} className="flex items-center gap-4 border-b border-[var(--tm-border-subtle)] p-4 last:border-0">
             {Array.from({ length: columns }).map((_, colIndex) => (
               <Skeleton
                 key={`td-${rowIndex}-${colIndex}`}

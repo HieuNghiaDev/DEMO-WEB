@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { CalendarDays, Check, ClipboardList, FilePlus2, FolderOpen, UserRound, X } from 'lucide-react'
-import { LoadingState } from '../../components/ui'
+import { SectionSkeleton } from '../../components/loading'
 import { caseWorkspaceApi } from '../../features/case-workspace/api'
 import type { CaseActivity, WorkspaceResponse } from '../../features/case-workspace/types'
 import { documentCollectionApi } from '../../features/document-collection/api'
@@ -156,11 +156,7 @@ export default function CaseQuickViewDrawer({ caseItem, onClose, onOpen, onOpenC
           </dl>
 
           {isLoading ? (
-            <LoadingState
-              className="mt-4 border-y border-[var(--tm-border)]"
-              message="案件資料を読み込み中…"
-              variant="compact"
-            />
+            <SectionSkeleton className="mt-4 border-x-0 px-0" label="案件資料を読み込み中…" rows={5} showHeader={false} />
           ) : loadError ? (
             <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-5 text-red-700 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
               {loadError}

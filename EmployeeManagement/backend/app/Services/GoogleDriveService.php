@@ -19,6 +19,8 @@ class GoogleDriveService
 {
     private const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 
+    public const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
     public function authMode(): string
     {
         return strtolower(trim((string) config('services.google_drive.auth_mode', 'service_account')));
@@ -151,6 +153,176 @@ class GoogleDriveService
         } catch (Throwable) {
             // Never propagate provider bodies, signed JWTs or request headers into logs/UI.
             throw new GeneratedDocumentDriveException('Google Driveへの保存に失敗しました。');
+        }
+    }
+
+    /** @return array{id: string, name: string, mime_type: string} */
+    public function resolveExactTemplateFile(string $folderId, string $filename, ?string $preferredFileId = null): array
+    {
+        try {
+            $this->validFileId($folderId);
+            $filename = trim($filename);
+            if ($filename === '') {
+                throw new GeneratedDocumentDriveException('C-001のテンプレート名が設定されていません。');
+            }
+
+            if ($preferredFileId !== null && trim($preferredFileId) !== '') {
+                $fileId = $this->validFileId(trim($preferredFileId));
+                $response = $this->authenticatedRequest()->get($this->fileUrl($fileId), [
+                    'fields' => 'id,name,mimeType,trashed,parents',
+                    'supportsAllDrives' => 'true',
+                ]);
+                $data = $response->json();
+                if (! $response->successful() || ! is_array($data)
+                    || ($data['name'] ?? null) !== $filename
+                    || ($data['mimeType'] ?? null) !== self::XLSX_MIME_TYPE
+                    || ($data['trashed'] ?? false) === true
+                    || ! in_array($folderId, $data['parents'] ?? [], true)) {
+                    throw new GeneratedDocumentDriveException('C-001の指定テンプレートを確認できませんでした。');
+                }
+
+                return ['id' => $fileId, 'name' => $filename, 'mime_type' => self::XLSX_MIME_TYPE];
+            }
+
+            $escapedFolderId = $this->escapeQueryLiteral($folderId);
+            $escapedFilename = $this->escapeQueryLiteral($filename);
+            $response = $this->authenticatedRequest()->get('https://www.googleapis.com/drive/v3/files', [
+                'q' => "'{$escapedFolderId}' in parents and trashed = false and name = '{$escapedFilename}'",
+                'fields' => 'incompleteSearch,files(id,name,mimeType)',
+                'pageSize' => 3,
+                'supportsAllDrives' => 'true',
+                'includeItemsFromAllDrives' => 'true',
+            ]);
+            $files = $response->json('files');
+            if (! $response->successful() || $response->json('incompleteSearch') === true || ! is_array($files)) {
+                throw new GeneratedDocumentDriveException('C-001のテンプレートを検索できませんでした。');
+            }
+            if (count($files) === 0) {
+                throw new GeneratedDocumentDriveException('C-001のテンプレートが見つかりません。');
+            }
+            if (count($files) !== 1) {
+                throw new GeneratedDocumentDriveException('同名のC-001テンプレートが複数あります。管理者に確認してください。');
+            }
+            if (($files[0]['mimeType'] ?? null) !== self::XLSX_MIME_TYPE) {
+                throw new GeneratedDocumentDriveException('C-001のテンプレート形式はXLSXではありません。');
+            }
+
+            return [
+                'id' => $this->validFileId($files[0]['id'] ?? null),
+                'name' => $filename,
+                'mime_type' => self::XLSX_MIME_TYPE,
+            ];
+        } catch (GeneratedDocumentDriveException $error) {
+            throw $error;
+        } catch (Throwable) {
+            throw new GeneratedDocumentDriveException('C-001のテンプレートを確認できませんでした。');
+        }
+    }
+
+    public function downloadFileContent(string $fileId): string
+    {
+        try {
+            $response = $this->authenticatedRequest()->timeout(45)->get($this->fileUrl($this->validFileId($fileId)), [
+                'alt' => 'media',
+                'supportsAllDrives' => 'true',
+            ]);
+            if (! $response->successful()) {
+                throw new GeneratedDocumentDriveException('C-001テンプレートを取得できませんでした。');
+            }
+
+            return $response->body();
+        } catch (GeneratedDocumentDriveException $error) {
+            throw $error;
+        } catch (Throwable) {
+            throw new GeneratedDocumentDriveException('C-001テンプレートを取得できませんでした。');
+        }
+    }
+
+    /** @return array{id: string, name: string, mime_type: string, url: string, created_at: string} */
+    public function ensureGeneratedWorkbookCopy(string $sourceFileId, string $folderId, string $filename, string $key): array
+    {
+        try {
+            if (! $this->canWriteGeneratedDocuments()) {
+                throw new GeneratedDocumentDriveException('Google Driveへの保存は現在利用できません。');
+            }
+            if (! preg_match('/^[a-f0-9]{64}$/', $key)) {
+                throw new GeneratedDocumentDriveException('C-001の保存識別子が不正です。');
+            }
+            $sourceFileId = $this->validFileId($sourceFileId);
+            $folderId = $this->validFileId($folderId);
+            if ($sourceFileId === $folderId) {
+                throw new GeneratedDocumentDriveException('C-001の保存先が不正です。');
+            }
+            $this->assertWritableFolder($folderId);
+            $escapedFolderId = $this->escapeQueryLiteral($folderId);
+            $response = $this->writeRequest()->get('https://www.googleapis.com/drive/v3/files', [
+                'q' => "'{$escapedFolderId}' in parents and trashed = false and appProperties has { key='themis_c001_working_copy' and value='{$key}' }",
+                'fields' => 'incompleteSearch,files(id,name,mimeType,createdTime)',
+                'pageSize' => 2,
+                'supportsAllDrives' => 'true',
+                'includeItemsFromAllDrives' => 'true',
+            ]);
+            $files = $response->json('files');
+            if (! $response->successful() || $response->json('incompleteSearch') === true || ! is_array($files) || count($files) > 1) {
+                throw new GeneratedDocumentDriveException('C-001の保存済みコピーを確認できませんでした。');
+            }
+            $data = $files[0] ?? null;
+            if (! is_array($data)) {
+                $created = $this->writeRequest()->post(
+                    'https://www.googleapis.com/drive/v3/files/'.$sourceFileId.'/copy?supportsAllDrives=true&fields=id,name,mimeType,createdTime',
+                    [
+                        'name' => $filename,
+                        'parents' => [$folderId],
+                        'appProperties' => ['themis_c001_working_copy' => $key],
+                    ]
+                );
+                if (! $created->successful()) {
+                    throw new GeneratedDocumentDriveException('C-001の作業コピーを作成できませんでした。');
+                }
+                $data = $created->json();
+            }
+            if (($data['mimeType'] ?? null) !== self::XLSX_MIME_TYPE) {
+                throw new GeneratedDocumentDriveException('C-001の作業コピー形式を確認できませんでした。');
+            }
+            $id = $this->validFileId($data['id'] ?? null);
+            if ($id === $sourceFileId) {
+                throw new GeneratedDocumentDriveException('C-001のマスターテンプレートは更新できません。');
+            }
+
+            return [
+                'id' => $id,
+                'name' => is_string($data['name'] ?? null) ? $data['name'] : $filename,
+                'mime_type' => self::XLSX_MIME_TYPE,
+                'url' => 'https://drive.google.com/file/d/'.$id.'/view',
+                'created_at' => is_string($data['createdTime'] ?? null) ? $data['createdTime'] : now()->toISOString(),
+            ];
+        } catch (GeneratedDocumentDriveException $error) {
+            throw $error;
+        } catch (Throwable) {
+            throw new GeneratedDocumentDriveException('C-001の作業コピーを作成できませんでした。');
+        }
+    }
+
+    public function replaceWorkbookContent(string $fileId, string $sourceFileId, string $bytes): void
+    {
+        try {
+            if (! $this->writeConfigured()) {
+                throw new GeneratedDocumentDriveException('Google Driveへの保存は現在利用できません。');
+            }
+            $fileId = $this->validFileId($fileId);
+            if ($fileId === $this->validFileId($sourceFileId)) {
+                throw new GeneratedDocumentDriveException('C-001のマスターテンプレートは更新できません。');
+            }
+            $response = $this->writeRequest()->timeout(45)
+                ->withBody($bytes, self::XLSX_MIME_TYPE)
+                ->patch('https://www.googleapis.com/upload/drive/v3/files/'.$fileId.'?uploadType=media&supportsAllDrives=true');
+            if (! $response->successful()) {
+                throw new GeneratedDocumentDriveException('C-001の作業コピーを更新できませんでした。');
+            }
+        } catch (GeneratedDocumentDriveException $error) {
+            throw $error;
+        } catch (Throwable) {
+            throw new GeneratedDocumentDriveException('C-001の作業コピーを更新できませんでした。');
         }
     }
 

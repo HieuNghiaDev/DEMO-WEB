@@ -382,7 +382,7 @@ export default function Login() {
                 {isSubmitting ? (
                   <>
                     <ButtonSpinner size={18} />
-                    処理中...
+                    処理中…
                   </>
                 ) : (
                   <>
