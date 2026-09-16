@@ -196,9 +196,9 @@ class CaseDocumentCreationController extends Controller
         return DB::transaction(function () use ($request, $caseFile, $caseDocument, $documents, $c001, $audit, $payload) {
             [$document, $instance, $template] = $this->lockedContext($caseFile, $caseDocument, $documents);
             $this->assertEditable($instance);
-            $isC001 = $c001->officialWorkflowEnabled($document);
+            $isC001 = $this->usesC001CompanyTemplateValidation($document, $instance, $payload, $c001);
             $draft = $isC001
-                ? $this->validateC001Draft($document, $template, $documents, $payload['draft_data'])
+                ? $this->validateC001Draft($document)
                 : $documents->validateDraft($template, $payload['draft_data'], false);
             $actorId = $request->user()->id;
             $previousFee = $instance?->success_fee_percentage;
@@ -243,9 +243,9 @@ class CaseDocumentCreationController extends Controller
         return DB::transaction(function () use ($request, $caseFile, $caseDocument, $documents, $c001, $audit, $payload) {
             [$document, $instance, $template] = $this->lockedContext($caseFile, $caseDocument, $documents);
             $this->assertEditable($instance);
-            $isC001 = $c001->officialWorkflowEnabled($document);
+            $isC001 = $this->usesC001CompanyTemplateValidation($document, $instance, $payload, $c001);
             $draft = $isC001
-                ? $this->validateC001Draft($document, $template, $documents, $payload['draft_data'])
+                ? $this->validateC001Draft($document)
                 : $documents->validateDraft($template, $payload['draft_data'], true);
             $actorId = $request->user()->id;
             $previousFee = $instance?->success_fee_percentage;
@@ -609,33 +609,49 @@ class CaseDocumentCreationController extends Controller
         return $user?->hasAnyRole(['level_3', 'level_5']) ?? false;
     }
 
-    /**
-     * C-001 customer identity always comes from the case database. Only the two
-     * source keys are accepted; configuration such as the fee is stored separately.
-     *
-     * @param  array<string, string>  $draft
-     * @return array<string, string>
-     */
-    private function validateC001Draft(
+    /** @param array{draft_data: array<string, mixed>, success_fee_percentage?: mixed} $payload */
+    private function usesC001CompanyTemplateValidation(
         CaseDocument $caseDocument,
-        DocumentGenerationTemplate $template,
-        DocumentGenerationService $documents,
-        array $draft
-    ): array {
-        $allowed = ['client_name', 'client_address'];
-        $unknown = array_diff(array_keys($draft), $allowed);
-        if ($unknown !== []) {
-            throw ValidationException::withMessages(array_fill_keys(
-                array_map(fn ($key) => "draft_data.{$key}", $unknown),
-                'この項目はC-001の作業ファイルに定義されていません。'
-            ));
+        ?CaseGeneratedDocument $instance,
+        array $payload,
+        C001DocumentWorkflowService $c001
+    ): bool {
+        if (! $c001->isC001($caseDocument)) {
+            return false;
         }
 
-        $initial = $documents->initialDraft($caseDocument, $template);
+        $companyTemplateFields = ['client_name', 'client_address'];
 
-        return collect($allowed)->mapWithKeys(fn (string $field) => [
-            $field => (string) ($initial[$field] ?? ''),
-        ])->all();
+        return $c001->officialWorkflowEnabled($caseDocument)
+            || array_key_exists('success_fee_percentage', $payload)
+            || $instance?->success_fee_percentage !== null
+            || array_diff(array_keys($payload['draft_data']), $companyTemplateFields) === [];
+    }
+
+    /**
+     * C-001 customer identity always comes from the case database. Payload values
+     * and obsolete generic fields are intentionally ignored.
+     *
+     * @return array{client_name: string, client_address: string}
+     */
+    private function validateC001Draft(CaseDocument $caseDocument): array
+    {
+        $caseDocument->loadMissing('caseFile.client');
+        $clientName = trim((string) $caseDocument->caseFile?->client?->name);
+        $clientAddress = trim((string) $caseDocument->caseFile?->client?->address);
+        $errors = [];
+
+        if ($clientName === '') {
+            $errors['client_name'] = '依頼者氏名が案件情報に登録されていません。';
+        }
+        if ($clientAddress === '') {
+            $errors['client_address'] = '依頼者住所が案件情報に登録されていません。';
+        }
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        return ['client_name' => $clientName, 'client_address' => $clientAddress];
     }
 
     /** @param array<int, string> $relations */

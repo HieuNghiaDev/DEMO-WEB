@@ -384,6 +384,77 @@ class CaseDocumentCreationApiTest extends TestCase
         $this->assertDatabaseCount('case_generated_documents', 1);
     }
 
+    public function test_c001_company_review_ignores_generic_fields_and_uses_case_client_without_drive_configuration(): void
+    {
+        config()->set('services.google_drive.c001_template_folder_id', null);
+        $payload = [
+            'draft_data' => [
+                'client_name' => 'PAYLOAD MUST NOT OVERRIDE DB',
+                'client_address' => 'PAYLOAD MUST NOT OVERRIDE DB',
+                'contract_date' => '',
+                'engagement_scope' => '',
+            ],
+            'success_fee_percentage' => 28,
+        ];
+
+        $this->postJson($this->url().'/review', $payload)->assertOk()
+            ->assertJsonPath('document.workflow_status', 'review')
+            ->assertJsonPath('document.version', 1)
+            ->assertJsonPath('document.draft_data.client_name', '依頼者株式会社')
+            ->assertJsonPath('document.draft_data.client_address', '大阪市北区')
+            ->assertJsonPath('c001.success_fee_percentage', '28')
+            ->assertJsonMissingPath('document.draft_data.contract_date')
+            ->assertJsonMissingPath('document.draft_data.engagement_scope');
+
+        $payload['success_fee_percentage'] = 24;
+        $this->postJson($this->url().'/review', $payload)->assertOk()
+            ->assertJsonPath('document.version', 1)
+            ->assertJsonPath('c001.success_fee_percentage', '24');
+
+        $this->assertDatabaseCount('case_generated_documents', 1);
+    }
+
+    public function test_c001_company_review_validates_customer_identity_from_case_database(): void
+    {
+        $this->case->client->update(['address' => '']);
+
+        $this->postJson($this->url().'/review', [
+            'draft_data' => ['client_name' => 'manual name', 'client_address' => 'manual address'],
+            'success_fee_percentage' => 20,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('client_address')
+            ->assertJsonMissingValidationErrors('draft_data.contract_date');
+
+        $this->assertDatabaseCount('case_generated_documents', 0);
+    }
+
+    public function test_non_c001_documents_keep_generic_required_field_validation(): void
+    {
+        $documentType = DocumentType::where('code', 'C-002')->sole();
+        $documentType->update(['handling_type' => 'office_generated']);
+        DocumentGenerationTemplate::create([
+            'document_type_id' => $documentType->id,
+            'version' => 1,
+            'renderer_type' => 'generic_legal_document',
+            'format' => 'html',
+            'template_body' => '<article>{{contract_date}}</article>',
+            'field_schema' => [[
+                'key' => 'contract_date', 'label' => '契約日', 'type' => 'date', 'required' => true,
+            ]],
+            'is_active' => true,
+        ]);
+        $document = $this->case->documents()->create([
+            'title' => 'Generic C-002',
+            'category' => 'COMMON',
+            'document_type_id' => $documentType->id,
+        ]);
+
+        $this->postJson($this->url($document).'/review', [
+            'draft_data' => ['contract_date' => ''],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('draft_data.contract_date');
+    }
+
     public function test_approved_pdf_download_contains_japanese_pdf_and_safe_snapshot_filename(): void
     {
         $draft = $this->validDraft(['client_name' => '../山田/太郎:確認', 'notes' => '日本語の保存内容です。']);
