@@ -11,6 +11,7 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
@@ -288,6 +289,11 @@ class GoogleDriveService
                     ]
                 );
                 if (! $created->successful()) {
+                    Log::channel('stderr')->warning('Google Drive rejected C-001 workbook copy', [
+                        'status' => $created->status(),
+                        'code' => $created->json('error.code'),
+                        'reason' => $created->json('error.errors.0.reason'),
+                    ]);
                     throw new GeneratedDocumentDriveException('C-001の作業コピーを作成できませんでした。');
                 }
                 $data = $created->json();
