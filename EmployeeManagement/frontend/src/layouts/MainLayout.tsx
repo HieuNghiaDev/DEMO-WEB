@@ -1,12 +1,25 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import ThemisAiAssistant from '../components/ai/ThemisAiAssistant'
 import Sidebar from '../components/layout/Sidebar'
 import AppFooter from '../components/layout/AppFooter'
+import UpdateNotesModal from '../components/layout/UpdateNotesModal'
+import { appVersionTag, lastSeenVersionStorageKey } from '../config/app'
 import { RouteProgress } from '../components/loading'
 
 function MainLayout() {
   const location = useLocation()
+  const [releaseNotesOpen, setReleaseNotesOpen] = useState(false)
+
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(lastSeenVersionStorageKey) !== appVersionTag) {
+        setReleaseNotesOpen(true)
+      }
+    } catch {
+      setReleaseNotesOpen(true)
+    }
+  }, [])
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' })
@@ -21,10 +34,11 @@ function MainLayout() {
         <main key={location.pathname} className="themis-page-transition min-w-0 flex-1">
           <Outlet />
         </main>
-        <AppFooter />
+        <AppFooter onOpenReleaseNotes={() => setReleaseNotesOpen(true)} />
       </div>
 
       <ThemisAiAssistant />
+      <UpdateNotesModal isOpen={releaseNotesOpen} onOpenChange={setReleaseNotesOpen} />
     </div>
   )
 }

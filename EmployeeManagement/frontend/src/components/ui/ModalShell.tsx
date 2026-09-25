@@ -8,12 +8,15 @@ export interface ModalShellProps {
   isOpen: boolean
   onClose: () => void
   title: ReactNode
+  titleId?: string
   description?: ReactNode
   icon?: ReactNode
   size?: ModalSize
   children: ReactNode
   footer?: ReactNode
   className?: string
+  overlayClassName?: string
+  backdropClassName?: string
 }
 
 const sizeClasses: Record<ModalSize, string> = {
@@ -28,12 +31,15 @@ export const ModalShell: React.FC<ModalShellProps> = ({
   isOpen,
   onClose,
   title,
+  titleId,
   description,
   icon,
   size = 'md',
   children,
   footer,
   className = '',
+  overlayClassName = '',
+  backdropClassName = '',
 }) => {
   useEffect(() => {
     if (!isOpen) return
@@ -57,13 +63,14 @@ export const ModalShell: React.FC<ModalShellProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+      className={`fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 sm:p-6 ${overlayClassName}`}
       role="dialog"
       aria-modal="true"
+      aria-labelledby={titleId}
     >
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/65 backdrop-blur-[2px] transition-opacity duration-200"
+        className={`fixed inset-0 bg-black/65 backdrop-blur-[2px] transition-opacity duration-200 ${backdropClassName}`}
         onClick={onClose}
         aria-hidden="true"
       />
@@ -86,7 +93,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
               </div>
             )}
             <div className="min-w-0">
-              <h3 className="text-base font-semibold text-[var(--tm-text-primary)] truncate">
+              <h3 id={titleId} className="text-base font-semibold text-[var(--tm-text-primary)] truncate">
                 {title}
               </h3>
               {description && (

@@ -1,0 +1,231 @@
+.tm-release-overlay {
+  animation: tm-release-overlay-in 300ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.tm-release-overlay.is-closing {
+  animation: tm-release-overlay-out 200ms ease both;
+}
+
+.tm-release-backdrop {
+  background: rgb(15 23 42 / .42);
+  backdrop-filter: blur(2px);
+}
+
+.tm-release-modal {
+  width: min(36rem, calc(100vw - 32px));
+  max-width: 36rem;
+  max-height: min(85dvh, 760px);
+  overflow: hidden;
+  border-radius: 20px;
+  box-shadow: 0 24px 64px -24px rgb(15 23 42 / .34);
+  animation: tm-release-modal-in 320ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.tm-release-modal.is-closing {
+  animation: tm-release-modal-out 200ms ease both;
+}
+
+.tm-release-modal > div:first-child {
+  position: relative;
+  background: linear-gradient(135deg, var(--tm-primary-muted), transparent 68%);
+}
+
+.tm-release-modal > div:nth-child(2) {
+  padding: 18px 20px;
+}
+
+.tm-release-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.tm-release-version {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--tm-primary) 26%, var(--tm-border));
+  border-radius: 999px;
+  background: var(--tm-primary-muted);
+  color: var(--tm-primary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+.tm-release-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tm-release-section {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--tm-border);
+  border-radius: 12px;
+  background: var(--tm-surface-elevated);
+}
+
+.tm-release-section header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.tm-release-section-icon {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--tm-primary-muted);
+  color: var(--tm-primary);
+}
+
+.tm-release-section h4 {
+  margin: 0;
+  color: var(--tm-text-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tm-release-section ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tm-release-section li {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 7px;
+  color: var(--tm-text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.tm-release-section li > svg {
+  margin-top: 1px;
+  color: var(--tm-primary);
+}
+
+.tm-release-section li em {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--tm-primary-muted);
+  color: var(--tm-primary);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.tm-release-footer {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tm-release-footer > p {
+  margin: 0;
+  color: var(--tm-text-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.tm-release-footer > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 639px) {
+  .tm-release-overlay {
+    align-items: center;
+    padding: 16px;
+  }
+
+  .tm-release-modal {
+    width: calc(100vw - 32px);
+    max-height: 84dvh;
+    border-radius: 18px;
+  }
+
+  .tm-release-modal > div:first-child {
+    padding: 16px;
+  }
+
+  .tm-release-modal > div:nth-child(2) {
+    padding: 14px;
+  }
+
+  .tm-release-sections {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .tm-release-section {
+    padding: 12px;
+  }
+
+  .tm-release-section header {
+    margin-bottom: 8px;
+  }
+
+  .tm-release-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tm-release-footer > p {
+    text-align: center;
+  }
+
+  .tm-release-footer > div {
+    display: grid;
+    grid-template-columns: minmax(0, .8fr) minmax(0, 1.7fr);
+  }
+
+  .tm-release-footer button {
+    min-width: 0;
+    padding-inline: 8px;
+  }
+}
+
+@keyframes tm-release-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes tm-release-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes tm-release-modal-in {
+  from { opacity: 0; transform: translateY(12px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes tm-release-modal-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(8px) scale(.97); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tm-release-overlay,
+  .tm-release-overlay.is-closing,
+  .tm-release-modal,
+  .tm-release-modal.is-closing {
+    animation-duration: .01ms;
+  }
+}
