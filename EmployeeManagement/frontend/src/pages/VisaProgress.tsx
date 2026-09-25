@@ -131,7 +131,7 @@ export default function VisaProgress() {
           refreshing={isRefreshing}
           onRefresh={() => void loadDashboard(true)}
         />
-        {!isLoading && !error && dashboard && <VisaProgressSummary summary={dashboard.summary} />}
+        {isLoading ? <VisaProgressSummary loading /> : !error && dashboard && <VisaProgressSummary summary={dashboard.summary} />}
       </section>
 
       {isLoading && <LoadingState />}

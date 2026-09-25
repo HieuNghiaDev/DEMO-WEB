@@ -4,7 +4,7 @@ export type MetricStatus = 'neutral' | 'success' | 'warning' | 'danger' | 'info'
 
 export interface MetricCardProps {
   label: string
-  value: string | number
+  value: ReactNode
   subtext?: ReactNode
   icon?: ReactNode
   status?: MetricStatus

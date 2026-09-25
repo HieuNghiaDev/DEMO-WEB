@@ -1,14 +1,29 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CalendarDays, Check, ClipboardList, FilePlus2, FolderOpen, UserRound, X } from 'lucide-react'
+import {
+  ArrowRight,
+  Briefcase,
+  Check,
+  ChevronRight,
+  ClipboardList,
+  Clock3,
+  FilePlus2,
+  FileText,
+  Files,
+  FolderOpen,
+  UserCheck,
+  X,
+} from 'lucide-react'
 import { SectionSkeleton } from '../../components/loading'
 import { caseWorkspaceApi } from '../../features/case-workspace/api'
-import type { CaseActivity, WorkspaceResponse } from '../../features/case-workspace/types'
+import type { WorkspaceResponse } from '../../features/case-workspace/types'
+import { useDrawerBodyScrollLock } from '../../features/case-workspace/useDrawerBodyScrollLock'
 import { documentCollectionApi } from '../../features/document-collection/api'
 import { collectionLabels, fulfillmentLabels, reviewLabels } from '../../features/document-collection/labels'
 import type { CollectionItem, CollectionListResponse } from '../../features/document-collection/types'
 import { safeProgress, statusConfig } from './helpers'
 import type { BusinessCase } from './types'
+import { CaseTypeBadge } from './CaseListView'
 
 type Props = {
   caseItem: BusinessCase | null
@@ -24,27 +39,95 @@ type DrawerResponse = {
   error: string | null
 }
 
+const CLOSE_DURATION_MS = 200
+
 export default function CaseQuickViewDrawer({ caseItem, onClose, onOpen, onOpenCollection }: Props) {
+  const [activeCase, setActiveCase] = useState<BusinessCase | null>(caseItem)
+  const [isRendered, setIsRendered] = useState<boolean>(Boolean(caseItem))
+  const [isClosing, setIsClosing] = useState(false)
   const [response, setResponse] = useState<DrawerResponse | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const closingRef = useRef(false)
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const triggerElementRef = useRef<HTMLElement | null>(null)
 
+  const handleClose = () => {
+    // Rapid click protection: ignore if already closing or not rendered
+    if (closingRef.current || !isRendered) return
+    closingRef.current = true
+    setIsClosing(true)
+
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current)
+    }
+
+    closeTimerRef.current = setTimeout(() => {
+      setIsRendered(false)
+      setIsClosing(false)
+      closingRef.current = false
+      closeTimerRef.current = null
+      onClose()
+
+      // Restore focus safely after close animation and unmount
+      if (triggerElementRef.current && typeof triggerElementRef.current.focus === 'function') {
+        try {
+          triggerElementRef.current.focus({ preventScroll: true })
+        } catch {
+          // ignore
+        }
+      }
+    }, CLOSE_DURATION_MS)
+  }
+
+  // Sync prop changes
   useEffect(() => {
-    if (!caseItem) return
+    if (caseItem) {
+      // Capture trigger element before opening
+      triggerElementRef.current = document.activeElement as HTMLElement | null
+
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current)
+        closeTimerRef.current = null
+      }
+      closingRef.current = false
+      setActiveCase(caseItem)
+      setIsRendered(true)
+      setIsClosing(false)
+    } else if (!caseItem && isRendered && !closingRef.current) {
+      handleClose()
+    }
+  }, [caseItem, isRendered])
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current)
+      }
+    }
+  }, [])
+
+  // Hook handles body scroll lock with scrollbar compensation + Escape key
+  useDrawerBodyScrollLock(isRendered, handleClose)
+
+  // Data fetching
+  useEffect(() => {
+    if (!activeCase || !isRendered) return
 
     let active = true
     const controller = new AbortController()
     void Promise.all([
-      caseWorkspaceApi.show(caseItem.id),
-      documentCollectionApi.list(caseItem.id, { necessity_status: 'required', page: 1, per_page: 100 }, controller.signal),
+      caseWorkspaceApi.show(activeCase.id),
+      documentCollectionApi.list(activeCase.id, { necessity_status: 'required', page: 1, per_page: 100 }, controller.signal),
     ])
       .then(([workspace, collection]) => {
         if (!active) return
-        setResponse({ caseId: caseItem.id, workspace, collection, error: null })
+        setResponse({ caseId: activeCase.id, workspace, collection, error: null })
       })
       .catch(() => {
         if (active && !controller.signal.aborted) {
           setResponse({
-            caseId: caseItem.id,
+            caseId: activeCase.id,
             workspace: null,
             collection: null,
             error: '案件の詳細を取得できませんでした。もう一度お試しください。',
@@ -56,167 +139,330 @@ export default function CaseQuickViewDrawer({ caseItem, onClose, onOpen, onOpenC
       active = false
       controller.abort()
     }
-  }, [caseItem])
+  }, [activeCase?.id, isRendered])
 
-  const isCurrentResponse = caseItem !== null && response?.caseId === caseItem.id
+  // Reset scroll only when opening a different case
+  useEffect(() => {
+    if (isRendered && !isClosing) {
+      scrollContainerRef.current?.scrollTo({ top: 0 })
+    }
+  }, [activeCase?.id, isRendered, isClosing])
+
+  const isCurrentResponse = activeCase !== null && response?.caseId === activeCase.id
   const data = isCurrentResponse ? response?.workspace ?? null : null
   const collectionData = isCurrentResponse ? response?.collection ?? null : null
   const loadError = isCurrentResponse ? response?.error ?? null : null
-  const isLoading = caseItem !== null && !isCurrentResponse
-
-  useEffect(() => {
-    if (!caseItem) return
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-
-    document.addEventListener('keydown', onKeyDown)
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', onKeyDown)
-      document.body.style.overflow = ''
-    }
-  }, [caseItem, onClose])
-
-  useEffect(() => {
-    if (!caseItem) return
-    scrollContainerRef.current?.scrollTo({ top: 0 })
-  }, [caseItem])
+  const isLoading = activeCase !== null && !isCurrentResponse
 
   const requiredDocuments = useMemo(() => collectionData?.documents ?? [], [collectionData])
   const recentActivities = useMemo(
     () => [...(data?.case_file.activities ?? [])]
       .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
-      .slice(0, 3),
+      .slice(0, 5),
     [data],
   )
 
-  if (!caseItem) return null
+  if (!isRendered || !activeCase) return null
 
-  const status = statusConfig[caseItem.status]
+  const status = statusConfig[activeCase.status]
   const completedCount = requiredDocuments.filter(isDocumentConfirmed).length
-  const requiredCount = collectionData?.summary.necessity.required ?? caseItem.documentsTotal
+  const requiredCount = collectionData?.summary.necessity.required ?? activeCase.documentsTotal
   const progress = safeProgress(completedCount, requiredCount)
 
   const openCase = () => {
-    onClose()
-    onOpen(caseItem.id)
+    handleClose()
+    onOpen(activeCase.id)
   }
 
   const openCollection = () => {
-    onClose()
-    onOpenCollection(caseItem.id)
+    handleClose()
+    onOpenCollection(activeCase.id)
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[80]" role="presentation">
-      <button
-        type="button"
-        className="absolute inset-0 cursor-default bg-slate-950/50 backdrop-blur-[2px] transition-opacity"
+    <div className="cm-qv-root" role="presentation">
+      {/* Dimmed Backdrop */}
+      <div
+        className={`cm-qv-backdrop ${isClosing ? 'is-closing' : ''}`}
         aria-label="案件詳細を閉じる"
-        onClick={onClose}
+        onClick={handleClose}
       />
+
+      {/* Floating Right-Side Drawer Panel */}
       <aside
         role="dialog"
         aria-modal="true"
         aria-labelledby="case-quick-view-title"
-        className="absolute inset-y-0 right-0 flex w-full max-w-[430px] flex-col border-l border-[var(--tm-border)] bg-[var(--tm-surface)] shadow-2xl md:inset-y-3 md:right-3 md:rounded-xl md:border"
+        className={`cm-qv-drawer ${isClosing ? 'is-closing' : ''}`}
       >
-        <header className="flex items-start justify-between gap-3 border-b border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] px-5 py-4 md:rounded-t-xl">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold tracking-wide text-[var(--tm-primary)]">QUICK VIEW · 案件詳細</p>
-            <h2 id="case-quick-view-title" className="mt-2 truncate text-[17px] font-semibold text-[var(--tm-text-primary)]">
-              {caseItem.customerName}
+        {/* Header Block with Mockup-faithful Visual Hierarchy */}
+        <header className="cm-qv-header">
+          <div className="cm-qv-header-main">
+            {/* Level 1: Eyebrow alone */}
+            <div className="cm-qv-eyebrow">QUICK VIEW · 案件詳細</div>
+
+            {/* Level 2: Client Name (22-24px, 700-750) */}
+            <h2 id="case-quick-view-title" className="cm-qv-header-name">
+              {activeCase.customerName}
             </h2>
-            <p className="mt-0.5 text-xs text-[var(--tm-text-secondary)]">{caseItem.code}</p>
-            <p className="mt-0.5 truncate text-xs text-[var(--tm-text-muted)]">{caseItem.title}</p>
+
+            {/* Level 3: [CASE-000048] ・ チャン・クオック・フイ */}
+            <div className="cm-qv-code-row">
+              <span className="cm-qv-code-badge">{activeCase.code}</span>
+              {activeCase.customerKana && (
+                <>
+                  <span className="cm-qv-code-separator" aria-hidden="true">・</span>
+                  <span className="cm-qv-kana">{activeCase.customerKana}</span>
+                </>
+              )}
+            </div>
+
+            {/* Level 4: Case Title (e.g. TRAN QUOC HUY / 労災) */}
+            <div className="cm-qv-case-title">
+              {activeCase.title || `${activeCase.customerName} / ${activeCase.caseType}`}
+            </div>
+
+            {/* Level 5: Status Badge & Case Type */}
+            <div className="cm-qv-header-badges">
+              <span className={`cm-qv-status-badge cm-qv-status-badge--${activeCase.status}`}>
+                <span className={`cm-qv-status-dot ${status.dot}`} />
+                {status.label}
+              </span>
+              <CaseTypeBadge caseType={activeCase.caseType} />
+            </div>
           </div>
+
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="案件詳細を閉じる"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[var(--tm-text-secondary)] transition-colors hover:bg-[var(--tm-surface-hover)] hover:text-[var(--tm-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tm-focus-ring)]"
+            className="cm-qv-header-close-btn"
           >
             <X size={18} />
           </button>
         </header>
 
-        <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          <div className="flex items-center justify-between gap-3">
-            <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-semibold ${status.badge}`}>
-              {status.label}
-            </span>
-          </div>
+        {/* Scrollable Body: Continuous Single Flow */}
+        <div ref={scrollContainerRef} className="cm-qv-body">
+          {/* Section 1: 案件の情報 */}
+          <section className="cm-qv-card" aria-labelledby="qv-sec-case-info">
+            <div className="cm-qv-card-header">
+              <div className="flex items-center gap-2.5">
+                <div className="cm-qv-card-iconbox">
+                  <ClipboardList size={16} />
+                </div>
+                <h3 id="qv-sec-case-info" className="cm-qv-card-title">案件の情報</h3>
+              </div>
+            </div>
 
-          <dl className="mt-4 grid gap-3 border-y border-[var(--tm-border)] py-3.5 text-xs">
-            <DetailFact icon={<ClipboardList size={15} />} label="事件類型" value={caseItem.caseType} />
-            <DetailFact icon={<UserRound size={15} />} label="担当者" value={caseItem.assignee} description={caseItem.role} />
-            <DetailFact icon={<CalendarDays size={15} />} label="更新日時" value={formatDateTime(caseItem.rawUpdatedAt)} />
-          </dl>
+            <div className="cm-qv-card-content">
+              {/* 事件類型 */}
+              <div className="cm-qv-fact-row">
+                <div className="cm-qv-fact-left">
+                  <div className="cm-qv-row-iconbox" aria-hidden="true">
+                    <Briefcase size={14} />
+                  </div>
+                  <span className="cm-qv-fact-label">事件類型</span>
+                </div>
+                <div className="cm-qv-fact-right">
+                  <CaseTypeBadge caseType={activeCase.caseType} />
+                  {activeCase.targetCompletionAt && (
+                    <span className="cm-qv-fact-sub">目標: {activeCase.targetCompletionAt.slice(0, 10)}</span>
+                  )}
+                </div>
+              </div>
 
-          {isLoading ? (
-            <SectionSkeleton className="mt-4 border-x-0 px-0" label="案件資料を読み込み中…" rows={5} showHeader={false} />
-          ) : loadError ? (
-            <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-5 text-red-700 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300">
-              {loadError}
-            </p>
-          ) : (
-            <>
-              <section className="mt-5" aria-labelledby="case-quick-progress-title">
-                <div className="flex items-baseline justify-between gap-3">
-                  <h3 id="case-quick-progress-title" className="text-xs font-semibold text-[var(--tm-text-primary)]">必要資料の進捗</h3>
-                  <span className="text-xs font-semibold tabular-nums text-[var(--tm-text-primary)]">
-                    {`${completedCount} / ${requiredCount} 件`}
+              {/* 担当者 */}
+              <div className="cm-qv-fact-row">
+                <div className="cm-qv-fact-left">
+                  <div className="cm-qv-row-iconbox" aria-hidden="true">
+                    <UserCheck size={14} />
+                  </div>
+                  <span className="cm-qv-fact-label">担当者</span>
+                </div>
+                <div className="cm-qv-fact-right">
+                  <span className="cm-qv-fact-value">
+                    {activeCase.assignedEmployeeId ? activeCase.assignee : '未割当'}
+                  </span>
+                  <span className="cm-qv-fact-sub">
+                    {activeCase.assignedEmployeeId ? activeCase.role : '担当スタッフ未登録'}
                   </span>
                 </div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--tm-surface-hover)]">
-                  <div className="h-full rounded-full bg-[var(--tm-primary)] transition-[width]" style={{ width: `${progress}%` }} />
-                </div>
-                {requiredCount === 0 && (
-                  <p className="mt-2 text-xs text-[var(--tm-text-muted)]">必要資料はまだ設定されていません。</p>
-                )}
-                <ul className="mt-3 overflow-hidden rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)]">
-                  {requiredDocuments.map((document) => {
-                    const confirmed = isDocumentConfirmed(document)
-                    return (
-                      <li key={document.id} className="flex min-h-11 items-center gap-2.5 border-b border-[var(--tm-border)] px-3 py-2 last:border-b-0">
-                        <span className="min-w-0 flex-1 text-xs font-medium leading-5 text-[var(--tm-text-primary)]">{document.title}</span>
-                        <span className={`shrink-0 text-[11px] font-medium ${confirmed ? 'text-emerald-600 dark:text-emerald-400' : 'text-[var(--tm-text-muted)]'}`}>
-                          {documentDisplayStatus(document)}
-                        </span>
-                        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border ${confirmed ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-[var(--tm-border-strong)] bg-[var(--tm-surface)]'}`} aria-label={confirmed ? '確認・充足済み' : '未完了'}>
-                          {confirmed && <Check size={12} strokeWidth={3} />}
-                        </span>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </section>
+              </div>
 
-              <section className="mt-5 border-t border-[var(--tm-border)] pt-4" aria-labelledby="case-quick-activity-title">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 id="case-quick-activity-title" className="text-xs font-semibold text-[var(--tm-text-primary)]">最近のアクティビティ</h3>
-                  <button type="button" onClick={openCase} className="text-[11px] font-semibold text-[var(--tm-primary)] hover:underline">すべて見る</button>
+              {/* 更新日時 */}
+              <div className="cm-qv-fact-row">
+                <div className="cm-qv-fact-left">
+                  <div className="cm-qv-row-iconbox" aria-hidden="true">
+                    <Clock3 size={14} />
+                  </div>
+                  <span className="cm-qv-fact-label">更新日時</span>
                 </div>
-                {recentActivities.length ? (
-                  <ol className="mt-3 space-y-3 border-l border-[var(--tm-border)] pl-3">
-                    {recentActivities.map((activity) => <ActivityItem key={activity.id} activity={activity} />)}
-                  </ol>
+                <div className="cm-qv-fact-right">
+                  <span className="cm-qv-fact-value font-mono">
+                    {formatDateTime(activeCase.rawUpdatedAt)}
+                  </span>
+                </div>
+              </div>
+
+              {/* 案件メモ if exists */}
+              {activeCase.memo && (
+                <div className="cm-qv-fact-row cm-qv-fact-row--memo">
+                  <div className="cm-qv-fact-left">
+                    <div className="cm-qv-row-iconbox" aria-hidden="true">
+                      <FileText size={14} />
+                    </div>
+                    <span className="cm-qv-fact-label">案件メモ</span>
+                  </div>
+                  <div className="cm-qv-fact-right text-left">
+                    <p className="cm-qv-memo-text">{activeCase.memo}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Section 2: 必要資料の進捗 */}
+          <section className="cm-qv-card" aria-labelledby="qv-sec-docs">
+            <div className="cm-qv-card-header">
+              <div className="flex items-center gap-2.5">
+                <div className="cm-qv-card-iconbox">
+                  <Files size={16} />
+                </div>
+                <h3 id="qv-sec-docs" className="cm-qv-card-title">必要資料の進捗</h3>
+              </div>
+              <span className="cm-qv-count-badge">
+                {`${completedCount} / ${requiredCount} 件`}
+              </span>
+            </div>
+
+            {isLoading ? (
+              <SectionSkeleton className="border-x-0 px-0 my-2" label="案件資料を読み込み中…" rows={3} showHeader={false} />
+            ) : loadError ? (
+              <p role="alert" className="cm-qv-error-box">
+                {loadError}
+              </p>
+            ) : (
+              <div className="cm-qv-card-content">
+                {/* Thin Elegant Progress bar */}
+                <div className="cm-qv-progress-bar">
+                  <div
+                    className={`cm-qv-progress-fill ${
+                      progress === 100
+                        ? 'bg-emerald-500'
+                        : progress > 0
+                        ? 'bg-indigo-600'
+                        : 'bg-slate-200 dark:bg-slate-700'
+                    }`}
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+
+                {requiredCount === 0 ? (
+                  <p className="cm-qv-empty-text">必要資料はまだ設定されていません。</p>
                 ) : (
-                  <p className="mt-3 text-xs text-[var(--tm-text-muted)]">記録されたアクティビティはありません。</p>
+                  <div className="cm-qv-doc-list">
+                    {requiredDocuments.map((document) => {
+                      const confirmed = isDocumentConfirmed(document)
+                      const statusTxt = documentDisplayStatus(document)
+                      return (
+                        <div key={document.id} className="cm-qv-doc-item">
+                          <div className="cm-qv-doc-title-wrap">
+                            <FileText size={15} className="cm-qv-doc-icon" />
+                            <span className="cm-qv-doc-title">{document.title}</span>
+                          </div>
+                          <div className="cm-qv-doc-status-wrap">
+                            <span
+                              className={`cm-qv-doc-pill ${
+                                confirmed
+                                  ? 'cm-qv-doc-pill--confirmed'
+                                  : statusTxt.includes('確認中')
+                                  ? 'cm-qv-doc-pill--reviewing'
+                                  : statusTxt.includes('不備') || statusTxt.includes('不足')
+                                  ? 'cm-qv-doc-pill--alert'
+                                  : 'cm-qv-doc-pill--default'
+                              }`}
+                            >
+                              {statusTxt}
+                            </span>
+                            <span
+                              className={`cm-qv-doc-check ${confirmed ? 'is-confirmed' : 'is-pending'}`}
+                              aria-label={confirmed ? '確認・充足済み' : '未完了'}
+                            >
+                              {confirmed && <Check size={11} strokeWidth={3} />}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 )}
-              </section>
-            </>
-          )}
+              </div>
+            )}
+          </section>
+
+          {/* Section 3: 最近のアクティビティ */}
+          <section className="cm-qv-card" aria-labelledby="qv-sec-activity">
+            <div className="cm-qv-card-header">
+              <div className="flex items-center gap-2.5">
+                <div className="cm-qv-card-iconbox">
+                  <Clock3 size={16} />
+                </div>
+                <h3 id="qv-sec-activity" className="cm-qv-card-title">最近のアクティビティ</h3>
+              </div>
+              <button
+                type="button"
+                onClick={openCase}
+                className="cm-qv-link-btn"
+              >
+                <span>すべて見る</span>
+                <ChevronRight size={13} />
+              </button>
+            </div>
+
+            {isLoading ? (
+              <SectionSkeleton className="border-x-0 px-0 my-2" label="アクティビティを読み込み中…" rows={3} showHeader={false} />
+            ) : recentActivities.length > 0 ? (
+              <div className="cm-qv-timeline">
+                {recentActivities.map((activity) => (
+                  <div key={activity.id} className="cm-qv-timeline-item">
+                    <span className="cm-qv-timeline-dot" aria-hidden="true" />
+                    <time className="cm-qv-timeline-time">
+                      {formatDateTime(activity.occurred_at)}
+                    </time>
+                    <p className="cm-qv-timeline-title">{activity.title}</p>
+                    {activity.created_by_employee?.full_name && (
+                      <span className="cm-qv-timeline-author">
+                        {activity.created_by_employee.full_name}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="cm-qv-empty-text">記録されたアクティビティはありません。</p>
+            )}
+          </section>
         </div>
 
-        <footer className="grid grid-cols-2 gap-2 border-t border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] px-5 py-4">
-          <button type="button" onClick={openCase} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[var(--tm-primary)] px-3 text-xs font-semibold text-white transition-colors hover:bg-[var(--tm-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tm-focus-ring)]">
-            <FolderOpen size={15} />案件を開く
+        {/* Sticky Footer Actions */}
+        <footer className="cm-qv-footer">
+          <button
+            type="button"
+            onClick={openCollection}
+            className="cm-qv-btn-secondary"
+          >
+            <FilePlus2 size={15} />
+            <span>資料収集を開く</span>
           </button>
-          <button type="button" onClick={openCollection} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-[var(--tm-border-strong)] bg-[var(--tm-surface)] px-3 text-xs font-semibold text-[var(--tm-primary)] transition-colors hover:bg-[var(--tm-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tm-focus-ring)]">
-            <FilePlus2 size={15} />資料収集を開く
+          <button
+            type="button"
+            onClick={openCase}
+            className="cm-qv-btn-primary"
+          >
+            <FolderOpen size={15} />
+            <span>案件を開く</span>
+            <ArrowRight size={14} className="cm-qv-btn-arrow opacity-80" />
           </button>
         </footer>
       </aside>
@@ -225,35 +471,16 @@ export default function CaseQuickViewDrawer({ caseItem, onClose, onOpen, onOpenC
   )
 }
 
-function DetailFact({ icon, label, value, description }: { icon: ReactNode; label: string; value: string; description?: string }) {
-  return (
-    <div className="grid grid-cols-[18px_68px_minmax(0,1fr)] items-start gap-x-2">
-      <span className="mt-0.5 text-[var(--tm-text-secondary)]" aria-hidden="true">{icon}</span>
-      <dt className="text-[11px] text-[var(--tm-text-secondary)]">{label}</dt>
-      <dd className="min-w-0 font-medium text-[var(--tm-text-primary)]">
-        <span className="block truncate">{value}</span>
-        {description && <span className="mt-0.5 block text-[11px] font-normal text-[var(--tm-text-secondary)]">{description}</span>}
-      </dd>
-    </div>
-  )
-}
-
-function ActivityItem({ activity }: { activity: CaseActivity }) {
-  return (
-    <li className="relative">
-      <span className="absolute -left-[17px] top-1.5 h-2 w-2 rounded-full bg-[var(--tm-primary)] ring-2 ring-[var(--tm-surface)]" aria-hidden="true" />
-      <p className="text-[11px] text-[var(--tm-text-secondary)]">{formatDateTime(activity.occurred_at)}</p>
-      <p className="mt-0.5 text-xs font-medium text-[var(--tm-text-primary)]">{activity.title}</p>
-      {activity.created_by_employee?.full_name && <p className="mt-0.5 text-[11px] text-[var(--tm-text-muted)]">{activity.created_by_employee.full_name}</p>}
-    </li>
-  )
-}
-
 function formatDateTime(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return new Intl.DateTimeFormat('ja-JP', {
-    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Tokyo',
   }).format(date)
 }
 

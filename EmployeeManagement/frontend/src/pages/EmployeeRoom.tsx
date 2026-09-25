@@ -1250,7 +1250,7 @@ export default function EmployeeRoom() {
               ? (weatherLabelByCode[weatherCode] ?? "天気情報")
               : "天気情報",
         });
-      } catch (error) {
+      } catch {
         if (!controller.signal.aborted) {
           setOsakaWeather({ temperature: null, label: "天気情報を取得できません" });
         }

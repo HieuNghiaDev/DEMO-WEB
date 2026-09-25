@@ -1,68 +1,43 @@
-import { useEffect, useState } from 'react'
-import ThemisAIMascot from './ThemisAIMascot'
-import { MASCOT_SLEEP_DELAY, resolveMascotExpression, type MascotExpression } from './mascotExpressions'
+import { useEffect, useRef, useState } from 'react'
+import ThemisHead from './ThemisHead'
+import type { ThemisActivity, ThemisExpression } from './mascotExpressions'
 
-export default function ThemisAIFloatingButton({ onOpen, expression = 'idle' }: {
+export default function ThemisAIFloatingButton({ onOpen, expression = 'idle', activity, action = 'none', notificationCount = 0, hasNotification = false, preview = false, forceHover = false }: {
   onOpen: () => void
-  expression?: MascotExpression
+  expression?: ThemisExpression
+  activity?: ThemisActivity
+  action?: ThemisActivity
+  notificationCount?: number
+  hasNotification?: boolean
+  preview?: boolean
+  forceHover?: boolean
 }) {
-  const [hovered, setHovered] = useState(false)
-  const [focused, setFocused] = useState(false)
-  const [sleepy, setSleepy] = useState(false)
+  const [attentive, setAttentive] = useState(false)
+  const [notificationPop, setNotificationPop] = useState(false)
+  const previousCount = useRef(notificationCount)
+  const currentActivity = activity ?? action
+  const displayExpression = (attentive || forceHover) && currentActivity === 'none' && expression === 'idle' ? 'softSmile' : expression
+  const showNotification = hasNotification || notificationCount > 0
 
   useEffect(() => {
-    let lastActivity = Date.now()
-    let asleep = false
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const check = () => {
-      const remaining = MASCOT_SLEEP_DELAY - (Date.now() - lastActivity)
-      if (remaining > 0) timer = setTimeout(check, remaining)
-      else { asleep = true; setSleepy(true) }
+    if (notificationCount > previousCount.current) {
+      setNotificationPop(true)
+      const timer = setTimeout(() => setNotificationPop(false), 650)
+      previousCount.current = notificationCount
+      return () => clearTimeout(timer)
     }
-    const wake = () => {
-      if (document.hidden) return
-      lastActivity = Date.now()
-      if (asleep) {
-        asleep = false
-        setSleepy(false)
-        timer = setTimeout(check, MASCOT_SLEEP_DELAY)
-      }
-    }
-    const visibility = () => {
-      clearTimeout(timer)
-      if (!document.hidden) {
-        asleep = false
-        setSleepy(false)
-        lastActivity = Date.now()
-        timer = setTimeout(check, MASCOT_SLEEP_DELAY)
-      }
-    }
-    timer = setTimeout(check, MASCOT_SLEEP_DELAY)
-    window.addEventListener('pointermove', wake, { passive: true })
-    window.addEventListener('pointerdown', wake, { passive: true })
-    window.addEventListener('keydown', wake)
-    window.addEventListener('scroll', wake, { passive: true, capture: true })
-    document.addEventListener('visibilitychange', visibility)
-    return () => {
-      clearTimeout(timer)
-      window.removeEventListener('pointermove', wake)
-      window.removeEventListener('pointerdown', wake)
-      window.removeEventListener('keydown', wake)
-      window.removeEventListener('scroll', wake, true)
-      document.removeEventListener('visibilitychange', visibility)
-    }
-  }, [])
+    previousCount.current = notificationCount
+  }, [notificationCount])
 
   return (
-    <div className="themis-ai-launcher">
-      <button type="button" className="themis-ai-launcher-button" aria-label="THEMIS AIを開く" aria-haspopup="dialog"
-        onClick={onOpen}
-        onPointerEnter={(event) => { if (event.pointerType === 'mouse') setHovered(true) }}
-        onPointerLeave={() => setHovered(false)}
-        onFocus={() => setFocused(true)} onBlur={() => { setFocused(false); setHovered(false) }}>
-        <ThemisAIMascot expression={resolveMascotExpression(expression, hovered || focused, sleepy)} />
+    <div className={`themis-ai-launcher${preview ? ' themis-ai-launcher--preview' : ''}${forceHover ? ' themis-ai-launcher--force-hover' : ''}${notificationPop ? ' themis-ai-launcher--notification-pop' : ''}`}>
+      <button type="button" className="themis-ai-launcher-button" aria-label="THEMIS AIを開く" aria-haspopup="dialog" onClick={onOpen}
+        onPointerEnter={(event) => { if (event.pointerType === 'mouse') setAttentive(true) }} onPointerLeave={() => setAttentive(false)} onFocus={() => setAttentive(true)} onBlur={() => setAttentive(false)}>
+        <ThemisHead activity={currentActivity} expression={displayExpression} />
+        <span className="themis-ai-launcher-online" aria-hidden="true" />
+        {showNotification && <span className="themis-ai-launcher-notification" aria-label={notificationCount > 0 ? `${notificationCount}件の新しい通知` : '新しい通知'}>{notificationCount > 0 ? Math.min(notificationCount, 9) : ''}</span>}
       </button>
-      <span className="themis-ai-launcher-hint" aria-hidden="true">THEMIS AI に相談</span>
+      <span className="themis-ai-launcher-hint" aria-hidden="true"><strong>AI Themis</strong><span>何かお手伝いしますか？</span></span>
     </div>
   )
 }

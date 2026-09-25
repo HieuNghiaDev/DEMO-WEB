@@ -12,8 +12,13 @@ class Client extends Model
 
     protected $fillable = [
         'name', 'name_vn', 'name_kana', 'client_type', 'address', 'phone',
-        'email', 'language', 'nationality', 'notes',
+        'email', 'language', 'nationality', 'notes', 'birth_date',
     ];
+
+    protected function casts(): array
+    {
+        return ['birth_date' => 'date:Y-m-d'];
+    }
 
     public function caseFiles(): HasMany
     {

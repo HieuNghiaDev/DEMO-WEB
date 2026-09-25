@@ -9,7 +9,7 @@ import {
   PageHeader,
   StatusBadge,
 } from '../components/ui'
-import { SectionSkeleton } from '../components/loading'
+import { KpiSkeletonValue, SectionSkeleton } from '../components/loading'
 import { useAuth } from '../contexts/AuthContext'
 import C001DocumentReviewDrawer from '../features/document-creation/components/C001DocumentReviewDrawer'
 
@@ -82,11 +82,13 @@ function ApprovalRoom() {
   const [c001Documents, setC001Documents] = useState<C001ApprovalSummary[]>([])
   const [selectedC001, setSelectedC001] = useState<C001ApprovalSummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeAction, setActiveAction] = useState<{ id: number; action: ApprovalAction } | null>(null)
 
-  const loadApprovals = useCallback(async () => {
-    setIsLoading(true)
+  const loadApprovals = useCallback(async (manual = false) => {
+    if (manual) setIsRefreshing(true)
+    else setIsLoading(true)
     setError(null)
     try {
       const response = await api.get<{ approvals: ApprovalRequest[]; c001_documents?: C001ApprovalSummary[] }>('/approvals')
@@ -96,6 +98,7 @@ function ApprovalRoom() {
       setError('承認申請を読み込めませんでした。アクセス権限と接続状況を確認してください。')
     } finally {
       setIsLoading(false)
+      setIsRefreshing(false)
     }
   }, [])
 
@@ -115,7 +118,7 @@ function ApprovalRoom() {
         current.map((approval) => (approval.id === approvalId ? response.data.approval : approval)),
       )
     } catch {
-      await loadApprovals()
+      await loadApprovals(true)
       setError('申請を更新できませんでした。すでに処理済みの可能性があります。')
     } finally {
       setActiveAction(null)
@@ -139,12 +142,12 @@ function ApprovalRoom() {
           <Button
             variant="secondary"
             size="md"
-            onClick={() => void loadApprovals()}
-            disabled={isLoading}
-            loading={isLoading}
-            icon={!isLoading ? <RefreshCw size={15} className="text-[var(--tm-primary)]" /> : undefined}
+            onClick={() => void loadApprovals(true)}
+            disabled={isRefreshing}
+            loading={isRefreshing}
+            icon={!isRefreshing ? <RefreshCw size={15} className="text-[var(--tm-primary)]" /> : undefined}
           >
-            {isLoading ? '更新中…' : '最新データを取得'}
+            {isRefreshing ? '更新中…' : '最新データを取得'}
           </Button>
         }
       />
@@ -154,28 +157,28 @@ function ApprovalRoom() {
         <MetricStrip columns={4}>
           <MetricCard
             label="承認待ち"
-            value={pendingCount}
+            value={isLoading ? <KpiSkeletonValue /> : pendingCount}
             subtext="件"
             status="warning"
             icon={<Clock3 size={18} />}
           />
           <MetricCard
             label="承認済み"
-            value={approvedCount}
+            value={isLoading ? <KpiSkeletonValue /> : approvedCount}
             subtext="件"
             status="success"
             icon={<CheckCircle2 size={18} />}
           />
           <MetricCard
             label="実行済み"
-            value={executedCount}
+            value={isLoading ? <KpiSkeletonValue /> : executedCount}
             subtext="件"
             status="info"
             icon={<Play size={18} />}
           />
           <MetricCard
             label="却下"
-            value={rejectedCount}
+            value={isLoading ? <KpiSkeletonValue /> : rejectedCount}
             subtext="件"
             status="danger"
             icon={<XCircle size={18} />}

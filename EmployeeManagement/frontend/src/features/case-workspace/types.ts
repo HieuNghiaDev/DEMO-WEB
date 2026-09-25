@@ -22,6 +22,17 @@ export type CaseParty = {
   email: string | null
   address: string | null
   notes: string | null
+  entity_type?: EntityKind | 'insurance_company' | null
+  relation_type?: EntityRelationType | null
+  relation_status?: 'current' | 'past' | 'active' | 'inactive' | 'unknown' | null
+  contact_person?: string | null
+  reference_number?: string | null
+  start_date?: string | null
+  end_date?: string | null
+  is_current?: boolean | null
+  metadata?: Record<string, unknown> | null
+  sort_order?: number
+  updated_at?: string
 }
 
 export type CaseDeadline = {
@@ -60,6 +71,11 @@ export type CaseWorkspace = Omit<CaseDetail, 'documents'> & {
   reference_number?: string | null
   priority?: 'low' | 'normal' | 'high' | 'critical'
   summary?: string | null
+  incident_summary?: string | null
+  occurred_at?: string | null
+  injury_details?: string | null
+  incident_location?: string | null
+  current_status_memo?: string | null
   opened_at?: string | null
   target_completion_at?: string | null
   documents: WorkspaceDocument[]
@@ -80,3 +96,61 @@ export type WorkspaceSummary = {
 
 export type WorkspaceResponse = { case_file: CaseWorkspace; summary: WorkspaceSummary }
 export type WorkspaceTab = 'overview' | 'collection' | 'documents' | 'tasks' | 'deadlines' | 'parties' | 'timeline'
+
+export type EntityKind = 'company' | 'organization' | 'person' | 'insurer' | 'police' | 'other'
+
+export type EntityRelationType =
+  | 'current_employer'
+  | 'former_employer'
+  | 'dispatch_company'
+  | 'dispatch_destination'
+  | 'training_company'
+  | 'supervising_organization'
+  | 'sending_organization'
+  | 'support_organization'
+  | 'accident_opponent'
+  | 'opponent_company'
+  | 'own_insurer'
+  | 'opponent_insurer'
+  | 'police'
+  | 'family'
+  | 'medical'
+  | 'supporter'
+  | 'other'
+
+export type EntityBadgeTone = 'emerald' | 'slate' | 'blue' | 'violet' | 'cyan' | 'amber' | 'red'
+
+export type RelatedEntity = {
+  id: string | number
+  kind: EntityKind
+  relationType: EntityRelationType
+  relationRoleLabel: string
+  statusBadgeLabel?: string
+  statusBadgeTone?: EntityBadgeTone
+  name: string
+  organizationName?: string | null
+  address?: string | null
+  phone?: string | null
+  email?: string | null
+  contactPerson?: string | null
+  relationshipDetail?: string | null
+  insuranceSide?: 'own' | 'opponent' | 'other' | null
+  policyNumber?: string | null
+  claimNumber?: string | null
+  department?: string | null
+  referenceNumber?: string | null
+  driverName?: string | null
+  vehicleInfo?: string | null
+  vehicleNumber?: string | null
+  accidentRelationship?: string | null
+  metadata?: Record<string, unknown> | null
+  industry?: string | null
+  employeeCount?: string | null
+  notes?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  isCurrent?: boolean
+  originalEmploymentId?: number
+  originalPartyId?: number
+  updatedAt?: string | null
+}

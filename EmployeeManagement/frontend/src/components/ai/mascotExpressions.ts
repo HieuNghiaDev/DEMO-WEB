@@ -1,30 +1,50 @@
-export type MascotExpression = 'idle' | 'hover' | 'happy' | 'thinking' | 'sad' | 'sleepy'
+/**
+ * `idle` and `idea` are retained as legacy aliases for existing callers.
+ * New UI should prefer `neutral` for the attentive, open-eyed resting face.
+ */
+export type ThemisExpression =
+  | 'idle'
+  | 'neutral'
+  | 'softSmile'
+  | 'greeting'
+  | 'happy'
+  | 'excited'
+  | 'wink'
+  | 'curious'
+  | 'thinking'
+  | 'focused'
+  | 'surprised'
+  | 'confused'
+  | 'concerned'
+  | 'supportive'
+  | 'proud'
+  | 'thankful'
+  | 'sleepy'
+  | 'listening'
+  | 'talking'
+  | 'idea'
 
-export const MASCOT_SLEEP_DELAY = 55_000
-export const MASCOT_FEEDBACK_DURATION = { happy: 1_500, sad: 2_400 } as const
+export type ThemisGazeDirection = 'center' | 'left' | 'right' | 'up' | 'down'
+export type ThemisActivity = 'none' | 'processing' | 'searching' | 'generating' | 'success' | 'error'
 
-export const mascotMouth: Record<MascotExpression, string> = {
-  idle: 'M43 61 Q48 64 53 61',
-  hover: 'M42 60 Q48 67 54 60',
-  happy: 'M42 60 Q48 69 54 60 Q48 63 42 60Z',
-  thinking: 'M46 62 Q49 61 52 62',
-  sad: 'M43 64 Q48 59 53 64',
-  sleepy: 'M45 63 L51 63',
-}
+/** Compatibility alias for existing mascot consumers. */
+export type ThemisAction = ThemisActivity
+export type MascotVisualState = ThemisExpression | Exclude<ThemisActivity, 'none'>
 
-export function resolveMascotExpression(state: MascotExpression, attentive: boolean, sleepy: boolean): MascotExpression {
-  if (state !== 'idle') return state
-  return attentive ? 'hover' : sleepy ? 'sleepy' : 'idle'
-}
+export const THEMIS_HEAD_ASSET = '/images/themis-mascot/themis-head-shell.png'
+export const MASCOT_FEEDBACK_DURATION = { success: 1_500, error: 2_400 } as const
 
-export function canTrackMascotPointer(expression: MascotExpression, reducedMotion: boolean, finePointer: boolean) {
-  return !reducedMotion && finePointer && (expression === 'idle' || expression === 'hover')
-}
+export const THEMIS_EXPRESSION_PREVIEW_STATES: ThemisExpression[] = [
+  'neutral', 'softSmile', 'greeting', 'happy', 'excited', 'wink',
+  'curious', 'thinking', 'focused', 'surprised', 'confused', 'concerned',
+  'supportive', 'proud', 'thankful', 'sleepy', 'listening', 'talking',
+]
 
-/** SVG-space movement: at the largest rendered size this stays below 3px. */
-export function getMascotGaze(dx: number, dy: number) {
-  const distance = Math.hypot(dx, dy)
-  if (distance > 160 || distance === 0) return { x: 0, y: 0 }
-  const strength = Math.min(3.5, distance / 24)
-  return { x: dx / distance * strength, y: dy / distance * strength }
+export function resolveMascotVisualState(activity: ThemisActivity = 'none', expression: ThemisExpression = 'idle'): MascotVisualState {
+  if (activity === 'error') return 'error'
+  if (activity === 'success') return 'success'
+  if (activity === 'generating') return 'generating'
+  if (activity === 'searching') return 'searching'
+  if (activity === 'processing') return 'processing'
+  return expression
 }

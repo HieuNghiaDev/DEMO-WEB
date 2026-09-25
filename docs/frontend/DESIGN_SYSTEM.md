@@ -36,22 +36,29 @@ Operational clarity first. Visual drama never wins over readability.
 
 These tokens are the visual source of truth. Prefer shared CSS/Tailwind theme variables rather than arbitrary page-level colors.
 
---tm-bg: #0B1220
---tm-surface: #111B2E
---tm-surface-elevated: #162238
---tm-border: #26344D
+--bg-app: #0B0E13
+--bg-sidebar: #0D1118
+--bg-surface: #11161F
+--bg-elevated: #161C26
+--bg-hover: #1B2330
+--bg-selected: #1D2540
+--border-default: #283241
 
---tm-text: #F3F6FC
---tm-text-secondary: #CBD5E1
---tm-text-muted: #94A3B8
+--text-primary: #F4F7FB
+--text-secondary: #A7B0BE
+--text-muted: #707B8D
 
---tm-primary: #5B6CFF
---tm-primary-hover: #7080FF
+--brand: #5B5BD6
+--brand-hover: #6D6DE3
 
---tm-success: #3F9B76
---tm-warning: #C58A32
---tm-danger: #C75B64
+--success: #34D399
+--warning: #FBBF24
+--danger: #F87171
+--info: #38BDF8
 --tm-ai: #8668E8
+
+Existing `--tm-*` variables alias these semantic tokens so shared and legacy
+components use one color system during the migration.
 
 Light mode equivalents may use the existing neutral light palette, but the same semantic hierarchy and component language must remain.
 
@@ -277,16 +284,16 @@ Dark mode is the primary visual reference for THEMIS Command.
 Dark mode:
 
 Main background:
-#0B1220
+#0B0E13
 
 Primary surface:
-#111B2E
+#11161F
 
 Elevated / secondary surface:
-#162238
+#161C26
 
 Primary border:
-#26344D
+#283241
 
 Light mode remains supported:
 
@@ -321,10 +328,10 @@ THEMIS primary accent is a restrained indigo-blue.
 Canonical token:
 
 Primary:
-#5B6CFF
+#5B5BD6
 
 Primary hover / stronger emphasis:
-#7080FF
+#6D6DE3
 
 Use primary color mainly for:
 
@@ -352,7 +359,7 @@ Success
 
 Use restrained emerald.
 
-#3F9B76
+#34D399
 
 Examples:
 
@@ -365,7 +372,7 @@ Warning
 
 Use restrained amber.
 
-#C58A32
+#FBBF24
 
 Examples:
 
@@ -378,7 +385,7 @@ Error / Destructive
 
 Use restrained red.
 
-#C75B64
+#F87171
 
 Examples:
 
@@ -1379,14 +1386,14 @@ Dark mode is the primary visual expression of THEMIS Command.
 
 Use canonical layers:
 
-Page background: #0B1220
-Primary surface: #111B2E
-Elevated surface: #162238
-Border: #26344D
-Primary text: #F3F6FC
-Secondary text: #CBD5E1
-Muted text: #94A3B8
-Primary accent: #5B6CFF
+Page background: #0B0E13
+Primary surface: #11161F
+Elevated surface: #161C26
+Border: #283241
+Primary text: #F4F7FB
+Secondary text: #A7B0BE
+Muted text: #707B8D
+Primary accent: #5B5BD6
 
 Avoid pure black (#000000) as the application foundation.
 

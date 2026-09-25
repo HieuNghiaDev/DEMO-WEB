@@ -214,6 +214,12 @@ class GoogleDriveService
             ];
         } catch (GeneratedDocumentDriveException $error) {
             throw $error;
+        } catch (VisaProgressConfigurationException $error) {
+            if ($error->getMessage() === 'Google Drive OAuth authorization is required.') {
+                throw new GeneratedDocumentDriveException('Google Driveの再認証が必要です。管理者がOAuth連携を更新してください。');
+            }
+
+            throw new GeneratedDocumentDriveException('Google Drive OAuthの設定を確認してください。');
         } catch (Throwable) {
             throw new GeneratedDocumentDriveException('C-001のテンプレートを確認できませんでした。');
         }
@@ -622,6 +628,9 @@ class GoogleDriveService
             'refresh_token' => $refreshToken,
             'grant_type' => 'refresh_token',
         ]);
+        if ($response->status() === 400 && $response->json('error') === 'invalid_grant') {
+            throw new VisaProgressConfigurationException('Google Drive OAuth authorization is required.');
+        }
         if (! $response->successful() || ! is_string($response->json('access_token'))) {
             throw new VisaProgressSourceException('Google Drive OAuth token refresh failed.');
         }

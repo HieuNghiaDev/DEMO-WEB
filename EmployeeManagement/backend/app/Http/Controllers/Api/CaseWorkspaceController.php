@@ -3,10 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UpdateCaseIncidentRequest;
 use App\Models\CaseFile;
 use App\Services\CaseDocumentChecklistService;
+use App\Services\CaseWorkspaceAuditService;
+use Illuminate\Support\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CaseWorkspaceController extends Controller
 {
@@ -45,5 +49,22 @@ class CaseWorkspaceController extends Controller
             'message' => $created > 0 ? "{$created}件の必要書類を追加しました。" : '追加できる新しい必要書類はありません。',
             'created_count' => $created,
         ]);
+    }
+
+    public function updateIncident(UpdateCaseIncidentRequest $request, CaseFile $caseFile, CaseWorkspaceAuditService $audit): JsonResponse
+    {
+        DB::transaction(function () use ($request, $caseFile, $audit): void {
+            $data = $request->validated();
+            if (! empty($data['occurred_at'])) {
+                // Eloquent stores timestamps in the app timezone; preserve the instant sent by the browser.
+                $data['occurred_at'] = Carbon::parse($data['occurred_at'])
+                    ->setTimezone(config('app.timezone'))
+                    ->format('Y-m-d H:i:s');
+            }
+            $caseFile->update($data);
+            $audit->record($caseFile, $request, '事故・事件概要を更新');
+        });
+
+        return response()->json(['case_file' => $caseFile->fresh()]);
     }
 }

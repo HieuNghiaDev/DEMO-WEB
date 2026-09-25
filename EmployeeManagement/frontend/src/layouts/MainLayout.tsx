@@ -17,7 +17,7 @@ function MainLayout() {
       <RouteProgress key={location.key} />
       <Sidebar />
 
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col pt-[calc(56px+env(safe-area-inset-top))] xl:pt-0">
         <main key={location.pathname} className="themis-page-transition min-w-0 flex-1">
           <Outlet />
         </main>

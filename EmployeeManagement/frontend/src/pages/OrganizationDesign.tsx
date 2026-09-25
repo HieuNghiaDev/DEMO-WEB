@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import axios from 'axios'
 import {
@@ -7,30 +7,32 @@ import {
   Building2,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Clock3,
   Coffee,
   Copy,
-  Eye,
-  EyeOff,
   LayoutGrid,
   LayoutList,
   MapPin,
+  Play,
   Plus,
   RefreshCw,
   RotateCcw,
   Scale,
   Search,
   ShieldCheck,
+  SlidersHorizontal,
   UserCog,
   UserRound,
   Users,
   X,
-  Play,
 } from 'lucide-react'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
-import { ButtonSpinner, LoadingOverlay, Skeleton } from '../components/loading'
+import { ButtonSpinner, KpiSkeletonValue, LoadingOverlay, MobileCardSkeleton, Skeleton, TableSkeleton } from '../components/loading'
+import { CasePageHeader } from '../features/case-management/CasePrimitives'
+import '../features/case-management/caseManagement.css'
 
 type WorkStatus = 'working' | 'break' | 'outside' | 'offline'
 
@@ -98,31 +100,31 @@ const rolePresentation = {
     caption: 'SYSTEM ADMIN',
     iconClass: 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300',
     selectedClass: 'border-rose-400 bg-rose-50/70 dark:border-rose-400/50 dark:bg-rose-500/10',
-    badgeClass: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/20',
+    badgeClass: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/25',
     checkClass: 'bg-rose-500 text-white',
   },
   level_4: {
     icon: UserCog,
     caption: 'MANAGEMENT',
-    iconClass: 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300',
-    selectedClass: 'border-violet-400 bg-violet-50/70 dark:border-violet-400/50 dark:bg-violet-500/10',
-    badgeClass: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-300 dark:border-violet-500/20',
-    checkClass: 'bg-violet-600 text-white',
+    iconClass: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300',
+    selectedClass: 'border-indigo-400 bg-indigo-50/70 dark:border-indigo-400/50 dark:bg-indigo-500/10',
+    badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500/25',
+    checkClass: 'bg-indigo-600 text-white',
   },
   level_3: {
     icon: Scale,
     caption: 'LEGAL PROFESSIONAL',
-    iconClass: 'bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300',
-    selectedClass: 'border-sky-400 bg-sky-50/70 dark:border-sky-400/50 dark:bg-sky-500/10',
-    badgeClass: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/20',
-    checkClass: 'bg-sky-600 text-white',
+    iconClass: 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300',
+    selectedClass: 'border-blue-400 bg-blue-50/70 dark:border-blue-400/50 dark:bg-blue-500/10',
+    badgeClass: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/25',
+    checkClass: 'bg-blue-600 text-white',
   },
   level_2: {
     icon: BadgeCheck,
     caption: 'FULL-TIME STAFF',
     iconClass: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300',
     selectedClass: 'border-emerald-400 bg-emerald-50/70 dark:border-emerald-400/50 dark:bg-emerald-500/10',
-    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20',
+    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/25',
     checkClass: 'bg-emerald-600 text-white',
   },
   level_1: {
@@ -130,7 +132,7 @@ const rolePresentation = {
     caption: 'PART-TIME STAFF',
     iconClass: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300',
     selectedClass: 'border-amber-400 bg-amber-50/70 dark:border-amber-400/50 dark:bg-amber-500/10',
-    badgeClass: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20',
+    badgeClass: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/25',
     checkClass: 'bg-amber-500 text-white',
   },
 } as const
@@ -179,23 +181,44 @@ const statusConfig: Record<
   working: {
     label: '勤務中',
     dot: 'bg-emerald-500',
-    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20',
+    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/50',
   },
   break: {
     label: '休憩中',
     dot: 'bg-amber-500',
-    badge: 'bg-amber-50 text-amber-700 border-amber-200/80 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20',
+    badge: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/50',
   },
   outside: {
     label: '外出中',
-    dot: 'bg-sky-500',
-    badge: 'bg-sky-50 text-sky-700 border-sky-200/80 dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/20',
+    dot: 'bg-blue-500',
+    badge: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/50',
   },
   offline: {
     label: 'オフライン',
     dot: 'bg-slate-400 dark:bg-slate-500',
     badge: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
   },
+}
+
+const statusAccentMap: Record<WorkStatus, string> = {
+  working: 'bg-emerald-500',
+  break: 'bg-amber-500',
+  outside: 'bg-blue-500',
+  offline: 'bg-slate-400',
+}
+
+const mobileAccentMap: Record<WorkStatus, string> = {
+  working: 'border-l-emerald-500',
+  break: 'border-l-amber-500',
+  outside: 'border-l-blue-500',
+  offline: 'border-l-slate-400',
+}
+
+const avatarMap: Record<WorkStatus, string> = {
+  working: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
+  break: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
+  outside: 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
+  offline: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
 }
 
 function formatTime(value?: string | null) {
@@ -272,6 +295,8 @@ const buildClosestTokyoDeadline = (hour: string, minute: string) => {
   return `${date.year}-${date.month}-${date.day}T${hour}:${minute}:00`
 }
 
+const PAGE_SIZE = 10
+
 export default function OrganizationDesign() {
   const { user } = useAuth()
   const [employees, setEmployees] = useState<OrganizationEmployee[]>([])
@@ -286,11 +311,13 @@ export default function OrganizationDesign() {
   const [statusFilter, setStatusFilter] = useState<WorkStatus | 'all'>('all')
   const [roleFilter, setRoleFilter] = useState<string | 'all'>('all')
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table')
+  const [page, setPage] = useState(1)
 
   // Modals & Panels
   const [selectedEmployee, setSelectedEmployee] = useState<OrganizationEmployee | null>(null)
   const [isAccessGuideOpen, setIsAccessGuideOpen] = useState(false)
   const [isCreateEmployeeOpen, setIsCreateEmployeeOpen] = useState(false)
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
 
   const loadOrganization = useCallback(async (manual = false) => {
     if (manual) {
@@ -317,8 +344,6 @@ export default function OrganizationDesign() {
   }, [])
 
   useEffect(() => {
-    // Initial loading is scheduled after the effect completes to avoid a synchronous
-    // state update during effect setup; the initial `loading` state remains true.
     const initialLoadId = window.setTimeout(() => {
       void loadOrganization()
     }, 0)
@@ -375,8 +400,8 @@ export default function OrganizationDesign() {
         }
         // Search query
         if (searchQuery.trim()) {
-          const query = searchQuery.toLowerCase().trim()
-          const nameMatch = employee.full_name?.toLowerCase().includes(query)
+          const query = searchQuery.trim().toLowerCase()
+          const nameMatch = employee.full_name.toLowerCase().includes(query)
           const kanaMatch = employee.full_name_kana?.toLowerCase().includes(query)
           const codeMatch = employee.employee_code?.toLowerCase().includes(query)
           const titleMatch = employee.position_title?.toLowerCase().includes(query)
@@ -394,11 +419,23 @@ export default function OrganizationDesign() {
       })
   }, [employees, selectedOfficeId, statusFilter, roleFilter, searchQuery])
 
+  // Pagination calculation
+  const pages = Math.max(1, Math.ceil(filteredEmployees.length / PAGE_SIZE))
+  const current = Math.min(page, pages)
+  const visibleEmployees = filteredEmployees.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setPage(1), 0)
+    return () => window.clearTimeout(timer)
+  }, [searchQuery, selectedOfficeId, statusFilter, roleFilter])
+
   const hasActiveFilters =
     searchQuery.trim() !== '' ||
     selectedOfficeId !== null ||
     statusFilter !== 'all' ||
     roleFilter !== 'all'
+
+  const mobileFilterCount = Number(statusFilter !== 'all') + Number(roleFilter !== 'all')
 
   const resetAllFilters = () => {
     setSearchQuery('')
@@ -408,393 +445,487 @@ export default function OrganizationDesign() {
   }
 
   const handleKpiStatusClick = (status: WorkStatus) => {
-    setStatusFilter((current) => (current === status ? 'all' : status))
+    setStatusFilter((curr) => (curr === status ? 'all' : status))
   }
 
-  if (loading) {
-    return <OrganizationLoadingSkeleton />
-  }
+  const metricValue = (value: number) => loading
+    ? <KpiSkeletonValue />
+    : <><span className="cm-clv-kpi-num">{value}</span><span className="cm-clv-kpi-unit">名</span></>
 
   return (
-    <div className="organization-page relative mx-auto w-full max-w-[1600px] space-y-5 px-4 pb-12 pt-4 sm:px-6 lg:px-8" aria-busy={refreshing}>
+    <div className="cm-case-list-page cm-org-page min-h-screen pb-24 text-slate-800 sm:pb-20 xl:pb-16 dark:text-slate-100" aria-busy={loading || refreshing} aria-label="組織設計・社員管理">
       <LoadingOverlay isVisible={refreshing} label="組織データを更新しています…" className="rounded-xl" />
-      {/* 1. Header Area */}
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900" aria-labelledby="organization-title">
-        <header className="organization-page-header flex flex-col justify-between gap-4 border-b border-slate-100 p-4 dark:border-slate-800/80 sm:flex-row sm:items-center sm:p-5">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-              <Building2 size={15} />
-              <span>THEMIS 人事・組織マネジメント</span>
-            </div>
-            <h1 id="organization-title" className="mt-1 text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 sm:text-2xl">
-              組織設計・社員管理
-            </h1>
-            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-              社員名簿、所属先、出勤状態、システムアクセス権限を一元的に管理・設定します。
-            </p>
-          </div>
 
-          <div className="organization-header-actions flex items-center gap-2.5 sm:shrink-0">
-            <button
-              type="button"
-              disabled={refreshing}
-              onClick={() => void loadOrganization(true)}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-            >
-              {refreshing ? <ButtonSpinner size={14} className="text-indigo-500" /> : <RefreshCw size={14} className="text-slate-500" />}
-              <span>{refreshing ? '更新中…' : '最新取得'}</span>
-            </button>
+      {/* ── Page Header + KPI Strip ───────────────────────────── */}
+      <div className="cm-case-list-shell">
+        <section className="cm-clv-hero" aria-label="組織設計・社員管理">
+          <CasePageHeader
+            title="組織設計・社員管理"
+            description="社員名簿、所属先、出勤状態、システムアクセス権限を一元的に管理・設定します。"
+            kicker={<><Building2 size={12} /><span className="cm-org-kicker-short">人事・組織</span><span className="cm-org-kicker-full">THEMIS 人事・組織マネジメント</span></>}
+            showIllustration={false}
+            actions={<>
+              <button
+                type="button"
+                className="dc-button"
+                disabled={refreshing}
+                aria-label={refreshing ? '組織データを更新中' : '最新取得'}
+                title={refreshing ? '組織データを更新中' : '最新取得'}
+                onClick={() => void loadOrganization(true)}
+              >
+                {refreshing ? <ButtonSpinner size={14} className="text-indigo-500" /> : <RefreshCw size={14} />}
+                <span>{refreshing ? '更新中…' : '最新取得'}</span>
+              </button>
+              <button
+                type="button"
+                className="dc-button dc-primary"
+                disabled={!user?.permission_names.includes('employee.create')}
+                title={user?.permission_names.includes('employee.create') ? '新規社員を登録' : '社員登録の権限がありません'}
+                onClick={() => setIsCreateEmployeeOpen(true)}
+              >
+                <Plus size={14} />
+                <span>新規社員登録</span>
+              </button>
+            </>}
+          />
+        </section>
 
-            <button
-              type="button"
-              disabled={!user?.permission_names.includes('employee.create')}
-              title={user?.permission_names.includes('employee.create') ? '新規社員を登録' : '社員登録の権限がありません'}
-              onClick={() => setIsCreateEmployeeOpen(true)}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 text-xs font-medium text-white transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-300 dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:disabled:bg-slate-800"
-            >
-              <Plus size={15} />
-              <span>新規社員登録</span>
-            </button>
-          </div>
-        </header>
-
-      </section>
-
-      {/* KPI Summary Cards */}
-      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5" aria-labelledby="organization-summary-title">
-        <div className="mb-4 flex items-end justify-between gap-4">
-          <div>
-            <h2 id="organization-summary-title" className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-              勤務サマリー
-            </h2>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              所属事務所の選択に応じた社員の勤務状況
-            </p>
-          </div>
-          <p className="hidden text-xs font-medium text-slate-400 sm:block">
-            状態を選択して絞り込み
-          </p>
-        </div>
-
-        <div className="organization-kpi-grid grid grid-cols-2 gap-3 lg:grid-cols-5">
-          <KpiSummaryCard
-            title="全社員"
-            value={summary.total}
-            icon={<Users size={16} />}
-            isActive={statusFilter === 'all'}
+        {/* ── Compact 5-Card KPI Strip ─────────────────────────── */}
+        <div className="cm-clv-kpi-strip is-5-cols" role="region" aria-label="勤務サマリー">
+          {/* 全社員 */}
+          <button
+            type="button"
             onClick={() => setStatusFilter('all')}
-            dotClass="bg-slate-400"
-            iconClass="border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300"
-          />
-          <KpiSummaryCard
-            title="勤務中"
-            value={summary.working}
-            icon={<BriefcaseBusiness size={16} />}
-            isActive={statusFilter === 'working'}
-            onClick={() => handleKpiStatusClick('working')}
-            dotClass="bg-emerald-500"
-            badgeClass="text-emerald-600 dark:text-emerald-400"
-            iconClass="border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
-          />
-          <KpiSummaryCard
-            title="休憩中"
-            value={summary.break}
-            icon={<Coffee size={16} />}
-            isActive={statusFilter === 'break'}
-            onClick={() => handleKpiStatusClick('break')}
-            dotClass="bg-amber-500"
-            badgeClass="text-amber-600 dark:text-amber-400"
-            iconClass="border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
-          />
-          <KpiSummaryCard
-            title="外出中"
-            value={summary.outside}
-            icon={<MapPin size={16} />}
-            isActive={statusFilter === 'outside'}
-            onClick={() => handleKpiStatusClick('outside')}
-            dotClass="bg-sky-500"
-            badgeClass="text-sky-600 dark:text-sky-400"
-            iconClass="border-sky-200 bg-sky-50 text-sky-600 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300"
-          />
-          <KpiSummaryCard
-            title="オフライン"
-            value={summary.offline}
-            icon={<UserRound size={16} />}
-            isActive={statusFilter === 'offline'}
-            onClick={() => handleKpiStatusClick('offline')}
-            dotClass="bg-slate-400"
-            className="col-span-2 sm:col-span-1"
-            iconClass="border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-          />
-        </div>
-      </section>
-
-      {errorMessage && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
-          {errorMessage}
-        </div>
-      )}
-
-      {/* 2. Search, Filter Toolbar & Office Selector */}
-      <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        {/* Office Segmented Switcher */}
-        <div className="organization-office-switcher flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 text-xs font-semibold text-slate-500 dark:text-slate-400">所属事務所:</span>
-            <button
-              type="button"
-              onClick={() => setSelectedOfficeId(null)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                selectedOfficeId === null
-                  ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-500/20'
-                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
-              }`}
-            >
-              全事務所 ({employees.length})
-            </button>
-            {offices.map((office) => {
-              const isSelected = selectedOfficeId === office.id
-              const count = employees.filter((e) => e.office?.id === office.id).length
-              return (
-                <button
-                  key={office.id}
-                  type="button"
-                  onClick={() => setSelectedOfficeId(isSelected ? null : office.id)}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                    isSelected
-                      ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-500/20'
-                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <Building2 size={13} className={isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'} />
-                  <span>{office.name}</span>
-                  <span className="rounded-full bg-slate-200/60 px-1.5 py-0.2 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                    {count}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-800/60">
-            <button
-              type="button"
-              aria-label="テーブル表示"
-              title="テーブル表示"
-              onClick={() => setViewMode('table')}
-              className={`rounded-md p-1.5 transition ${
-                viewMode === 'table'
-                  ? 'bg-white text-indigo-600 shadow-xs dark:bg-slate-700 dark:text-indigo-300'
-                  : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-              }`}
-            >
-              <LayoutList size={15} />
-            </button>
-            <button
-              type="button"
-              aria-label="カード表示"
-              title="カード表示"
-              onClick={() => setViewMode('grid')}
-              className={`rounded-md p-1.5 transition ${
-                viewMode === 'grid'
-                  ? 'bg-white text-indigo-600 shadow-xs dark:bg-slate-700 dark:text-indigo-300'
-                  : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-              }`}
-            >
-              <LayoutGrid size={15} />
-            </button>
-          </div>
-        </div>
-
-        {/* Toolbar Inputs */}
-        <div className="organization-filter-row flex flex-col gap-2.5 sm:flex-row sm:items-center">
-          {/* Search Box */}
-          <div className="relative min-w-0 flex-1">
-            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="社員名・フリガナ・社員コード・役職・メールで検索..."
-              className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-xs text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
-
-          {/* Status Filter */}
-          <div className="organization-filter-controls flex items-center gap-2">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as WorkStatus | 'all')}
-              className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-            >
-              <option value="all">すべての勤務状態</option>
-              <option value="working">勤務中</option>
-              <option value="break">休憩中</option>
-              <option value="outside">外出中</option>
-              <option value="offline">オフライン</option>
-            </select>
-
-            {/* Role Filter */}
-            <select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-            >
-              <option value="all">すべてのアクセスレベル</option>
-              <option value="level_5">レベル 5 (システム管理)</option>
-              <option value="level_4">レベル 4 (運営管理)</option>
-              <option value="level_3">レベル 3 (専門業務)</option>
-              <option value="level_2">レベル 2 (通常業務)</option>
-              <option value="level_1">レベル 1 (基本業務)</option>
-            </select>
-
-            {/* Reset Button */}
-            {hasActiveFilters && (
-              <button
-                type="button"
-                onClick={resetAllFilters}
-                className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                title="条件をクリア"
-              >
-                <RotateCcw size={13} />
-                <span className="hidden md:inline">リセット</span>
-              </button>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* 3. Access-Level Guide Collapsible */}
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
-        <button
-          type="button"
-          aria-expanded={isAccessGuideOpen}
-          onClick={() => setIsAccessGuideOpen((c) => !c)}
-          className="flex w-full items-center justify-between gap-3 bg-slate-50/70 px-4 py-2.5 text-left transition hover:bg-indigo-50/50 dark:bg-slate-950/30 dark:hover:bg-slate-800/40 sm:px-5"
-        >
-          <div className="flex items-center gap-2">
-            <ShieldCheck size={16} className="text-indigo-600 dark:text-indigo-400" />
-            <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-              アクセスレベル権限表（権限一覧の確認）
-            </span>
-          </div>
-          <span className="flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-            <span>{isAccessGuideOpen ? '閉じる' : '詳細を見る'}</span>
-            <ChevronDown size={14} className={`transition-transform duration-200 ${isAccessGuideOpen ? 'rotate-180' : ''}`} />
-          </span>
-        </button>
-
-        {isAccessGuideOpen && (
-          <div className="border-t border-slate-100 p-4 dark:border-slate-800">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              {Object.entries(accessLevelGuide).map(([levelKey, level]) => {
-                const visual = rolePresentation[levelKey as keyof typeof rolePresentation]
-                const Icon = visual.icon
-                return (
-                  <div
-                    key={levelKey}
-                    className="rounded-lg border border-slate-200/70 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-800/40"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${visual.iconClass}`}>
-                        <Icon size={14} />
-                      </span>
-                      <div>
-                        <p className="text-xs font-bold text-slate-900 dark:text-slate-100">{level.title}</p>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400">{level.summary}</p>
-                      </div>
-                    </div>
-                    <p className="mt-2 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
-                      {level.description}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {level.capabilities.map((cap) => (
-                        <span
-                          key={cap}
-                          className="rounded bg-white px-1.5 py-0.5 text-[9px] font-medium text-slate-600 shadow-xs dark:bg-slate-900 dark:text-slate-300"
-                        >
-                          {cap}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
+            className={`cm-clv-kpi-card cm-clv-kpi-indigo is-clickable ${statusFilter === 'all' ? 'is-active' : ''}`}
+          >
+            <div className="cm-clv-kpi-icon">
+              <Users size={14} />
             </div>
+            <div className="cm-clv-kpi-body">
+              <span className="cm-clv-kpi-label">全社員</span>
+              <div className="cm-clv-kpi-value-row">
+                {metricValue(summary.total)}
+              </div>
+            </div>
+          </button>
+
+          {/* 勤務中 */}
+          <button
+            type="button"
+            onClick={() => handleKpiStatusClick('working')}
+            className={`cm-clv-kpi-card cm-clv-kpi-emerald is-clickable ${statusFilter === 'working' ? 'is-active' : ''}`}
+          >
+            <div className="cm-clv-kpi-icon">
+              <BriefcaseBusiness size={14} />
+            </div>
+            <div className="cm-clv-kpi-body">
+              <span className="cm-clv-kpi-label">勤務中</span>
+              <div className="cm-clv-kpi-value-row">
+                {metricValue(summary.working)}
+              </div>
+            </div>
+          </button>
+
+          {/* 休憩中 */}
+          <button
+            type="button"
+            onClick={() => handleKpiStatusClick('break')}
+            className={`cm-clv-kpi-card cm-clv-kpi-amber is-clickable ${statusFilter === 'break' ? 'is-active' : ''}`}
+          >
+            <div className="cm-clv-kpi-icon">
+              <Coffee size={14} />
+            </div>
+            <div className="cm-clv-kpi-body">
+              <span className="cm-clv-kpi-label">休憩中</span>
+              <div className="cm-clv-kpi-value-row">
+                {metricValue(summary.break)}
+              </div>
+            </div>
+          </button>
+
+          {/* 外出中 */}
+          <button
+            type="button"
+            onClick={() => handleKpiStatusClick('outside')}
+            className={`cm-clv-kpi-card cm-clv-kpi-blue is-clickable ${statusFilter === 'outside' ? 'is-active' : ''}`}
+          >
+            <div className="cm-clv-kpi-icon">
+              <MapPin size={14} />
+            </div>
+            <div className="cm-clv-kpi-body">
+              <span className="cm-clv-kpi-label">外出中</span>
+              <div className="cm-clv-kpi-value-row">
+                {metricValue(summary.outside)}
+              </div>
+            </div>
+          </button>
+
+          {/* オフライン */}
+          <button
+            type="button"
+            onClick={() => handleKpiStatusClick('offline')}
+            className={`cm-clv-kpi-card cm-clv-kpi-slate is-clickable ${statusFilter === 'offline' ? 'is-active' : ''}`}
+          >
+            <div className="cm-clv-kpi-icon">
+              <UserRound size={14} />
+            </div>
+            <div className="cm-clv-kpi-body">
+              <span className="cm-clv-kpi-label">オフライン</span>
+              <div className="cm-clv-kpi-value-row">
+                {metricValue(summary.offline)}
+              </div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {/* ── Main Workspace ──────────────────────────────────────── */}
+      <main className="cm-case-list-shell cm-case-list-workspace">
+
+        {/* Error message if any */}
+        {errorMessage && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
+            {errorMessage}
           </div>
         )}
-      </section>
 
-      {/* 4. Employee List (Table or Grid) */}
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <header className="organization-list-header flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/20 sm:px-5">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
-              社員一覧 ({filteredEmployees.length}名)
-            </h2>
-            {hasActiveFilters && (
-              <span className="rounded bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
-                絞り込み適用中
+        {/* ── Access Level Guide (Compact Strip) ────────────────── */}
+        <section className="cm-org-access-strip">
+          <button
+            type="button"
+            aria-expanded={isAccessGuideOpen}
+            onClick={() => setIsAccessGuideOpen((c) => !c)}
+            className="cm-org-access-toggle"
+          >
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck size={16} className="text-indigo-600 dark:text-indigo-400" />
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                アクセスレベル権限表
               </span>
-            )}
+              <span className="text-[11px] text-slate-400 hidden sm:inline">
+                — 権限一覧を確認できます
+              </span>
+            </div>
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
+              <span>{isAccessGuideOpen ? '閉じる' : '詳細を見る'}</span>
+              <ChevronDown size={14} className={`transition-transform duration-200 ${isAccessGuideOpen ? 'rotate-180' : ''}`} />
+            </span>
+          </button>
+
+          {isAccessGuideOpen && (
+            <div className="border-t border-[var(--tm-border)] p-4 bg-[var(--tm-surface-elevated)]">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                {Object.entries(accessLevelGuide).map(([levelKey, level]) => {
+                  const visual = rolePresentation[levelKey as keyof typeof rolePresentation]
+                  const Icon = visual.icon
+                  return (
+                    <div
+                      key={levelKey}
+                      className="rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] p-3 shadow-2xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${visual.iconClass}`}>
+                          <Icon size={14} />
+                        </span>
+                        <div>
+                          <p className="text-xs font-bold text-slate-900 dark:text-slate-100">{level.title}</p>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400">{level.summary}</p>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                        {level.description}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {level.capabilities.map((cap) => (
+                          <span
+                            key={cap}
+                            className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                          >
+                            {cap}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* ── Search + Filter Toolbar ───────────────────────────── */}
+        <section className="cm-case-toolbar">
+          <div className="cm-case-toolbar-primary">
+            {/* Search Box */}
+            <div className="relative min-w-0 flex-1">
+              <Search size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="社員名・フリガナ・社員コード・役職・メールで検索..."
+                className="cm-case-control w-full pl-10 pr-9"
+              />
+              <span className="cm-org-mobile-search-placeholder" aria-hidden="true">
+                社員名・コードで検索
+              </span>
+              {searchQuery && (
+                <button
+                  type="button"
+                  aria-label="検索語をクリア"
+                  onClick={() => setSearchQuery('')}
+                  className="cm-case-clear"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Filter controls */}
+            <div className="cm-case-filter-controls">
+              {/* Status filter select */}
+              <div className="relative min-w-0 cm-case-select-status">
+                <select
+                  aria-label="勤務状態"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as WorkStatus | 'all')}
+                  className="cm-case-control cm-case-select w-full"
+                >
+                  <option value="all">すべての勤務状態</option>
+                  <option value="working">勤務中</option>
+                  <option value="break">休憩中</option>
+                  <option value="outside">外出中</option>
+                  <option value="offline">オフライン</option>
+                </select>
+                <ChevronDown size={14} className="cm-case-select-icon" />
+              </div>
+
+              {/* Role filter select */}
+              <div className="relative min-w-0 cm-case-select-role">
+                <select
+                  aria-label="アクセスレベル"
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                  className="cm-case-control cm-case-select w-full"
+                >
+                  <option value="all">すべてのアクセスレベル</option>
+                  <option value="level_5">レベル 5 (システム管理)</option>
+                  <option value="level_4">レベル 4 (運営管理)</option>
+                  <option value="level_3">レベル 3 (専門業務)</option>
+                  <option value="level_2">レベル 2 (通常業務)</option>
+                  <option value="level_1">レベル 1 (基本業務)</option>
+                </select>
+                <ChevronDown size={14} className="cm-case-select-icon" />
+              </div>
+
+              {/* View Mode Toggle (Table / Grid) */}
+              <div className="cm-view-toggle-group" role="group" aria-label="表示切り替え">
+                <button
+                  type="button"
+                  aria-label="テーブル表示"
+                  title="テーブル表示"
+                  onClick={() => setViewMode('table')}
+                  className={`cm-view-toggle-btn ${viewMode === 'table' ? 'is-active' : ''}`}
+                >
+                  <LayoutList size={14} />
+                </button>
+                <button
+                  type="button"
+                  aria-label="カード表示"
+                  title="カード表示"
+                  onClick={() => setViewMode('grid')}
+                  className={`cm-view-toggle-btn ${viewMode === 'grid' ? 'is-active' : ''}`}
+                >
+                  <LayoutGrid size={14} />
+                </button>
+              </div>
+            </div>
           </div>
 
-          <p className="text-[11px] text-slate-400">
-            行をクリックすると詳細情報・権限設定・業務依頼が開きます
-          </p>
-        </header>
+          <div className="cm-org-mobile-filter-bar">
+            <button
+              type="button"
+              className="cm-org-mobile-filter-trigger"
+              aria-label="絞り込みを開く"
+              aria-expanded={isMobileFilterOpen}
+              onClick={() => setIsMobileFilterOpen(true)}
+            >
+              <SlidersHorizontal size={16} aria-hidden="true" />
+              <span>フィルター</span>
+              {mobileFilterCount > 0 && <span className="cm-org-mobile-filter-count">{mobileFilterCount}</span>}
+              <ChevronDown size={15} aria-hidden="true" />
+            </button>
+          </div>
 
-        {filteredEmployees.length === 0 ? (
-          <EmptyEmployeeState hasFilters={hasActiveFilters} onReset={resetAllFilters} />
-        ) : viewMode === 'table' ? (
-          <div className="organization-table-scroll overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-xs text-slate-600 dark:text-slate-300">
-              <thead className="border-b border-slate-200 bg-slate-50 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-900/90 dark:text-slate-400">
-                <tr>
-                  <th scope="col" className="py-2.5 pl-4 pr-3 sm:pl-5">社員情報</th>
-                  <th scope="col" className="px-3 py-2.5">所属事務所</th>
-                  <th scope="col" className="px-3 py-2.5">役職・雇用区分</th>
-                  <th scope="col" className="px-3 py-2.5">アクセス権限</th>
-                  <th scope="col" className="px-3 py-2.5">勤務状況</th>
-                  <th scope="col" className="px-3 py-2.5">現在の作業</th>
-                  <th scope="col" className="py-2.5 pl-3 pr-4 text-right sm:pr-5">操作</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredEmployees.map((employee) => (
-                  <EmployeeTableRow
+          {/* Secondary row: Office Tabs + Result Count */}
+          <div className="cm-case-toolbar-secondary">
+            <nav className="cm-case-quick-filters" aria-label="所属事務所フィルター">
+              <button
+                type="button"
+                aria-pressed={selectedOfficeId === null}
+                onClick={() => setSelectedOfficeId(null)}
+                className={`cm-case-quick-filter ${selectedOfficeId === null ? 'is-active' : ''}`}
+              >
+                <span>全事務所</span>
+                {loading ? <Skeleton className="h-4 w-5 rounded-full" /> : <span className="cm-case-quick-count">{employees.length}</span>}
+              </button>
+
+              {offices.map((office) => {
+                const isSelected = selectedOfficeId === office.id
+                const count = employees.filter((e) => e.office?.id === office.id).length
+                return (
+                  <button
+                    key={office.id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => setSelectedOfficeId(isSelected ? null : office.id)}
+                    className={`cm-case-quick-filter ${isSelected ? 'is-active' : ''}`}
+                  >
+                    <span>{office.name}</span>
+                    <span className="cm-case-quick-count">{count}</span>
+                  </button>
+                )
+              })}
+            </nav>
+
+            <span className="cm-case-result-count" aria-live="polite">
+              {loading ? <Skeleton className="inline-block h-4 w-16 align-middle" /> : <>表示中 <strong>{filteredEmployees.length}</strong> / {employees.length}名</>}
+            </span>
+          </div>
+        </section>
+
+        {/* ── Employee List (Table / Cards) ─────────────────────── */}
+        <section className="cm-case-table">
+          {loading ? (
+            <div className="p-4">
+              <div className="cm-clv-desktop-only"><TableSkeleton rows={8} columns={7} className="border-0 shadow-none dark:bg-transparent" /></div>
+              <MobileCardSkeleton className="cm-clv-mobile-only" rows={6} label="社員カードを読み込み中…" />
+            </div>
+          ) : filteredEmployees.length === 0 ? (
+            <EmptyEmployeeState hasFilters={hasActiveFilters} onReset={resetAllFilters} />
+          ) : viewMode === 'grid' ? (
+            /* Grid View Mode */
+            <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 sm:p-5">
+              {visibleEmployees.map((employee) => (
+                <EmployeeGridCard
+                  key={employee.id}
+                  employee={employee}
+                  onClick={() => setSelectedEmployee(employee)}
+                />
+              ))}
+            </div>
+          ) : (
+            <>
+              {/* ══ DESKTOP TABLE — hidden below sm (640px) ═══════ */}
+              <div className="cm-clv-desktop-only cm-cc-scroll">
+                {/* Column Headers */}
+                <div className="cm-org-grid cm-cc-header">
+                  <div>社員情報</div>
+                  <div>所属事務所</div>
+                  <div>役職・雇用区分</div>
+                  <div>アクセス権限</div>
+                  <div>勤務状況</div>
+                  <div>現在の作業</div>
+                  <div />
+                </div>
+
+                {/* Card Rows */}
+                <div className="cm-cc-list">
+                  {visibleEmployees.map((employee) => (
+                    <EmployeeTableRow
+                      key={employee.id}
+                      employee={employee}
+                      onClick={() => setSelectedEmployee(employee)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* ══ MOBILE CARD STACK — hidden at sm (640px) and above ═ */}
+              <div className="cm-clv-mobile-only cm-mobile-list">
+                {visibleEmployees.map((employee) => (
+                  <EmployeeMobileCard
                     key={employee.id}
                     employee={employee}
                     onClick={() => setSelectedEmployee(employee)}
                   />
                 ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="grid gap-3.5 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 sm:p-5">
-            {filteredEmployees.map((employee) => (
-              <EmployeeGridCard
-                key={employee.id}
-                employee={employee}
-                onClick={() => setSelectedEmployee(employee)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+              </div>
+            </>
+          )}
 
-      {/* 5. Create Employee Modal */}
+          {/* ── Pagination Footer ─────────────────────────────── */}
+          {filteredEmployees.length > 0 && (
+            <footer className="cm-case-pagination">
+              <div className="cm-clv-pagination-info">
+                {filteredEmployees.length ? (current - 1) * PAGE_SIZE + 1 : 0}–{Math.min(current * PAGE_SIZE, filteredEmployees.length)} / {filteredEmployees.length}名
+              </div>
+
+              <div className="cm-clv-pagination-controls">
+                {/* Mobile compact pagination */}
+                <nav className="cm-clv-mobile-only cm-clv-pag-mobile" aria-label="社員ページネーション">
+                  <button
+                    type="button"
+                    aria-label="前のページ"
+                    disabled={current === 1}
+                    onClick={() => setPage(current - 1)}
+                    className="cm-clv-pag-btn"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <span className="cm-clv-pag-label">{current} / {pages}</span>
+                  <button
+                    type="button"
+                    aria-label="次のページ"
+                    disabled={current === pages}
+                    onClick={() => setPage(current + 1)}
+                    className="cm-clv-pag-btn"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </nav>
+
+                {/* Desktop full pagination */}
+                <nav className="cm-clv-desktop-only cm-clv-pag-desktop" aria-label="社員ページネーション">
+                  <button
+                    type="button"
+                    aria-label="前のページ"
+                    disabled={current === 1}
+                    onClick={() => setPage(current - 1)}
+                    className="cm-clv-pag-btn"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  {Array.from({ length: pages }, (_, index) => index + 1)
+                    .filter((number) => Math.abs(number - current) <= 2)
+                    .map((number) => (
+                      <button
+                        key={number}
+                        type="button"
+                        aria-current={number === current ? 'page' : undefined}
+                        onClick={() => setPage(number)}
+                        className={`cm-clv-pag-page ${number === current ? 'is-active' : ''}`}
+                      >
+                        {number}
+                      </button>
+                    ))}
+                  <button
+                    type="button"
+                    aria-label="次のページ"
+                    disabled={current === pages}
+                    onClick={() => setPage(current + 1)}
+                    className="cm-clv-pag-btn"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </nav>
+              </div>
+            </footer>
+          )}
+        </section>
+      </main>
+
+      {/* ── Create Employee Modal ──────────────────────────────── */}
       {isCreateEmployeeOpen && (
         <CreateEmployeeModal
           offices={offices}
@@ -806,7 +937,7 @@ export default function OrganizationDesign() {
         />
       )}
 
-      {/* 6. Employee Detail Modal */}
+      {/* ── Employee Detail Modal ──────────────────────────────── */}
       {selectedEmployee && (
         <EmployeeDetailModal
           key={selectedEmployee.id}
@@ -823,52 +954,36 @@ export default function OrganizationDesign() {
           canEditRoles={selectedEmployee.user_id !== user?.id}
           availableRoles={availableRoles}
           onRolesUpdated={(roles) => {
-            setEmployees((current) =>
-              current.map((item) => (item.id === selectedEmployee.id ? { ...item, roles } : item)),
+            setEmployees((curr) =>
+              curr.map((item) => (item.id === selectedEmployee.id ? { ...item, roles } : item)),
             )
-            setSelectedEmployee((current) => (current?.id === selectedEmployee.id ? { ...current, roles } : current))
+            setSelectedEmployee((curr) => (curr?.id === selectedEmployee.id ? { ...curr, roles } : curr))
           }}
           onEmploymentUpdated={(employment) => {
-            setEmployees((current) =>
-              current.map((item) => (item.id === selectedEmployee.id ? { ...item, ...employment } : item)),
+            setEmployees((curr) =>
+              curr.map((item) => (item.id === selectedEmployee.id ? { ...item, ...employment } : item)),
             )
-            setSelectedEmployee((current) =>
-              current?.id === selectedEmployee.id ? { ...current, ...employment } : current,
+            setSelectedEmployee((curr) =>
+              curr?.id === selectedEmployee.id ? { ...curr, ...employment } : curr,
             )
           }}
           onClose={() => setSelectedEmployee(null)}
         />
       )}
-    </div>
-  )
-}
 
-function OrganizationLoadingSkeleton() {
-  return (
-    <div className="organization-page mx-auto w-full max-w-[1600px] space-y-5 px-4 pb-12 pt-4 sm:px-6 lg:px-8" role="status" aria-label="組織データを読み込み中…" aria-busy="true">
-      <section className="rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface)] p-5">
-        <div className="flex items-start justify-between gap-5">
-          <div className="space-y-3"><Skeleton className="h-3 w-44" /><Skeleton className="h-7 w-64 max-w-[66vw]" /><Skeleton className="h-3 w-80 max-w-[75vw]" /></div>
-          <div className="hidden gap-2 sm:flex"><Skeleton className="h-9 w-24" /><Skeleton className="h-9 w-32" /></div>
-        </div>
-      </section>
-      <section className="rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface)] p-5">
-        <Skeleton className="mb-4 h-4 w-28" />
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-24 rounded-lg" />)}
-        </div>
-      </section>
-      <section className="rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface)] p-4">
-        <div className="flex flex-wrap gap-3"><Skeleton className="h-9 w-52" /><Skeleton className="h-9 min-w-56 flex-1" /><Skeleton className="h-9 w-36" /></div>
-      </section>
-      <section className="overflow-hidden rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface)]">
-        <div className="border-b border-[var(--tm-border)] p-4"><Skeleton className="h-4 w-32" /></div>
-        {Array.from({ length: 6 }).map((_, index) => (
-          <div key={index} className="flex items-center gap-4 border-b border-[var(--tm-border-subtle)] p-4 last:border-0">
-            <Skeleton className="h-10 w-10 shrink-0 rounded-lg" /><div className="min-w-0 flex-1 space-y-2"><Skeleton className="h-3.5 w-44 max-w-[60vw]" /><Skeleton className="h-3 w-28" /></div><Skeleton className="hidden h-6 w-20 sm:block" />
-          </div>
-        ))}
-      </section>
+      {isMobileFilterOpen && (
+        <MobileFilterSheet
+          roleFilter={roleFilter}
+          statusFilter={statusFilter}
+          onClear={() => {
+            setStatusFilter('all')
+            setRoleFilter('all')
+          }}
+          onClose={() => setIsMobileFilterOpen(false)}
+          onRoleFilterChange={setRoleFilter}
+          onStatusFilterChange={setStatusFilter}
+        />
+      )}
     </div>
   )
 }
@@ -876,55 +991,6 @@ function OrganizationLoadingSkeleton() {
 /* ========================================================================= */
 /* Subcomponents                                                             */
 /* ========================================================================= */
-
-function KpiSummaryCard({
-  title,
-  value,
-  icon,
-  isActive = false,
-  onClick,
-  dotClass = 'bg-slate-400',
-  badgeClass = 'text-slate-900 dark:text-white',
-  iconClass = 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300',
-  className = '',
-}: {
-  title: string
-  value: number
-  icon: ReactNode
-  isActive?: boolean
-  onClick?: () => void
-  dotClass?: string
-  badgeClass?: string
-  iconClass?: string
-  className?: string
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={isActive}
-      className={`group relative flex min-h-[92px] items-center gap-3 rounded-lg border p-3.5 text-left shadow-2xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 sm:p-4 ${className} ${
-        isActive
-          ? 'border-indigo-500 bg-indigo-50/40 ring-1 ring-indigo-500/20 dark:border-indigo-400/70 dark:bg-indigo-500/[0.06]'
-          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70 dark:border-slate-700 dark:bg-slate-950/20 dark:hover:border-slate-600 dark:hover:bg-slate-800/40'
-      }`}
-    >
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${iconClass}`}>
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />
-          <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{title}</span>
-        </div>
-        <p className={`mt-0.5 flex items-baseline gap-1 text-xl font-semibold tabular-nums ${badgeClass}`}>
-          <span>{value}</span>
-          <span className="text-xs font-medium text-slate-400">名</span>
-        </p>
-      </div>
-    </button>
-  )
-}
 
 function EmployeeTableRow({
   employee,
@@ -935,105 +1001,186 @@ function EmployeeTableRow({
 }) {
   const status = statusConfig[employee.work_status]
   const initial = employee.full_name.trim().charAt(0).toUpperCase() || '?'
+  const isActive = employee.work_status === 'working'
 
   return (
-    <tr
+    <div
       onClick={onClick}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          onClick()
-        }
-      }}
-      tabIndex={0}
-      aria-label={`${employee.full_name}の詳細を開く`}
-      className="group cursor-pointer transition-colors hover:bg-indigo-50/40 focus-visible:bg-indigo-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 dark:hover:bg-indigo-950/15 dark:focus-visible:bg-indigo-950/25"
+      className="cm-cc-card group"
+      data-status={employee.work_status}
     >
-      {/* 1. Employee identity */}
-      <td className="py-3 pl-4 pr-3 sm:pl-5">
-        <div className="flex items-center gap-3">
-          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-xs font-bold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
+      {/* Accent bar */}
+      <div className={`cm-cc-accent ${statusAccentMap[employee.work_status] ?? 'bg-slate-400'}`} />
+
+      {/* Grid body */}
+      <div className="cm-cc-body cm-org-grid">
+        {/* 1. Identity */}
+        <div className="cm-cc-client">
+          <div className={`cm-cc-avatar relative ${avatarMap[employee.work_status]}`}>
             {initial}
             <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-slate-900 ${status.dot}`} />
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="font-semibold text-slate-900 dark:text-slate-100">{employee.full_name}</span>
-              <span className="rounded bg-slate-100 px-1.5 py-0.2 font-mono text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                {employee.employee_code}
-              </span>
+          <div className="min-w-0 flex-1">
+            <span className="cm-cc-client-name">{employee.full_name}</span>
+            <div className="cm-cc-client-sub">
+              <span className="cm-cc-client-code">{employee.employee_code}</span>
+              {employee.full_name_kana && <span className="cm-cc-client-kana">· {employee.full_name_kana}</span>}
             </div>
-            {employee.full_name_kana && (
-              <p className="truncate text-[10px] text-slate-400">{employee.full_name_kana}</p>
-            )}
           </div>
         </div>
-      </td>
 
-      {/* 2. Office & Dept */}
-      <td className="px-3 py-3">
-        <div className="flex items-center gap-1.5">
-          <Building2 size={13} className="shrink-0 text-slate-400" />
-          <span className="truncate font-medium text-slate-800 dark:text-slate-200">
+        {/* 2. Office */}
+        <div className="min-w-0">
+          <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs truncate block">
             {employee.office?.name ?? '未登録'}
           </span>
+          {employee.department?.name && (
+            <span className="text-[11px] text-slate-400 dark:text-slate-500 truncate block">
+              {employee.department.name}
+            </span>
+          )}
         </div>
-      </td>
 
-      {/* 3. Position & Employment */}
-      <td className="px-3 py-3">
-        <div className="font-medium text-slate-800 dark:text-slate-200">
-          {employee.position_title ?? '役職未登録'}
+        {/* 3. Position & Employment */}
+        <div className="min-w-0">
+          <span className="cm-cc-type-tag truncate block max-w-fit">
+            {employee.position_title ?? '役職未登録'}
+          </span>
+          <span className="block text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+            {employmentTypeLabels[employee.employment_type ?? ''] ?? '—'}
+          </span>
         </div>
-        <div className="text-[10px] text-slate-400">
-          {employmentTypeLabels[employee.employment_type ?? ''] ?? '雇用区分未登録'}
-        </div>
-      </td>
 
-      {/* 4. Access Level */}
-      <td className="px-3 py-3">
+        {/* 4. Access Level */}
+        <div>
+          <AccessLevelBadge roles={employee.roles} />
+        </div>
+
+        {/* 5. Work Status */}
+        <div>
+          <span className={`cm-cc-status ${status.badge}`}>
+            <span className={`cm-cc-dot ${status.dot} ${isActive ? 'animate-pulse' : ''}`} />
+            {status.label}
+          </span>
+          {employee.attendance?.clock_in && (
+            <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+              <Clock3 size={11} />
+              <span>{formatTime(employee.attendance.clock_in)} 入室</span>
+            </div>
+          )}
+        </div>
+
+        {/* 6. Current Task */}
+        <div className="min-w-0 pr-2">
+          {employee.attendance?.current_task ? (
+            <div>
+              <p className="truncate text-xs font-semibold text-slate-800 dark:text-slate-200">
+                {employee.attendance.current_task.task_description}
+              </p>
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 mt-0.5">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                {questStatusLabel[employee.attendance.current_task.status] ?? '進行中'}
+              </span>
+            </div>
+          ) : (
+            <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+          )}
+        </div>
+
+        {/* 7. Action */}
+        <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            aria-label={`${employee.full_name}の詳細を表示`}
+            onClick={onClick}
+            className="cm-clv-row-action-btn"
+            title="詳細を表示"
+          >
+            <ChevronRight size={15} />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EmployeeMobileCard({
+  employee,
+  onClick,
+}: {
+  employee: OrganizationEmployee
+  onClick: () => void
+}) {
+  const status = statusConfig[employee.work_status]
+  const initial = employee.full_name.trim().charAt(0).toUpperCase() || '?'
+  const isActive = employee.work_status === 'working'
+
+  return (
+    <div
+      onClick={onClick}
+      className={`cm-mobile-card border-l-4 ${mobileAccentMap[employee.work_status] ?? 'border-l-slate-400'}`}
+    >
+      {/* Top row: Identity + Action */}
+      <div className="cm-mobile-card-top">
+        <div className="cm-mobile-card-identity">
+          <div className={`cm-mobile-avatar relative ${avatarMap[employee.work_status]}`}>
+            {initial}
+            <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-slate-900 ${status.dot}`} />
+          </div>
+          <div className="cm-mobile-card-name-block">
+            <p className="cm-mobile-client-name">{employee.full_name}</p>
+            <p className="cm-mobile-case-code">{employee.employee_code}</p>
+            {employee.full_name_kana && <p className="cm-org-mobile-kana">{employee.full_name_kana}</p>}
+          </div>
+        </div>
+        <div onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            aria-label={`${employee.full_name}の詳細を表示`}
+            onClick={onClick}
+            className="cm-mobile-action-btn"
+          >
+            <ChevronRight size={15} />
+          </button>
+        </div>
+      </div>
+
+      <div className="cm-org-mobile-office">
+        <div className="flex min-w-0 items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-300">
+          <Building2 size={13} className="text-slate-400 shrink-0" />
+          <span className="truncate">{employee.office?.name ?? '所属未登録'}</span>
+        </div>
+      </div>
+
+      <div className="cm-org-mobile-badges">
+        <span className="cm-cc-type-tag">{employmentTypeLabels[employee.employment_type ?? ''] ?? '雇用区分未登録'}</span>
+        {employee.position_title && <span className="cm-org-mobile-position">{employee.position_title}</span>}
         <AccessLevelBadge roles={employee.roles} />
-      </td>
+      </div>
 
-      {/* 5. Work Status */}
-      <td className="px-3 py-3">
-        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${status.badge}`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
-          <span>{status.label}</span>
+      <div className="cm-org-mobile-status-row">
+        <span className={`cm-cc-status ${status.badge}`}>
+          <span className={`cm-cc-dot ${status.dot} ${isActive ? 'animate-pulse' : ''}`} />
+          {status.label}
         </span>
         {employee.attendance?.clock_in && (
-          <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-400">
-            <Clock3 size={11} />
+          <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-400">
+            <Clock3 size={12} />
             <span>{formatTime(employee.attendance.clock_in)} 入室</span>
-          </div>
+          </span>
         )}
-      </td>
+      </div>
 
-      {/* 6. Current Task */}
-      <td className="max-w-[200px] px-3 py-3">
-        {employee.attendance?.current_task ? (
-          <div>
-            <p className="truncate font-medium text-slate-800 dark:text-slate-200">
-              {employee.attendance.current_task.task_description}
-            </p>
-            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-              {questStatusLabel[employee.attendance.current_task.status]}
-            </span>
-          </div>
-        ) : (
-          <span className="text-slate-300 dark:text-slate-600">—</span>
-        )}
-      </td>
-
-      {/* 7. Action Button */}
-      <td className="py-3 pl-3 pr-4 text-right sm:pr-5">
-        <span className="inline-flex items-center gap-1 rounded-md bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600 transition group-hover:bg-indigo-50 group-hover:text-indigo-600 dark:bg-slate-800 dark:text-slate-300">
-          <span>詳細</span>
-          <ChevronRight size={13} />
-        </span>
-      </td>
-    </tr>
+      {/* Keep the card dense: an empty task must not reserve a meaningless row. */}
+      {employee.attendance?.current_task && (
+        <div className="mt-2.5 flex items-center justify-between border-t border-[var(--tm-border-subtle)] pt-2 text-xs">
+          <span className="shrink-0 text-[11px] text-slate-400">現在の作業:</span>
+          <span className="ml-3 truncate text-right text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+            {employee.attendance.current_task.task_description}
+          </span>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1046,49 +1193,50 @@ function EmployeeGridCard({
 }) {
   const status = statusConfig[employee.work_status]
   const initial = employee.full_name.trim().charAt(0).toUpperCase() || '?'
+  const isActive = employee.work_status === 'working'
 
   return (
-    <button
-      type="button"
+    <div
       onClick={onClick}
-      className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 text-left shadow-2xs transition hover:border-indigo-300 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:hover:border-indigo-500/40"
+      className={`cm-cc-card border-l-4 ${mobileAccentMap[employee.work_status] ?? 'border-l-slate-400'} flex flex-col justify-between p-4 cursor-pointer`}
     >
       <div>
         {/* Top bar: Avatar & Status */}
         <div className="flex items-start justify-between gap-2">
-          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-sm font-bold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
+          <div className={`cm-cc-avatar relative ${avatarMap[employee.work_status]}`}>
             {initial}
-            <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white dark:border-slate-900 ${status.dot}`} />
+            <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-slate-900 ${status.dot}`} />
           </div>
 
-          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${status.badge}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
-            <span>{status.label}</span>
+          <span className={`cm-cc-status ${status.badge}`}>
+            <span className={`cm-cc-dot ${status.dot} ${isActive ? 'animate-pulse' : ''}`} />
+            {status.label}
           </span>
         </div>
 
         {/* Employee name & code */}
         <div className="mt-3">
-          <div className="flex items-baseline gap-1.5">
-            <h3 className="font-semibold text-slate-900 dark:text-slate-100">{employee.full_name}</h3>
-            <span className="font-mono text-[10px] text-slate-400">({employee.employee_code})</span>
+          <h3 className="cm-cc-client-name">{employee.full_name}</h3>
+          <div className="cm-cc-client-sub mt-0.5">
+            <span className="cm-cc-client-code">{employee.employee_code}</span>
+            {employee.full_name_kana && <span className="cm-cc-client-kana">· {employee.full_name_kana}</span>}
           </div>
-          {employee.full_name_kana && (
-            <p className="text-[10px] text-slate-400">{employee.full_name_kana}</p>
-          )}
         </div>
 
         {/* Metadata */}
-        <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
+        <div className="mt-3 space-y-1.5 border-t border-[var(--tm-border-subtle)] pt-3 text-xs">
           <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-            <Building2 size={13} className="text-slate-400" />
-            <span className="truncate">{employee.office?.name ?? '未登録'}</span>
+            <Building2 size={13} className="text-slate-400 shrink-0" />
+            <span className="truncate font-medium">{employee.office?.name ?? '未登録'}</span>
           </div>
 
-          <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-            <BriefcaseBusiness size={13} className="text-slate-400" />
-            <span className="truncate">{employee.position_title ?? '役職未登録'}</span>
-            <span className="text-[10px] text-slate-400">({employmentTypeLabels[employee.employment_type ?? ''] ?? '—'})</span>
+          <div className="flex items-center gap-1.5">
+            <span className="cm-cc-type-tag truncate">
+              {employee.position_title ?? '役職未登録'}
+            </span>
+            <span className="text-[10px] text-slate-400">
+              ({employmentTypeLabels[employee.employment_type ?? ''] ?? '—'})
+            </span>
           </div>
 
           <div className="pt-1">
@@ -1098,7 +1246,7 @@ function EmployeeGridCard({
 
         {/* Current Task if any */}
         {employee.attendance?.current_task && (
-          <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
+          <div className="mt-3 rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] p-2.5">
             <div className="flex items-center gap-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
               <span>{questStatusLabel[employee.attendance.current_task.status]}</span>
@@ -1110,18 +1258,18 @@ function EmployeeGridCard({
         )}
       </div>
 
-      <div className="mt-4 flex items-center justify-end border-t border-slate-100 pt-2.5 text-[11px] font-medium text-indigo-600 dark:border-slate-800 dark:text-indigo-400">
+      <div className="mt-4 flex items-center justify-end border-t border-[var(--tm-border-subtle)] pt-2.5 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
         <span>プロフィールを開く</span>
         <ChevronRight size={13} />
       </div>
-    </button>
+    </div>
   )
 }
 
 function AccessLevelBadge({ roles }: { roles: RoleOption[] }) {
   const role = roles[0]
   if (!role) {
-    return <span className="text-[10px] text-slate-400">権限未設定</span>
+    return <span className="text-[10px] font-medium text-slate-400">権限未設定</span>
   }
 
   const level = accessLevelGuide[role.name as keyof typeof accessLevelGuide]
@@ -1129,7 +1277,7 @@ function AccessLevelBadge({ roles }: { roles: RoleOption[] }) {
   const Icon = visual?.icon ?? ShieldCheck
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium ${visual?.badgeClass ?? 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${visual?.badgeClass ?? 'bg-slate-100 text-slate-700 border-slate-200'}`}>
       <Icon size={11} />
       <span>{level?.title ?? role.display_name}</span>
     </span>
@@ -1144,13 +1292,13 @@ function EmptyEmployeeState({
   onReset: () => void
 }) {
   return (
-    <div className="py-12 text-center">
+    <div className="p-12 text-center">
       <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-slate-800">
         <Users size={20} />
       </div>
-      <p className="mt-3 text-xs font-semibold text-slate-700 dark:text-slate-200">
+      <h2 className="mt-3 text-sm font-semibold text-slate-800 dark:text-slate-200">
         {hasFilters ? '条件に一致する社員が見つかりません' : '社員が登録されていません'}
-      </p>
+      </h2>
       <p className="mt-1 text-xs text-slate-400">
         {hasFilters ? '検索キーワードまたは絞り込み条件を変更してください。' : '「新規社員登録」から新しい社員を追加してください。'}
       </p>
@@ -1158,13 +1306,84 @@ function EmptyEmployeeState({
         <button
           type="button"
           onClick={onReset}
-          className="mt-3 inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-indigo-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-indigo-400"
+          className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--tm-primary)] hover:bg-[var(--tm-surface-hover)] transition"
         >
-          <RotateCcw size={12} />
+          <RotateCcw size={13} />
           <span>絞り込み条件をリセット</span>
         </button>
       )}
     </div>
+  )
+}
+
+function MobileFilterSheet({
+  statusFilter,
+  roleFilter,
+  onStatusFilterChange,
+  onRoleFilterChange,
+  onClear,
+  onClose,
+}: {
+  statusFilter: WorkStatus | 'all'
+  roleFilter: string | 'all'
+  onStatusFilterChange: (value: WorkStatus | 'all') => void
+  onRoleFilterChange: (value: string | 'all') => void
+  onClear: () => void
+  onClose: () => void
+}) {
+  useOrganizationDialog(onClose)
+
+  return createPortal(
+    <div className="cm-org-mobile-filter-sheet" onClick={onClose}>
+      <section
+        aria-labelledby="mobile-filter-sheet-title"
+        aria-modal="true"
+        className="cm-org-mobile-filter-panel"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <header className="flex items-center justify-between border-b border-[var(--tm-border)] px-4 py-3">
+          <div>
+            <p className="text-[10px] font-bold tracking-[0.12em] text-[var(--tm-primary)]">EMPLOYEE DIRECTORY</p>
+            <h2 className="mt-0.5 text-base font-bold text-[var(--tm-text-primary)]" id="mobile-filter-sheet-title">絞り込み</h2>
+          </div>
+          <button aria-label="絞り込みを閉じる" className="flex h-10 w-10 items-center justify-center rounded-lg text-[var(--tm-text-muted)] transition-colors hover:bg-[var(--tm-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" onClick={onClose} type="button">
+            <X size={18} />
+          </button>
+        </header>
+
+        <div className="space-y-4 overflow-y-auto px-4 py-4">
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-[var(--tm-text-secondary)]">勤務状態</span>
+            <select aria-label="勤務状態" className="cm-org-mobile-filter-select" onChange={(event) => onStatusFilterChange(event.target.value as WorkStatus | 'all')} value={statusFilter}>
+              <option value="all">すべての勤務状態</option>
+              <option value="working">勤務中</option>
+              <option value="break">休憩中</option>
+              <option value="outside">外出中</option>
+              <option value="offline">オフライン</option>
+            </select>
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-[var(--tm-text-secondary)]">アクセスレベル</span>
+            <select aria-label="アクセスレベル" className="cm-org-mobile-filter-select" onChange={(event) => onRoleFilterChange(event.target.value)} value={roleFilter}>
+              <option value="all">すべてのアクセスレベル</option>
+              <option value="level_5">レベル 5 (システム管理)</option>
+              <option value="level_4">レベル 4 (運営管理)</option>
+              <option value="level_3">レベル 3 (専門業務)</option>
+              <option value="level_2">レベル 2 (通常業務)</option>
+              <option value="level_1">レベル 1 (基本業務)</option>
+            </select>
+          </label>
+        </div>
+
+        <footer className="flex gap-2 border-t border-[var(--tm-border)] px-4 pb-[calc(16px+env(safe-area-inset-bottom))] pt-3">
+          <button className="flex h-11 flex-1 items-center justify-center rounded-lg border border-[var(--tm-border-strong)] bg-[var(--tm-surface)] text-sm font-semibold text-[var(--tm-text-secondary)] transition-colors hover:bg-[var(--tm-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" onClick={onClear} type="button">クリア</button>
+          <button className="flex h-11 flex-1 items-center justify-center rounded-lg bg-[var(--tm-primary)] text-sm font-semibold text-white transition-colors hover:bg-[var(--tm-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2" onClick={onClose} type="button">適用する</button>
+        </footer>
+      </section>
+    </div>,
+    document.body,
   )
 }
 
@@ -1378,7 +1597,7 @@ function EmployeeDetailModal({
         {/* Header */}
         <header className="organization-dialog-header flex items-start justify-between border-b border-slate-100 p-4 dark:border-slate-800 sm:p-5">
           <div className="flex items-center gap-3.5">
-            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-base font-bold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
+            <div className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${avatarMap[employee.work_status]} text-base font-bold`}>
               {initial}
               <span className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-slate-900 ${status.dot}`} />
             </div>
@@ -1454,78 +1673,101 @@ function EmployeeDetailModal({
                   </div>
                 </div>
 
-                {employee.work_status === 'outside' && employee.attendance?.outside_destination && (
+                {employee.attendance?.outside_destination && (
                   <div className="text-right">
-                    <span className="text-[10px] font-medium text-slate-400">外出先</span>
-                    <p className="text-xs font-semibold text-sky-600 dark:text-sky-400">
+                    <span className="text-[10px] text-slate-400">外出先</span>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                       {employee.attendance.outside_destination}
                     </p>
                   </div>
                 )}
               </div>
 
-              {/* Grid of details */}
+              {/* Profile Details Grid */}
               <div className="grid gap-3 sm:grid-cols-2">
+                <DetailItem label="社員氏名（カナ）" value={employee.full_name_kana || '未登録'} />
                 <DetailItem label="社員コード" value={employee.employee_code} />
-                <DetailItem label="氏名（フリガナ）" value={employee.full_name_kana || '—'} />
                 <DetailItem label="所属事務所" value={employee.office?.name || '未登録'} />
-                <DetailItem label="部署" value={employee.department?.name || '未登録'} />
+                <DetailItem label="所属部署" value={employee.department?.name || '未登録'} />
+                <DetailItem label="役職" value={employee.position_title || '未登録'} />
                 <DetailItem label="入社日" value={formatDate(employee.hire_date)} />
-                <DetailItem label="在籍ステータス" value={employee.employee_status || '在籍'} />
               </div>
 
-              {/* Email */}
-              {employee.work_email && (
-                <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-                  <span className="text-[10px] font-medium text-slate-400">業務用メールアドレス</span>
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs text-slate-700 dark:text-slate-200">
-                      {showEmail ? employee.work_email : maskEmail(employee.work_email)}
-                    </span>
+              {/* Contact Information */}
+              <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                <span className="text-[10px] font-medium text-slate-400">業務用メールアドレス</span>
+                <div className="mt-1 flex items-center justify-between">
+                  <p className="font-mono text-xs text-slate-700 dark:text-slate-300">
+                    {employee.work_email
+                      ? showEmail
+                        ? employee.work_email
+                        : maskEmail(employee.work_email)
+                      : '未登録'}
+                  </p>
+                  {employee.work_email && (
                     <button
                       type="button"
                       onClick={() => setShowEmail((c) => !c)}
-                      className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
+                      className="text-xs font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
                     >
-                      {showEmail ? <EyeOff size={13} /> : <Eye size={13} />}
-                      <span>{showEmail ? '隠す' : '表示'}</span>
+                      {showEmail ? '隠す' : '表示'}
                     </button>
-                  </div>
+                  )}
                 </div>
-              )}
+              </div>
 
-              {/* Employment Type Update Form */}
-              {canUpdateEmployment && (
-                <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3.5 dark:border-slate-800 dark:bg-slate-800/20">
-                  <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">雇用区分の変更</span>
-                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <select
-                      value={employmentType}
-                      disabled={savingEmployment}
-                      onChange={(e) => {
-                        setEmploymentType(e.target.value)
-                        setEmploymentError('')
-                        setEmploymentSuccess('')
-                      }}
-                      className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                    >
-                      {employmentTypeOptions.map(([val, label]) => (
-                        <option key={val} value={val}>{label}</option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      disabled={savingEmployment || employmentType === employee.employment_type}
-                      onClick={() => void saveEmployment()}
-                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-xs font-medium text-white transition hover:bg-indigo-700 disabled:opacity-40 dark:bg-indigo-600 dark:hover:bg-indigo-500"
-                    >
-                      {savingEmployment && <ButtonSpinner size={14} />}
-                      {savingEmployment ? '保存中…' : '変更を保存'}
-                    </button>
+              {/* Employment Type Editor (if permitted) */}
+              {canUpdateEmployment ? (
+                <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-800 dark:text-slate-200">雇用区分の設定</h4>
+                      <p className="text-[10px] text-slate-400">契約形態・勤務体系の区分を更新します</p>
+                    </div>
+                    <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                      {employmentTypeLabels[employee.employment_type ?? ''] ?? '未登録'}
+                    </span>
                   </div>
+
+                  <div className="mt-2.5 flex flex-wrap gap-2">
+                    {employmentTypeOptions.map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setEmploymentType(key)}
+                        className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                          employmentType === key
+                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500/20 dark:bg-indigo-950/30 dark:text-indigo-300'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
                   {employmentError && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{employmentError}</p>}
                   {employmentSuccess && <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">{employmentSuccess}</p>}
+
+                  {employmentType !== employee.employment_type && (
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        disabled={savingEmployment}
+                        onClick={() => void saveEmployment()}
+                        className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {savingEmployment ? <ButtonSpinner size={12} /> : <Check size={12} />}
+                        <span>雇用区分を保存</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
+              ) : (
+                <DetailItem
+                  label="雇用区分"
+                  value={employmentTypeLabels[employee.employment_type ?? ''] ?? '未登録'}
+                />
               )}
             </div>
           )}
@@ -1534,83 +1776,75 @@ function EmployeeDetailModal({
           {activeTab === 'roles' && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200">アクセスレベルの割り当て</h3>
+                <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  システムアクセス権限（ロール）
+                </h3>
                 <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                  社員に付与する権限レベルを1つ選択してください。
+                  社員に割り当てる権限レベルを選択します。職責に応じた最小限の権限を設定してください。
                 </p>
               </div>
 
-              {canManageRoles && !canEditRoles && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
-                  ご自身のアカウント権限は変更できません。別の管理者に依頼してください。
+              {!canEditRoles && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300">
+                  自分自身の権限は変更できません。
                 </div>
               )}
 
               <div className="space-y-2">
                 {availableRoles.map((role) => {
-                  const isSelected = roleIds.includes(role.id)
-                  const visual = rolePresentation[role.name as keyof typeof rolePresentation]
-                  const level = accessLevelGuide[role.name as keyof typeof accessLevelGuide]
+                  const levelKey = role.name as keyof typeof accessLevelGuide
+                  const guide = accessLevelGuide[levelKey]
+                  const visual = rolePresentation[levelKey as keyof typeof rolePresentation]
                   const Icon = visual?.icon ?? ShieldCheck
+                  const isChecked = roleIds.includes(role.id)
 
                   return (
-                    <label
+                    <div
                       key={role.id}
-                      className={`flex cursor-pointer items-start gap-3 rounded-lg border p-2.5 transition duration-150 ${
-                        isSelected
-                          ? `${visual?.selectedClass ?? 'border-indigo-500 bg-indigo-50/50'} ring-1 ring-inset ${visual?.selectedClass?.split(' ')[0].replace('border', 'ring') ?? 'ring-indigo-500'}`
-                          : 'border-slate-200 bg-white hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/80'
-                      }`}
+                      onClick={() => canManageRoles && canEditRoles && toggleRole(role.id)}
+                      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition ${
+                        isChecked
+                          ? visual?.selectedClass ?? 'border-indigo-400 bg-indigo-50/70 dark:border-indigo-400/50 dark:bg-indigo-500/10'
+                          : 'border-slate-200 bg-white hover:bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/40'
+                      } ${!canManageRoles || !canEditRoles ? 'cursor-not-allowed opacity-75' : ''}`}
                     >
-                      <input
-                        type="checkbox"
-                        disabled={!canManageRoles || !canEditRoles}
-                        checked={isSelected}
-                        onChange={() => toggleRole(role.id)}
-                        className="sr-only"
-                      />
-                      <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${visual?.iconClass ?? 'bg-slate-100 text-slate-500'}`}>
-                        <Icon size={13} />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-baseline gap-2">
-                            <p className="text-xs font-bold text-slate-900 dark:text-white">
-                              {role.display_name}
-                            </p>
-                            {level && <span className="text-[10px] font-medium text-slate-500">{level.summary}</span>}
-                          </div>
-                          <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                            isSelected
-                              ? (visual?.checkClass ?? 'border-indigo-600 bg-indigo-600 text-white')
+                      <div className="pt-0.5">
+                        <div
+                          className={`flex h-4 w-4 items-center justify-center rounded-full border transition ${
+                            isChecked
+                              ? visual?.checkClass ?? 'border-indigo-600 bg-indigo-600 text-white'
                               : 'border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800'
-                          }`}>
-                            {isSelected && <Check size={8} strokeWidth={4} />}
-                          </span>
+                          }`}
+                        >
+                          {isChecked && <Check size={10} strokeWidth={3} />}
                         </div>
-                        {level && (
-                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                            <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                              {level.description}
-                            </p>
-                            <div className="flex flex-wrap gap-1">
-                              {level.capabilities.map((cap) => (
-                                <span
-                                  key={cap}
-                                  className={`rounded-[4px] border px-1.5 py-0 text-[9px] font-medium tracking-wide ${
-                                    isSelected
-                                      ? (visual?.badgeClass ?? 'bg-white text-slate-600')
-                                      : 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400'
-                                  }`}
-                                >
-                                  {cap}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
                       </div>
-                    </label>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`flex h-6 w-6 items-center justify-center rounded-md ${visual?.iconClass ?? 'bg-slate-100 text-slate-600'}`}>
+                            <Icon size={13} />
+                          </span>
+                          <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs">
+                            {guide?.title ?? role.display_name}
+                          </span>
+                          <span className="font-mono text-[10px] text-slate-400">({visual?.caption ?? role.name})</span>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                          {guide?.description ?? '業務権限'}
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {guide?.capabilities.map((cap) => (
+                            <span
+                              key={cap}
+                              className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                            >
+                              {cap}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   )
                 })}
               </div>
@@ -1619,15 +1853,15 @@ function EmployeeDetailModal({
               {rolesSuccess && <p className="text-xs text-emerald-600 dark:text-emerald-400">{rolesSuccess}</p>}
 
               {canManageRoles && canEditRoles && (
-                <div className="pt-2">
+                <div className="flex justify-end pt-2">
                   <button
                     type="button"
-                    disabled={savingRoles || roleIds.length === 0}
+                    disabled={savingRoles}
                     onClick={() => void saveRoles()}
-                    className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-xs font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500"
                   >
-                    {savingRoles ? <ButtonSpinner size={14} /> : <ShieldCheck size={14} />}
-                    <span>{savingRoles ? '更新中…' : '権限設定を保存'}</span>
+                    {savingRoles ? <ButtonSpinner size={14} /> : <Check size={14} />}
+                    <span>{savingRoles ? '保存中…' : '権限設定を保存'}</span>
                   </button>
                 </div>
               )}
@@ -1637,27 +1871,21 @@ function EmployeeDetailModal({
           {/* TAB 3: Assign Task */}
           {activeTab === 'task' && canAssignTasks && (
             <div className="space-y-4">
+              <div>
+                <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  業務（クエスト）の依頼
+                </h3>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                  勤務中の社員に新しい業務を即座に割り当てます。
+                </p>
+              </div>
+
               {!isEmployeeOnline ? (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-center dark:border-slate-800 dark:bg-slate-800/40">
-                  <Clock3 size={20} className="mx-auto text-slate-400" />
-                  <p className="mt-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    現在オフラインのため業務を依頼できません
-                  </p>
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    社員が出勤（オンライン）になると、ここからリアルタイムに業務を依頼できます。
-                  </p>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300">
+                  現在オフラインのため、業務を依頼できません。社員の入室をお待ちください。
                 </div>
               ) : (
-                <div className="space-y-3.5">
-                  <div>
-                    <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                      {employee.full_name} さんへの業務依頼
-                    </h3>
-                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                      依頼内容は社員画面の「MY QUEST」に届き、タイマーで進捗管理されます。
-                    </p>
-                  </div>
-
+                <div className="space-y-3">
                   <label className="block space-y-1">
                     <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
                       業務タイトル <span className="text-rose-500">*</span>
@@ -1666,14 +1894,14 @@ function EmployeeDetailModal({
                       type="text"
                       value={taskTitle}
                       onChange={(e) => setTaskTitle(e.target.value)}
-                      placeholder="例：契約書第3条の法務チェック"
-                      className="h-9 w-full rounded-lg border border-slate-200 px-3 text-xs text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      placeholder="例：A社様契約書の修正案作成"
+                      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </label>
 
                   <label className="block space-y-1">
                     <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                      依頼メモ・指示事項
+                      業務詳細・指示事項
                     </span>
                     <textarea
                       value={taskNote}

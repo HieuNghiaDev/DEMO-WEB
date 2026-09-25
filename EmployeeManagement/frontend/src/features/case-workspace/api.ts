@@ -20,6 +20,16 @@ export const caseWorkspaceApi = {
   async createParty(caseId: number, payload: Record<string, unknown>) {
     return (await api.post<{ party: CaseParty }>(`/case-files/${caseId}/parties`, payload)).data.party
   },
+  async updateParty(caseId: number, partyId: number, payload: Record<string, unknown>) {
+    return (await api.patch<{ party: CaseParty }>(`/case-files/${caseId}/parties/${partyId}`, payload)).data.party
+  },
+  async updateIncident(caseId: number, payload: Record<string, unknown>) {
+    return (await api.patch<{ case_file: WorkspaceResponse['case_file'] }>(`/case-files/${caseId}/incident`, payload)).data.case_file
+  },
+  // Update the client/requester basic information for a case
+  async updateClient(clientId: number, payload: Record<string, unknown>) {
+    return (await api.patch<{ client: Record<string, unknown> }>(`/clients/${clientId}`, payload)).data.client
+  },
   async deleteParty(caseId: number, partyId: number) {
     await api.delete(`/case-files/${caseId}/parties/${partyId}`)
   },

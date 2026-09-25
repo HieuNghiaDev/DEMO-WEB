@@ -1,23 +1,36 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import axios from 'axios'
 import { useTranslation } from 'react-i18next'
 import {
-  AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, CircleGauge,
-  Clock3, Mail, MessageSquareText, Pencil, Phone,
-  Plus, RefreshCw, ShieldCheck, Trash2, UserRound, X,
-  Globe, MapPin, Files, ListChecks, CalendarDays,
-  Compass, Layers, Folder, FileText, BriefcaseBusiness, ChevronRight
+  AlertTriangle, ArrowLeft, ArrowRight, Building2, CheckCircle2,
+  Clock3, Mail, MessageSquareText, MoreHorizontal, Phone,
+  Plus, RefreshCw, Shield, ShieldCheck, Trash2, UserRound, Users, X,
+  CalendarDays, Folder, ChevronRight,
+  LayoutGrid, ClipboardList, SquareCheckBig, History
 } from 'lucide-react'
 
 import { useAuth } from '../../contexts/AuthContext'
 import i18n from '../../i18n'
 import { ButtonSpinner } from '../../components/loading'
-import ClientEmploymentPanel from './ClientEmploymentPanel'
-import type { CaseViewer, ClientEmployment } from '../case-management/types'
+import type { CaseViewer } from '../case-management/types'
 import { caseWorkspaceApi } from './api'
+import './caseWorkspace.css'
+import RelatedEntityDrawer from './RelatedEntityDrawer'
+import IncidentSummaryEditDrawer from './IncidentSummaryEditDrawer'
+import { RelatedEntityAddDrawer } from './RelatedEntityAddDrawer'
+import ClientEditDrawer from './ClientEditDrawer'
+import {
+  WorkspaceHeader,
+  IncidentSummaryCard,
+  RelatedEntitiesSection,
+  RecentHistoryCard,
+  QuickInfoSidebar,
+  buildRelatedEntities,
+} from './CaseWorkspaceComponents'
 import type {
   CaseActivity, CaseDeadline, CaseParty, CaseTask, CaseWorkspace,
-  WorkspaceDocument, WorkspaceResponse, WorkspaceSummary, WorkspaceTab,
+  RelatedEntity, WorkspaceDocument, WorkspaceResponse, WorkspaceSummary, WorkspaceTab,
 } from './types'
 
 type DialogKind = 'task' | 'deadline' | 'party' | 'activity'
@@ -30,14 +43,14 @@ const textareaClass = `${inputClass} min-h-24 py-2`
 const primaryButton = 'inline-flex h-9 items-center justify-center gap-2 rounded-md bg-indigo-600 px-3.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-indigo-500 active:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500'
 const secondaryButton = 'inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3.5 text-xs font-medium text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50 dark:border-tm-border dark:bg-tm-surface-elevated dark:text-[var(--tm-text-secondary)] dark:shadow-none dark:hover:bg-tm-surface-hover dark:hover:text-white'
 
-const tabs: Array<{ id: WorkspaceTab; icon: typeof Files }> = [
-  { id: 'overview', icon: CircleGauge },
-  { id: 'collection', icon: ListChecks },
-  { id: 'documents', icon: Files },
-  { id: 'tasks', icon: CheckCircle2 },
+const tabs: Array<{ id: WorkspaceTab; icon: typeof LayoutGrid }> = [
+  { id: 'overview', icon: LayoutGrid },
+  { id: 'collection', icon: ClipboardList },
+  { id: 'documents', icon: Folder },
+  { id: 'tasks', icon: SquareCheckBig },
   { id: 'deadlines', icon: CalendarDays },
-  { id: 'parties', icon: UserRound },
-  { id: 'timeline', icon: MessageSquareText },
+  { id: 'parties', icon: Users },
+  { id: 'timeline', icon: History },
 ]
 
 export function CaseWorkspaceView(props: Props) {
@@ -45,7 +58,7 @@ export function CaseWorkspaceView(props: Props) {
 }
 
 export default function CaseWorkspacePage(props: Props) {
-  const { caseId, onBack, onEdit, initialNotice, initialTab, initialCollectionItemId } = props
+  const { caseId, onBack, onEdit: _onEdit, initialNotice, initialTab, initialCollectionItemId } = props
   const { user } = useAuth()
   const { t } = useTranslation()
   const [tab, setTab] = useState<WorkspaceTab>(initialTab ?? 'overview')
@@ -55,8 +68,19 @@ export default function CaseWorkspacePage(props: Props) {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(initialNotice ?? null)
   const [dialog, setDialog] = useState<DialogKind | null>(null)
+  const [selectedEntity, setSelectedEntity] = useState<RelatedEntity | null>(null)
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [isAddEntityDrawerOpen, setIsAddEntityDrawerOpen] = useState(false)
+  const [editingEntity, setEditingEntity] = useState<RelatedEntity | null>(null)
+  const [isIncidentDrawerOpen, setIsIncidentDrawerOpen] = useState(false)
+  const [isClientEditDrawerOpen, setIsClientEditDrawerOpen] = useState(false)
   const canUpdate = user?.permission_names.includes('case.update') ?? false
   const canReviewDocuments = canUpdate && (user?.role_names.some(role => role === 'level_4' || role === 'level_5') ?? false)
+
+  const openEntityDrawer = (entity: RelatedEntity) => {
+    setSelectedEntity(entity)
+    setIsDrawerOpen(true)
+  }
 
   const reload = async (quiet = false) => {
     if (!quiet) setLoading(true)
@@ -93,341 +117,446 @@ export default function CaseWorkspacePage(props: Props) {
     }
   }
 
+  const clearNotice = useCallback(() => setNotice(null), [])
+
   if (loading) return <WorkspaceSkeleton onBack={onBack}/>
   if (!data) return <WorkspaceFailure error={error} onBack={onBack} onRetry={() => void reload()}/>
 
   const caseFile = data.case_file
-  const openEmploymentManagement = () => {
-    setTab('overview')
-    window.setTimeout(() => {
-      document.getElementById('client-employment-management')?.scrollIntoView({ block: 'start' })
-    }, 0)
-  }
   const dialogTitle: Record<DialogKind, string> = {
     task: 'タスクを追加', deadline: '期限を追加',
     party: '関係者を追加', activity: '連絡・イベントを記録',
   }
 
   return <main className="dc-preview cm-page">
-    <div className="cm-backbar">
-      <button type="button" onClick={onBack} className="cm-back-button">
-        <ArrowLeft size={15}/><span>{t('cases.workspace.backToList')}</span>
+    <div className="cm-ws-backbar">
+      <button type="button" onClick={onBack} className="cm-ws-backlink" aria-label="戻る">
+        <ArrowLeft size={17} className="cm-ws-backlink-icon" />
+        <span>戻る</span>
       </button>
+      <span className="cm-ws-breadcrumb-sep">&gt;</span>
+      <span className="cm-ws-breadcrumb-current">案件詳細</span>
     </div>
 
-    {(error || notice) && <div className={`cm-alert-banner ${error ? 'is-error' : 'is-success'}`}>{error ?? notice}</div>}
+    {error && <div className="cm-alert-banner is-error">{error}</div>}
+    {notice && <SuccessToast key={notice} message={notice} onDismiss={clearNotice} />}
 
     <div className="cm-workspace-shell">
       <WorkspaceHeader
         caseFile={caseFile}
         canUpdate={canUpdate}
-        onEdit={canUpdate ? onEdit : undefined}
-        onOpenEmployment={openEmploymentManagement}
+        onEdit={canUpdate ? () => setIsClientEditDrawerOpen(true) : undefined}
+        onSelectEntity={openEntityDrawer}
       />
 
-      <nav className="cm-command-rail" aria-label={t('cases.workspace.ariaLabel')} role="tablist">
-        {tabs.map(({ id, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            className={`cm-rail-tab ${tab === id ? 'is-active' : ''}`}
-            onClick={() => setTab(id)}
-            aria-selected={tab === id}
-            aria-current={tab === id ? 'page' : undefined}
-          >
-            <Icon size={15} className="cm-rail-icon"/>
-            <span>{t(`cases.tabs.${id}`)}</span>
-          </button>
-        ))}
-      </nav>
+      <div className="cm-ws-tab-strip">
+        <nav className="cm-command-rail cm-ws-tab-rail" aria-label={t('cases.workspace.ariaLabel')} role="tablist">
+          {tabs.map(({ id, icon: Icon }, index) => {
+            const isActive = tab === id
+            const showSeparator = index > 0 && !isActive && tab !== tabs[index - 1].id
+            return (
+              <Fragment key={id}>
+                {showSeparator && <span className="cm-tab-separator" aria-hidden="true" />}
+                <button
+                  type="button"
+                  role="tab"
+                  className={`cm-rail-tab cm-ws-tab ${isActive ? 'is-active is-selected' : ''}`}
+                  onClick={() => setTab(id)}
+                  aria-selected={isActive}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  <Icon size={19} className="cm-rail-icon cm-ws-tab-icon"/>
+                  <span className="cm-ws-tab-label">{t(`cases.tabs.${id}`)}</span>
+                  {isActive && <span className="cm-ws-tab-indicator" aria-hidden="true" />}
+                </button>
+              </Fragment>
+            )
+          })}
+        </nav>
+      </div>
 
       <div className="cm-tab-content">
         {tab === 'collection' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingCollection')}</p>}><DocumentCollectionPanel key={caseId} caseId={caseId} initialSelectedId={initialCollectionItemId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onHistory={() => setTab('timeline')} onBack={onBack} onChanged={() => void reload(true)} /></Suspense>}
-        {tab === 'overview' && <OverviewPanel caseFile={caseFile} summary={data.summary} canUpdate={canUpdate} onEmploymentChanged={() => reload(true)} onOpenTab={setTab}/>}
-        {tab === 'documents' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingDocuments')}</p>}><RequiredDocumentsPanel key={caseId} caseId={caseId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onCandidates={() => setTab('collection')} onHistory={() => setTab('timeline')} onChanged={() => void reload(true)}/></Suspense>}
-        {tab === 'tasks' && <TasksPanel tasks={caseFile.case_tasks} canUpdate={canUpdate} working={working} onAdd={() => setDialog('task')} onStatus={(task, status) => void run(() => caseWorkspaceApi.updateTask(caseId, task.id, { status }), 'タスクを更新しました。')} onDelete={(task) => confirmDelete(task.title) && void run(() => caseWorkspaceApi.deleteTask(caseId, task.id), 'タスクを削除しました。')}/>}
-        {tab === 'deadlines' && <DeadlinesPanel deadlines={caseFile.deadlines} canUpdate={canUpdate} working={working} onAdd={() => setDialog('deadline')} onComplete={(deadline) => void run(() => caseWorkspaceApi.updateDeadline(caseId, deadline.id, { status: deadline.status === 'completed' ? 'open' : 'completed' }), '期限の状態を更新しました。')} onDelete={(deadline) => confirmDelete(deadline.title) && void run(() => caseWorkspaceApi.deleteDeadline(caseId, deadline.id), '期限を削除しました。')}/>}
-        {tab === 'parties' && <PartiesPanel client={caseFile.client} parties={caseFile.parties} canUpdate={canUpdate} onAdd={() => setDialog('party')} onDelete={(party) => confirmDelete(party.name) && void run(() => caseWorkspaceApi.deleteParty(caseId, party.id), '関係者を削除しました。')}/>}
-        {tab === 'timeline' && <TimelinePanel activities={caseFile.activities} canUpdate={canUpdate} onAdd={() => setDialog('activity')}/>}
+        {tab === 'overview' && (
+          <OverviewPanel
+            caseFile={caseFile}
+            summary={data.summary}
+            canUpdate={canUpdate}
+            onOpenTab={setTab}
+            onSelectEntity={openEntityDrawer}
+            onOpenAddEntity={() => { setEditingEntity(null); setIsAddEntityDrawerOpen(true) }}
+            onEditIncident={() => setIsIncidentDrawerOpen(true)}
+          />
+        )}
+        {tab === 'documents' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingDocuments')}</p>}><RequiredDocumentsPanel key={caseId} caseId={caseId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities ?? []} onCandidates={() => setTab('collection')} onHistory={() => setTab('timeline')} onChanged={() => void reload(true)}/></Suspense>}
+        {tab === 'tasks' && <TasksPanel tasks={caseFile.case_tasks ?? []} canUpdate={canUpdate} working={working} onAdd={() => setDialog('task')} onStatus={(task, status) => void run(() => caseWorkspaceApi.updateTask(caseId, task.id, { status }), 'タスクを更新しました。')} onDelete={(task) => confirmDelete(task.title) && void run(() => caseWorkspaceApi.deleteTask(caseId, task.id), 'タスクを削除しました。')}/>}
+        {tab === 'deadlines' && <DeadlinesPanel deadlines={caseFile.deadlines ?? []} canUpdate={canUpdate} working={working} onAdd={() => setDialog('deadline')} onComplete={(deadline) => void run(() => caseWorkspaceApi.updateDeadline(caseId, deadline.id, { status: deadline.status === 'completed' ? 'open' : 'completed' }), '期限の状態を更新しました。')} onDelete={(deadline) => confirmDelete(deadline.title) && void run(() => caseWorkspaceApi.deleteDeadline(caseId, deadline.id), '期限を削除しました。')}/>}
+        {tab === 'parties' && <PartiesPanel caseFile={caseFile} canUpdate={canUpdate} onAdd={() => { setEditingEntity(null); setIsAddEntityDrawerOpen(true) }} onSelectEntity={openEntityDrawer} onDelete={(party) => confirmDelete(party.name) && void run(() => caseWorkspaceApi.deleteParty(caseId, party.id), '関係者を削除しました。')}/>}
+        {tab === 'timeline' && <TimelinePanel activities={caseFile.activities ?? []} canUpdate={canUpdate} onAdd={() => setDialog('activity')}/>}
       </div>
     </div>
 
     {dialog && <WorkspaceDialog title={dialogTitle[dialog]} working={working} onClose={() => !working && setDialog(null)}>
       <CreateItemForm kind={dialog} working={working} onSubmit={(payload) => void run(() => createItem(dialog, caseId, payload), '保存しました。')}/>
     </WorkspaceDialog>}
+
+    <RelatedEntityDrawer
+      entity={selectedEntity}
+      isOpen={isDrawerOpen}
+      onClose={() => setIsDrawerOpen(false)}
+      lastUpdated={selectedEntity?.updatedAt}
+      onEdit={canUpdate && !selectedEntity?.originalEmploymentId ? (entity) => {
+        setIsDrawerOpen(false)
+        setEditingEntity(entity)
+        setIsAddEntityDrawerOpen(true)
+      } : undefined}
+    />
+
+    <RelatedEntityAddDrawer
+      isOpen={isAddEntityDrawerOpen}
+      onClose={() => { setIsAddEntityDrawerOpen(false); setEditingEntity(null) }}
+      caseFile={caseFile}
+      initialEntity={editingEntity}
+      onAdd={async (newEntity) => {
+        const isEmploymentRelation = ['current_employer', 'former_employer', 'dispatch_company', 'dispatch_destination'].includes(newEntity.relationType)
+        const partyType = newEntity.relationType === 'opponent_company' ? 'opponent'
+          : newEntity.kind === 'company' ? 'employer'
+          : newEntity.kind === 'person' ? 'opponent'
+          : newEntity.kind === 'insurer' ? 'insurer' : 'other'
+        const payload = {
+          party_type: partyType,
+          entity_type: newEntity.kind,
+          relation_type: newEntity.relationType,
+          relation_status: isEmploymentRelation ? (newEntity.isCurrent ? 'current' : 'past') : null,
+          relationship: newEntity.relationRoleLabel,
+          name: newEntity.name,
+          organization: newEntity.organizationName || null,
+          address: newEntity.address || null,
+          phone: newEntity.phone || null,
+          email: newEntity.email || null,
+          contact_person: newEntity.contactPerson || null,
+          reference_number: newEntity.referenceNumber || newEntity.claimNumber || null,
+          start_date: isEmploymentRelation ? (newEntity.startDate || null) : null,
+          end_date: isEmploymentRelation ? (newEntity.endDate || null) : null,
+          is_current: isEmploymentRelation ? (newEntity.isCurrent ?? null) : null,
+          metadata: newEntity.metadata || null,
+          notes: newEntity.notes || null,
+        }
+        if (editingEntity?.originalPartyId) {
+          await caseWorkspaceApi.updateParty(caseId, editingEntity.originalPartyId, payload)
+        } else {
+          await caseWorkspaceApi.createParty(caseId, payload)
+        }
+        await reload(true)
+        setNotice(editingEntity
+          ? `関係先「${newEntity.name}」を更新しました。`
+          : `関係先「${newEntity.name}」を追加しました。`)
+      }}
+    />
+
+    <IncidentSummaryEditDrawer
+      isOpen={isIncidentDrawerOpen}
+      onClose={() => setIsIncidentDrawerOpen(false)}
+      caseFile={caseFile}
+      onSave={async (values) => {
+        await caseWorkspaceApi.updateIncident(caseId, {
+          incident_summary: values.summary || null,
+          occurred_at: values.incidentDate
+            ? new Date(`${values.incidentDate}T${values.incidentTime || '00:00'}`).toISOString() : null,
+          injury_details: values.injuryContent || null,
+          incident_location: values.location || null,
+          current_status_memo: values.notes || null,
+        })
+        await reload(true)
+        setNotice('事故・事件概要を更新しました。')
+      }}
+    />
+
+    <ClientEditDrawer
+      isOpen={isClientEditDrawerOpen}
+      onClose={() => setIsClientEditDrawerOpen(false)}
+      caseFile={caseFile}
+      onSave={async (values) => {
+        const clientId = caseFile.client?.id
+        if (!clientId) throw new Error('依頼者情報が見つかりません。')
+        await caseWorkspaceApi.updateClient(clientId, {
+          name: values.name || null,
+          name_kana: values.name_kana || null,
+          birth_date: values.birth_date || null,
+          client_type: values.client_type,
+          phone: values.phone || null,
+          email: values.email || null,
+          address: values.address || null,
+        })
+        await reload(true)
+        setNotice('依頼者情報を更新しました。')
+      }}
+    />
   </main>
 }
 
-function WorkspaceHeader({ caseFile, canUpdate, onEdit, onOpenEmployment }: { caseFile: CaseWorkspace; canUpdate: boolean; onEdit?: () => void; onOpenEmployment: () => void }) {
-  const { t } = useTranslation()
-  const code = caseFile.reference_number || `CASE-${String(caseFile.id).padStart(6, '0')}`
+function OverviewPanel({
+  caseFile,
+  summary,
+  canUpdate,
+  onOpenTab,
+  onSelectEntity,
+  onOpenAddEntity,
+  onEditIncident,
+}: {
+  caseFile: CaseWorkspace
+  summary?: WorkspaceSummary | null
+  canUpdate: boolean
+  onOpenTab: (tab: WorkspaceTab) => void
+  onSelectEntity: (entity: RelatedEntity) => void
+  onOpenAddEntity?: () => void
+  onEditIncident?: () => void
+}) {
+  const deadlines = caseFile?.deadlines ?? []
+  const urgent = deadlines.filter((item) => item.status === 'open' && remainingDays(item.due_at) <= 7)
 
-  return (
-    <header className="cm-dossier-header">
-      <div className="cm-dh-top">
-        <div className="cm-dh-identity">
-          <div className="cm-dh-code-row">
-            <span className="cm-dh-code">{code}</span>
-            <span className="cm-dh-status-label">ACTIVE CASE</span>
-          </div>
-          <h1 className="cm-dh-client-name">{caseFile.client.name}</h1>
-        </div>
-
-        <div className="cm-dh-ops-box">
-          <div className="cm-dh-timestamps">
-            <div className="cm-dh-ts-row">
-              <span className="cm-dh-ts-label">{t('cases.workspace.createdAt')}</span>
-              <time className="cm-dh-ts-val">{caseFile.created_at ? dateTime(caseFile.created_at) : '—'}</time>
-            </div>
-            <div className="cm-dh-ts-row">
-              <span className="cm-dh-ts-label">{t('cases.workspace.updatedAt')}</span>
-              <time className="cm-dh-ts-val">{dateTime(caseFile.updated_at)}</time>
-            </div>
-          </div>
-          {onEdit && (
-            <button type="button" className="cm-dh-edit-button" onClick={onEdit}>
-              <Pencil size={13} />
-              <span>{t('cases.workspace.edit')}</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="cm-dh-contact-rail">
-        <span className="cm-dh-contact-item">
-          <Phone size={16} className="cm-dh-contact-icon cm-dh-contact-icon--phone" />
-          <span className="cm-dh-contact-val">{caseFile.client.phone || t('cases.workspace.notRegistered')}</span>
-        </span>
-        <span className="cm-dh-contact-item" title={caseFile.client.email || undefined}>
-          <Mail size={16} className="cm-dh-contact-icon cm-dh-contact-icon--mail" />
-          <span className="cm-dh-contact-val">{caseFile.client.email || t('cases.workspace.notRegistered')}</span>
-        </span>
-        <span className="cm-dh-contact-item">
-          <Globe size={16} className="cm-dh-contact-icon cm-dh-contact-icon--globe" />
-          <span className="cm-dh-contact-val">{caseFile.client.nationality || t('cases.workspace.notRegistered')}</span>
-        </span>
-        <span className="cm-dh-contact-item cm-dh-contact-item--address" title={caseFile.client.address || undefined}>
-          <MapPin size={16} className="cm-dh-contact-icon cm-dh-contact-icon--pin" />
-          <span className="cm-dh-contact-val">{caseFile.client.address || t('cases.workspace.notRegistered')}</span>
-        </span>
-      </div>
-
-      <EmploymentSummary
-        records={caseFile.client.employments ?? []}
-        canUpdate={canUpdate}
-        onOpen={onOpenEmployment}
-      />
-    </header>
-  )
-}
-
-function EmploymentSummary({ records, canUpdate, onOpen }: { records: ClientEmployment[]; canUpdate: boolean; onOpen: () => void }) {
-  const current = records.find((item) => item.is_current)
-    ?? records.find((item) => item.employment_status === 'employed' || item.employment_status === 'leave')
-  const pastCount = current ? records.filter((item) => item.id !== current.id).length : records.length
-
-  return (
-    <section className="cm-dh-employment" aria-labelledby="client-employment-summary-title">
-      <div className="cm-dh-employment-heading">
-        <BriefcaseBusiness size={16} aria-hidden="true" />
-        <span id="client-employment-summary-title">勤務先・職歴</span>
-      </div>
-      <div className="cm-dh-employment-primary">
-        <strong>{current?.company_name ?? '現在の勤務先は未登録'}</strong>
-        <span>{current?.company_address ?? '勤務先情報を確認してください'}</span>
-      </div>
-      <div className="cm-dh-employment-period">
-        <span>在籍期間</span>
-        <strong>{current ? employmentPeriod(current) : '—'}</strong>
-      </div>
-      {pastCount > 0 && <span className="cm-dh-employment-count">過去 {pastCount}件</span>}
-      <button type="button" className="cm-dh-employment-action" onClick={onOpen}>
-        <span>{canUpdate ? '編集' : '一覧を見る'}</span>
-        <ChevronRight size={14} aria-hidden="true" />
-      </button>
-    </section>
-  )
-}
-
-function employmentPeriod(item: ClientEmployment) {
-  if (!item.start_date && item.is_current) return '現在勤務中'
-  if (!item.start_date && !item.end_date) return '期間未登録'
-  const start = item.start_date ? shortDate(item.start_date) : '開始日未登録'
-  const end = item.is_current ? '現在勤務中' : item.end_date ? shortDate(item.end_date) : '終了日未登録'
-  return `${start} 〜 ${end}`
-}
-
-function OverviewPanel({ caseFile, summary, canUpdate, onEmploymentChanged, onOpenTab }: { caseFile: CaseWorkspace; summary: WorkspaceSummary; canUpdate: boolean; onEmploymentChanged: () => void | Promise<void>; onOpenTab: (tab: WorkspaceTab) => void }) {
-  const { t } = useTranslation()
-  const urgent = caseFile.deadlines.filter((item) => item.status === 'open' && remainingDays(item.due_at) <= 7)
-
-  const docs = (caseFile.documents ?? []) as Array<WorkspaceDocument & { necessity_status?: string }>
+  const docs = (caseFile?.documents ?? []) as Array<WorkspaceDocument & { necessity_status?: string }>
   const undeterminedCount = docs.filter((d) => d.necessity_status === 'undetermined' || (!d.necessity_status && d.requirement_level === 'conditional')).length
   const requiredCount = docs.filter((d) => d.necessity_status === 'required' || (!d.necessity_status && d.requirement_level === 'required')).length
 
+  const baseEntities = buildRelatedEntities(caseFile)
+  const relatedEntities = baseEntities
+
+  const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({
+    incident: true,
+    entities: true,
+    quick: true,
+    workflow: true,
+    history: true,
+  })
+
+  const toggleAccordion = (key: string) => {
+    setOpenAccordions((prev) => ({ ...prev, [key]: !prev[key] }))
+  }
+
   return (
-    <div className="cm-overview-dashboard">
-      {/* 案件の現在地 */}
-      <section className="cm-sec-block">
-        <div className="cm-sec-header">
-          <h2 className="cm-sec-title">
-            <Compass size={16} className="cm-sec-title-icon cm-sec-title-icon--compass" />
-            <span>案件の現在地</span>
-          </h2>
+    <div className="space-y-6">
+      {/* Desktop 2-Column Command Layout */}
+      <div className="hidden lg:grid cm-ws-overview-layout">
+        <div className="cm-ws-left-col">
+          <IncidentSummaryCard
+            caseFile={caseFile}
+            onEdit={canUpdate ? onEditIncident : undefined}
+          />
+          <RelatedEntitiesSection
+            entities={relatedEntities}
+            onSelectEntity={onSelectEntity}
+            onAddEntity={canUpdate ? onOpenAddEntity : undefined}
+          />
         </div>
-        <div className="cm-instrument-panel">
-          <div className="cm-inst-col">
-            <div className="cm-inst-circle cm-inst-circle--task">
-              <ListChecks size={20} className="cm-inst-circle-icon" />
-            </div>
-            <div className="cm-inst-content">
-              <span className="cm-inst-label">{t('cases.workspace.overview.openTasks')}</span>
-              <div className="cm-inst-metric">
-                <span className="cm-inst-val">{summary.open_tasks}</span>
-                <span className="cm-inst-unit">件</span>
-              </div>
-              <div className="cm-inst-sub">{t('cases.workspace.overview.openTasksDetail')}</div>
-            </div>
-          </div>
 
-          <div className={`cm-inst-col ${urgent.length > 0 ? 'is-warning' : ''}`}>
-            <div className="cm-inst-circle cm-inst-circle--risk">
-              <AlertTriangle size={20} className="cm-inst-circle-icon" />
-            </div>
-            <div className="cm-inst-content">
-              <span className="cm-inst-label">{t('cases.workspace.overview.deadlineRisk')}</span>
-              <div className="cm-inst-metric">
-                <span className="cm-inst-val">{urgent.length}</span>
-                <span className="cm-inst-unit">件</span>
-              </div>
-              <div className="cm-inst-sub">{t('cases.workspace.overview.deadlineRiskDetail')}</div>
-            </div>
-          </div>
-
-          <div className="cm-inst-col">
-            <div className="cm-inst-circle cm-inst-circle--deadline">
-              <Clock3 size={20} className="cm-inst-circle-icon" />
-            </div>
-            <div className="cm-inst-content">
-              <span className="cm-inst-label">{t('cases.workspace.overview.nextDeadline')}</span>
-              <div className="cm-inst-metric">
-                <span className={`cm-inst-date ${!summary.next_deadline ? 'is-empty' : ''}`}>
-                  {summary.next_deadline ? shortDate(summary.next_deadline) : t('cases.workspace.notSet')}
-                </span>
-              </div>
-              <div className="cm-inst-sub">{t('cases.workspace.overview.nextDeadlineDetail')}</div>
-            </div>
-          </div>
+        <div className="cm-ws-right-col">
+          <QuickInfoSidebar summary={summary} urgentCount={urgent.length} />
+          <WorkflowLinksSection
+            undeterminedCount={undeterminedCount}
+            requiredCount={requiredCount}
+            onOpenTab={onOpenTab}
+          />
         </div>
-      </section>
 
-      {/* 資料ワークフロー */}
-      <section className="cm-sec-block">
-        <div className="cm-sec-header">
-          <h2 className="cm-sec-title">
-            <Layers size={16} className="cm-sec-title-icon cm-sec-title-icon--layers" />
-            <span>資料ワークフロー</span>
-          </h2>
+        <div className="cm-ws-full-col">
+          <RecentHistoryCard
+            activities={caseFile.activities}
+            onViewAll={() => onOpenTab('timeline')}
+          />
         </div>
-        <div className="cm-workflow-row">
-          <button type="button" onClick={() => onOpenTab('collection')} className="cm-wf-card">
-            <div className="cm-wf-icon-box cm-wf-icon-box--collection">
-              <Folder size={20} className="cm-wf-icon" />
-            </div>
-            <div className="cm-wf-content">
-              <h3 className="cm-wf-title">{t('cases.tabs.collection')}</h3>
-              <p className="cm-wf-desc">{t('cases.workspace.overview.collectionHint')}</p>
-              <div className="cm-wf-pills">
-                <span className="cm-wf-pill is-neutral">未判定 <strong className="cm-wf-pill-num">{undeterminedCount}</strong></span>
-                <span className="cm-wf-pill is-indigo">必要 <strong className="cm-wf-pill-num">{requiredCount}</strong></span>
-              </div>
-            </div>
-            <div className="cm-wf-action">
-              <span>資料収集へ</span>
-              <ArrowRight size={14} className="cm-wf-arrow" />
-            </div>
-          </button>
+      </div>
 
-          <button type="button" onClick={() => onOpenTab('documents')} className="cm-wf-card">
-            <div className="cm-wf-icon-box cm-wf-icon-box--documents">
-              <FileText size={20} className="cm-wf-icon" />
-            </div>
-            <div className="cm-wf-content">
-              <h3 className="cm-wf-title">{t('cases.tabs.documents')}</h3>
-              <p className="cm-wf-desc">{t('cases.workspace.overview.documentsHint')}</p>
-              <div className="cm-wf-pills">
-                <span className="cm-wf-pill is-indigo">必要 <strong className="cm-wf-pill-num">{requiredCount}件</strong></span>
-              </div>
-            </div>
-            <div className="cm-wf-action">
-              <span>必要資料へ</span>
-              <ArrowRight size={14} className="cm-wf-arrow" />
-            </div>
-          </button>
-        </div>
-      </section>
+      {/* Mobile Accordion Layout (Reusing the exact same components) */}
+      <div className="lg:hidden space-y-2">
+        <MobileAccordionSection
+          title="事故・事件概要"
+          icon={Shield}
+          isOpen={openAccordions.incident}
+          onToggle={() => toggleAccordion('incident')}
+        >
+          <IncidentSummaryCard
+            caseFile={caseFile}
+            onEdit={canUpdate ? onEditIncident : undefined}
+          />
+        </MobileAccordionSection>
 
-      {/* 最近の履歴 */}
-      <section className="cm-sec-block">
-        <div className="cm-sec-header">
-          <h2 className="cm-sec-title">
-            <Clock3 size={16} className="cm-sec-title-icon cm-sec-title-icon--clock" />
-            <span>最近の履歴</span>
-          </h2>
-          <button type="button" className="cm-audit-all-btn" onClick={() => onOpenTab('timeline')}>
-            <span>{t('cases.workspace.overview.viewAllHistory')}</span>
-            <ArrowRight size={14} />
-          </button>
-        </div>
-        <div className="cm-audit-panel">
-          <div className="cm-audit-table-head">
-            <span className="cm-audit-head-cell cm-audit-col-time">記録日時</span>
-            <span className="cm-audit-head-cell cm-audit-col-action">操作内容</span>
-            <span className="cm-audit-head-cell cm-audit-col-details">対象・変更詳細</span>
-            <span className="cm-audit-head-cell cm-audit-col-actor">担当者</span>
-          </div>
-          <div className="cm-audit-table-body">
-            {caseFile.activities.slice(0, 4).map((activity) => (
-              <RecentHistoryRow key={activity.id} activity={activity} />
-            ))}
-            {caseFile.activities.length === 0 && (
-              <div className="cm-audit-empty">{t('cases.workspace.overview.noHistory')}</div>
-            )}
-          </div>
-        </div>
-      </section>
+        <MobileAccordionSection
+          title="関係先"
+          icon={Users}
+          isOpen={openAccordions.entities}
+          onToggle={() => toggleAccordion('entities')}
+        >
+          <RelatedEntitiesSection
+            entities={relatedEntities}
+            onSelectEntity={onSelectEntity}
+            onAddEntity={canUpdate ? onOpenAddEntity : undefined}
+          />
+        </MobileAccordionSection>
 
-      <ClientEmploymentPanel clientId={caseFile.client.id} records={caseFile.client.employments ?? []} canUpdate={canUpdate} onChanged={onEmploymentChanged}/>
+        <MobileAccordionSection
+          title="クイック情報"
+          icon={CheckCircle2}
+          isOpen={openAccordions.quick}
+          onToggle={() => toggleAccordion('quick')}
+        >
+          <QuickInfoSidebar summary={summary} urgentCount={urgent.length} />
+        </MobileAccordionSection>
+
+        <MobileAccordionSection
+          title="資料ワークフロー"
+          icon={Folder}
+          isOpen={openAccordions.workflow}
+          onToggle={() => toggleAccordion('workflow')}
+        >
+          <WorkflowLinksSection
+            undeterminedCount={undeterminedCount}
+            requiredCount={requiredCount}
+            onOpenTab={onOpenTab}
+          />
+        </MobileAccordionSection>
+
+        <MobileAccordionSection
+          title="最近の履歴"
+          icon={Clock3}
+          isOpen={openAccordions.history}
+          onToggle={() => toggleAccordion('history')}
+        >
+          <RecentHistoryCard
+            activities={caseFile.activities}
+            onViewAll={() => onOpenTab('timeline')}
+          />
+        </MobileAccordionSection>
+      </div>
     </div>
   )
 }
 
-function RecentHistoryRow({ activity }: { activity: CaseActivity }) {
-  const { t } = useTranslation()
-  const changedFields = Object.keys(activity.metadata?.changes ?? {}).map((field) => historyFieldLabel(field, t)).filter(Boolean)
-  const relatedDocument = activity.metadata?.event === 'document_collection.updated' ? activity.content : null
+function SuccessToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  const [closing, setClosing] = useState(false)
+  const autoDismissTimer = useRef<number | null>(null)
+  const closeTimer = useRef<number | null>(null)
 
-  return (
-    <article className="cm-audit-row">
-      <div className="cm-audit-cell cm-audit-col-time">
-        <FileText size={14} className="cm-audit-file-icon" />
-        <time dateTime={activity.occurred_at}>{dateTime(activity.occurred_at)}</time>
-      </div>
-      <div className="cm-audit-cell cm-audit-col-action">
-        <span className="cm-audit-action-title">{activity.title}</span>
-      </div>
-      <div className="cm-audit-cell cm-audit-col-details">
-        {relatedDocument && <span className="cm-audit-tag-target">対象: {relatedDocument}</span>}
-        {changedFields.length > 0 && <span className="cm-audit-tag-changes">変更: {changedFields.join(' · ')}</span>}
-        {!relatedDocument && changedFields.length === 0 && <span className="cm-audit-tag-none">—</span>}
-      </div>
-      <div className="cm-audit-cell cm-audit-col-actor">
-        <span className="cm-audit-actor-name">
-          {activity.created_by_employee?.full_name ?? t('cases.workspace.overview.historySystem')}
+  const dismiss = useCallback(() => {
+    if (autoDismissTimer.current !== null) window.clearTimeout(autoDismissTimer.current)
+    if (closing) return
+    setClosing(true)
+    closeTimer.current = window.setTimeout(onDismiss, 170)
+  }, [closing, onDismiss])
+
+  useEffect(() => {
+    setClosing(false)
+    autoDismissTimer.current = window.setTimeout(() => {
+      setClosing(true)
+      closeTimer.current = window.setTimeout(onDismiss, 170)
+    }, 6000)
+
+    return () => {
+      if (autoDismissTimer.current !== null) window.clearTimeout(autoDismissTimer.current)
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current)
+    }
+  }, [message, onDismiss])
+
+  return createPortal(
+    <div className="cm-success-toast-region" aria-live="polite" aria-atomic="true">
+      <div className={`cm-success-toast ${closing ? 'is-closing' : ''}`} role="status">
+        <span className="cm-success-toast-icon" aria-hidden="true">
+          <CheckCircle2 size={17} />
         </span>
+        <span className="cm-success-toast-message">{message}</span>
+        <button type="button" className="cm-success-toast-close" onClick={dismiss} aria-label="通知を閉じる">
+          <X size={16} aria-hidden="true" />
+        </button>
+        <span className="cm-success-toast-progress" aria-hidden="true" />
       </div>
-    </article>
+    </div>,
+    document.body,
+  )
+}
+
+function WorkflowLinksSection({
+  undeterminedCount,
+  requiredCount,
+  onOpenTab,
+}: {
+  undeterminedCount: number
+  requiredCount: number
+  onOpenTab: (tab: WorkspaceTab) => void
+}) {
+  return (
+    <section className="cm-ws-card cm-ws-workflow-card">
+      <div className="cm-ws-card-header cm-ws-workflow-header">
+        <div className="cm-ws-card-title-wrap">
+          <div className="cm-ws-title-iconbox">
+            <Folder size={16} />
+          </div>
+          <h2 className="cm-ws-card-title">資料ワークフロー</h2>
+        </div>
+      </div>
+      <div className="cm-ws-workflow-list">
+        <button
+          type="button"
+          onClick={() => onOpenTab('collection')}
+          className="cm-ws-workflow-link"
+        >
+          <div className="cm-ws-workflow-link-main">
+            <div className="cm-ws-workflow-link-title">資料収集</div>
+            <div className="cm-ws-workflow-link-sub">
+              未判定 {undeterminedCount}件 · 必要 {requiredCount}件
+            </div>
+          </div>
+          <ArrowRight size={15} className="cm-ws-workflow-link-arrow" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpenTab('documents')}
+          className="cm-ws-workflow-link"
+        >
+          <div className="cm-ws-workflow-link-main">
+            <div className="cm-ws-workflow-link-title">必要資料一覧</div>
+            <div className="cm-ws-workflow-link-sub">
+              必要書類 {requiredCount}件
+            </div>
+          </div>
+          <ArrowRight size={15} className="cm-ws-workflow-link-arrow" />
+        </button>
+      </div>
+    </section>
+  )
+}
+
+function MobileAccordionSection({
+  title,
+  icon: Icon,
+  isOpen,
+  onToggle,
+  children,
+}: {
+  title: string
+  icon: typeof Shield
+  isOpen: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <div className="cm-ws-accordion-item">
+      <button
+        type="button"
+        className="cm-ws-accordion-btn"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+      >
+        <div className="flex items-center gap-2">
+          <Icon size={16} className="text-blue-600 dark:text-blue-400" />
+          <span>{title}</span>
+        </div>
+        <ChevronRight
+          size={16}
+          className={`transition-transform duration-200 text-slate-400 ${isOpen ? 'rotate-90' : ''}`}
+        />
+      </button>
+      {isOpen && <div className="cm-ws-accordion-content pt-3">{children}</div>}
+    </div>
   )
 }
 
@@ -435,8 +564,233 @@ function TasksPanel({ tasks, canUpdate, working, onAdd, onStatus, onDelete }: { 
 
 function DeadlinesPanel({ deadlines, canUpdate, working, onAdd, onComplete, onDelete }: { deadlines: CaseDeadline[]; canUpdate: boolean; working: boolean; onAdd: () => void; onComplete: (deadline: CaseDeadline) => void; onDelete: (deadline: CaseDeadline) => void }) { return <><PanelToolbar title="期限管理" description="在留期限、提出期限、追加資料期限、時効を一元管理します。" actions={canUpdate && <button type="button" onClick={onAdd} className={primaryButton}><Plus size={16}/>期限を追加</button>}/><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{deadlines.map((deadline) => { const days = remainingDays(deadline.due_at); const isDone = deadline.status === 'completed'; return <article key={deadline.id} className={`border-l-4 rounded-lg border border-slate-200 bg-white p-4 dark:border-tm-border dark:bg-tm-surface-elevated ${isDone ? 'border-l-green-500' : days < 0 ? 'border-l-red-500' : days <= 7 ? 'border-l-amber-500' : 'border-l-blue-500'}`}><div className="flex items-start justify-between gap-3"><div><p className="text-xs text-slate-500">{deadlineTypeLabel(deadline.deadline_type)}</p><h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{deadline.title}</h3></div><PriorityBadge priority={deadline.priority}/></div><div className="mt-4 flex items-end justify-between"><div><p className="text-lg font-semibold text-slate-900 dark:text-white">{shortDate(deadline.due_at)}</p><p className={`mt-1 text-xs font-medium ${isDone ? 'text-green-600' : days < 0 ? 'text-red-600' : days <= 7 ? 'text-amber-600' : 'text-slate-500'}`}>{isDone ? '完了済み' : days < 0 ? `${Math.abs(days)}日超過` : `残り${days}日`}</p></div>{canUpdate && <div className="flex gap-1"><button type="button" disabled={working} onClick={() => onComplete(deadline)} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-500/10"><CheckCircle2 size={17}/></button><button type="button" onClick={() => onDelete(deadline)} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"><Trash2 size={16}/></button></div>}</div></article>})}{deadlines.length === 0 && <div className="md:col-span-2 xl:col-span-3"><EmptyRow text="期限はまだ登録されていません。"/></div>}</div></> }
 
-function PartiesPanel({ client, parties, canUpdate, onAdd, onDelete }: { client: CaseWorkspace['client']; parties: CaseParty[]; canUpdate: boolean; onAdd: () => void; onDelete: (party: CaseParty) => void }) { return <><PanelToolbar title="関係者" description="依頼者、家族、勤務先、相手方、保険会社、医療機関を管理します。" actions={canUpdate && <button type="button" onClick={onAdd} className={primaryButton}><Plus size={16}/>関係者を追加</button>}/><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"><PartyCard name={client.name} type="依頼者" organization={client.client_type === 'corporate' ? client.name : null} phone={client.phone} email={client.email}/>{parties.map((party) => <PartyCard key={party.id} name={party.name} type={partyTypeLabel(party.party_type)} organization={party.organization} phone={party.phone} email={party.email} onDelete={canUpdate ? () => onDelete(party) : undefined}/>)}</div></> }
-function PartyCard({ name, type, organization, phone, email, onDelete }: { name: string; type: string; organization: string | null; phone: string | null; email: string | null; onDelete?: () => void }) { return <article className="rounded-lg border border-slate-200 bg-white p-4 dark:border-tm-border dark:bg-tm-surface-elevated"><div className="flex items-start justify-between"><div className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-indigo-500/15 dark:text-indigo-300"><UserRound size={18}/></span><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{name}</p><p className="text-xs text-slate-500">{type}{organization ? ` · ${organization}` : ''}</p></div></div>{onDelete && <button type="button" onClick={onDelete} className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"><Trash2 size={15}/></button>}</div><div className="mt-4 space-y-2 text-xs text-slate-500">{phone && <p className="flex items-center gap-2"><Phone size={14}/>{phone}</p>}{email && <p className="flex items-center gap-2 truncate"><Mail size={14}/>{email}</p>}{!phone && !email && <p>連絡先は未登録です。</p>}</div></article> }
+function getEntitySecondaryDescription(entity: RelatedEntity, originalParty?: CaseParty | null): string {
+  if (entity.relationType === 'current_employer') {
+    return '勤務先・現在の勤務先'
+  }
+  if (entity.relationType === 'former_employer') {
+    return '勤務先・過去の勤務先'
+  }
+  if (entity.relationType === 'dispatch_company') {
+    return '勤務先・派遣元会社'
+  }
+  if (entity.relationType === 'dispatch_destination') {
+    return '勤務先・派遣先会社'
+  }
+  if (entity.kind === 'police' || entity.relationType === 'police') {
+    return `その他・${entity.name}`
+  }
+  if (entity.kind === 'insurer' || entity.relationType === 'own_insurer' || entity.relationType === 'opponent_insurer') {
+    const side = entity.statusBadgeLabel === '本人側保険会社' || entity.insuranceSide === 'own' ? '本人側' : '相手方'
+    return `保険会社・${side}`
+  }
+  if (entity.relationType === 'opponent_company') {
+    return 'その他・加害者側会社'
+  }
+  if (originalParty?.party_type && originalParty.party_type !== 'other') {
+    const typeLabel = ({
+      client: '依頼者',
+      family: '家族',
+      employer: '勤務先',
+      opponent: '相手方',
+      insurer: '保険会社',
+      medical: '医療機関',
+      supporter: '支援者',
+    } as Record<string, string>)[originalParty.party_type] || 'その他'
+    return `${typeLabel}・${entity.relationRoleLabel || entity.name}`
+  }
+  return entity.organizationName || entity.relationshipDetail || entity.relationRoleLabel || '関係先'
+}
+
+function PartiesPanel({ caseFile, canUpdate, onAdd, onSelectEntity, onDelete }: { caseFile: CaseWorkspace; canUpdate: boolean; onAdd: () => void; onSelectEntity: (entity: RelatedEntity) => void; onDelete: (party: CaseParty) => void }) {
+  const entities = buildRelatedEntities(caseFile)
+  const client = caseFile.client
+  return (
+    <>
+      <PanelToolbar
+        title="関係者"
+        description="依頼者、家族、勤務先、相手方、保険会社、医療機関を管理します。"
+        actions={canUpdate && <button type="button" onClick={onAdd} className={primaryButton}><Plus size={16}/>関係者を追加</button>}
+      />
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {/* Pinned client card — always first */}
+        <PartiesEntityCard
+          roleLabel="依頼者"
+          roleTone="violet"
+          name={client.name || '氏名未登録'}
+          secondary={client.name_kana || '依頼者'}
+          phone={client.phone}
+          email={client.email}
+          kind="person"
+          canUpdate={canUpdate}
+        />
+        {/* Related entities derived from parties + employments */}
+        {entities.map((entity) => {
+          const originalParty = entity.originalPartyId
+            ? (caseFile.parties ?? []).find((p) => p.id === entity.originalPartyId) ?? null
+            : null
+          const canDelete = canUpdate && !!originalParty
+          const isOpponent = entity.relationType === 'opponent_insurer' || entity.statusBadgeLabel === '相手方保険会社' || entity.insuranceSide === 'opponent'
+          const accentBorder = entity.relationType === 'opponent_company' ? 'orange' : isOpponent ? 'amber' : undefined
+          const subRoleLabel = entity.relationType === 'opponent_company' ? '加害車両所有会社' : null
+
+          return (
+            <PartiesEntityCard
+              key={entity.id}
+              roleLabel={entity.statusBadgeLabel || entity.relationRoleLabel}
+              roleTone={entity.statusBadgeTone}
+              subRoleLabel={subRoleLabel}
+              name={entity.name}
+              secondary={getEntitySecondaryDescription(entity, originalParty)}
+              phone={entity.phone}
+              email={entity.email}
+              kind={entity.kind}
+              isOpponent={isOpponent}
+              accentBorder={accentBorder}
+              canUpdate={canUpdate}
+              onClick={() => onSelectEntity(entity)}
+              onDelete={canDelete && originalParty ? () => onDelete(originalParty) : undefined}
+            />
+          )
+        })}
+        {entities.length === 0 && (
+          <div className="md:col-span-2 xl:col-span-3">
+            <EmptyRow text="関係者はまだ登録されていません。" />
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+type PartiesEntityCardProps = {
+  roleLabel: string
+  roleTone?: import('./types').EntityBadgeTone
+  subRoleLabel?: string | null
+  name: string
+  secondary?: string | null
+  phone?: string | null
+  email?: string | null
+  kind: import('./types').EntityKind | 'insurance_company'
+  isOpponent?: boolean
+  accentBorder?: 'orange' | 'amber'
+  canUpdate?: boolean
+  onClick?: () => void
+  onDelete?: () => void
+}
+
+function PartiesEntityCard({
+  roleLabel,
+  roleTone,
+  subRoleLabel,
+  name,
+  secondary,
+  phone,
+  email,
+  kind,
+  isOpponent = false,
+  accentBorder,
+  canUpdate = false,
+  onClick,
+  onDelete,
+}: PartiesEntityCardProps) {
+  const iconEl = (() => {
+    switch (kind) {
+      case 'person': return <UserRound size={19} />
+      case 'organization': return <Users size={19} />
+      case 'insurer': return isOpponent ? <Shield size={19} /> : <ShieldCheck size={19} />
+      case 'police': return <Shield size={19} />
+      default: return <Building2 size={19} />
+    }
+  })()
+
+  const tone = roleTone ?? 'slate'
+  const accentClass = accentBorder === 'orange' ? ' cw-pt-card--accent-orange' : accentBorder === 'amber' ? ' cw-pt-card--accent-amber' : ''
+
+  return (
+    <article
+      className={`cw-pt-card${accentClass}${onClick ? ' cw-pt-card--clickable' : ''}`}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-label={onClick ? `${name} の詳細を開く` : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } } : undefined}
+    >
+      {/* Top area */}
+      <div className="cw-pt-top-row">
+        <div className={`cw-pt-icon-tile cw-pt-icon-tile--${tone}`}>
+          {iconEl}
+        </div>
+
+        <div className="cw-pt-center-col">
+          <div className="cw-pt-role-row">
+            <span className={`cw-pt-role-pill cw-pt-role-pill--${tone}`}>
+              <span className={`cw-pt-pill-dot cw-pt-pill-dot--${tone}`} />
+              {roleLabel}
+            </span>
+            {subRoleLabel && (
+              <span className="cw-pt-sub-tag">
+                {subRoleLabel}
+              </span>
+            )}
+          </div>
+
+          <p className="cw-pt-name" title={name}>{name}</p>
+
+          {secondary && <p className="cw-pt-secondary" title={secondary}>{secondary}</p>}
+        </div>
+
+        <div className="cw-pt-actions">
+          <button
+            type="button"
+            className="cw-pt-action-btn"
+            onClick={(e) => { e.stopPropagation(); onClick?.() }}
+            aria-label={`${name} の詳細を表示`}
+            title="詳細を表示"
+          >
+            <MoreHorizontal size={14} />
+          </button>
+          {canUpdate && (
+            <button
+              type="button"
+              className={`cw-pt-action-btn cw-pt-action-btn--delete ${!onDelete ? 'opacity-40 cursor-not-allowed' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (onDelete) {
+                  onDelete()
+                } else {
+                  window.alert('依頼者データは削除できません。')
+                }
+              }}
+              aria-label={`${name}を削除`}
+              title={onDelete ? `${name}を削除` : '依頼者データは削除できません'}
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom area: Contact row */}
+      {(phone || email) && (
+        <div className="cw-pt-contacts">
+          {phone && (
+            <span className="cw-pt-contact-item">
+              <Phone size={12.5} className="cw-pt-contact-icon" />
+              <span>{phone}</span>
+            </span>
+          )}
+          {email && (
+            <span className="cw-pt-contact-item">
+              <Mail size={12.5} className="cw-pt-contact-icon" />
+              <span className="truncate">{email}</span>
+            </span>
+          )}
+        </div>
+      )}
+    </article>
+  )
+}
 
 function TimelinePanel({ activities, canUpdate, onAdd }: { activities: CaseActivity[]; canUpdate: boolean; onAdd: () => void }) { return <><PanelToolbar title="連絡・イベント履歴" description="電話、メール、面談、提出、事故、通院などを時系列で残します。" actions={canUpdate && <button type="button" onClick={onAdd} className={primaryButton}><Plus size={16}/>履歴を追加</button>}/><div className="relative ml-2 space-y-0 before:absolute before:bottom-5 before:left-4 before:top-5 before:w-px before:bg-slate-200 dark:before:bg-white/[0.055]">{activities.map((activity) => <article key={activity.id} className="relative flex gap-4 pb-5"><span className="relative z-10 mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-4 border-white bg-blue-100 text-blue-700 dark:border-[var(--tm-surface)] dark:bg-indigo-500/20 dark:text-indigo-300"><MessageSquareText size={13}/></span><div className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-tm-border dark:bg-tm-surface-elevated"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-medium text-blue-600 dark:text-indigo-300">{activityTypeLabel(activity.activity_type)}{activity.channel ? ` · ${channelLabel(activity.channel)}` : ''}</p><h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{activity.title}</h3></div><time className="text-xs text-slate-400">{dateTime(activity.occurred_at)}</time></div>{activity.content && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600 dark:text-slate-300">{activity.content}</p>}<p className="mt-2 text-xs text-slate-400">{activity.created_by_employee?.full_name ?? 'システム'}</p></div></article>)}{activities.length === 0 && <EmptyRow text="連絡・イベント履歴はまだありません。"/>}</div></> }
 
@@ -469,20 +823,9 @@ function confirmDelete(name: string) { return window.confirm(`「${name}」を�
 function apiError(error: unknown, fallback: string) { if (!axios.isAxiosError(error)) return fallback; const validation = error.response?.data?.errors as Record<string, string[]> | undefined; return validation ? Object.values(validation).flat()[0] : error.response?.data?.message ?? fallback }
 function shortDate(value: string) { return new Intl.DateTimeFormat(i18n.language, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value)) }
 function dateTime(value: string) { return new Intl.DateTimeFormat(i18n.language, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
-function historyFieldLabel(field: string, t: (key: string) => string) {
-  const key = ({
-    necessity_status: 'necessity', necessity_reason: 'necessityReason', necessity_decided_by_employee_id: 'necessityDecidedBy', necessity_decided_at: 'necessityDecidedAt',
-    target_person: 'targetPerson', collection_source: 'collectionSource', collection_method: 'collectionMethod',
-    target_period_from: 'targetPeriod', target_period_to: 'targetPeriod', target_scope: 'targetScope',
-    assigned_employee_id: 'assignee', requested_at: 'requestedAt', response_deadline: 'responseDeadline',
-    collection_priority: 'collectionPriority', preservation_priority: 'preservationPriority', preservation_reason: 'preservationReason',
-    collection_status: 'collectionStatus', collection_result: 'collectionResult', fulfillment_status: 'fulfillmentStatus', review_status: 'reviewStatus',
-  } as Record<string, string>)[field]
-  return key ? t(`cases.workspace.overview.historyFields.${key}`) : field
-}
 function remainingDays(value: string) { const target = new Date(value); const today = new Date(); target.setHours(0, 0, 0, 0); today.setHours(0, 0, 0, 0); return Math.ceil((target.getTime() - today.getTime()) / 86400000) }
 function localDateTime() { const date = new Date(Date.now() - new Date().getTimezoneOffset() * 60000); return date.toISOString().slice(0, 16) }
 function deadlineTypeLabel(type: CaseDeadline['deadline_type']) { return ({ residence: '在留期限', submission: '提出期限', additional: '追加資料期限', limitation: '時効', document: '書類期限', internal: '内部期限', other: 'その他' } as Record<string, string>)[type] }
-function partyTypeLabel(type: CaseParty['party_type']) { return ({ client: '依頼者', family: '家族', employer: '勤務先', opponent: '相手方', insurer: '保険会社', medical: '医療機関', supporter: '支援者', other: 'その他' } as Record<string, string>)[type] }
+
 function activityTypeLabel(type: CaseActivity['activity_type']) { return ({ communication: '連絡', event: 'イベント', note: '内部メモ', submission: '提出', medical: '通院・医療', incident: '事故・事実' } as Record<string, string>)[type] }
 function channelLabel(channel: NonNullable<CaseActivity['channel']>) { return ({ meeting: '面談', phone: '電話', email: 'メール', line: 'LINE', internal: '社内', other: 'その他' } as Record<string, string>)[channel] }

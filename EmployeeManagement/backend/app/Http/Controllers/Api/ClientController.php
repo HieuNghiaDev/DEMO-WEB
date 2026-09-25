@@ -72,6 +72,7 @@ class ClientController extends Controller
         return $request->validate([
             'name' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
             'name_kana' => ['nullable', 'string', 'max:255'], 'client_type' => ['nullable', 'in:individual,corporate'],
+            'birth_date' => ['nullable', 'date_format:Y-m-d'],
             'address' => ['nullable', 'string', 'max:255'], 'phone' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:255'], 'nationality' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],

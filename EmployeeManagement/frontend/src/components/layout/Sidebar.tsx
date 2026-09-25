@@ -24,7 +24,7 @@ function SidebarItem({ path, name, icon: Icon, onSelect }: {
         `group relative flex min-h-[42px] items-center gap-3 rounded-xl px-3.5 py-2 text-[13.5px] font-medium transition-all duration-200 ease-out active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
           isActive
             ? 'text-white font-semibold'
-            : 'text-slate-700 hover:bg-indigo-50/70 hover:text-indigo-700 dark:text-slate-300 dark:hover:bg-white/[0.06] dark:hover:text-white'
+            : 'text-slate-600 hover:bg-indigo-50/80 hover:text-indigo-800 dark:text-slate-400 dark:hover:bg-white/[0.06] dark:hover:text-slate-100'
         }`
       }
     >
@@ -32,7 +32,7 @@ function SidebarItem({ path, name, icon: Icon, onSelect }: {
         <>
           {/* Smooth animated active pill background */}
           <span
-            className={`absolute inset-0 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 shadow-md shadow-indigo-500/25 transition-all duration-250 ease-out pointer-events-none dark:from-indigo-600 dark:to-indigo-700 dark:shadow-indigo-500/30 ${
+            className={`absolute inset-0 rounded-xl bg-gradient-to-r from-indigo-700 to-indigo-900 shadow-md shadow-indigo-700/20 transition-all duration-250 ease-out pointer-events-none dark:!bg-none dark:!bg-[#25255f] dark:!shadow-none ${
               isActive ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
             }`}
             aria-hidden="true"
@@ -86,7 +86,7 @@ export default function Sidebar() {
     const trigger = triggerRef.current
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    const desktop = window.matchMedia('(min-width: 768px)')
+    const desktop = window.matchMedia('(min-width: 1280px)')
     const closeOnDesktop = () => { if (desktop.matches) setIsOpen(false) }
     const focusable = () => Array.from(sidebarRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? [])
       .filter((element) => element.getClientRects().length > 0)
@@ -133,13 +133,22 @@ export default function Sidebar() {
   }
 
   return <>
-    <button ref={triggerRef} type="button" onClick={() => setIsOpen(true)} aria-label={t('sidebar.openMenu')} aria-expanded={isOpen} aria-controls="main-sidebar"
-      className="fixed left-4 top-4 z-40 flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-tm-border dark:bg-tm-sidebar dark:text-slate-100 dark:shadow-none md:hidden">
-      <Menu size={20} />
-    </button>
-    {isOpen && <button type="button" onClick={closeMenu} aria-label={t('sidebar.closeMenu')} className="fixed inset-0 z-40 bg-slate-950/50 md:hidden" />}
+    <header className="fixed inset-x-0 top-0 z-30 flex h-[calc(56px+env(safe-area-inset-top))] items-center justify-between border-b border-slate-200/90 bg-white/95 px-3 pt-[env(safe-area-inset-top)] shadow-xs backdrop-blur-sm xl:hidden dark:border-tm-border dark:bg-tm-sidebar/95 dark:shadow-none">
+      <button ref={triggerRef} type="button" onClick={() => setIsOpen(true)} aria-label={t('sidebar.openMenu')} aria-expanded={isOpen} aria-controls="main-sidebar"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-tm-border dark:bg-tm-surface dark:text-slate-100 dark:shadow-none">
+        <Menu size={20} />
+      </button>
+      <NavLink to="/" aria-label="THEMIS HQ" className="absolute left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-lg px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+        <img src={`${import.meta.env.BASE_URL}images/logoTHEMIS.png`} alt="" className="h-7 w-7 object-contain" />
+        <span className="whitespace-nowrap text-sm font-extrabold tracking-tight text-slate-900 dark:text-white">THEMIS HQ</span>
+      </NavLink>
+      <NavLink to="/system?section=account" aria-label={t('sidebar.accountSettings', { name: employeeName })} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xs font-black text-white shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:bg-tm-primary dark:ring-offset-tm-sidebar">
+        {employeeName.charAt(0).toUpperCase()}
+      </NavLink>
+    </header>
+    {isOpen && <button type="button" onClick={closeMenu} aria-label={t('sidebar.closeMenu')} className="fixed inset-0 z-40 bg-slate-950/50 xl:hidden" />}
     <aside ref={sidebarRef} id="main-sidebar" aria-label={t('sidebar.mainMenu')}
-      className={`fixed inset-y-0 left-0 z-50 flex h-dvh w-64 max-w-[88vw] shrink-0 flex-col border-r border-slate-200/90 bg-white p-3.5 text-slate-700 shadow-xs transition-[transform,visibility] duration-200 motion-reduce:transition-none dark:border-white/10 dark:bg-tm-sidebar dark:text-slate-200 md:sticky md:top-0 md:visible md:max-w-none md:translate-x-0 ${isOpen ? 'visible translate-x-0' : 'invisible -translate-x-full'}`}>
+      className={`fixed inset-y-0 left-0 z-50 flex h-dvh w-[84vw] max-w-[320px] shrink-0 flex-col border-r border-slate-200/90 bg-white p-3.5 text-slate-700 shadow-xs transition-[transform,visibility] duration-200 motion-reduce:transition-none dark:border-tm-border dark:bg-tm-sidebar dark:text-slate-200 xl:sticky xl:top-0 xl:w-64 xl:max-w-none xl:visible xl:translate-x-0 ${isOpen ? 'visible translate-x-0' : 'invisible -translate-x-full'}`}>
       <div className="flex shrink-0 items-center gap-3 px-1 py-1.5">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 p-1.5 ring-1 ring-indigo-200/80 dark:bg-indigo-500/15 dark:ring-indigo-500/30">
           <img src={`${import.meta.env.BASE_URL}images/logoTHEMIS.png`} alt="THEMIS HQ" className="h-full w-full object-contain" />
@@ -148,7 +157,7 @@ export default function Sidebar() {
           <p className="text-[16px] font-extrabold tracking-tight text-slate-900 dark:text-white leading-none">THEMIS HQ</p>
           <p className="mt-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 tracking-wide">合同法律事務所</p>
         </div>
-        <button type="button" onClick={closeMenu} aria-label={t('sidebar.closeMenu')} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-white/[0.06] dark:hover:text-slate-200 md:hidden"><X size={18} /></button>
+        <button type="button" onClick={closeMenu} aria-label={t('sidebar.closeMenu')} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-white/[0.06] dark:hover:text-slate-200 xl:hidden"><X size={18} /></button>
       </div>
       <SidebarUtilityPanel />
       <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain" aria-label={t('sidebar.workspaceAndSystem')}>
@@ -162,10 +171,10 @@ export default function Sidebar() {
         <SidebarItem path="/system" name={t('navigation.settings')} icon={Settings} onSelect={closeMenu} />
       </nav>
       <div className="mt-4 shrink-0 border-t border-slate-200/90 pt-3 dark:border-white/[0.08]">
-        <div className="flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 via-white to-indigo-50/50 p-2 shadow-xs transition-all duration-150 hover:border-indigo-300 hover:shadow-sm dark:border-white/10 dark:from-slate-900/80 dark:via-slate-900/60 dark:to-indigo-950/30 dark:hover:border-indigo-500/40">
+        <div className="flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 via-white to-indigo-50/50 p-2 shadow-xs transition-all duration-150 hover:border-indigo-300 hover:shadow-sm dark:!bg-none dark:!bg-tm-surface dark:border-tm-border dark:shadow-none dark:hover:border-tm-border-strong dark:hover:shadow-none">
           <NavLink to="/system?section=account" onClick={closeMenu} aria-label={t('sidebar.accountSettings', { name: employeeName })}
             className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-xs font-black text-white shadow-sm shadow-indigo-500/30 ring-2 ring-indigo-500/20">{employeeName.charAt(0).toUpperCase()}</span>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-xs font-black text-white shadow-sm shadow-indigo-500/30 ring-2 ring-indigo-500/20 dark:!bg-none dark:!bg-tm-primary dark:shadow-none dark:ring-indigo-400/20">{employeeName.charAt(0).toUpperCase()}</span>
           <div className="min-w-0 flex-1">
             <p title={employeeName} className="truncate text-xs font-bold text-slate-900 dark:text-slate-100 leading-tight">{employeeName}</p>
             <p className="mt-0.5 truncate font-mono text-[11px] font-bold text-indigo-600 dark:text-indigo-400">{employeeCode}</p>

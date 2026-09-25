@@ -27,7 +27,7 @@ erDiagram
 | `attendances` / `Attendance` | Một ca làm: employee, ngày, check-in/out, khoảng nghỉ, khoảng ra ngoài/địa điểm và status. Các datetime/date được cast Eloquent. |
 | `work_sessions` / `WorkSession` | Công việc theo một attendance: mô tả, bắt đầu/dự kiến/kết thúc và status; index cho `attendance_id + status`. |
 | `employee_tasks` / `EmployeeTask` | Việc được giao: người nhận, người giao, mô tả, thời lượng 30/60/120 phút, thời điểm nhận/hoàn tất, `work_session_id`, liên kết nullable `case_document_id` và status theo luồng `pending → accepted → in_progress → completed`. Một task từ mục C「依頼・準備」liên kết đúng một tài liệu; task thủ công giữ `case_document_id` null. |
-| `clients` / `Client` | Hồ sơ khách hàng/依頼者: tên, kana, loại cá nhân/pháp nhân, số điện thoại, email, địa chỉ, quốc tịch và ghi chú. Một client có thể có nhiều `case_files`; dùng soft delete. |
+| `clients` / `Client` | Hồ sơ khách hàng/依頼者: tên, kana, ngày sinh nullable, loại cá nhân/pháp nhân, số điện thoại, email, địa chỉ, quốc tịch và ghi chú. Một client có thể có nhiều `case_files`; dùng soft delete. |
 | `client_employments` / `ClientEmployment` | Lịch sử勤務先 one-to-many của client: tên/địa chỉ công ty, điện thoại tùy chọn, trạng thái làm việc, ngày bắt đầu/kết thúc, cờ hiện tại và ghi chú. FK `client_id` cascade delete; index theo client/current/status. |
 | `case_custom_sections` / `CaseCustomSection` | Tab nghiệp vụ tự do theo `case_file`: tiêu đề, nội dung ghi chú, thứ tự hiển thị và nhân viên tạo. Dùng cho thông tin phát sinh ngoài ba khu vực mặc định. |
 | `case_types` / `CaseType` | Nhóm hồ sơ và subtype theo quan hệ cha-con; case thực tế liên kết vào subtype để chọn đúng checklist. |
@@ -40,7 +40,7 @@ erDiagram
 | `case_document_purposes` | Quan hệ nhiều–nhiều checklist ↔ purpose, độc lập với rule; unique cặp checklist/purpose, timestamps. |
 | `received_documents` / `ReceivedDocument` | File/tài liệu/phiên bản thực nhận theo case: metadata lưu trữ, URL, ngày nhận/hết hạn, bản gốc/bản sao, yêu cầu trả lại và nhân viên đăng ký. Có soft delete. |
 | `case_document_received_documents` | Liên kết nhiều–nhiều checklist ↔ file nhận, relationship_type và timestamps; unique cặp case_document_id + received_document_id. |
-| `case_parties` / `CaseParty` | Gia đình, công ty, đối phương, bảo hiểm, bệnh viện, người hỗ trợ và các bên phát sinh. |
+| `case_parties` / `CaseParty` | 関係先 one-to-many theo案件: gia đình, công ty, đối phương, bảo hiểm, bệnh viện, cảnh sát và các bên phát sinh. Giữ cột liên hệ cũ; thêm loại thực thể/quan hệ/trạng thái, người liên hệ, mã tham chiếu, ngày bắt đầu/kết thúc, cờ hiện tại, `metadata` JSONB và thứ tự. |
 | `case_deadlines` / `CaseDeadline` | Hạn lưu trú, nộp hồ sơ, bổ sung, thời hiệu, hạn tài liệu và hạn nội bộ. |
 | `case_tasks` / `CaseTask` | Task vận hành gắn với hồ sơ, người phụ trách, ưu tiên, deadline và trạng thái. |
 | `case_activities` / `CaseActivity` | Timeline liên lạc, sự kiện, nộp hồ sơ, y tế, tai nạn và ghi chú nội bộ. |
@@ -52,6 +52,10 @@ Migration giữ lịch sử thay đổi schema, không phải nơi để đặt 
 Tạo CaseFile mới luôn bắt đầu với **0 `case_documents`**, kể cả khi case type có template legacy đang hiệu lực. Vòng đời V2 chuẩn là tạo案件 → preview ứng viên (chỉ đọc) → xác nhận → POST initialize → `CaseDocumentChecklistGenerator`; không tự sinh tài liệu hay activity initialize khi tạo案件. Không thay schema/master hoặc reprocess dữ liệu đang có.
 
 `clients` 1—N `client_employments`.勤務先 là hồ sơ của khách hàng, không phải `case_parties` theo từng案件, nên có thể tái sử dụng và chỉnh sửa từ workspace sau khi tạo案件. Popup intake cho phép bỏ qua hoàn toàn hoặc gửi nhiều nơi làm việc; `CaseFileController::store` ghi Client + employment + CaseFile trong cùng transaction. `is_current=true` buộc `end_date=null`; bản ghi quá khứ buộc `is_current=false`. Không tự suy đoán勤務先 từ loại案件 và không bắt buộc dữ liệu này cho quick intake.
+
+Migration `2026_09_17_100000_add_case_intake_and_workspace_fields` chỉ mở rộng các bảng hiện có: `clients.birth_date`; 5 trường tóm tắt sự cố nullable trong `case_files` (`incident_summary`, `occurred_at`, `injury_details`, `incident_location`, `current_status_memo`); và các thuộc tính 関係先 trong `case_parties`. Không tạo bảng mới, không backfill dữ liệu giả và không thay đổi tài liệu/Drive. UI intake hiện tại không gửi勤務先, nhưng API cũ vẫn cho phép `employments` tùy chọn để tương thích ngược.
+
+案件交通事故 tiếp tục dùng cùng bảng `case_parties`: `relation_type=opponent_company` dành cho công ty phía gây tai nạn; thông tin lái xe, xe và quan hệ với tai nạn nằm trong `metadata`. Bảo hiểm phân phía bằng `metadata.insurance_side` (`own`/`opponent`/`other`). Không tạo bảng riêng hay sao chép dữ liệu勤務先.
 
 `document_templates` / `document_template_items` và `CaseDocumentChecklistService` giữ lại ở chế độ deprecated/compatibility-only. Chỉ API áp dụng template legacy tường minh mới sao chép template thành checklist; không còn tự áp dụng trong `CaseFileController::store`. Không thay semantics idempotence/restore hiện có của thao tác legacy hoặc chuyển template sang rule V2.
 

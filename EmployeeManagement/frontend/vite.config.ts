@@ -9,4 +9,7 @@ export default defineConfig(({ command }) => ({
   cacheDir: `.vite-cache/${process.pid}`,
 
   base: command === 'build' ? '/DEMO-WEB/' : '/',
+  build: {
+    emptyOutDir: false,
+  },
 }))

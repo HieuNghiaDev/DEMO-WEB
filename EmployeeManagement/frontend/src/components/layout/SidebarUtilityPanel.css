@@ -8,8 +8,8 @@
 
 .dark .sidebar-workspace-pill,
 .dark .sidebar-utility-panel .theme-toggle {
-  background-color: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.14);
+  background-color: var(--bg-surface);
+  border-color: var(--border-default);
   box-shadow: none;
 }
 
@@ -53,9 +53,9 @@
 
   .dark .sidebar-workspace-pill:hover,
   .dark .sidebar-utility-panel .theme-toggle:hover {
-    background-color: rgba(255, 255, 255, 0.08);
-    border-color: rgba(99, 102, 241, 0.4);
-    box-shadow: 0 2px 6px 0 rgba(99, 102, 241, 0.2);
+    background-color: var(--bg-hover);
+    border-color: var(--brand);
+    box-shadow: none;
   }
 }
 
@@ -64,5 +64,4 @@
     transition: none;
   }
 }
-
 

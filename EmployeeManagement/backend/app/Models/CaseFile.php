@@ -15,11 +15,12 @@ class CaseFile extends Model
         'title', 'reference_number', 'case_type', 'case_type_id', 'case_type_other', 'client_id',
         'department_id', 'assigned_employee_id', 'created_by_employee_id', 'status', 'priority',
         'summary', 'opened_at', 'target_completion_at',
+        'incident_summary', 'occurred_at', 'injury_details', 'incident_location', 'current_status_memo',
     ];
 
     protected function casts(): array
     {
-        return ['opened_at' => 'date', 'target_completion_at' => 'date'];
+        return ['opened_at' => 'date', 'target_completion_at' => 'date', 'occurred_at' => 'datetime'];
     }
 
     public function client(): BelongsTo

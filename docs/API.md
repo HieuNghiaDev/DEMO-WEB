@@ -28,7 +28,7 @@ Tài khoản có `must_change_password=true` chỉ được gọi `/me`, `/passw
 
 Popup tạo案件 dùng progressive profiling và chỉ gửi **một** `POST /case-files`. Với khách hàng đã có, payload dùng `client_id`; với khách hàng mới, payload dùng object `client`. Trường `employments` là mảng tùy chọn nên quick intake vẫn hợp lệ khi không nhập勤務先. Khi có dữ liệu, backend tạo Client, CaseFile và toàn bộ勤務先 trong cùng transaction; validation lỗi rollback cả ba. Frontend tự ghép `title` từ tên khách hàng + loại案件 trong giới hạn 255 ký tự và vẫn giữ bước xác nhận cuối trước khi gửi. Xem [CASE_MANAGEMENT_UI.md](frontend/CASE_MANAGEMENT_UI.md).
 
-Khách hàng (`clients`) lưu dữ liệu liên hệ: `phone`, `email`, `address`, `nationality`, cùng `name`, `name_kana` và `client_type` (`individual`/`corporate`). Khi tạo mới `case-files`, payload `client` có thể bao gồm các trường này; email hợp lệ, điện thoại tối đa 30 ký tự, địa chỉ tối đa 255 ký tự. `GET /case-files/{id}` trả toàn bộ thông tin liên hệ của khách hàng để hiển thị trong hồ sơ; `PUT /clients/{client}` cập nhật hồ sơ khi người gọi có `case.update`.
+Khách hàng (`clients`) lưu dữ liệu liên hệ: `phone`, `email`, `address`, `nationality`, cùng `name`, `name_kana`, `birth_date` (nullable, `YYYY-MM-DD`) và `client_type` (`individual`/`corporate`; UI hiển thị 個人/組織). Khi tạo mới `case-files`, payload `client` có thể bao gồm các trường này; email hợp lệ, điện thoại tối đa 30 ký tự, địa chỉ tối đa 255 ký tự. `GET /case-files/{id}` trả thông tin khách hàng, bên liên quan và lịch sử hiện có để hiển thị trong hồ sơ; `PUT /clients/{client}` cập nhật hồ sơ khi người gọi có `case.update`.
 
 Mỗi client có nhiều勤務先 (`client_employments`). Item gồm `company_name` (bắt buộc), `company_address` (bắt buộc), `company_phone`, `employment_status` (`employed`, `leave`, `former`, `unknown`), `start_date`, `end_date`, `is_current` và `notes`. Bản ghi hiện tại luôn có `end_date=null`; bản ghi quá khứ luôn có `is_current=false`. Các route lồng sau kiểm tra employment thuộc đúng client:
 
@@ -52,11 +52,16 @@ Vòng đời V2: tạo案件 → GET `document-collection/initialization-preview
 | Method & path | Quyền | Hành vi |
 | --- | --- | --- |
 | `GET /case-files/{id}/workspace` | `case.view` | Trả hồ sơ, checklist, bên liên quan, deadline, task, timeline và summary tiến độ. |
+| `PATCH /case-files/{id}/incident` | `case.update` | Cập nhật riêng 5 trường nullable `incident_summary`, `occurred_at`, `injury_details`, `incident_location`, `current_status_memo`; ghi lịch sử workspace trong cùng transaction. |
 | `POST /case-files/{id}/apply-document-template` | `document.create` | Compatibility-only: áp dụng template legacy tường minh; chạy lại không tạo trùng checklist. Không tự chạy khi tạo案件. |
 | `POST/PATCH/DELETE /case-files/{id}/parties/...` | `case.update` | Quản lý gia đình, công ty, đối phương, bảo hiểm, bệnh viện và bên liên quan khác. |
 | `POST/PATCH/DELETE /case-files/{id}/deadlines/...` | `case.update` | Quản lý hạn lưu trú, nộp hồ sơ, bổ sung, thời hiệu và hạn nội bộ. |
 | `POST/PATCH/DELETE /case-files/{id}/case-tasks/...` | `case.update` | Quản lý task gắn trực tiếp với hồ sơ. |
 | `POST /case-files/{id}/activities` | `case.update` | Ghi lịch sử liên lạc, sự kiện, nộp hồ sơ, y tế, tai nạn hoặc ghi chú nội bộ. |
+
+`case_parties` là nguồn dữ liệu 関係先 theo từng hồ sơ. API parties hiện có nhận thêm `entity_type`, `relation_type`, `relation_status`, `contact_person`, `reference_number`, `start_date`, `end_date`, `is_current`, `metadata` và `sort_order`; các cột liên hệ/tên/ghi chú cũ vẫn giữ. `GET /case-files/{id}/workspace` nhúng danh sách này nên không cần một GET related-entities song song. UI 新規案件 hiện không nhập勤務先; trường `employments` cũ ở API vẫn được hỗ trợ để không phá client hiện có.
+
+Với案件交通事故, `relation_type=opponent_company` biểu diễn 「相手方企業（加害者側会社）」. Các trường riêng dùng `metadata.driver_name`, `metadata.vehicle_info`, `metadata.vehicle_number`, `metadata.accident_relationship`; người liên hệ tiếp tục dùng cột chung `contact_person`. Bảo hiểm phân phía bằng `metadata.insurance_side`: `own`, `opponent` hoặc `other`.
 
 Tài liệu hỗ trợ `requirement_level`: `required`, `conditional`, `optional`; và trạng thái nghiệp vụ: `not_requested`, `requested`, `waiting`, `received`, `reviewing`, `deficient`, `resubmission_requested`, `confirmed`, `submitted`, `not_required`. Tài liệu thêm thủ công không phụ thuộc template. Xóa tài liệu dùng soft delete để phục hồi/audit về sau.
 

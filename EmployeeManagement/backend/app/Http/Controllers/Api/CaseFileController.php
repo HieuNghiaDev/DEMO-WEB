@@ -31,6 +31,10 @@ class CaseFileController extends Controller
     {
         $data = $this->validated($request);
 
+        if (! empty($data['assigned_employee_id'])) {
+            $this->ensureCanAssignCase($request);
+        }
+
         $this->resolveCaseType($data);
 
         $caseFile = DB::transaction(function () use ($data, $request): CaseFile {
@@ -77,6 +81,7 @@ class CaseFileController extends Controller
         return response()->json(['case_file' => $caseFile->load([
             'client.employments', 'caseTypeOption', 'department', 'assignedEmployee', 'createdByEmployee', 'documents.createdByEmployee',
             'precedents.createdByEmployee', 'meetingLogs.createdByEmployee', 'customSections.createdByEmployee',
+            'parties', 'activities.createdByEmployee',
         ])]);
     }
 
@@ -132,6 +137,7 @@ class CaseFileController extends Controller
             'client' => [$partial ? 'prohibited' : 'required_without:client_id', 'array'],
             'client.name' => ['required_with:client', 'string', 'max:255'],
             'client.name_kana' => ['nullable', 'string', 'max:255'],
+            'client.birth_date' => ['nullable', 'date_format:Y-m-d'],
             'client.client_type' => ['nullable', Rule::in(['individual', 'corporate'])],
             'client.phone' => ['nullable', 'string', 'max:30'],
             'client.email' => ['nullable', 'email', 'max:255'],

@@ -220,6 +220,8 @@ Route::middleware([
             ->middleware('permission:case.update');
         Route::get('workspace', [CaseWorkspaceController::class, 'show'])
             ->middleware('permission:case.view');
+        Route::patch('incident', [CaseWorkspaceController::class, 'updateIncident'])
+            ->middleware('permission:case.update');
         Route::post('apply-document-template', [CaseWorkspaceController::class, 'applyTemplate'])
             ->middleware('permission:document.create');
         Route::post('parties', [CaseWorkspaceItemController::class, 'storeParty'])->middleware('permission:case.update');

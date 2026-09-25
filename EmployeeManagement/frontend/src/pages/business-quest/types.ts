@@ -103,6 +103,7 @@ export type ClientProfile = {
   id: number
   name: string
   name_kana: string | null
+  birth_date?: string | null
   client_type: 'individual' | 'corporate' | null
   phone: string | null
   email: string | null

@@ -1,9 +1,11 @@
 import { AlertTriangle, CheckCircle2, ClipboardList, FileWarning, Search } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { Skeleton } from '../../components/loading'
 import type { VisaProgressSummary as Summary } from './types'
 
 type Props = {
-  summary: Summary
+  summary?: Summary
+  loading?: boolean
 }
 
 const metrics: Array<{ key: keyof Summary; label: string; dot: string; iconTone: string; icon: ReactNode }> = [
@@ -14,7 +16,7 @@ const metrics: Array<{ key: keyof Summary; label: string; dot: string; iconTone:
   { key: 'approved',            label: '許可',        dot: 'bg-emerald-500', iconTone: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-300', icon: <CheckCircle2 size={17} /> },
 ]
 
-export default function VisaProgressSummary({ summary }: Props) {
+export default function VisaProgressSummary({ summary, loading = false }: Props) {
   return (
     <section className="border-t border-slate-200 bg-slate-50/55 dark:border-slate-700 dark:bg-slate-950/25" aria-labelledby="visa-summary-heading">
       <h2 id="visa-summary-heading" className="sr-only">運用サマリー</h2>
@@ -31,7 +33,7 @@ export default function VisaProgressSummary({ summary }: Props) {
             </span>
             <div className="min-w-0">
               <p className="text-2xl font-semibold tracking-tight tabular-nums text-slate-950 dark:text-slate-100">
-                {summary[metric.key]}
+                {loading ? <Skeleton className="h-7 w-12 rounded-sm" /> : summary?.[metric.key]}
               </p>
               <p className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">{metric.label}</p>
             </div>

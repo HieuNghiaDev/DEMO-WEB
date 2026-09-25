@@ -102,6 +102,37 @@ class GoogleDriveOAuthTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_revoked_refresh_token_returns_actionable_c001_reauthorization_error(): void
+    {
+        config([
+            'services.google_drive.c001_template_folder_id' => 'template_folder',
+            'services.google_drive.c001_template_file_id' => 'master_template',
+            'services.google_drive.c001_template_file_name' => '委任契約書簡易版完全成功報酬-空欄.xlsx',
+        ]);
+        Storage::disk('local')->put('google-drive/oauth-token.json', json_encode([
+            'access_token' => 'expired-access',
+            'refresh_token' => 'revoked-refresh',
+            'expires_at' => now()->subMinute()->timestamp,
+        ], JSON_THROW_ON_ERROR));
+        Http::fake(['https://oauth2.googleapis.com/token' => Http::response([
+            'error' => 'invalid_grant',
+            'error_description' => 'Token has been expired or revoked.',
+        ], 400)]);
+
+        $this->expectException(GeneratedDocumentDriveException::class);
+        $this->expectExceptionMessage('Google Driveの再認証が必要です。管理者がOAuth連携を更新してください。');
+
+        try {
+            app(GoogleDriveService::class)->resolveExactTemplateFile(
+                'template_folder',
+                '委任契約書簡易版完全成功報酬-空欄.xlsx',
+                'master_template'
+            );
+        } finally {
+            Http::assertSentCount(1);
+        }
+    }
+
     public function test_local_root_folder_override_does_not_replace_the_default_root(): void
     {
         config([

@@ -8,36 +8,61 @@
 :root {
   color-scheme: light;
 
-  /* Surfaces - Clean, airy, elegant off-white foundation */
-  --tm-bg: #f4f6f9;
-  --tm-sidebar: #ffffff;
-  --tm-surface: #ffffff;
-  --tm-surface-elevated: #f8fafc;
-  --tm-surface-hover: #f1f5f9;
-  --tm-control: #ffffff;
-  --tm-surface-active: rgba(91, 108, 255, 0.08);
+  /* Semantic color system. Light mode intentionally retains the approved palette. */
+  --bg-app: #f4f6f9;
+  --bg-sidebar: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f8fafc;
+  --bg-hover: #f1f5f9;
+  --bg-selected: rgba(91, 108, 255, 0.08);
+  --bg-control: #ffffff;
 
-  /* Borders - Soft, crisp, calm */
-  --tm-border-subtle: #f1f5f9;
-  --tm-border: #e2e8f0;
-  --tm-border-strong: #cbd5e1;
-  --tm-border-focus: #5b6cff;
+  --border-muted: #f1f5f9;
+  --border-default: #e2e8f0;
+  --border-strong: #cbd5e1;
 
-  /* Typography */
-  --tm-text-primary: #0f172a;
-  --tm-text-secondary: #475569;
-  --tm-text-muted: #64748b;
-  --tm-text-dim: #94a3b8;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-dim: #94a3b8;
 
-  /* Semantic Accents */
-  --tm-primary: #5b6cff;
-  --tm-primary-hover: #4b5ceb;
-  --tm-primary-muted: rgba(91, 108, 255, 0.08);
-  --tm-success: #10b981;
-  --tm-warning: #f59e0b;
-  --tm-danger: #ef4444;
+  --brand: #5b6cff;
+  --brand-hover: #4b5ceb;
+  --brand-soft: rgba(91, 108, 255, 0.08);
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #2563eb;
+  --success-soft: rgb(16 185 129 / 0.1);
+  --warning-soft: rgb(245 158 11 / 0.1);
+  --danger-soft: rgb(239 68 68 / 0.1);
+  --info-soft: rgb(37 99 235 / 0.1);
+
+  /* Legacy THEMIS aliases keep existing components source-compatible. */
+  --tm-bg: var(--bg-app);
+  --tm-sidebar: var(--bg-sidebar);
+  --tm-surface: var(--bg-surface);
+  --tm-surface-elevated: var(--bg-elevated);
+  --tm-surface-hover: var(--bg-hover);
+  --tm-control: var(--bg-control);
+  --tm-surface-active: var(--bg-selected);
+  --tm-border-subtle: var(--border-muted);
+  --tm-border: var(--border-default);
+  --tm-border-strong: var(--border-strong);
+  --tm-border-focus: var(--brand);
+  --tm-text-primary: var(--text-primary);
+  --tm-text-secondary: var(--text-secondary);
+  --tm-text-muted: var(--text-muted);
+  --tm-text-dim: var(--text-dim);
+  --tm-primary: var(--brand);
+  --tm-primary-hover: var(--brand-hover);
+  --tm-primary-muted: var(--brand-soft);
+  --tm-success: var(--success);
+  --tm-warning: var(--warning);
+  --tm-danger: var(--danger);
+  --tm-info: var(--info);
   --tm-ai: #8b5cf6;
-  --tm-focus-ring: rgba(91, 108, 255, 0.45);
+  --tm-focus-ring: rgb(91 108 255 / 0.45);
 
   /* Elevation Shadows */
   --tm-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
@@ -56,44 +81,85 @@
 :root.dark {
   color-scheme: dark;
 
-  /* Surfaces - neutral near-black ladder; indigo remains an accent, not a base. */
-  --tm-bg: #090b0f;
-  --tm-sidebar: #0d1015;
-  --tm-surface: #101217;
-  --tm-surface-elevated: #14161b;
-  --tm-surface-hover: #181a20;
-  --tm-control: #0d0f13;
-  --tm-surface-active: rgba(99, 102, 241, 0.09);
+  /* Premium legal dark theme: graphite layers, with indigo reserved for workflow. */
+  --bg-app: #0b0e13;
+  --bg-sidebar: #0d1118;
+  --bg-surface: #11161f;
+  --bg-elevated: #161c26;
+  --bg-hover: #1b2330;
+  --bg-selected: #1d2540;
+  --bg-control: #11161f;
 
-  /* Borders - neutral white-alpha structure with no blue cast. */
-  --tm-border-subtle: rgba(255, 255, 255, 0.055);
-  --tm-border: rgba(255, 255, 255, 0.09);
-  --tm-border-strong: rgba(255, 255, 255, 0.13);
-  --tm-border-focus: #7080ff;
+  --border-muted: #202936;
+  --border-default: #283241;
+  --border-strong: #354155;
 
-  /* Typography */
-  --tm-text-primary: #f5f5f6;
-  --tm-text-secondary: #a1a1aa;
-  --tm-text-muted: #85858e;
-  --tm-text-dim: #52525b;
+  --text-primary: #f4f7fb;
+  --text-secondary: #a7b0be;
+  --text-muted: #707b8d;
+  --text-dim: #5d6879;
 
-  /* Semantic Accents */
-  --tm-primary: #5b6cff;
-  --tm-primary-hover: #7080ff;
-  --tm-primary-muted: rgba(91, 108, 255, 0.12);
-  --tm-success: #10b981;
-  --tm-warning: #f59e0b;
-  --tm-danger: #ef4444;
+  --brand: #5b5bd6;
+  --brand-hover: #6d6de3;
+  --brand-soft: rgb(91 91 214 / 0.14);
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --info: #38bdf8;
+  --success-soft: rgb(52 211 153 / 0.12);
+  --warning-soft: rgb(251 191 36 / 0.12);
+  --danger-soft: rgb(248 113 113 / 0.12);
+  --info-soft: rgb(56 189 248 / 0.12);
+
+  --tm-bg: var(--bg-app);
+  --tm-sidebar: var(--bg-sidebar);
+  --tm-surface: var(--bg-surface);
+  --tm-surface-elevated: var(--bg-elevated);
+  --tm-surface-hover: var(--bg-hover);
+  --tm-control: var(--bg-control);
+  --tm-surface-active: var(--bg-selected);
+  --tm-border-subtle: var(--border-muted);
+  --tm-border: var(--border-default);
+  --tm-border-strong: var(--border-strong);
+  --tm-border-focus: var(--brand-hover);
+  --tm-text-primary: var(--text-primary);
+  --tm-text-secondary: var(--text-secondary);
+  --tm-text-muted: var(--text-muted);
+  --tm-text-dim: var(--text-dim);
+  --tm-primary: var(--brand);
+  --tm-primary-hover: var(--brand-hover);
+  --tm-primary-muted: var(--brand-soft);
+  --tm-success: var(--success);
+  --tm-warning: var(--warning);
+  --tm-danger: var(--danger);
+  --tm-info: var(--info);
   --tm-ai: #8b5cf6;
-  --tm-focus-ring: rgba(112, 128, 255, 0.5);
+  --tm-focus-ring: rgb(109 109 227 / 0.55);
 
-  /* Elevation is primarily tonal in dark mode. */
-  --tm-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
-  --tm-shadow-md: 0 6px 18px rgba(0, 0, 0, 0.24);
-  --tm-shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.38);
+  /* Elevation stays quiet: tonal layers lead, shadows only separate overlays. */
+  --tm-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.16);
+  --tm-shadow-md: 0 6px 18px rgb(0 0 0 / 0.2);
+  --tm-shadow-lg: 0 14px 36px rgb(0 0 0 / 0.28);
 }
 
 @theme inline {
+  --color-bg-app: var(--bg-app);
+  --color-bg-sidebar: var(--bg-sidebar);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-hover: var(--bg-hover);
+  --color-bg-selected: var(--bg-selected);
+  --color-border-default: var(--border-default);
+  --color-border-muted: var(--border-muted);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
   --color-tm-bg: var(--tm-bg);
   --color-tm-sidebar: var(--tm-sidebar);
   --color-tm-surface: var(--tm-surface);
@@ -253,81 +319,96 @@ html.dark {
 }
 
 .dark .themis-app [class~="bg-indigo-50/70"] {
-  background-color: rgb(99 102 241 / 0.09) !important;
+  background-color: var(--brand-soft) !important;
 }
 
 .dark .themis-app .bg-indigo-100 {
-  background-color: rgb(99 102 241 / 0.14) !important;
+  background-color: var(--brand-soft) !important;
 }
 
 .dark .themis-app .border-indigo-100,
 .dark .themis-app [class~="border-indigo-100/80"],
 .dark .themis-app .border-indigo-200 {
-  border-color: rgb(129 140 248 / 0.24) !important;
+  border-color: color-mix(in srgb, var(--brand) 42%, var(--border-default)) !important;
 }
 
 .dark .themis-app .ring-indigo-100 {
-  --tw-ring-color: rgb(99 102 241 / 0.24) !important;
+  --tw-ring-color: color-mix(in srgb, var(--brand) 34%, transparent) !important;
 }
 
 .dark .themis-app .text-indigo-900 {
-  color: #c7d2fe !important;
+  color: color-mix(in srgb, var(--brand-hover) 68%, var(--text-primary)) !important;
 }
 
 .dark .themis-app .bg-blue-50,
 .dark .themis-app [class~="bg-blue-50/70"] {
-  background-color: rgb(30 64 175 / 0.22) !important;
+  background-color: var(--info-soft) !important;
 }
 
 .dark .themis-app .bg-blue-100 {
-  background-color: rgb(37 99 235 / 0.24) !important;
+  background-color: var(--info-soft) !important;
 }
 
 .dark .themis-app .border-blue-100,
 .dark .themis-app .border-blue-200 {
-  border-color: rgb(96 165 250 / 0.3) !important;
+  border-color: color-mix(in srgb, var(--info) 38%, var(--border-default)) !important;
 }
 
 .dark .themis-app .ring-blue-100 {
-  --tw-ring-color: rgb(59 130 246 / 0.22) !important;
+  --tw-ring-color: color-mix(in srgb, var(--info) 28%, transparent) !important;
 }
 
 .dark .themis-app .bg-emerald-50 {
-  background-color: rgb(6 78 59 / 0.28) !important;
+  background-color: var(--success-soft) !important;
 }
 
 .dark .themis-app .bg-emerald-100 {
-  background-color: rgb(5 150 105 / 0.2) !important;
+  background-color: var(--success-soft) !important;
 }
 
 .dark .themis-app .border-emerald-100 {
-  border-color: rgb(52 211 153 / 0.25) !important;
+  border-color: color-mix(in srgb, var(--success) 34%, var(--border-default)) !important;
 }
 
 .dark .themis-app .bg-amber-50 {
-  background-color: rgb(120 53 15 / 0.24) !important;
+  background-color: var(--warning-soft) !important;
 }
 
 .dark .themis-app .bg-amber-100 {
-  background-color: rgb(217 119 6 / 0.2) !important;
+  background-color: var(--warning-soft) !important;
 }
 
 .dark .themis-app .border-amber-100 {
-  border-color: rgb(251 191 36 / 0.26) !important;
+  border-color: color-mix(in srgb, var(--warning) 36%, var(--border-default)) !important;
 }
 
 .dark .themis-app .bg-red-50 {
-  background-color: rgb(127 29 29 / 0.26) !important;
+  background-color: var(--danger-soft) !important;
 }
 
 .dark .themis-app .bg-red-100 {
-  background-color: rgb(220 38 38 / 0.2) !important;
+  background-color: var(--danger-soft) !important;
 }
 
 .dark .themis-app .border-red-100,
 .dark .themis-app .border-red-200 {
-  border-color: rgb(248 113 113 / 0.3) !important;
+  border-color: color-mix(in srgb, var(--danger) 38%, var(--border-default)) !important;
 }
+
+/* Common Tailwind utilities are bridged to the semantic dark palette so
+   pages do not each need their own near-black color ladder. */
+.dark .themis-app .dark\:bg-slate-950 { background-color: var(--bg-app) !important; }
+.dark .themis-app .dark\:bg-slate-900 { background-color: var(--bg-surface) !important; }
+.dark .themis-app .dark\:bg-slate-800 { background-color: var(--bg-elevated) !important; }
+.dark .themis-app .dark\:hover\:bg-slate-800:hover { background-color: var(--bg-hover) !important; }
+.dark .themis-app .dark\:border-slate-800 { border-color: var(--border-muted) !important; }
+.dark .themis-app .dark\:border-slate-700 { border-color: var(--border-default) !important; }
+.dark .themis-app .dark\:border-slate-600 { border-color: var(--border-strong) !important; }
+.dark .themis-app .dark\:text-slate-100 { color: var(--text-primary) !important; }
+.dark .themis-app .dark\:text-slate-200,
+.dark .themis-app .dark\:text-slate-300 { color: var(--text-secondary) !important; }
+.dark .themis-app .dark\:text-slate-400 { color: var(--text-muted) !important; }
+.dark .themis-app .dark\:text-slate-500 { color: var(--text-dim) !important; }
 
 .dark .themis-app input,
 .dark .themis-app select,
@@ -611,6 +692,20 @@ html.theme-revealing::view-transition-new(themis-theme-icon) {
   background: currentColor;
   box-shadow: 0 0 10px color-mix(in srgb, var(--tm-primary) 48%, transparent);
   animation: themis-loading-core 1200ms ease-in-out infinite;
+}
+
+/* Dark mode feedback remains deliberate and operational: no neon bloom. */
+.dark .themis-loading-mark__scan,
+.dark .themis-loading-mark__core,
+.dark .themis-route-progress > span {
+  box-shadow: none;
+}
+
+.dark .themis-app-loader__ambient,
+.dark .organization-employee-card::after,
+.dark .organization-office-card::before,
+.dark .case-file-card::after {
+  display: none;
 }
 
 .themis-app-loader__content {

@@ -1,4 +1,5 @@
 import api from '../../services/api'
+import { isAxiosError } from 'axios'
 import type { DocumentDraft, DocumentFieldDefinition, DocumentRendererType, DocumentTemplateDefinition, DocumentWorkflowStatus } from './documentTemplates'
 import type { C001State } from '../document-collection/types'
 import { pdfFilename } from './documentPdf'
@@ -136,7 +137,23 @@ export const apiDocumentDraftStore: DocumentDraftStore = {
   async previewC001(identity, official, signal) {
     const query = identity.version ? `?version=${identity.version}` : ''
     const endpoint = official ? 'pdf' : 'preview'
-    const response = await api.get<Blob>(`${path(identity)}/c001/${endpoint}${query}`, { signal, responseType: 'blob' })
+    let response
+    try {
+      response = await api.get<Blob>(`${path(identity)}/c001/${endpoint}${query}`, { signal, responseType: 'blob' })
+    } catch (error) {
+      const errorBlob = isAxiosError(error) && error.response?.data instanceof Blob
+        ? error.response.data
+        : null
+      const contentType = errorBlob?.type || (isAxiosError(error) ? String(error.response?.headers['content-type'] ?? '') : '')
+      if (errorBlob && contentType.toLowerCase().includes('application/json')) {
+        let payload: { message?: unknown } | null = null
+        try {
+          payload = JSON.parse(await errorBlob.text()) as { message?: unknown }
+        } catch { /* Preserve the original Axios error for a malformed response. */ }
+        if (typeof payload?.message === 'string' && payload.message.trim() !== '') throw new Error(payload.message)
+      }
+      throw error
+    }
     if (!response.data.type.toLowerCase().startsWith('application/pdf') || await response.data.slice(0, 5).text() !== '%PDF-') {
       throw new Error('C-001 PDFを取得できませんでした。')
     }
