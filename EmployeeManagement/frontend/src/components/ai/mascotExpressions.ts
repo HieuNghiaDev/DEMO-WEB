@@ -31,7 +31,10 @@ export type ThemisActivity = 'none' | 'processing' | 'searching' | 'generating' 
 export type ThemisAction = ThemisActivity
 export type MascotVisualState = ThemisExpression | Exclude<ThemisActivity, 'none'>
 
-export const THEMIS_HEAD_ASSET = '/images/themis-mascot/themis-head-shell.png'
+// Public assets must retain Vite's deployment base. GitHub Pages serves THEMIS
+// below /DEMO-WEB/, while local development serves it from the origin root.
+const themisAssetBase = import.meta.env?.BASE_URL ?? '/'
+export const THEMIS_HEAD_ASSET = `${themisAssetBase}images/themis-mascot/themis-head-shell.png`
 export const MASCOT_FEEDBACK_DURATION = { success: 1_500, error: 2_400 } as const
 
 export const THEMIS_EXPRESSION_PREVIEW_STATES: ThemisExpression[] = [
