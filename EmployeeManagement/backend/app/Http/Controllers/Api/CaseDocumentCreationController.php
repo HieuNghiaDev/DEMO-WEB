@@ -18,6 +18,7 @@ use App\Services\GoogleDriveService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\Response;
@@ -47,6 +48,14 @@ class CaseDocumentCreationController extends Controller
                 'Cache-Control' => 'private, no-store, max-age=0',
             ]);
         } catch (GeneratedDocumentDriveException $error) {
+            // Provider responses themselves may contain sensitive Drive details.
+            // The workflow exception is already sanitized for operator diagnosis.
+            Log::warning('C-001 Drive sync failed', [
+                'case_file_id' => $caseFile->id,
+                'case_document_id' => $caseDocument->id,
+                'message' => $error->getMessage(),
+            ]);
+
             return response()->json(['message' => $error->getMessage()], 503);
         }
     }
