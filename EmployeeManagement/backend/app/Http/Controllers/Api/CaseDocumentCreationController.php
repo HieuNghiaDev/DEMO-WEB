@@ -68,15 +68,6 @@ class CaseDocumentCreationController extends Controller
                 'Content-Disposition' => HeaderUtils::makeDisposition('attachment', $file['filename'], 'C-001_v'.$file['version'].'.xlsx'),
             ]);
         } catch (GeneratedDocumentDriveException $error) {
-            // The browser receives only the sanitized workflow message. Emit the
-            // same safe context to stderr so a managed host can diagnose a failed
-            // sync without logging Google provider responses or credentials.
-            Log::channel('stderr')->warning('C-001 Drive sync failed', [
-                'case_file_id' => $caseFile->id,
-                'case_document_id' => $caseDocument->id,
-                'message' => $error->getMessage(),
-            ]);
-
             return response()->json(['message' => $error->getMessage()], 503);
         }
     }
@@ -142,6 +133,15 @@ class CaseDocumentCreationController extends Controller
                 $result['instance']->draft_data
             );
         } catch (GeneratedDocumentDriveException $error) {
+            // The browser receives only the sanitized workflow message. Emit the
+            // same safe context to stderr so a managed host can diagnose a failed
+            // sync without logging Google provider responses or credentials.
+            Log::channel('stderr')->warning('C-001 Drive sync failed', [
+                'case_file_id' => $caseFile->id,
+                'case_document_id' => $caseDocument->id,
+                'message' => $error->getMessage(),
+            ]);
+
             return response()->json(['message' => $error->getMessage()], 503);
         }
     }
