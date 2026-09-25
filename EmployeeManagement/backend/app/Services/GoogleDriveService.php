@@ -116,7 +116,10 @@ class GoogleDriveService
             if (! preg_match('/^[a-f0-9]{64}$/', $key)) {
                 throw new GeneratedDocumentDriveException('保存識別子が不正です。');
             }
-            if (! $this->canWriteGeneratedDocuments()) {
+            // C-001 always supplies its own case-level 作成書類 folder. The
+            // global generated-documents folder is a readiness signal for the
+            // generic document flow and must not block this scoped upload.
+            if (! $this->writeConfigured()) {
                 throw new GeneratedDocumentDriveException('Google Driveへの保存は現在利用できません。');
             }
             $this->assertWritableFolder($folderId);
@@ -248,7 +251,9 @@ class GoogleDriveService
     public function ensureGeneratedWorkbookCopy(string $sourceFileId, string $folderId, string $filename, string $key): array
     {
         try {
-            if (! $this->canWriteGeneratedDocuments()) {
+            // The caller supplies the specific case-level folder and it is
+            // verified below. Do not require the unrelated global folder.
+            if (! $this->writeConfigured()) {
                 throw new GeneratedDocumentDriveException('Google Driveへの保存は現在利用できません。');
             }
             if (! preg_match('/^[a-f0-9]{64}$/', $key)) {
@@ -346,7 +351,6 @@ class GoogleDriveService
         }
 
         return $this->authMode() === 'service_account'
-            && preg_match('/^[A-Za-z0-9_-]+$/', (string) config('services.google_drive.generated_documents_folder_id'))
             && trim((string) config('services.google_drive.service_account_json')) !== ''
             && in_array(config('services.google_drive.write_scope'), ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive'], true);
     }
