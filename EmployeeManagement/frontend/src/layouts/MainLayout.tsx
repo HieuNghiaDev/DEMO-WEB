@@ -4,22 +4,30 @@ import ThemisAiAssistant from '../components/ai/ThemisAiAssistant'
 import Sidebar from '../components/layout/Sidebar'
 import AppFooter from '../components/layout/AppFooter'
 import UpdateNotesModal from '../components/layout/UpdateNotesModal'
-import { appVersionTag, lastSeenVersionStorageKey } from '../config/app'
+import { lastSeenVersionStorageKey } from '../config/app'
 import { RouteProgress } from '../components/loading'
+import { useAppRelease } from '../contexts/AppReleaseContext'
+import { releaseVersionTag } from '../features/releases/releaseApi'
 
 function MainLayout() {
   const location = useLocation()
   const [releaseNotesOpen, setReleaseNotesOpen] = useState(false)
+  const { currentRelease, isLoading } = useAppRelease()
 
   useEffect(() => {
-    try {
-      if (window.localStorage.getItem(lastSeenVersionStorageKey) !== appVersionTag) {
+    if (isLoading) return
+    const currentVersionTag = releaseVersionTag(currentRelease)
+    const openTimer = window.setTimeout(() => {
+      try {
+        if (window.localStorage.getItem(lastSeenVersionStorageKey) !== currentVersionTag) {
+          setReleaseNotesOpen(true)
+        }
+      } catch {
         setReleaseNotesOpen(true)
       }
-    } catch {
-      setReleaseNotesOpen(true)
-    }
-  }, [])
+    }, 0)
+    return () => window.clearTimeout(openTimer)
+  }, [currentRelease, isLoading])
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' })

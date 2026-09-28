@@ -5,7 +5,8 @@ import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import OfficeSwitcher from "../components/employee-room/OfficeSwitcher";
-import { getEmployeeAvatarUrl } from "../utils/employeeAvatar";
+import { getEmployeeAvatarImageUrl } from "../utils/employeeAvatar";
+import { UserAvatar } from "../components/ui";
 import { ButtonSpinner } from "../components/loading";
 import {
   Bell,
@@ -488,7 +489,14 @@ function EmployeeProfilePopover({
   return <section role="dialog" aria-labelledby="employee-profile-title" onClick={(event) => event.stopPropagation()} style={position} className={`absolute z-40 w-72 -translate-y-1/2 rounded-xl border border-white/80 bg-white/95 p-4 shadow-xl shadow-slate-950/25 max-sm:!inset-x-2 max-sm:!bottom-2 max-sm:!top-auto max-sm:!w-auto max-sm:!translate-x-0 max-sm:!translate-y-0 ${opensLeft ? '-translate-x-[calc(100%+2.5rem)]' : 'translate-x-10'} dark:border-slate-600 dark:bg-slate-900/95`}>
     <span className={`absolute top-1/2 h-3 w-3 -translate-y-1/2 rotate-45 border-b border-l border-white/80 bg-white/95 max-sm:hidden dark:border-slate-600 dark:bg-slate-900/95 ${opensLeft ? '-right-1.5 rotate-[225deg]' : '-left-1.5'}`} />
     <div className="relative flex items-start gap-3">
-      <img src={getEmployeeAvatar(attendance)} alt={employeeName} className="h-11 w-11 shrink-0 rounded-xl object-cover ring-1 ring-indigo-100 dark:ring-indigo-500/30" />
+      <UserAvatar
+        name={employeeName}
+        stableKey={attendance.employee?.id ?? employeeName}
+        imageSrc={getEmployeeAvatarImageUrl(attendance.employee?.avatar_path)}
+        imageAlt={`${employeeName}のプロフィール画像`}
+        size="md"
+        status={attendance.status}
+      />
       <div className="min-w-0 flex-1"><p className="text-[9px] font-bold tracking-wider text-indigo-500">EMPLOYEE PROFILE</p><h2 id="employee-profile-title" className="mt-0.5 truncate text-sm font-bold text-slate-900 dark:text-white">{employeeName}</h2><p className="truncate text-[10px] text-slate-400">{attendance.employee?.full_name_kana || attendance.employee?.employee_code || "社員情報"}</p></div>
       <button type="button" onClick={onClose} aria-label="プロフィールを閉じる" className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800"><X size={15} /></button>
     </div>
@@ -499,13 +507,6 @@ function EmployeeProfilePopover({
 }
 
 const BASE_URL = import.meta.env.BASE_URL
-
-const getEmployeeAvatar = (attendance: Attendance) => {
-  return getEmployeeAvatarUrl(
-    attendance.employee?.avatar_path,
-    attendance.employee?.gender,
-  );
-};
 
 const formatEmploymentType = (type?: string | null) => {
   const labels: Record<string, string> = {
@@ -1863,15 +1864,6 @@ export default function EmployeeRoom() {
     closeStatusModal();
   };
 
-  const memberStatusColor = (status: WorkStatus) => {
-    switch (status) {
-      case "working": return "bg-emerald-500";
-      case "break": return "bg-amber-400";
-      case "outside": return "bg-blue-500";
-      default: return "bg-slate-400";
-    }
-  };
-
   const memberStatusLabel = (status: WorkStatus) => statusLabels[status];
 
   const filteredMembers = memberActivityTab === "all"
@@ -2215,21 +2207,13 @@ export default function EmployeeRoom() {
                     isSelected ? "z-30" : "z-10"
                   }`}
                 >
-                  <span
-                    className={`absolute -right-0.5 -top-0.5 z-10 h-2.5 w-2.5 rounded-full border-2 border-white shadow-sm ${
-                      attendance.status === "break"
-                        ? "bg-amber-400"
-                        : attendance.status === "outside"
-                          ? "bg-blue-500"
-                          : "bg-emerald-500"
-                    }`}
-                  />
-
-                  <img
-                    src={getEmployeeAvatar(attendance)}
-                    alt=""
-                    className="h-10 w-10 rounded-full border-2 border-white/90 object-cover shadow-md shadow-slate-950/50 sm:h-12 sm:w-12"
-                    draggable={false}
+                  <UserAvatar
+                    name={vietnameseName}
+                    stableKey={attendance.employee?.id ?? vietnameseName}
+                    imageSrc={getEmployeeAvatarImageUrl(attendance.employee?.avatar_path)}
+                    imageAlt={`${vietnameseName}のプロフィール画像`}
+                    size="md"
+                    status={attendance.status}
                   />
 
                   <span className={`absolute left-1/2 top-full mt-1 max-w-28 -translate-x-1/2 truncate rounded-md border border-white/10 bg-slate-950/90 px-1.5 py-0.5 text-[9px] font-semibold text-white shadow-sm transition-opacity sm:text-[10px] ${
@@ -2736,16 +2720,14 @@ export default function EmployeeRoom() {
                       key={attendance.id}
                       className="flex items-center gap-3 border-b border-slate-50 px-5 py-3 last:border-b-0 hover:bg-slate-50/70 dark:border-slate-800 dark:hover:bg-slate-800/50"
                     >
-                      <div className="relative shrink-0">
-                        <img
-                          src={getEmployeeAvatar(attendance)}
-                          alt={name}
-                          className="h-9 w-9 rounded-xl object-cover"
-                        />
-                        <span
-                          className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-slate-900 ${memberStatusColor(attendance.status)}`}
-                        />
-                      </div>
+                      <UserAvatar
+                        name={name}
+                        stableKey={attendance.employee?.id ?? name}
+                        imageSrc={getEmployeeAvatarImageUrl(attendance.employee?.avatar_path)}
+                        imageAlt={`${name}のプロフィール画像`}
+                        size="md"
+                        status={attendance.status}
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <p className="truncate text-xs font-bold text-slate-800 dark:text-white">

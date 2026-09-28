@@ -27,6 +27,7 @@ import { safeProgress, statusConfig } from './helpers'
 import { generatedCaseTitle } from '../../features/case-management/helpers'
 import type { BusinessCase, CaseQuickFilter, CaseStatus } from './types'
 import CaseQuickViewDrawer from './CaseQuickViewDrawer'
+import { UserAvatar } from '../../components/ui'
 
 type Props = {
   cases: BusinessCase[]
@@ -83,17 +84,6 @@ const mobileAccentMap: Record<string, string> = {
   waiting_payment: 'border-l-violet-600',
   completed:       'border-l-emerald-600',
 }
-
-const avatarMap: Record<string, string> = {
-  received:        'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/60 dark:text-cyan-200',
-  in_progress:     'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200',
-  reviewing:       'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200',
-  waiting:         'bg-orange-100 text-orange-800 dark:bg-orange-900/60 dark:text-orange-200',
-  waiting_payment: 'bg-violet-100 text-violet-800 dark:bg-violet-900/60 dark:text-violet-200',
-  completed:       'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200',
-}
-
-const DEFAULT_AVATAR = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
 
 export default function CaseListView(props: Props) {
   const { t } = useTranslation()
@@ -433,7 +423,6 @@ export default function CaseListView(props: Props) {
                   const title = item.title === generatedCaseTitle(item.customerName, item.caseType.split(' / ').at(-1) ?? '') ? null : item.title
                   const isAssigningThis = assigningCaseId === item.id
                   const statusCfg = statusConfig[item.status]
-                  const initials = item.customerName.trim().split(/\s+/).slice(0, 2).map((w: string) => w.charAt(0).toUpperCase()).join('')
                   const docPct   = safeProgress(item.documentsDone, item.documentsTotal)
                   const docDone  = item.documentsTotal > 0 && item.documentsDone === item.documentsTotal
                   const isActive = item.status === 'in_progress'
@@ -456,9 +445,7 @@ export default function CaseListView(props: Props) {
 
                         {/* 1. Client */}
                         <div className="cm-cc-client">
-                          <div className={`cm-cc-avatar ${avatarMap[item.status] ?? DEFAULT_AVATAR}`}>
-                            {initials || '?'}
-                          </div>
+                          <UserAvatar name={item.customerName} stableKey={item.customerId} size="md" />
                           <div className="min-w-0 flex-1">
                             <span className="cm-cc-client-name">{item.customerName}</span>
                             <div className="cm-cc-client-sub">
@@ -575,7 +562,6 @@ export default function CaseListView(props: Props) {
             <div className="cm-clv-mobile-only cm-mobile-list">
               {visible.map(item => {
                 const statusCfg = statusConfig[item.status]
-                const initials = item.customerName.trim().split(/\s+/).slice(0, 2).map((w: string) => w.charAt(0).toUpperCase()).join('')
                 const docPct   = safeProgress(item.documentsDone, item.documentsTotal)
                 const docDone  = item.documentsTotal > 0 && item.documentsDone === item.documentsTotal
                 const isActive = item.status === 'in_progress'
@@ -595,9 +581,7 @@ export default function CaseListView(props: Props) {
                     <div className="cm-mobile-card-top">
                       {/* Left: avatar + name */}
                       <div className="cm-mobile-card-identity">
-                        <div className={`cm-mobile-avatar ${avatarMap[item.status] ?? DEFAULT_AVATAR}`}>
-                          {initials || '?'}
-                        </div>
+                        <UserAvatar name={item.customerName} stableKey={item.customerId} size="md" />
                         <div className="cm-mobile-card-name-block">
                           <p className="cm-mobile-client-name">{item.customerName}</p>
                           <p className="cm-mobile-case-code">{item.code}</p>

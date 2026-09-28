@@ -53,7 +53,7 @@ export type CaseTask = {
   priority: 'low' | 'normal' | 'high' | 'critical'
   due_at: string | null
   completed_at: string | null
-  assigned_employee: { id: number; full_name: string } | null
+  assigned_employee: { id: number; full_name: string; avatar_path?: string | null } | null
 }
 
 export type CaseActivity = {

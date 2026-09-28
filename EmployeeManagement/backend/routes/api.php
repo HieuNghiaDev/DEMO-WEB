@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AiChatController;
+use App\Http\Controllers\Api\AppReleaseController;
 use App\Http\Controllers\Api\ApprovalRequestController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuthController;
@@ -57,6 +58,21 @@ Route::middleware([
         AuthController::class,
         'updateAvatar',
     ])->middleware('throttle:10,1');
+
+    Route::get('/system/release/current', [
+        AppReleaseController::class,
+        'current',
+    ]);
+
+    Route::get('/developer/releases', [
+        AppReleaseController::class,
+        'index',
+    ])->middleware('permission:developer.view');
+
+    Route::post('/developer/releases', [
+        AppReleaseController::class,
+        'store',
+    ])->middleware('permission:developer.release.manage', 'throttle:10,1');
 
     Route::get('/organization', [
         OrganizationController::class,

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  BadgeCheck, BotMessageSquare, FileSpreadsheet, FolderKanban, Home, LogOut,
+  BadgeCheck, BotMessageSquare, Code2, FileSpreadsheet, FolderKanban, Home, LogOut,
   Menu, Settings, UsersRound, X, type LucideIcon,
 } from 'lucide-react'
 import { NavLink, useNavigate } from 'react-router-dom'
@@ -8,6 +8,8 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../contexts/AuthContext'
 import LogoutConfirmationDialog from '../settings/LogoutConfirmationDialog'
 import SidebarUtilityPanel from './SidebarUtilityPanel'
+import { UserAvatar } from '../ui'
+import { getEmployeeAvatarImageUrl } from '../../utils/employeeAvatar'
 
 function SidebarItem({ path, name, icon: Icon, onSelect }: {
   path: string
@@ -72,6 +74,7 @@ export default function Sidebar() {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const employeeName = user?.employee?.full_name || user?.name || user?.login_id || 'THEMIS MANAGER'
   const employeeCode = user?.employee?.employee_code || user?.login_id || 'TMS-2600S'
+  const canViewDeveloperConsole = user?.permission_names.includes('developer.view') ?? false
   const menuItems = [
     { path: '/', name: t('navigation.employeeRoom'), icon: Home },
     { path: '/organization', name: t('navigation.organization'), icon: UsersRound },
@@ -142,8 +145,14 @@ export default function Sidebar() {
         <img src={`${import.meta.env.BASE_URL}images/logoTHEMIS.png`} alt="" className="h-7 w-7 object-contain" />
         <span className="whitespace-nowrap text-sm font-extrabold tracking-tight text-slate-900 dark:text-white">THEMIS HQ</span>
       </NavLink>
-      <NavLink to="/system?section=account" aria-label={t('sidebar.accountSettings', { name: employeeName })} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-xs font-black text-white shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:bg-tm-primary dark:ring-offset-tm-sidebar">
-        {employeeName.charAt(0).toUpperCase()}
+      <NavLink to="/system?section=account" aria-label={t('sidebar.accountSettings', { name: employeeName })} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:ring-offset-tm-sidebar">
+        <UserAvatar
+          name={employeeName}
+          stableKey={user?.employee?.id ?? user?.id}
+          imageSrc={getEmployeeAvatarImageUrl(user?.employee?.avatar_path)}
+          imageAlt={`${employeeName}のプロフィール画像`}
+          size="md"
+        />
       </NavLink>
     </header>
     {isOpen && <button type="button" onClick={closeMenu} aria-label={t('sidebar.closeMenu')} className="fixed inset-0 z-40 bg-slate-950/50 xl:hidden" />}
@@ -169,12 +178,19 @@ export default function Sidebar() {
           <span>{t('sidebar.system')}</span><span className="tracking-widest text-[10px] text-slate-400 dark:text-slate-500">SYSTEM</span>
         </div>
         <SidebarItem path="/system" name={t('navigation.settings')} icon={Settings} onSelect={closeMenu} />
+        {canViewDeveloperConsole && <SidebarItem path="/developer" name="開発者" icon={Code2} onSelect={closeMenu} />}
       </nav>
       <div className="mt-4 shrink-0 border-t border-slate-200/90 pt-3 dark:border-white/[0.08]">
         <div className="flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 via-white to-indigo-50/50 p-2 shadow-xs transition-all duration-150 hover:border-indigo-300 hover:shadow-sm dark:!bg-none dark:!bg-tm-surface dark:border-tm-border dark:shadow-none dark:hover:border-tm-border-strong dark:hover:shadow-none">
           <NavLink to="/system?section=account" onClick={closeMenu} aria-label={t('sidebar.accountSettings', { name: employeeName })}
             className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-xs font-black text-white shadow-sm shadow-indigo-500/30 ring-2 ring-indigo-500/20 dark:!bg-none dark:!bg-tm-primary dark:shadow-none dark:ring-indigo-400/20">{employeeName.charAt(0).toUpperCase()}</span>
+          <UserAvatar
+            name={employeeName}
+            stableKey={user?.employee?.id ?? user?.id}
+            imageSrc={getEmployeeAvatarImageUrl(user?.employee?.avatar_path)}
+            imageAlt={`${employeeName}のプロフィール画像`}
+            size="md"
+          />
           <div className="min-w-0 flex-1">
             <p title={employeeName} className="truncate text-xs font-bold text-slate-900 dark:text-slate-100 leading-tight">{employeeName}</p>
             <p className="mt-0.5 truncate font-mono text-[11px] font-bold text-indigo-600 dark:text-indigo-400">{employeeCode}</p>

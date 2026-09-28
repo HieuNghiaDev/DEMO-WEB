@@ -286,6 +286,7 @@ class OrganizationController extends Controller
             'available_roles' => $user->hasPermission('employee.manage_roles')
                 ? Role::query()
                     ->select(['id', 'name', 'display_name'])
+                    ->when(! $user->hasRole('level_5'), fn ($query) => $query->where('name', '!=', 'developer'))
                     ->orderBy('id')
                     ->get()
                 : [],
@@ -319,14 +320,15 @@ class OrganizationController extends Controller
             ->get(['id', 'name']);
         $roleNames = $roles->pluck('name');
         $isGrantingLevelFive = $roleNames->contains('level_5');
+        $isGrantingDeveloper = $roleNames->contains('developer');
         $superAdminRole = Role::query()
             ->where('name', 'level_5')
             ->firstOrFail();
 
         abort_if(
-            $isGrantingLevelFive && ! $actor->hasRole('level_5'),
+            ($isGrantingLevelFive || $isGrantingDeveloper) && ! $actor->hasRole('level_5'),
             403,
-            'Level 5を付与できるのはLevel 5のユーザーのみです。'
+            'Level 5または開発者権限を付与できるのはLevel 5のユーザーのみです。'
         );
 
         $isRemovingLastSuperAdmin = $targetUser->hasRole('level_5')

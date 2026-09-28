@@ -232,12 +232,27 @@ Không có bảng MySQL nào cho dữ liệu 在留申請 trong Phase 1. Workboo
 - `SecurityAuditLogger` băm định danh bằng `APP_KEY`, loại bỏ metadata có các từ khóa authorization/cookie/password/secret/token, và fail-open để audit không làm gián đoạn app.
 - Sự kiện 401/403/429 được deduplicate trong cache một phút để tránh spam log.
 
+## Application releases
+
+`app_releases` lưu lịch sử phát hành ứng dụng nội bộ và là source of truth thay cho version hardcode trong React.
+
+| Cột | Ý nghĩa |
+| --- | --- |
+| `version`, `major`, `minor`, `patch` | Semantic version duy nhất; unique cả chuỗi và bộ ba số. |
+| `codename`, `release_type`, `title` | Codename hiện tại, loại patch/minor/major và tiêu đề hiển thị. |
+| `release_notes` | JSON có các category `ui`, `new_features`, `improvements`, `bug_fixes`. |
+| `released_at`, `released_by`, `status` | Thời điểm, user phát hành nullable và trạng thái `released`. |
+| `environment`, `build_sha`, `build_number`, `build_date` | Metadata build tách khỏi semantic release; SHA/number là tùy chọn. |
+
+Migration khởi tạo đúng release lịch sử `0.11.0 — KAI`, không tạo tài khoản Developer và không gán quyền cho user. Hai permission Developer phải đi qua role explicit; super-admin bypass không áp dụng cho chúng.
+
 ## Biến môi trường cần thiết
 
 | Biến | Ứng dụng | Ý nghĩa |
 | --- | --- | --- |
 | `APP_KEY` | Backend | Khóa Laravel; cũng là secret khi HMAC định danh audit. Không được lộ hoặc thay đổi tùy tiện ở production. |
 | `APP_ENV`, `APP_DEBUG`, `APP_URL` | Backend | Môi trường, mức debug và URL public của API. Production phải `APP_DEBUG=false`. |
+| `APP_BUILD_SHA`, `APP_BUILD_NUMBER`, `APP_BUILD_DATE` | Backend | Metadata build tùy chọn do pipeline deploy cung cấp; thao tác publish release không tự giả lập các giá trị này. |
 | `DB_*` | Backend | Driver, máy chủ, database, user và password của cơ sở dữ liệu. |
 | `FRONTEND_URL` | Backend | Origin frontend production được phép CORS. |
 | `FILESYSTEM_DISK` | Backend | Disk mặc định Laravel; Excel vận hành đang dùng storage local của ứng dụng. |

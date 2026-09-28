@@ -18,6 +18,18 @@ Accept: application/json
 
 Token không ghi nhớ hết hạn sau 12 giờ; token có `remember: true` hết hạn sau 30 ngày. Frontend lưu token vào `sessionStorage` hoặc `localStorage` tương ứng.
 
+## Application release API
+
+Tất cả endpoint dưới đây cần Sanctum và middleware bắt đổi mật khẩu hiện hữu.
+
+| Method | Endpoint | Quyền | Mô tả |
+| --- | --- | --- | --- |
+| `GET` | `/system/release/current` | User đã xác thực | Bản `released` mới nhất; chỉ trả metadata an toàn, release notes, môi trường và ngày build. |
+| `GET` | `/developer/releases?page=1&per_page=15` | `developer.view` | Lịch sử phân trang, mới nhất trước; thêm actor/build metadata dành cho Developer Console. |
+| `POST` | `/developer/releases` | `developer.release.manage` | Tạo release metadata mới trong transaction và ghi audit. |
+
+Payload POST chỉ nhận `release_type` (`patch|minor|major`), `title` và `release_notes`. `release_notes` có bốn mảng tùy chọn `ui`, `new_features`, `improvements`, `bug_fixes` và phải có ít nhất một item. Client không gửi/không điều khiển version; server khóa release hiện tại rồi tự tính version tiếp theo. Xung đột unique trả `409`, validation trả `422`, thiếu quyền trả `403`. Codename/môi trường kế thừa release hiện tại. Hành động này không deploy source code.
+
 ### Ảnh đại diện nhân viên
 
 `POST /me/avatar` yêu cầu Sanctum và chỉ thay ảnh của **employee đang đăng nhập**. Gửi `multipart/form-data` với field `avatar`: JPG/PNG/WebP, tối đa 2 MB, tối đa 2048 × 2048. Response là `{message, user}` với `user.employee.avatar_path` mới. Ảnh tùy chỉnh lưu public storage tại `/storage/avatars/...`; ảnh mặc định `/images/boy.png` hoặc `/images/girl.png` không bị xóa. Tài khoản chưa có employee profile nhận 403.

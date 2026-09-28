@@ -54,6 +54,12 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    'build_sha' => env('APP_BUILD_SHA'),
+
+    'build_number' => env('APP_BUILD_NUMBER'),
+
+    'build_date' => env('APP_BUILD_DATE'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

@@ -1145,16 +1145,25 @@
 
 /* --- Overview Two-Column Layout --- */
 .cm-ws-overview-layout {
-  display: grid;
+  display: none;
   grid-template-columns: 1fr;
   gap: 20px;
   align-items: start;
 }
 
+.cm-ws-overview-mobile {
+  display: block;
+}
+
 @media (min-width: 1024px) {
   .cm-ws-overview-layout {
+    display: grid;
     grid-template-columns: minmax(0, 70fr) minmax(0, 30fr);
     gap: 20px 24px;
+  }
+
+  .cm-ws-overview-mobile {
+    display: none;
   }
 }
 
@@ -1206,6 +1215,10 @@
   justify-content: space-between;
   margin-bottom: 16px;
   gap: 12px;
+}
+
+.cm-ws-card-header.is-actions-only {
+  justify-content: flex-end;
 }
 
 .cm-ws-card-title-wrap {

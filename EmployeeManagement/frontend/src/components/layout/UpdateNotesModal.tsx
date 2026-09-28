@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ElementType } from 'react'
-import { Bot, BriefcaseBusiness, Check, CheckCircle2, LayoutDashboard, Sparkles, Wrench } from 'lucide-react'
-import { appBuildLabel, appReleaseName, appVersionTag, lastSeenVersionStorageKey } from '../../config/app'
+import { Bug, Check, CheckCircle2, LayoutDashboard, Sparkles, Wrench } from 'lucide-react'
+import { lastSeenVersionStorageKey } from '../../config/app'
+import { useAppRelease } from '../../contexts/AppReleaseContext'
+import { formatReleaseName, releaseVersionTag } from '../../features/releases/releaseApi'
 import Button from '../ui/Button'
 import ModalShell from '../ui/ModalShell'
 import './UpdateNotesModal.css'
@@ -16,60 +18,27 @@ type ReleaseSection = {
   items: Array<{ label: string; badge?: 'NEW' | '改善' }>
 }
 
-const releaseSections: ReleaseSection[] = [
-  {
-    title: 'UI・操作性',
-    icon: LayoutDashboard,
-    items: [
-      { label: '案件詳細画面のUIを改善' },
-      { label: '関係先・関係者カードを見やすく整理' },
-      { label: 'Quick View のデザインと操作性を改善' },
-      { label: 'モバイル表示・レスポンシブ対応を強化' },
-      { label: 'ダークモードの表示品質を改善' },
-    ],
-  },
-  {
-    title: '案件・関係者管理',
-    icon: BriefcaseBusiness,
-    items: [
-      { label: '交通事故案件の関係先管理を強化' },
-      { label: '本人側保険会社 / 相手方保険会社を識別可能に', badge: 'NEW' },
-      { label: '相手方企業（加害者側会社）に対応', badge: 'NEW' },
-      { label: '勤務先・保険会社・警察署などの関係種別表示を改善' },
-    ],
-  },
-  {
-    title: 'THEMIS AI',
-    icon: Bot,
-    items: [
-      { label: 'AIクイックアシストのUIを刷新', badge: '改善' },
-      { label: 'ログインユーザー名を使ったパーソナルな挨拶に対応' },
-      { label: 'クイックアクションと入力UIを改善' },
-      { label: 'チャットパネルの開閉アニメーションを改善' },
-    ],
-  },
-  {
-    title: 'その他',
-    icon: Wrench,
-    items: [
-      { label: '各種UIの細かな表示・操作性を改善' },
-      { label: 'レスポンシブ表示とダークモードの調整' },
-      { label: '軽微な不具合を修正' },
-    ],
-  },
-]
-
 export default function UpdateNotesModal({ isOpen, onOpenChange }: UpdateNotesModalProps) {
+  const { currentRelease } = useAppRelease()
+  const releaseName = formatReleaseName(currentRelease)
+  const releaseSections: ReleaseSection[] = [
+    { title: 'UI・操作性', icon: LayoutDashboard, items: currentRelease.release_notes.ui.map(label => ({ label })) },
+    { title: '新機能', icon: Sparkles, items: currentRelease.release_notes.new_features.map(label => ({ label, badge: 'NEW' })) },
+    { title: '改善', icon: Wrench, items: currentRelease.release_notes.improvements.map(label => ({ label, badge: '改善' })) },
+    { title: '不具合修正', icon: Bug, items: currentRelease.release_notes.bug_fixes.map(label => ({ label })) },
+  ].filter(section => section.items.length > 0)
   const [isMounted, setIsMounted] = useState(isOpen)
   const [isClosing, setIsClosing] = useState(false)
   const closeTimer = useRef<number | null>(null)
 
   useEffect(() => {
-    if (isOpen) {
-      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current)
+    if (!isOpen) return
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current)
+    const openTimer = window.setTimeout(() => {
       setIsMounted(true)
       setIsClosing(false)
-    }
+    }, 0)
+    return () => window.clearTimeout(openTimer)
   }, [isOpen])
 
   useEffect(() => () => {
@@ -79,7 +48,7 @@ export default function UpdateNotesModal({ isOpen, onOpenChange }: UpdateNotesMo
   const close = () => {
     if (isClosing) return
     try {
-      window.localStorage.setItem(lastSeenVersionStorageKey, appVersionTag)
+      window.localStorage.setItem(lastSeenVersionStorageKey, releaseVersionTag(currentRelease))
     } catch {
       // The acknowledgement remains session-only when storage is unavailable.
     }
@@ -100,17 +69,17 @@ export default function UpdateNotesModal({ isOpen, onOpenChange }: UpdateNotesMo
       title={
         <span className="tm-release-title-row">
           <span>アップデートのお知らせ</span>
-          <span className="tm-release-version">{appReleaseName}</span>
+          <span className="tm-release-version">{releaseName}</span>
         </span>
       }
-      description="THEMIS がさらに使いやすくなりました。"
+      description={currentRelease.title}
       icon={<Sparkles className="h-[18px] w-[18px]" aria-hidden="true" />}
       className={`tm-release-modal${isClosing ? ' is-closing' : ''}`}
       overlayClassName={`tm-release-overlay${isClosing ? ' is-closing' : ''}`}
       backdropClassName="tm-release-backdrop"
       footer={
         <div className="tm-release-footer">
-          <p>{appReleaseName}<span aria-hidden="true"> · </span>{appBuildLabel}</p>
+          <p>{releaseName}<span aria-hidden="true"> · </span>{currentRelease.environment}</p>
           <div>
             <Button variant="ghost" onClick={close}>後で見る</Button>
             <Button variant="primary" icon={<Check size={16} aria-hidden="true" />} onClick={close}>

@@ -9,6 +9,7 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 import MainLayout from "./layouts/MainLayout";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { AppReleaseProvider } from "./contexts/AppReleaseContext";
 
 import Login from "./pages/Login";
 import EmployeeRoom from "./pages/EmployeeRoom";
@@ -19,6 +20,7 @@ import AIEmployees from "./pages/AI";
 import ApprovalRoom from "./pages/ApprovalRoom";
 import ChangePassword from "./pages/ChangePassword";
 import SystemSettings from "./pages/system/SystemSettings";
+import DeveloperConsolePage from "./pages/developer/DeveloperConsolePage";
 import { lazy, Suspense } from "react";
 import { LoadingState } from "./components/ui";
 
@@ -36,7 +38,7 @@ function App() {
             <Route path="/change-password" element={<ChangePassword />} />
             {/* Reuse the password screen without changing the mandatory-reset route guard. */}
             <Route path="/system/password" element={<ChangePassword />} />
-            <Route element={<MainLayout />}>
+            <Route element={<AppReleaseProvider><MainLayout /></AppReleaseProvider>}>
               <Route path="/" element={<EmployeeRoom />} />
               <Route
                 path="/organization"
@@ -47,6 +49,7 @@ function App() {
               <Route path="/ai" element={<AIEmployees />} />
               <Route path="/approvals" element={<ApprovalRoom />} />
               <Route path="/system" element={<SystemSettings />} />
+              <Route path="/developer" element={<DeveloperConsolePage />} />
               <Route path="/design/case-document-collection" element={<Suspense fallback={<LoadingState message="プレビューを読み込み中…" variant="page" />}><DocumentCollectionMockupPage /></Suspense>} />
             </Route>
           </Route>

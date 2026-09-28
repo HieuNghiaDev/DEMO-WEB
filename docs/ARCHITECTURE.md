@@ -40,6 +40,14 @@ Artifact đã lưu được coi là tham chiếu lịch sử; mỗi revision app
 
 ## Frontend
 
+### Application release metadata
+
+`app_releases` trong Laravel là nguồn chuẩn duy nhất cho phiên bản phát hành và release notes. `AppReleaseService` khóa bản phát hành mới nhất trong transaction, tự tính semantic version patch/minor/major và ghi actor/thời gian; thao tác này chỉ công bố metadata nội bộ, không giả lập deploy GitHub/Railway. `SecurityAuditLogger` ghi sự kiện `app.release.created`.
+
+Frontend tải `GET /api/system/release/current` một lần qua `AppReleaseProvider`/`useAppRelease()`. Footer, version popover, popup cập nhật và Developer Console đều đọc cùng state này; build metadata vẫn tách riêng. Nếu API lỗi, provider giữ fallback build-time để ứng dụng còn sử dụng được. Popup cập nhật dùng `themis:lastSeenVersion`, trong khi thao tác xem release notes thủ công luôn mở được.
+
+Hai permission `developer.view` và `developer.release.manage` là quyền explicit: kể cả `level_5` cũng không nhận tự động. Role `developer` không được gán cho user khi migrate/seed; chỉ một Level 5 khác có thể gán role này qua luồng quản trị hiện hữu.
+
 | Tệp/khu vực | Trách nhiệm |
 | --- | --- |
 | `src/main.tsx` | Điểm khởi động React; khởi tạo theme trước khi render để tránh nháy màu. |

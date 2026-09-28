@@ -8,11 +8,10 @@ export const appMetadata = {
   build: import.meta.env.VITE_APP_BUILD?.trim() || '2026.09.25',
 } as const
 
-export const appReleaseName =
-  `v${appMetadata.version} — ${appMetadata.codename}`
+export const appDisplayMetadata = {
+  recommendedResolution: '1920 × 1080（Full HD）',
+  recommendedScale: '100%',
+  minimumResolution: '1366 × 768 以上を推奨',
+} as const
 
-export const appBuildLabel =
-  `${appMetadata.environmentLabel} Build · ${appMetadata.build}`
-
-export const appVersionTag = `v${appMetadata.version}`
 export const lastSeenVersionStorageKey = 'themis:lastSeenVersion'

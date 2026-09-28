@@ -76,6 +76,32 @@ class RbacTest extends TestCase
         $this->getJson('/api/organization')->assertOk();
     }
 
+    public function test_developer_access_is_explicit_and_only_level_five_can_assign_it(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $manager = $this->makeUser('RBAC009');
+        $superAdmin = $this->makeUser('RBAC010');
+        $target = $this->makeUser('RBAC011');
+        $manager->roles()->sync($this->roleIds('level_4'));
+        $superAdmin->roles()->sync($this->roleIds('level_5'));
+        $target->roles()->sync($this->roleIds('level_2'));
+
+        $this->assertFalse($superAdmin->hasPermission('developer.view'));
+
+        Sanctum::actingAs($manager);
+        $this->putJson("/api/employees/{$target->employee_id}/roles", [
+            'role_ids' => $this->roleIds('developer'),
+        ])->assertForbidden();
+
+        Sanctum::actingAs($superAdmin);
+        $this->putJson("/api/employees/{$target->employee_id}/roles", [
+            'role_ids' => $this->roleIds('developer'),
+        ])->assertOk();
+
+        $this->assertTrue($target->fresh()->hasPermission('developer.view'));
+        $this->assertTrue($target->fresh()->hasPermission('developer.release.manage'));
+    }
+
     public function test_only_users_with_employee_update_permission_can_change_employment_type(): void
     {
         $this->seed(RolePermissionSeeder::class);

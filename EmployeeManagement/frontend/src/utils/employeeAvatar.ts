@@ -1,18 +1,16 @@
 const frontendBaseUrl = import.meta.env.BASE_URL;
 const backendBaseUrl = (import.meta.env.VITE_BACKEND_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
-export const getEmployeeAvatarUrl = (
+export const getEmployeeAvatarImageUrl = (
   avatarPath: string | null | undefined,
-  gender?: string | null,
 ) => {
-  const fallbackPath = gender === "female" ? "/images/girl.png" : "/images/boy.png";
-  const path = avatarPath || fallbackPath;
+  if (!avatarPath) return undefined;
 
-  if (/^https?:\/\//i.test(path)) return path;
+  if (/^https?:\/\//i.test(avatarPath)) return avatarPath;
 
-  if (path.startsWith("/storage/")) {
-    return `${backendBaseUrl}${path}`;
+  if (avatarPath.startsWith("/storage/")) {
+    return `${backendBaseUrl}${avatarPath}`;
   }
 
-  return `${frontendBaseUrl}${path.replace(/^\/+/, "")}`;
+  return `${frontendBaseUrl}${avatarPath.replace(/^\/+/, "")}`;
 };

@@ -15,6 +15,12 @@ class User extends Authenticatable
     use HasFactory;
     use Notifiable;
 
+    /** Permissions in this list always require an explicit role assignment. */
+    private const EXPLICIT_PERMISSIONS = [
+        'developer.view',
+        'developer.release.manage',
+    ];
+
     protected $fillable = [
         'employee_id',
         'login_id',
@@ -88,7 +94,7 @@ class User extends Authenticatable
 
     public function hasPermission(string $permission): bool
     {
-        if ($this->hasRole('level_5')) {
+        if ($this->hasRole('level_5') && ! in_array($permission, self::EXPLICIT_PERMISSIONS, true)) {
             return true;
         }
 
@@ -120,7 +126,20 @@ class User extends Authenticatable
     public function getPermissionNamesAttribute(): array
     {
         if ($this->hasRole('level_5')) {
-            return Permission::query()->pluck('name')->all();
+            $implicitPermissions = Permission::query()
+                ->whereNotIn('name', self::EXPLICIT_PERMISSIONS)
+                ->pluck('name');
+            $explicitPermissions = $this->roles()
+                ->with('permissions:id,name')
+                ->get()
+                ->flatMap(fn (Role $role) => $role->permissions->pluck('name'))
+                ->filter(fn (string $permission) => in_array($permission, self::EXPLICIT_PERMISSIONS, true));
+
+            return $implicitPermissions
+                ->merge($explicitPermissions)
+                ->unique()
+                ->values()
+                ->all();
         }
 
         return $this->roles()

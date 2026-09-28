@@ -50,7 +50,11 @@ class RolePermissionSeeder extends Seeder
             'approval.view' => '承認を閲覧',
             'approval.approve' => '承認を実行',
             'ai.use' => 'AIを利用',
+            'developer.view' => '開発者コンソールを閲覧',
+            'developer.release.manage' => 'アプリケーションリリースを管理',
         ];
+
+        $roles['developer'] = '開発者';
 
         $roleModels = collect($roles)->mapWithKeys(
             fn (string $displayName, string $name) => [
@@ -70,7 +74,10 @@ class RolePermissionSeeder extends Seeder
             ]
         );
 
-        $allPermissions = $permissionModels->pluck('id')->all();
+        $standardPermissionIds = $permissionModels
+            ->except(['developer.view', 'developer.release.manage'])
+            ->pluck('id')
+            ->all();
         $rolePermissions = [
             'level_1' => [
                 'employee.view', 'attendance.view_own', 'attendance.update_own',
@@ -100,12 +107,18 @@ class RolePermissionSeeder extends Seeder
                 'document.create', 'document.update', 'document.delete',
                 'approval.submit', 'approval.view', 'approval.approve', 'ai.use',
             ],
-            'level_5' => $allPermissions,
+            'level_5' => $standardPermissionIds,
+            'developer' => [
+                'employee.view', 'attendance.view_own', 'attendance.update_own',
+                'attendance.export_own', 'task.view_own', 'task.update',
+                'case.view', 'document.view', 'document.update', 'ai.use',
+                'developer.view', 'developer.release.manage',
+            ],
         ];
 
         foreach ($rolePermissions as $roleName => $permissionNames) {
             $ids = $roleName === 'level_5'
-                ? $allPermissions
+                ? $standardPermissionIds
                 : $permissionModels->only($permissionNames)->pluck('id')->all();
             $roleModels[$roleName]->permissions()->sync($ids);
         }

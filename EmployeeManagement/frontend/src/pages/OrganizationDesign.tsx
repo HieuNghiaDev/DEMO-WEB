@@ -33,6 +33,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { ButtonSpinner, KpiSkeletonValue, LoadingOverlay, MobileCardSkeleton, Skeleton, TableSkeleton } from '../components/loading'
 import { CasePageHeader } from '../features/case-management/CasePrimitives'
 import '../features/case-management/caseManagement.css'
+import { UserAvatar } from '../components/ui'
+import { getEmployeeAvatarImageUrl } from '../utils/employeeAvatar'
 
 type WorkStatus = 'working' | 'break' | 'outside' | 'offline'
 
@@ -212,13 +214,6 @@ const mobileAccentMap: Record<WorkStatus, string> = {
   break: 'border-l-amber-500',
   outside: 'border-l-blue-500',
   offline: 'border-l-slate-400',
-}
-
-const avatarMap: Record<WorkStatus, string> = {
-  working: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
-  break: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
-  outside: 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
-  offline: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
 }
 
 function formatTime(value?: string | null) {
@@ -862,31 +857,7 @@ export default function OrganizationDesign() {
               </div>
 
               <div className="cm-clv-pagination-controls">
-                {/* Mobile compact pagination */}
-                <nav className="cm-clv-mobile-only cm-clv-pag-mobile" aria-label="社員ページネーション">
-                  <button
-                    type="button"
-                    aria-label="前のページ"
-                    disabled={current === 1}
-                    onClick={() => setPage(current - 1)}
-                    className="cm-clv-pag-btn"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <span className="cm-clv-pag-label">{current} / {pages}</span>
-                  <button
-                    type="button"
-                    aria-label="次のページ"
-                    disabled={current === pages}
-                    onClick={() => setPage(current + 1)}
-                    className="cm-clv-pag-btn"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </nav>
-
-                {/* Desktop full pagination */}
-                <nav className="cm-clv-desktop-only cm-clv-pag-desktop" aria-label="社員ページネーション">
+                <nav className="cm-clv-pag-desktop" aria-label="社員ページネーション">
                   <button
                     type="button"
                     aria-label="前のページ"
@@ -1000,7 +971,6 @@ function EmployeeTableRow({
   onClick: () => void
 }) {
   const status = statusConfig[employee.work_status]
-  const initial = employee.full_name.trim().charAt(0).toUpperCase() || '?'
   const isActive = employee.work_status === 'working'
 
   return (
@@ -1016,10 +986,14 @@ function EmployeeTableRow({
       <div className="cm-cc-body cm-org-grid">
         {/* 1. Identity */}
         <div className="cm-cc-client">
-          <div className={`cm-cc-avatar relative ${avatarMap[employee.work_status]}`}>
-            {initial}
-            <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-slate-900 ${status.dot}`} />
-          </div>
+          <UserAvatar
+            name={employee.full_name}
+            stableKey={employee.id}
+            imageSrc={getEmployeeAvatarImageUrl(employee.avatar_path)}
+            imageAlt={`${employee.full_name}のプロフィール画像`}
+            size="md"
+            status={employee.work_status}
+          />
           <div className="min-w-0 flex-1">
             <span className="cm-cc-client-name">{employee.full_name}</span>
             <div className="cm-cc-client-sub">
@@ -1112,7 +1086,6 @@ function EmployeeMobileCard({
   onClick: () => void
 }) {
   const status = statusConfig[employee.work_status]
-  const initial = employee.full_name.trim().charAt(0).toUpperCase() || '?'
   const isActive = employee.work_status === 'working'
 
   return (
@@ -1122,27 +1095,30 @@ function EmployeeMobileCard({
     >
       {/* Top row: Identity + Action */}
       <div className="cm-mobile-card-top">
-        <div className="cm-mobile-card-identity">
-          <div className={`cm-mobile-avatar relative ${avatarMap[employee.work_status]}`}>
-            {initial}
-            <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-slate-900 ${status.dot}`} />
-          </div>
-          <div className="cm-mobile-card-name-block">
-            <p className="cm-mobile-client-name">{employee.full_name}</p>
-            <p className="cm-mobile-case-code">{employee.employee_code}</p>
-            {employee.full_name_kana && <p className="cm-org-mobile-kana">{employee.full_name_kana}</p>}
-          </div>
+        <UserAvatar
+          name={employee.full_name}
+          stableKey={employee.id}
+          imageSrc={getEmployeeAvatarImageUrl(employee.avatar_path)}
+          imageAlt={`${employee.full_name}のプロフィール画像`}
+          size="md"
+          status={employee.work_status}
+        />
+        <div className="cm-mobile-card-name-block">
+          <p className="cm-mobile-client-name">{employee.full_name}</p>
+          <p className="cm-mobile-case-code">{employee.employee_code}</p>
+          {employee.full_name_kana && <p className="cm-org-mobile-kana">{employee.full_name_kana}</p>}
         </div>
-        <div onClick={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            aria-label={`${employee.full_name}の詳細を表示`}
-            onClick={onClick}
-            className="cm-mobile-action-btn"
-          >
-            <ChevronRight size={15} />
-          </button>
-        </div>
+        <button
+          type="button"
+          aria-label={`${employee.full_name}の詳細を表示`}
+          onClick={(event) => {
+            event.stopPropagation()
+            onClick()
+          }}
+          className="cm-mobile-action-btn"
+        >
+          <ChevronRight size={15} />
+        </button>
       </div>
 
       <div className="cm-org-mobile-office">
@@ -1164,18 +1140,18 @@ function EmployeeMobileCard({
           {status.label}
         </span>
         {employee.attendance?.clock_in && (
-          <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-slate-400">
-            <Clock3 size={12} />
-            <span>{formatTime(employee.attendance.clock_in)} 入室</span>
+          <span className="cm-org-mobile-time flex min-w-0 items-center justify-end gap-1 text-[11px] font-medium text-slate-400">
+            <Clock3 size={12} className="shrink-0" />
+            <span className="truncate">{formatTime(employee.attendance.clock_in)} 入室</span>
           </span>
         )}
       </div>
 
       {/* Keep the card dense: an empty task must not reserve a meaningless row. */}
       {employee.attendance?.current_task && (
-        <div className="mt-2.5 flex items-center justify-between border-t border-[var(--tm-border-subtle)] pt-2 text-xs">
+        <div className="cm-org-mobile-task-row mt-2.5 flex min-w-0 items-center justify-between border-t border-[var(--tm-border-subtle)] pt-2 text-xs">
           <span className="shrink-0 text-[11px] text-slate-400">現在の作業:</span>
-          <span className="ml-3 truncate text-right text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+          <span className="ml-3 min-w-0 truncate text-right text-[11px] font-semibold text-slate-700 dark:text-slate-300">
             {employee.attendance.current_task.task_description}
           </span>
         </div>
@@ -1192,7 +1168,6 @@ function EmployeeGridCard({
   onClick: () => void
 }) {
   const status = statusConfig[employee.work_status]
-  const initial = employee.full_name.trim().charAt(0).toUpperCase() || '?'
   const isActive = employee.work_status === 'working'
 
   return (
@@ -1203,10 +1178,14 @@ function EmployeeGridCard({
       <div>
         {/* Top bar: Avatar & Status */}
         <div className="flex items-start justify-between gap-2">
-          <div className={`cm-cc-avatar relative ${avatarMap[employee.work_status]}`}>
-            {initial}
-            <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-slate-900 ${status.dot}`} />
-          </div>
+          <UserAvatar
+            name={employee.full_name}
+            stableKey={employee.id}
+            imageSrc={getEmployeeAvatarImageUrl(employee.avatar_path)}
+            imageAlt={`${employee.full_name}のプロフィール画像`}
+            size="md"
+            status={employee.work_status}
+          />
 
           <span className={`cm-cc-status ${status.badge}`}>
             <span className={`cm-cc-dot ${status.dot} ${isActive ? 'animate-pulse' : ''}`} />
@@ -1467,7 +1446,6 @@ function EmployeeDetailModal({
   const [resettingPassword, setResettingPassword] = useState(false)
 
   const status = statusConfig[employee.work_status]
-  const initial = employee.full_name.trim().charAt(0).toUpperCase() || '?'
   const isEmployeeOnline = employee.work_status !== 'offline' && employee.attendance !== null
 
   const toggleRole = (roleId: number) => {
@@ -1597,10 +1575,14 @@ function EmployeeDetailModal({
         {/* Header */}
         <header className="organization-dialog-header flex items-start justify-between border-b border-slate-100 p-4 dark:border-slate-800 sm:p-5">
           <div className="flex items-center gap-3.5">
-            <div className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${avatarMap[employee.work_status]} text-base font-bold`}>
-              {initial}
-              <span className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-slate-900 ${status.dot}`} />
-            </div>
+            <UserAvatar
+              name={employee.full_name}
+              stableKey={employee.id}
+              imageSrc={getEmployeeAvatarImageUrl(employee.avatar_path)}
+              imageAlt={`${employee.full_name}のプロフィール画像`}
+              size="lg"
+              status={employee.work_status}
+            />
             <div className="min-w-0">
               <div className="organization-dialog-title-line flex items-center gap-2">
                 <h2 id="organization-employee-dialog-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">{employee.full_name}</h2>

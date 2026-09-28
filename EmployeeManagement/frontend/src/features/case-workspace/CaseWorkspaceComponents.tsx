@@ -3,13 +3,15 @@ import {
   AlertTriangle, ArrowRight, Building2, Calendar, CheckCircle2,
   ChevronLeft, ChevronRight, Clock, Clock3, Copy, FileText, Globe, HeartPulse,
   ListChecks, Mail, MapPin, MoreHorizontal, Pencil, Phone,
-  Plus, Printer, Share2, Shield, ShieldCheck, User, Users
+  Plus, Printer, Share2, Shield, ShieldCheck, Users
 } from 'lucide-react'
 import type {
   CaseActivity, CaseWorkspace, RelatedEntity,
   WorkspaceSummary, EntityBadgeTone
 } from './types'
 import { caseStatusOptions } from '../../pages/business-quest/helpers'
+import { UserAvatar } from '../../components/ui'
+import { getEmployeeAvatarImageUrl } from '../../utils/employeeAvatar'
 
 // --- Helper Functions ---
 
@@ -356,6 +358,7 @@ export function WorkspaceHeader({
   const birthDisplay = rawBirth ? calculateAgeDisplay(rawBirth) : '未登録'
 
   const residenceStatus = (caseFile?.client as any)?.residence_status || (caseFile as any)?.summary_residence || '未登録'
+  const assigneeName = caseFile.assigned_employee?.full_name || '未割当'
 
   const currentWorkplace = selectEmploymentSummaryEntity(caseFile)
 
@@ -548,16 +551,17 @@ export function WorkspaceHeader({
 
         {/* Card 3: 担当者 */}
         <div className="cm-ws-summary-card">
-          <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-xs"
-            style={{ backgroundColor: '#4338ca' }}
-          >
-            {caseFile.assigned_employee?.full_name?.slice(0, 1) || 'T'}
-          </div>
+          <UserAvatar
+            name={caseFile.assigned_employee?.full_name}
+            stableKey={caseFile.assigned_employee?.id}
+            imageSrc={getEmployeeAvatarImageUrl(caseFile.assigned_employee?.avatar_path)}
+            imageAlt={caseFile.assigned_employee ? `${assigneeName}のプロフィール画像` : ''}
+            size="md"
+          />
           <div className="cm-ws-summary-content">
             <div className="cm-ws-summary-label">担当者</div>
             <div className="cm-ws-summary-val">
-              {caseFile.assigned_employee?.full_name || 'THAN VAN SAY'}
+              {assigneeName}
             </div>
           </div>
           <ChevronRight size={16} className="cm-ws-summary-chevron" />
@@ -610,9 +614,11 @@ export function WorkspaceHeader({
 export function IncidentSummaryCard({
   caseFile,
   onEdit,
+  hideTitle = false,
 }: {
   caseFile: CaseWorkspace
   onEdit?: () => void
+  hideTitle?: boolean
 }) {
   const occurrenceDate = caseFile.occurred_at ? formatDateTime(caseFile.occurred_at) : '—'
   const summaryText =
@@ -623,24 +629,28 @@ export function IncidentSummaryCard({
 
   return (
     <article className="cm-ws-card">
-      <div className="cm-ws-card-header">
-        <div className="cm-ws-card-title-wrap">
-          <div className="cm-ws-title-iconbox">
-            <Shield size={16} />
-          </div>
-          <h2 className="cm-ws-card-title">事故・事件概要</h2>
+      {(!hideTitle || onEdit) && (
+        <div className={`cm-ws-card-header ${hideTitle ? 'is-actions-only' : ''}`}>
+          {!hideTitle && (
+            <div className="cm-ws-card-title-wrap">
+              <div className="cm-ws-title-iconbox">
+                <Shield size={16} />
+              </div>
+              <h2 className="cm-ws-card-title">事故・事件概要</h2>
+            </div>
+          )}
+          {onEdit && (
+            <button
+              type="button"
+              className="cm-ws-incident-edit-btn"
+              onClick={onEdit}
+            >
+              <Pencil size={14} />
+              <span>編集</span>
+            </button>
+          )}
         </div>
-        {onEdit && (
-          <button
-            type="button"
-            className="cm-ws-incident-edit-btn"
-            onClick={onEdit}
-          >
-            <Pencil size={14} />
-            <span>編集</span>
-          </button>
-        )}
-      </div>
+      )}
 
       {/* Variant B: Dedicated Highlighted Incident Narrative Block */}
       <div className="cm-ws-incident-narrative">
@@ -793,8 +803,6 @@ export function RelatedEntitiesSection({
 
   const getEntityIcon = (kind: RelatedEntity['kind']) => {
     switch (kind) {
-      case 'person':
-        return <User size={16} />
       case 'organization':
         return <Users size={16} />
       case 'insurer':
@@ -923,9 +931,13 @@ export function RelatedEntitiesSection({
                 }}
               >
                 <div className="cm-ws-entity-card-top">
-                  <div className={`cm-ws-entity-iconbox ${getEntityToneClass(entity)}`}>
-                    {getEntityIcon(entity.kind)}
-                  </div>
+                  {entity.kind === 'person' ? (
+                    <UserAvatar name={entity.name} stableKey={entity.id} size="sm" />
+                  ) : (
+                    <div className={`cm-ws-entity-iconbox ${getEntityToneClass(entity)}`}>
+                      {getEntityIcon(entity.kind)}
+                    </div>
+                  )}
                   <div className="cm-ws-entity-meta">
                     <div className="cm-ws-entity-role-row">
                       <span className="cm-ws-entity-role">{entity.relationRoleLabel}</span>

@@ -64,6 +64,7 @@ export const mapCaseFile = (caseFile: ApiCaseFile, caseTypePath?: string): Busin
     id: caseFile.id,
     code: caseFile.reference_number || `CASE-${String(caseFile.id).padStart(6, '0')}`,
     title: caseFile.title,
+    customerId: caseFile.client.id,
     customerName: caseFile.client.name,
     customerKana: caseFile.client.name_kana ?? '',
     caseType: caseFile.case_type === 'その他' && caseFile.case_type_other

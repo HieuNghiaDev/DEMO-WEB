@@ -8,8 +8,8 @@ import { setAppLanguage, type SupportedLocale } from '../../i18n'
 import LogoutConfirmationDialog from '../../components/settings/LogoutConfirmationDialog'
 import SettingsLogoutAction from '../../components/settings/SettingsLogoutAction'
 import api from '../../services/api'
-import { getEmployeeAvatarUrl } from '../../utils/employeeAvatar'
-import { PageHeader } from '../../components/ui'
+import { getEmployeeAvatarImageUrl } from '../../utils/employeeAvatar'
+import { PageHeader, UserAvatar } from '../../components/ui'
 import { ButtonSpinner } from '../../components/loading'
 
 const categories = [
@@ -153,10 +153,12 @@ export default function SystemSettings() {
                   <div className="px-5 py-6 sm:px-6">
                     <div className="mb-6 flex items-center gap-4">
                       <div className="relative shrink-0">
-                        <img
-                          src={getEmployeeAvatarUrl(user?.employee?.avatar_path, user?.employee?.gender)}
-                          alt=""
-                          className="h-14 w-14 rounded-xl border border-[var(--tm-border)] object-cover shadow-2xs"
+                        <UserAvatar
+                          name={employeeName}
+                          stableKey={user?.employee?.id ?? user?.id}
+                          imageSrc={getEmployeeAvatarImageUrl(user?.employee?.avatar_path)}
+                          imageAlt={`${employeeName}のプロフィール画像`}
+                          size="xl"
                         />
                         <button
                           type="button"

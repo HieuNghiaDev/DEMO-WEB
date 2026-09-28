@@ -337,7 +337,7 @@ function OverviewPanel({
   return (
     <div className="space-y-6">
       {/* Desktop 2-Column Command Layout */}
-      <div className="hidden lg:grid cm-ws-overview-layout">
+      <div className="cm-ws-overview-layout">
         <div className="cm-ws-left-col">
           <IncidentSummaryCard
             caseFile={caseFile}
@@ -368,7 +368,7 @@ function OverviewPanel({
       </div>
 
       {/* Mobile Accordion Layout (Reusing the exact same components) */}
-      <div className="lg:hidden space-y-2">
+      <div className="cm-ws-overview-mobile space-y-2">
         <MobileAccordionSection
           title="事故・事件概要"
           icon={Shield}
@@ -378,6 +378,7 @@ function OverviewPanel({
           <IncidentSummaryCard
             caseFile={caseFile}
             onEdit={canUpdate ? onEditIncident : undefined}
+            hideTitle
           />
         </MobileAccordionSection>
 
