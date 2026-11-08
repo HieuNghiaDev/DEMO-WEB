@@ -1,6 +1,7 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "deploy": {
-    "preDeployCommand": "attempt=1; until php artisan migrate --force; do if [ \"$attempt\" -ge 12 ]; then exit 1; fi; attempt=$((attempt + 1)); sleep 5; done; php artisan db:seed --force"
+    "preDeployCommand": "php -r \"exit(0);\"",
+    "startCommand": "exec env RAILPACK_SKIP_MIGRATIONS=true /start-container.sh"
   }
 }
