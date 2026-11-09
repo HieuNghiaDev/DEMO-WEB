@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Permission extends Model
 {
+    use \App\Models\Concerns\GuardsAdminContinuity;
     protected $fillable = [
         'name',
         'display_name',
@@ -14,6 +15,7 @@ class Permission extends Model
 
     public function roles(): BelongsToMany
     {
-        return $this->belongsToMany(Role::class, 'role_permissions');
+        $related = new Role;
+        return new \App\Models\Relations\AdministrativeBelongsToMany($related->newQuery(), $this, 'role_permissions', 'permission_id', 'role_id', 'id', 'id', 'roles');
     }
 }

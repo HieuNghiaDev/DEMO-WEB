@@ -1,7 +1,22 @@
 import api from '../../services/api'
-import type { CaseActivity, CaseDeadline, CaseParty, CaseTask, WorkspaceDocument, WorkspaceResponse } from './types'
+import type { Communication, HistoryEntry, HistoryOptions, HistoryResponse } from './historyTypes'
+import { assertTaskUploadFile } from './taskUpload'
+import type { CaseActivity, CaseDeadline, CaseParty, CaseTask, CaseTaskOptionsResponse, CaseTaskSubmission, CreateCaseTaskBatchItem, WorkspaceDocument, WorkspaceResponse } from './types'
 
 export const caseWorkspaceApi = {
+  async history(caseId: number, params: Record<string, string | number>, signal?: AbortSignal) {
+    return (await api.get<HistoryResponse>(`/case-files/${caseId}/history`, { params, signal })).data
+  },
+  async historyOptions(caseId: number, signal?: AbortSignal) {
+    return (await api.get<HistoryOptions>(`/case-files/${caseId}/history/options`, { signal })).data
+  },
+  async saveCommunication(caseId: number, payload: Communication, id?: number) {
+    const path = `/case-files/${caseId}/communications`
+    return (id ? await api.patch<{ entry: HistoryEntry }>(`${path}/${id}`, payload) : await api.post<{ entry: HistoryEntry }>(path, payload)).data.entry
+  },
+  async communicationTask(caseId: number, communicationId: number, payload: Record<string, unknown>) {
+    return (await api.post<{ task: CaseTask | null }>(`/case-files/${caseId}/communications/${communicationId}/task`, payload)).data.task
+  },
   async show(caseId: number) {
     return (await api.get<WorkspaceResponse>(`/case-files/${caseId}/workspace`)).data
   },
@@ -43,13 +58,36 @@ export const caseWorkspaceApi = {
     await api.delete(`/case-files/${caseId}/deadlines/${deadlineId}`)
   },
   async createTask(caseId: number, payload: Record<string, unknown>) {
-    return (await api.post<{ task: CaseTask }>(`/case-files/${caseId}/case-tasks`, payload)).data.task
+    return (await api.post<{ task: CaseTask | null }>(`/case-files/${caseId}/case-tasks`, payload)).data.task
+  },
+  async taskOptions(caseId: number, signal?: AbortSignal) {
+    return (await api.get<CaseTaskOptionsResponse>(`/case-files/${caseId}/case-tasks/options`, { signal })).data
+  },
+  async createTaskBatch(caseId: number, tasks: CreateCaseTaskBatchItem[]) {
+    return (await api.post<{ message: string; tasks: CaseTask[] }>(`/case-files/${caseId}/case-tasks/batch`, { tasks })).data
   },
   async updateTask(caseId: number, taskId: number, payload: Record<string, unknown>) {
-    return (await api.patch<{ task: CaseTask }>(`/case-files/${caseId}/case-tasks/${taskId}`, payload)).data.task
+    return (await api.patch<{ task: CaseTask | null }>(`/case-files/${caseId}/case-tasks/${taskId}`, payload)).data.task
   },
   async deleteTask(caseId: number, taskId: number) {
     await api.delete(`/case-files/${caseId}/case-tasks/${taskId}`)
+  },
+  async acceptTask(caseId: number, taskId: number) {
+    return (await api.post<{ task: CaseTask }>(`/case-files/${caseId}/case-tasks/${taskId}/accept`)).data.task
+  },
+  async submitTask(caseId: number, taskId: number, file: File) {
+    assertTaskUploadFile(file)
+    const form = new FormData()
+    form.append('file', file, file.name)
+    // Null suppresses both JSON and Axios's POST urlencoded fallback; the
+    // browser/fetch transport supplies the multipart header and boundary.
+    return (await api.post<{ task: CaseTask; submission: CaseTaskSubmission }>(`/case-files/${caseId}/case-tasks/${taskId}/submissions`, form, { headers: { 'Content-Type': null } })).data
+  },
+  async approveTaskSubmission(caseId: number, taskId: number, submissionId: number) {
+    return (await api.post<{ task: CaseTask | null }>(`/case-files/${caseId}/case-tasks/${taskId}/submissions/${submissionId}/approve`)).data.task
+  },
+  async rejectTaskSubmission(caseId: number, taskId: number, submissionId: number, reason: string) {
+    return (await api.post<{ task: CaseTask | null }>(`/case-files/${caseId}/case-tasks/${taskId}/submissions/${submissionId}/reject`, { reason })).data.task
   },
   async createActivity(caseId: number, payload: Record<string, unknown>) {
     return (await api.post<{ activity: CaseActivity }>(`/case-files/${caseId}/activities`, payload)).data.activity

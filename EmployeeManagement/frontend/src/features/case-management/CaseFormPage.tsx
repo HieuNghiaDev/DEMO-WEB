@@ -7,8 +7,9 @@ import ClientSelector from './ClientSelector'
 import CaseTypeSelector from './CaseTypeSelector'
 import QuickClientDialog from './QuickClientDialog'
 import { caseApi, caseError } from './api'
-import { caseDraft, casePayload, caseTypeOptions, generatedCaseTitle, newDraft, priorityLabels, validateCase } from './helpers'
-import type { CaseClient, CaseDraft, CaseEmployee, CaseFieldErrors, CaseTypeOption, CaseViewer, EditableCase } from './types'
+import { classificationError, caseDraft, casePayload, caseTypeOptions, generatedCaseTitle, newDraft, priorityLabels, validateCase } from './helpers'
+import type { CaseClassification, CaseClient, CaseDraft, CaseEmployee, CaseFieldErrors, CaseTypeOption, CaseViewer, EditableCase } from './types'
+import CaseClassificationField from './CaseClassificationField'
 import { ButtonSpinner, SectionSkeleton } from '../../components/loading'
 
 export default function CaseFormPage({ user }: { user: CaseViewer }) {
@@ -18,8 +19,9 @@ export default function CaseFormPage({ user }: { user: CaseViewer }) {
   const allowed = user?.permission_names.includes(editing ? 'case.update' : 'case.create') ?? false
   const canCreateClient = user?.permission_names.includes('case.create') ?? false
   const canReadEmployees = user?.permission_names.includes('employee.view') ?? false
-  const canAssign = (user?.role_names.some(role => ['level_4', 'level_5'].includes(role)) ?? false) && canReadEmployees
+  const canAssign = (user?.permission_names.includes('case.assign') ?? false) && canReadEmployees
   const [initial, setInitial] = useState<CaseDraft | null>(null)
+  const [classification, setClassification] = useState<CaseClassification>('')
   const [draft, setDraft] = useState<CaseDraft>(newDraft)
   const [clients, setClients] = useState<CaseClient[]>([])
   const [types, setTypes] = useState<CaseTypeOption[]>([])
@@ -84,6 +86,7 @@ export default function CaseFormPage({ user }: { user: CaseViewer }) {
     if (lock.current || quickClient) return
     const submission = editing ? draft : { ...draft, title: generatedCaseTitle(selectedClient?.name ?? '', selectedType?.name ?? '') }
     const errors = validateCase(submission, types)
+    if (!editing && classificationError(classification)) errors.classification = classificationError(classification)
     if (!selectedClient) errors.client_id = '依頼者を選択してください。'
     if (!editing && !selectedType) errors.case_type_id = '事件類型を選択してください。'
     if (!editing && (!selectedClient || !selectedType)) delete errors.title
@@ -91,7 +94,7 @@ export default function CaseFormPage({ user }: { user: CaseViewer }) {
     lock.current = true; setSaving(true); setError(''); setFields({})
     try {
       const payload = casePayload(submission, canAssign && !employeeError)
-      const item = editing ? await caseApi.update(Number(caseId), payload) : await caseApi.create(payload)
+      const item = editing ? await caseApi.update(Number(caseId), payload) : await caseApi.create({ ...payload, classification })
       dirtyRef.current = false
       navigate('/quests/' + item.id, { replace: true, state: { caseNotice: editing ? '案件情報を保存しました。' : '案件を作成しました。資料収集候補は「資料収集」から確認できます。' } })
     } catch (requestError) {
@@ -114,6 +117,7 @@ export default function CaseFormPage({ user }: { user: CaseViewer }) {
             </div>
           </CaseFormSection>
           <CaseFormSection title="② どのような事件ですか？">
+            {!editing && <CaseClassificationField value={classification} onChange={setClassification} error={fields.classification}/>}
             <div className="cm-wide"><CaseTypeSelector types={types} value={draft.case_type_id} currentName={original?.case_type ?? undefined} error={fields.case_type_id}
               onChange={value => setDraft(current => ({ ...current, case_type_id: value, case_type_other: '' }))}/></div>
             {selectedType?.name === 'その他' && field('case_type_other', '事件類型の詳細 *', <input {...attrs('case_type_other')} required maxLength={255} value={draft.case_type_other} onChange={event => change('case_type_other', event.target.value)}/>, true)}
@@ -124,7 +128,7 @@ export default function CaseFormPage({ user }: { user: CaseViewer }) {
             {field('assigned_employee_id', '担当者', <><select {...attrs('assigned_employee_id')} disabled={!canAssign || employeeError} value={draft.assigned_employee_id} onChange={event => change('assigned_employee_id', event.target.value)}>
               <option value="">未割当</option>{!selectedEmployee && draft.assigned_employee_id && <option value={draft.assigned_employee_id}>{original?.assigned_employee?.full_name ?? '現在の担当者'}</option>}
               {employees.filter(employee => employee.employee_status === 'active' || String(employee.id) === draft.assigned_employee_id).map(employee => <option key={employee.id} value={employee.id}>{employee.full_name}{employee.employee_status !== 'active' ? '（現在の担当・非在籍）' : ''}</option>)}
-            </select>{(!canAssign || employeeError) && <small>{employeeError ? '担当者一覧を取得できませんでした。現在の担当を保持して保存します。' : '担当者の設定はレベル4以上が行います。'}</small>}</>)}
+            </select>{(!canAssign || employeeError) && <small>{employeeError ? '担当者一覧を取得できませんでした。現在の担当を保持して保存します。' : '担当者の設定には権限が必要です。'}</small>}</>)}
             {field('priority', '案件優先度', <select {...attrs('priority')} value={draft.priority} onChange={event => change('priority', event.target.value as CaseDraft['priority'])}>{Object.entries(priorityLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select>)}
             {field('summary', '案件概要（任意）', <textarea {...attrs('summary')} maxLength={10000} rows={3} value={draft.summary} placeholder="事故・相談内容・現在の状況など、必要な場合のみ入力してください。" onChange={event => change('summary', event.target.value)}/>, true)}
           </CaseFormSection>

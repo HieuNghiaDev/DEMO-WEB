@@ -17,7 +17,11 @@ class SecurityHeaders
             return $response;
         }
 
-        $response->headers->set('Cache-Control', 'no-store, private');
+        if ($request->routeIs('employee-avatar.show')) {
+            $response->headers->set('Cache-Control', 'public, max-age=31536000, immutable');
+        } else {
+            $response->headers->set('Cache-Control', 'no-store, private');
+        }
         $response->headers->set('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
         $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
         $response->headers->set('Referrer-Policy', 'no-referrer');

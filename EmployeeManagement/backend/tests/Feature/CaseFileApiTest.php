@@ -10,7 +10,7 @@ use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\CaseTypeSeeder;
 use Database\Seeders\OfficeSeeder;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -25,6 +25,7 @@ class CaseFileApiTest extends TestCase
         $this->seed(CaseTypeSeeder::class);
         $user->roles()->sync([Role::query()->where('name', 'level_5')->value('id')]);
         $case = $this->actingAs($user, 'sanctum')->postJson('/api/case-files', [
+            'classification' => 'normal',
             'title' => 'DEMO API Case',
             'case_type_id' => CaseType::where('name', '在留期間更新')->sole()->id,
             'client' => [
@@ -84,6 +85,7 @@ class CaseFileApiTest extends TestCase
         $user->roles()->sync([Role::query()->where('name', 'level_5')->value('id')]);
 
         $case = $this->actingAs($user, 'sanctum')->postJson('/api/case-files', [
+            'classification' => 'normal',
             'title' => 'Collection progress case',
             'case_type_id' => CaseType::where('name', '労災')->sole()->id,
             'client' => ['name' => 'Collection Progress Client'],
@@ -129,6 +131,7 @@ class CaseFileApiTest extends TestCase
         $user->roles()->sync([Role::query()->where('name', 'level_5')->value('id')]);
 
         $payload = [
+            'classification' => 'normal',
             'title' => 'Other case type',
             'case_type_id' => CaseType::where('name', 'その他')->sole()->id,
             'client' => [
@@ -158,6 +161,7 @@ class CaseFileApiTest extends TestCase
         $this->seed(CaseTypeSeeder::class);
         $user->roles()->sync([Role::query()->where('name', 'level_5')->value('id')]);
         $case = $this->actingAs($user, 'sanctum')->postJson('/api/case-files', [
+            'classification' => 'normal',
             'title' => 'Delete client case',
             'case_type_id' => 1,
             'client' => ['name' => 'Delete Client', 'client_type' => 'individual'],
@@ -196,6 +200,7 @@ class CaseFileApiTest extends TestCase
         ]);
 
         $case = $this->actingAs($levelFourUser, 'sanctum')->postJson('/api/case-files', [
+            'classification' => 'normal',
             'title' => 'Assignment protected case',
             'case_type_id' => 1,
             'client' => ['name' => 'Assignment Client', 'client_type' => 'individual'],

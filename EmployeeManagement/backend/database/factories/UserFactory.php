@@ -33,6 +33,11 @@ class UserFactory extends Factory
             'role' => 'employee',
             'is_active' => true,
             'must_change_password' => false,
+            // Existing-user fixtures, not the production provisioning path. New-account
+            // security tests call the real API/model instead of this legacy fixture state.
+            'activation_required' => false,
+            'activated_at' => null,
+            'pii_requires_explicit' => false,
             'remember_token' => Str::random(10),
         ];
     }

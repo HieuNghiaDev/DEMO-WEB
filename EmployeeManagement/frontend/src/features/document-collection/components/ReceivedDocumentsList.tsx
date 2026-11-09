@@ -2,13 +2,18 @@ import { Download, FileText, Link2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { documentCollectionApi } from '../api'
+import { resolveReceivedDocumentPreviewTarget, type DocumentPreviewTarget } from '../documentPreview'
 import type { ReceivedDocument } from '../types'
 import { formatDate, safeExternalUrl } from '../utils'
+import DocumentPreviewViewer from './DocumentPreviewViewer'
+import { fileReviewLabel } from '../fileReview'
+import DocumentFileCard from './DocumentFileCard'
 
-export default function ReceivedDocumentsList({ caseId, itemId, files, hideTitle = false }: { caseId: number; itemId: number; files: ReceivedDocument[]; hideTitle?: boolean }) {
+export default function ReceivedDocumentsList({ caseId, itemId, files, hideTitle = false, compact = false }: { caseId: number; itemId: number; files: ReceivedDocument[]; hideTitle?: boolean; compact?: boolean }) {
   const { t } = useTranslation()
   const [downloadingId, setDownloadingId] = useState<number | null>(null)
   const [downloadError, setDownloadError] = useState(false)
+  const [previewTarget, setPreviewTarget] = useState<DocumentPreviewTarget | null>(null)
   const download = async (file: ReceivedDocument) => {
     setDownloadingId(file.id); setDownloadError(false)
     try {
@@ -20,17 +25,27 @@ export default function ReceivedDocumentsList({ caseId, itemId, files, hideTitle
     } catch { setDownloadError(true) }
     finally { setDownloadingId(null) }
   }
-  return <section className="dc-received-documents">{!hideTitle && <h3>{t('documentCollection.receivedDocuments.title')} <small>{t('cases.count', { count: files.length })}</small></h3>}
+  return <><section className={compact ? 'dc-compact-file-list' : 'dc-received-documents'}>{!hideTitle && <h3>{t('documentCollection.receivedDocuments.title')} <small>{t('cases.count', { count: files.length })}</small></h3>}
     {!files.length && <p className="dc-file-empty">{t('documentCollection.receivedDocuments.empty')}</p>}
     {files.map(file => {
       const url = file.storage_type !== 'upload' ? safeExternalUrl(file.external_url) : null
       const provider = file.storage_type === 'google_drive' ? 'Google Drive' : file.storage_type === 'external_link' ? t('documentCollection.receivedDocuments.externalLink') : t('documentCollection.receivedDocuments.upload')
-      return <article className="dc-file" key={file.id}><FileText size={18} aria-hidden="true" /><div><strong>{file.title}</strong>
+      if (compact) return <DocumentFileCard key={file.id} name={file.original_filename || file.title} version={file.version} author={file.registered_by_employee?.display_name} uploadedAt={file.received_at} reviewStatus={file.review_status} onOpen={() => setPreviewTarget(resolveReceivedDocumentPreviewTarget(caseId, itemId, file))}>
+        <div className="dc-compact-file-details">
+          {file.original_filename && file.title !== file.original_filename && <span>{file.title}</span>}
+          {file.notes && <p>{file.notes}</p>}
+          {url ? <a className="dc-blue dc-link-text" href={url} target="_blank" rel="noopener noreferrer"><Link2 size={12}/>{file.storage_type === 'google_drive' ? t('documentCollection.receivedDocuments.openGoogleDrive') : t('documentCollection.receivedDocuments.openLink')}</a> : file.storage_type === 'upload' ? <button type="button" className="dc-file-download" disabled={downloadingId === file.id} onClick={() => void download(file)}><Download size={12}/>{downloadingId === file.id ? t('documentCollection.receivedDocuments.downloading') : t('documentCollection.receivedDocuments.download')}</button> : <span>{t('documentCollection.receivedDocuments.noLink')}</span>}
+          {file.review_status === 'rejected' && <p>差し戻し理由: {file.review_reason}{file.review_detail && ` · ${file.review_detail}`}</p>}
+        </div>
+      </DocumentFileCard>
+      return <article className="dc-file" key={file.id}><FileText size={18} aria-hidden="true" /><div><button type="button" className="dc-file-preview" onClick={() => setPreviewTarget(resolveReceivedDocumentPreviewTarget(caseId, itemId, file))}><strong>{file.title}</strong></button>
         <span>{provider} · v{file.version} · {formatDate(file.received_at, true)}</span>
+        {file.review_status && <span className={`dc-file-review-label is-${file.review_status}`}>{fileReviewLabel(file.review_status)}</span>}
+        {file.review_status === 'rejected' && <p>差し戻し理由: {file.review_reason}{file.review_detail && ` · ${file.review_detail}`}</p>}
         {file.original_filename && <span>{file.original_filename}</span>}
         {file.notes && <p>{file.notes}</p>}{url ? <a className="dc-blue dc-link-text" href={url} target="_blank" rel="noopener noreferrer"><Link2 size={12} />{file.storage_type === 'google_drive' ? t('documentCollection.receivedDocuments.openGoogleDrive') : t('documentCollection.receivedDocuments.openLink')}</a> : file.storage_type === 'upload' ? <button type="button" className="dc-file-download" disabled={downloadingId === file.id} onClick={() => void download(file)}><Download size={12}/>{downloadingId === file.id ? t('documentCollection.receivedDocuments.downloading') : t('documentCollection.receivedDocuments.download')}</button> : <span>{t('documentCollection.receivedDocuments.noLink')}</span>}
       </div></article>
     })}
     {downloadError && <p className="dc-danger" role="alert">{t('documentCollection.receivedDocuments.downloadFailed')}</p>}
-  </section>
+  </section><DocumentPreviewViewer target={previewTarget} onClose={() => setPreviewTarget(null)}/></>
 }

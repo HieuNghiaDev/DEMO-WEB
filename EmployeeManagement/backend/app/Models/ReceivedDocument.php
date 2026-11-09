@@ -16,6 +16,7 @@ class ReceivedDocument extends Model
     public const ORIGINAL_OR_COPY_VALUES = ['original', 'copy'];
 
     protected $fillable = [
+        'review_status', 'reviewed_by', 'reviewed_at', 'review_reason', 'review_detail',
         'case_file_id', 'document_type_id', 'title', 'original_filename', 'storage_type',
         'storage_path', 'external_url', 'version', 'received_at', 'expires_at',
         'original_or_copy', 'return_required', 'returned_at', 'registered_by_employee_id', 'notes',
@@ -24,6 +25,7 @@ class ReceivedDocument extends Model
     protected function casts(): array
     {
         return [
+            'reviewed_at' => 'datetime',
             'version' => 'integer', 'received_at' => 'datetime', 'expires_at' => 'date',
             'return_required' => 'boolean', 'returned_at' => 'datetime',
         ];
@@ -42,6 +44,11 @@ class ReceivedDocument extends Model
     public function registeredByEmployee(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'registered_by_employee_id');
+    }
+
+    public function reviewedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
     }
 
     public function caseDocuments(): BelongsToMany

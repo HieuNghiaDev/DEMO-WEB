@@ -7,6 +7,7 @@ import {
   Check,
   Eye,
   EyeOff,
+  Info,
   KeyRound,
   LockKeyhole,
   LogOut,
@@ -16,7 +17,10 @@ import {
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { SettingsSection, SettingsSecurityBackLink } from '../components/settings/SettingsSection';
+import { Button, IconButton } from '../components/ui';
 import { useAuth } from "../contexts/AuthContext";
+import StepUpDialog from '../features/authentication/StepUpDialog';
 
 type PasswordErrorResponse = {
   message?: string;
@@ -25,9 +29,10 @@ type PasswordErrorResponse = {
 
 const hasSpecialCharacter = (value: string) => /[\p{P}\p{S}]/u.test(value);
 
-export default function ChangePassword() {
+export default function ChangePassword({ inSettings = false }: { inSettings?: boolean }) {
   const navigate = useNavigate();
-  const { user, changePassword, logout } = useAuth();
+  const { user, changePassword, logout, requiresMfa } = useAuth();
+  const [pendingPassword, setPendingPassword] = useState<{ currentPassword: string; password: string; passwordConfirmation: string } | null>(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
@@ -58,6 +63,12 @@ export default function ChangePassword() {
 
     if (!passwordsMatch) {
       setErrorMessage("新しいパスワードと確認用パスワードが一致しません。");
+      return;
+    }
+
+    if (requiresMfa) {
+      setPendingPassword({ currentPassword, password, passwordConfirmation });
+      setCurrentPassword(''); setPassword(''); setPasswordConfirmation('');
       return;
     }
 
@@ -106,7 +117,105 @@ export default function ChangePassword() {
   const displayName = user?.employee?.full_name ?? user?.name ?? "社員";
   const isRequiredPasswordChange = user?.must_change_password === true;
 
-  return (
+  const passwordFields = (
+    <>
+      <PasswordField
+        inSettings={inSettings}
+        id="current-password"
+        label="現在のパスワード"
+        value={currentPassword}
+        type={currentPasswordType}
+        autoComplete="current-password"
+        icon="lock"
+        disabled={isSubmitting || isLoggingOut}
+        onChange={setCurrentPassword}
+        showToggle
+        isVisible={showCurrentPassword}
+        onToggleVisibility={() =>
+          setShowCurrentPassword((current) => !current)
+        }
+      />
+
+      <PasswordField
+        inSettings={inSettings}
+        id="new-password"
+        label="新しいパスワード"
+        value={password}
+        type={inputType}
+        autoComplete="new-password"
+        icon="key"
+        disabled={isSubmitting || isLoggingOut}
+        onChange={setPassword}
+        showToggle
+        isVisible={showPasswords}
+        onToggleVisibility={() => setShowPasswords((current) => !current)}
+      />
+
+      <PasswordField
+        inSettings={inSettings}
+        id="password-confirmation"
+        label="新しいパスワード（確認）"
+        value={passwordConfirmation}
+        type={inputType}
+        autoComplete="new-password"
+        icon="check"
+        disabled={isSubmitting || isLoggingOut}
+        onChange={setPasswordConfirmation}
+      />
+    </>
+  );
+  const requirements = (
+    <div className={inSettings ? "flex flex-wrap gap-2" : "grid grid-cols-3 gap-2 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-2"}>
+      {passwordRequirements.map(({ label, met }) => (
+        <span
+          key={label}
+          className={inSettings ? `inline-flex items-center gap-1 rounded-md border border-[var(--tm-border)] px-2 py-1 text-xs ${met ? "bg-[var(--success-soft)] text-emerald-700 dark:text-emerald-300" : "text-[var(--tm-text-secondary)]"}` : `flex min-h-8 items-center justify-center gap-1 rounded-xl px-1 text-center text-[9px] font-bold transition sm:text-[10px] ${
+            met
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-white text-slate-400"
+          }`}
+        >
+          <Check size={12} aria-hidden="true" className={met ? "opacity-100" : "opacity-35"} />
+          <span className="sr-only">{met ? "条件を満たしています：" : "条件を満たしていません："}</span>
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+  const stepUpDialog = pendingPassword && <StepUpDialog operation={{ action: 'account.password', scope: {} }} language={inSettings ? "ja" : "vi"} description={inSettings ? "パスワードを変更します。変更後はすべての端末で再ログインが必要です。" : "Đổi mật khẩu và kết thúc mọi phiên đăng nhập. Admin cuối cùng vẫn được bảo vệ."}
+      mutate={() => changePassword(pendingPassword)}
+      onComplete={() => { setPendingPassword(null); window.location.replace(`${import.meta.env.BASE_URL}login`); }}
+      onCancel={() => setPendingPassword(null)}
+      onMutationError={message => { setPendingPassword(null); setErrorMessage(message); }}
+    />;
+
+  if (inSettings) {
+    return (
+      <>
+        {stepUpDialog}
+        <SettingsSecurityBackLink />
+        <SettingsSection title="パスワードを変更" description="現在のパスワードを確認し、新しいパスワードを設定します。">
+          <form className="space-y-4 px-4 py-4 sm:px-6" onSubmit={handleSubmit} aria-busy={isSubmitting}>
+            <div className="max-w-md space-y-4">
+              {passwordFields}
+              {requirements}
+            </div>
+            {errorMessage && <p role="alert" className="rounded-lg border border-red-500/25 bg-[var(--danger-soft)] px-3 py-2 text-sm text-red-700 dark:text-red-300">{errorMessage}</p>}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--tm-border)] pt-4">
+              <p className="flex items-start gap-2 text-xs leading-5 text-[var(--tm-text-secondary)]">
+                <Info size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+                変更後はすべての端末で再ログインが必要です。
+              </p>
+              <Button type="submit" variant="primary" size="lg" loading={isSubmitting} disabled={!currentPassword || !password || !passwordConfirmation}>パスワードを変更</Button>
+            </div>
+          </form>
+        </SettingsSection>
+      </>
+    );
+  }
+
+  return (<>
+    {stepUpDialog}
     <main className="themis-login relative min-h-screen overflow-hidden bg-[#080d1f] lg:flex lg:bg-[linear-gradient(108deg,#080d1f_0%,#0b1027_43%,#17183e_53%,#6f7196_65%,#d9ddeb_78%,#f7f8fc_91%,#f6f3ff_100%)]">
       <div
         aria-hidden="true"
@@ -306,62 +415,9 @@ export default function ChangePassword() {
             </div>
 
             <form className="space-y-3" onSubmit={handleSubmit}>
-              <PasswordField
-                id="current-password"
-                label="現在のパスワード"
-                value={currentPassword}
-                type={currentPasswordType}
-                autoComplete="current-password"
-                icon="lock"
-                disabled={isSubmitting || isLoggingOut}
-                onChange={setCurrentPassword}
-                showToggle
-                isVisible={showCurrentPassword}
-                onToggleVisibility={() =>
-                  setShowCurrentPassword((current) => !current)
-                }
-              />
+              {passwordFields}
 
-              <PasswordField
-                id="new-password"
-                label="新しいパスワード"
-                value={password}
-                type={inputType}
-                autoComplete="new-password"
-                icon="key"
-                disabled={isSubmitting || isLoggingOut}
-                onChange={setPassword}
-                showToggle
-                isVisible={showPasswords}
-                onToggleVisibility={() => setShowPasswords((current) => !current)}
-              />
-
-              <PasswordField
-                id="password-confirmation"
-                label="新しいパスワード（確認）"
-                value={passwordConfirmation}
-                type={inputType}
-                autoComplete="new-password"
-                icon="check"
-                disabled={isSubmitting || isLoggingOut}
-                onChange={setPasswordConfirmation}
-              />
-
-              <div className="grid grid-cols-3 gap-2 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-2">
-                {passwordRequirements.map(({ label, met }) => (
-                  <span
-                    key={label}
-                    className={`flex min-h-8 items-center justify-center gap-1 rounded-xl px-1 text-center text-[9px] font-bold transition sm:text-[10px] ${
-                      met
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "bg-white text-slate-400"
-                    }`}
-                  >
-                    <Check size={12} className={met ? "opacity-100" : "opacity-35"} />
-                    {label}
-                  </span>
-                ))}
-              </div>
+              {requirements}
 
 
               {errorMessage && (
@@ -427,11 +483,12 @@ export default function ChangePassword() {
           </p>
         </div>
       </section>
-    </main>
+    </main></>
   );
 }
 
 function PasswordField({
+  inSettings,
   id,
   label,
   value,
@@ -444,6 +501,7 @@ function PasswordField({
   isVisible = false,
   onToggleVisibility,
 }: {
+  inSettings: boolean;
   id: string;
   label: string;
   value: string;
@@ -456,6 +514,25 @@ function PasswordField({
   isVisible?: boolean;
   onToggleVisibility?: () => void;
 }) {
+  if (inSettings) {
+    return (
+      <div>
+        <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-[var(--tm-text-primary)]">{label}</label>
+        <div className="relative">
+          <input id={id} required type={type} value={value} autoComplete={autoComplete} disabled={disabled}
+            onChange={(event) => onChange(event.target.value)}
+            className={`h-11 w-full rounded-lg border border-[var(--tm-border)] bg-[var(--tm-control)] pl-3 text-sm text-[var(--tm-text-primary)] focus-visible:outline-2 focus-visible:outline-[var(--tm-focus-ring)] disabled:opacity-60 ${showToggle ? 'pr-12' : 'pr-3'}`}
+          />
+          {showToggle && onToggleVisibility && <IconButton type="button" size="lg" disabled={disabled}
+            className="absolute right-0.5 top-0.5"
+            aria-label={`${label}を${isVisible ? "隠す" : "表示"}`} aria-pressed={isVisible} onClick={onToggleVisibility}>
+            {isVisible ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+          </IconButton>}
+        </div>
+      </div>
+    );
+  }
+
   const Icon = icon === "lock" ? LockKeyhole : icon === "key" ? KeyRound : ShieldCheck;
 
   return (

@@ -20,7 +20,7 @@ use Database\Seeders\CaseTypeDocumentRuleMasterSeeder;
 use Database\Seeders\CaseTypeSeeder;
 use Database\Seeders\DocumentPurposeSeeder;
 use Database\Seeders\DocumentTypeMasterSeeder;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -331,7 +331,7 @@ class CaseDocumentInitializationApiTest extends TestCase
     {
         $this->mock(CaseDocumentChecklistGenerator::class)->shouldNotReceive('generateForCase');
         $this->mock(CaseDocumentChecklistService::class)->shouldNotReceive('applyDefaultTemplate');
-        $this->postJson('/api/case-files', ['case_type_id' => CaseType::where('name', '労災')->sole()->id,
+        $this->postJson('/api/case-files', ['classification' => 'normal', 'case_type_id' => CaseType::where('name', '労災')->sole()->id,
             'title' => 'Explicit workflow', 'client' => ['name' => 'No automatic candidates']])->assertCreated()
             ->assertJsonPath('case_file.documents_count', 0)->assertJsonPath('case_file.confirmed_documents_count', 0);
         $this->assertDatabaseCount('case_documents', 0);
@@ -352,7 +352,7 @@ class CaseDocumentInitializationApiTest extends TestCase
         $templateBefore = $template->refresh()->getRawOriginal();
         $itemBefore = $item->refresh()->getRawOriginal();
 
-        $response = $this->postJson('/api/case-files', ['case_type_id' => $caseType->id,
+        $response = $this->postJson('/api/case-files', ['classification' => 'normal', 'case_type_id' => $caseType->id,
             'title' => 'Explicit V2 intake', 'client_id' => $existing->client_id, 'status' => 'active'])
             ->assertCreated()->assertJsonPath('case_file.client.id', $existing->client_id)
             ->assertJsonPath('case_file.case_type_id', $caseType->id)

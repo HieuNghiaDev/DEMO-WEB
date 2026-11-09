@@ -37,6 +37,12 @@ class CaseDocumentCollectionDetailResource extends CaseDocumentCollectionResourc
             ],
             'fulfillment_status' => $item['fulfillment_status'], 'review_status' => $item['review_status'],
             'assigned_employee' => $item['assigned_employee'], 'is_template_generated' => $item['is_template_generated'],
+            'active_task' => $item['active_task'],
+            'workflow_state' => $item['workflow_state'],
+            'latest_task_submission' => $item['latest_task_submission'],
+            'task_submissions' => $this->taskSubmissions->sortByDesc('version')->map(fn ($file) => self::submission($file))->values()->all(),
+            'capabilities' => $item['capabilities'],
+            'file_review' => $item['file_review'],
             'received_document_count' => $item['received_document_count'],
             'received_documents' => $this->receivedDocuments->map(fn ($file) => [
                 'id' => $file->id, 'title' => $file->title, 'original_filename' => $file->original_filename,
@@ -47,12 +53,16 @@ class CaseDocumentCollectionDetailResource extends CaseDocumentCollectionResourc
                     && in_array(strtolower((string) parse_url($file->external_url, PHP_URL_SCHEME)), ['https', 'http'], true)
                     ? $file->external_url : null,
                 'version' => $file->version, 'received_at' => $file->received_at?->toISOString(),
+                'review_status' => $file->review_status,
+                'review_reason' => $file->review_reason, 'review_detail' => $file->review_detail,
+                'reviewed_at' => $file->reviewed_at?->toISOString(),
                 'original_or_copy' => $file->original_or_copy, 'return_required' => $file->return_required,
                 'returned_at' => $file->returned_at?->toISOString(),
                 'registered_by_employee' => self::employee($file->registeredByEmployee),
                 'notes' => $file->notes, 'relationship_type' => $file->pivot->relationship_type,
             ])->values()->all(),
             'c001' => $item['c001'],
+            'generated_versions' => $item['generated_versions'],
             'created_at' => $item['created_at'], 'updated_at' => $item['updated_at'],
         ];
     }

@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\CaseActivity;
 use App\Models\CaseDocument;
 use App\Models\CaseFile;
+use App\Models\CaseTask;
+use App\Models\CaseTaskSubmission;
 use App\Models\CaseType;
 use App\Models\CaseTypeDocumentRule;
 use App\Models\Client;
@@ -21,7 +23,7 @@ use Database\Seeders\CaseTypeDocumentRuleMasterSeeder;
 use Database\Seeders\CaseTypeSeeder;
 use Database\Seeders\DocumentPurposeSeeder;
 use Database\Seeders\DocumentTypeMasterSeeder;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -76,6 +78,36 @@ class CaseDocumentCollectionApiTest extends TestCase
         $this->assertDatabaseCount('case_documents', 0);
         $this->assertDatabaseCount('case_activities', 0);
         $this->assertSame($before, $this->masters());
+    }
+
+    public function test_detail_preserves_workflow_and_preview_submission_metadata_from_the_list(): void
+    {
+        $document = $this->document(['necessity_status' => 'required']);
+        $task = CaseTask::create([
+            'case_file_id' => $this->case->id, 'case_document_id' => $document->id,
+            'assigned_employee_id' => $this->employee->id, 'title' => 'Preview task', 'status' => 'pending_review',
+        ]);
+        $submission = CaseTaskSubmission::create([
+            'case_task_id' => $task->id, 'case_document_id' => $document->id, 'version' => 2,
+            'source_type' => 'manual_upload', 'review_status' => 'pending_review', 'storage_provider' => 'google_drive',
+            'external_file_id' => 'preview-fixture', 'external_url' => 'https://drive.google.com/file/d/preview-fixture/view',
+            'filename' => 'manual-v2.pdf', 'mime_type' => 'application/pdf', 'submitted_by' => $this->editor->id, 'submitted_at' => now(),
+        ]);
+        $list = $this->getJson($this->url())->assertOk()->json('documents.0');
+        $detail = $this->getJson($this->url($document))->assertOk()
+            ->assertJsonPath('document.workflow_state.code', 'pending_review')
+            ->assertJsonPath('document.latest_task_submission.id', $submission->id)
+            ->assertJsonPath('document.latest_task_submission.version', 2)->json('document');
+        $this->assertSame($list['workflow_state'], $detail['workflow_state']);
+        $this->assertSame($list['latest_task_submission'], $detail['latest_task_submission']);
+
+        Sanctum::actingAs(User::factory()->withRole('level_2')->create());
+        $this->getJson($this->url($document))->assertOk()
+            ->assertJsonPath('document.active_task.id', $task->id)
+            ->assertJsonPath('document.latest_task_submission.id', $submission->id)
+            ->assertJsonPath('document.capabilities.can_upload', false)
+            ->assertJsonPath('document.capabilities.can_review', false)
+            ->assertJsonPath('document.workflow_state.code', 'pending_review');
     }
 
     public function test_same_document_type_and_multiple_purposes_remain_distinct_case_items(): void
@@ -136,6 +168,37 @@ class CaseDocumentCollectionApiTest extends TestCase
             'deadline_from' => '2026-09-01', 'deadline_to' => '2026-09-03']))->assertOk()->assertJsonPath('documents.0.id', $item->id);
         $this->getJson($this->url().'?source=Case%20source&preservation_priority=false')->assertOk()->assertJsonCount(0, 'documents');
         $this->getJson($this->url().'?search=%25')->assertOk()->assertJsonCount(0, 'documents');
+    }
+
+    public function test_collection_exposes_active_task_as_required_document_assignment_source(): void
+    {
+        $item = $this->document([
+            'necessity_status' => 'required',
+            'assigned_employee_id' => null,
+            'response_deadline' => null,
+        ]);
+        CaseTask::create([
+            'case_file_id' => $this->case->id,
+            'case_document_id' => $item->id,
+            'assigned_employee_id' => $this->employee->id,
+            'title' => $item->title,
+            'status' => 'in_progress',
+            'priority' => 'high',
+            'due_at' => '2026-09-08 23:59:59',
+        ]);
+
+        $this->getJson($this->url())
+            ->assertOk()
+            ->assertJsonPath('documents.0.active_task.status', 'in_progress')
+            ->assertJsonPath('documents.0.active_task.priority', 'high')
+            ->assertJsonPath('documents.0.active_task.assigned_employee.id', $this->employee->id)
+            ->assertJsonPath('documents.0.active_task.due_at', '2026-09-08T14:59:59.000000Z')
+            ->assertJsonPath('documents.0.generated_versions', []);
+
+        $this->getJson($this->url($item))
+            ->assertOk()
+            ->assertJsonPath('document.active_task.assigned_employee.display_name', 'Test operator')
+            ->assertJsonPath('document.generated_versions', []);
     }
 
     public function test_overdue_excludes_received_closed_null_and_exact_now_but_not_not_required(): void
@@ -244,9 +307,9 @@ class CaseDocumentCollectionApiTest extends TestCase
         $this->assertSame($before, $this->masters());
     }
 
-    public function test_editor_can_register_an_external_received_document_without_completing_collection(): void
+    public function test_assigned_editor_registers_an_external_file_as_pending_review_not_complete(): void
     {
-        $item = $this->document(['review_status' => 'reviewed']);
+        $item = $this->document(['review_status' => 'reviewed', 'assigned_employee_id' => $this->employee->id]);
 
         $this->post($this->receivedUrl($item), [
             'storage_type' => 'external_link', 'title' => '病院からの回答書',
@@ -256,25 +319,26 @@ class CaseDocumentCollectionApiTest extends TestCase
             ->assertJsonPath('document.received_document_count', 1)
             ->assertJsonPath('document.received_documents.0.title', '病院からの回答書')
             ->assertJsonPath('document.received_documents.0.external_url', 'https://example.test/records/123')
-            ->assertJsonPath('document.review_status', 'unreviewed');
+            ->assertJsonPath('document.review_status', 'reviewing')
+            ->assertJsonPath('document.workflow_state.code', 'pending_review');
 
         $received = ReceivedDocument::sole();
         $this->assertSame($this->case->id, $received->case_file_id);
         $this->assertSame($item->document_type_id, $received->document_type_id);
         $this->assertSame($this->employee->id, $received->registered_by_employee_id);
-        $this->assertSame('not_started', $item->refresh()->collection_status);
+        $this->assertSame('received', $item->refresh()->collection_status);
         $this->assertDatabaseHas('case_document_received_documents', ['case_document_id' => $item->id, 'received_document_id' => $received->id, 'relationship_type' => 'received']);
-        $this->assertDatabaseHas('case_activities', ['case_file_id' => $this->case->id, 'title' => '受領文書を登録']);
+        $this->assertDatabaseHas('case_activities', ['case_file_id' => $this->case->id, 'title' => 'ファイル v1 をアップロード']);
     }
 
     public function test_editor_can_upload_and_download_a_received_document_without_exposing_its_path(): void
     {
         Storage::fake('local');
-        $item = $this->document();
+        $item = $this->document(['assigned_employee_id' => $this->employee->id]);
 
         $this->post($this->receivedUrl($item), [
             'storage_type' => 'upload', 'title' => '診療記録PDF',
-            'file' => UploadedFile::fake()->create('medical-record.pdf', 64, 'application/pdf'),
+            'file' => UploadedFile::fake()->createWithContent('medical-record.pdf', "%PDF-1.4\n% Synthetic evidence\n%%EOF"),
         ])->assertCreated()->assertJsonPath('document.received_documents.0.external_url', null);
 
         $received = ReceivedDocument::sole();
@@ -285,6 +349,25 @@ class CaseDocumentCollectionApiTest extends TestCase
 
         $foreign = ReceivedDocument::create(['case_file_id' => $this->newCase()->id, 'title' => 'Other case file', 'storage_type' => 'upload', 'storage_path' => 'other.pdf']);
         $this->get($this->receivedDownloadUrl($item, $foreign))->assertNotFound();
+    }
+
+    public function test_received_datetime_preserves_the_instant_across_offset_input_storage_and_reload(): void
+    {
+        $item = $this->document(['assigned_employee_id' => $this->employee->id]);
+        $this->assertSame('Asia/Tokyo', config('app.timezone'));
+
+        foreach (['2026-10-15T06:44:00.000Z', '2026-10-15T15:44:00+09:00', '2026-10-15 15:44:00'] as $receivedAt) {
+            $response = $this->post($this->receivedUrl($item), [
+                'storage_type' => 'external_link', 'title' => 'Timezone test',
+                'external_url' => 'https://example.test/receipt.pdf', 'received_at' => $receivedAt,
+            ])->assertCreated();
+            $id = $response->json('document.received_documents.0.id');
+            $file = ReceivedDocument::findOrFail($id);
+            $this->assertSame('2026-10-15T06:44:00.000000Z', $file->received_at->toISOString());
+            $this->assertSame('2026-10-15 15:44:00', $file->getRawOriginal('received_at'));
+            $reloaded = $this->getJson($this->url($item))->assertOk()->json('document.received_documents');
+            $this->assertSame('2026-10-15T06:44:00.000000Z', collect($reloaded)->firstWhere('id', $id)['received_at']);
+        }
     }
 
     public function test_received_document_requires_a_real_http_link_or_uploaded_file(): void
@@ -300,6 +383,7 @@ class CaseDocumentCollectionApiTest extends TestCase
 
     public function test_partial_patch_edits_context_and_does_not_modify_master_legacy_or_snapshot_fields(): void
     {
+        $this->asManager();
         $item = $this->document(['status' => 'confirmed', 'file_url' => 'https://example.test/legacy', 'version' => '7',
             'rule_version_snapshot' => 1, 'rule_source_snapshot' => 'old', 'applicability_condition_snapshot' => 'Guidance']);
         $before = $this->masters();
@@ -500,6 +584,7 @@ class CaseDocumentCollectionApiTest extends TestCase
 
     public function test_confirming_preparation_creates_a_linked_employee_task_and_notification(): void
     {
+        $this->asManager();
         $assignee = Employee::create([
             'employee_code' => 'ASSIGN001', 'full_name' => 'Document assignee', 'gender' => 'female',
             'hire_date' => '2026-01-01', 'office_id' => $this->employee->office_id, 'status' => 'active',
@@ -527,6 +612,7 @@ class CaseDocumentCollectionApiTest extends TestCase
 
     public function test_nullable_fields_can_be_explicitly_cleared_and_noop_patch_does_not_create_history(): void
     {
+        $this->asManager();
         $item = $this->document(['collection_result' => 'other', 'collection_method' => 'Request', 'assigned_employee_id' => $this->employee->id,
             'response_deadline' => now(), 'preservation_priority' => true, 'preservation_reason' => 'Reason']);
         $this->patchJson($this->url($item), ['collection_result' => null, 'collection_method' => null, 'assigned_employee_id' => null,
@@ -563,6 +649,7 @@ class CaseDocumentCollectionApiTest extends TestCase
     #[DataProvider('invalidPatches')]
     public function test_invalid_patch_is_rejected_atomically(string $field, mixed $value): void
     {
+        $this->asManager();
         $item = $this->document();
         $before = $item->refresh()->getRawOriginal();
         $this->patchJson($this->url($item), [$field => $value, 'collection_method' => $field === 'collection_method' ? $value : 'Must not persist'])
@@ -593,13 +680,20 @@ class CaseDocumentCollectionApiTest extends TestCase
 
     public function test_partial_period_validation_uses_stored_other_bound_and_deleted_assignee_is_rejected(): void
     {
+        $this->asManager();
         $item = $this->document(['target_period_from' => '2026-01-01', 'target_period_to' => '2026-03-31']);
         $this->patchJson($this->url($item), ['target_period_from' => '2026-04-01'])->assertUnprocessable()->assertJsonValidationErrors('target_period_to');
         $this->patchJson($this->url($item), ['target_period_to' => '2025-12-31'])->assertUnprocessable();
         $this->patchJson($this->url($item), ['target_period_from' => null, 'target_period_to' => '2025-12-31'])->assertOk();
         $this->patchJson($this->url($item), ['target_period_from' => '2026-01-01', 'target_period_to' => '2026-01-01'])->assertOk();
-        $this->employee->delete();
-        $this->patchJson($this->url($item), ['assigned_employee_id' => $this->employee->id])->assertUnprocessable();
+        // Keep the caller active so this exercises assignee validation, not account revocation.
+        $deletedAssignee = Employee::create([
+            'employee_code' => 'SYNTHETIC-DELETED', 'full_name' => 'Synthetic deleted assignee',
+            'office_id' => $this->employee->office_id, 'hire_date' => '2026-01-01', 'status' => 'active',
+        ]);
+        $deletedAssignee->delete();
+        $this->patchJson($this->url($item), ['assigned_employee_id' => $deletedAssignee->id])
+            ->assertUnprocessable()->assertJsonValidationErrors('assigned_employee_id');
     }
 
     public function test_activity_failure_rolls_back_document_and_decision_metadata(): void
@@ -698,6 +792,12 @@ class CaseDocumentCollectionApiTest extends TestCase
     {
         return CaseFile::create(['client_id' => Client::create(['name' => 'Test client'])->id,
             'case_type_id' => CaseType::where('name', '労災')->sole()->id, 'title' => 'Test case']);
+    }
+
+    private function asManager(): void
+    {
+        $this->editor->roles()->sync([\App\Models\Role::where('name', 'level_4')->value('id')]);
+        Sanctum::actingAs($this->editor);
     }
 
     private function document(array $attributes = [], ?CaseFile $case = null): CaseDocument

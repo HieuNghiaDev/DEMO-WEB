@@ -12,7 +12,7 @@ class ToolRegistryTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_only_infrastructure_tools_remain(): void
+    public function test_only_supported_tools_are_registered(): void
     {
         $registry = app(ToolRegistry::class);
         foreach (['list_tasks', 'create_task', 'update_task', 'delete_task'] as $tool) {
@@ -20,6 +20,7 @@ class ToolRegistryTest extends TestCase
         }
         $this->assertTrue($registry->has('log_action'));
         $this->assertTrue($registry->has('request_approval'));
+        $this->assertTrue($registry->has('query_case_tasks'));
     }
 
     public function test_it_reports_an_unregistered_tool(): void

@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
@@ -52,15 +53,18 @@ class AuthController extends Controller
 
         $passwordIsValid = $user !== null &&
             Hash::check($validated['password'], $user->password);
+        $resetExpiry = $passwordIsValid ? \App\Services\Administration\EmployeePasswordReset::pendingExpiry($user, $validated['password']) : null;
 
         if (
             $user === null ||
             ! $user->is_active ||
-            ! $passwordIsValid
+            $user->activation_required ||
+            ! $passwordIsValid || $resetExpiry === false
         ) {
             $reason = match (true) {
                 $user === null => 'unknown_account',
                 ! $user->is_active => 'inactive_account',
+                $user->activation_required => 'pending_activation',
                 default => 'invalid_password',
             };
 
@@ -103,6 +107,12 @@ class AuthController extends Controller
             ], 403);
         }
 
+        if (app(\App\Services\Administration\VerifiedMfaSessions::class)->required($user)) {
+            return response()->json(app(\App\Services\Administration\MfaAuthenticationService::class)
+                ->loginChallenge($user, (bool) ($validated['remember'] ?? false)), 202)
+                ->header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        }
+
         $user->forceFill([
             'last_login_at' => now(),
         ])->save();
@@ -110,6 +120,7 @@ class AuthController extends Controller
         $expiresAt = ($validated['remember'] ?? false)
             ? now()->addDays(30)
             : now()->addHours(12);
+        if ($resetExpiry instanceof \Carbon\CarbonImmutable && $expiresAt->gt($resetExpiry)) $expiresAt = $resetExpiry;
 
         $token = $user
             ->createToken('employee-web', ['*'], $expiresAt)
@@ -130,6 +141,7 @@ class AuthController extends Controller
             'message' => 'ログインしました。',
             'user' => $user,
             'token' => $token,
+            'authentication' => ['requires_mfa' => false],
         ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     }
 
@@ -146,7 +158,18 @@ class AuthController extends Controller
 
         return response()->json([
             'user' => $user,
+            'authentication' => ['requires_mfa' => app(\App\Services\Administration\VerifiedMfaSessions::class)->required($user)],
         ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    }
+
+    /**
+     * Keep the current Sanctum token active for browser-presence reporting.
+     */
+    public function heartbeat(): JsonResponse
+    {
+        // Sanctum updates personal_access_tokens.last_used_at while resolving
+        // the authenticated request, so no additional write is required here.
+        return response()->json(null, 204);
     }
 
     /**
@@ -181,10 +204,18 @@ class AuthController extends Controller
             ]);
         }
 
-        $user->forceFill([
-            'password' => Hash::make($validated['password']),
-            'must_change_password' => false,
-        ])->save();
+        if (app(\App\Services\Administration\VerifiedMfaSessions::class)->required($user)) {
+            app(\App\Services\Administration\AdminContinuityGuard::class)->run(function () use ($user, $validated): void {
+                app(\App\Contracts\AdministrativeAuthentication::class)->consumeMutation($user, 'account.password');
+                $user->forceFill(['password' => Hash::make($validated['password']), 'must_change_password' => false])->save();
+                $user->revokeSessions();
+            }, $user, 'administration.account_password_changed', $user, true);
+        } else {
+            $user->forceFill([
+                'password' => Hash::make($validated['password']),
+                'must_change_password' => false,
+            ])->save();
+        }
 
         // A temporary password may have been exposed. Revoke every session,
         // including this one, and require a clean login with the new secret.
@@ -235,10 +266,16 @@ class AuthController extends Controller
 
         $employee = $user->employee;
         $previousPath = $employee->avatar_path;
-        $storedPath = $validated['avatar']->store('avatars', 'public');
+        $avatarBytes = $validated['avatar']->get();
+        $avatarUpdatedAt = now();
+        $avatarToken = Str::random(64);
 
         $employee->forceFill([
-            'avatar_path' => Storage::disk('public')->url($storedPath),
+            'avatar_path' => '/api/employee-avatars/'.$avatarToken.'?v='.$avatarUpdatedAt->getTimestamp(),
+            'avatar_token' => $avatarToken,
+            'avatar_mime_type' => $validated['avatar']->getMimeType(),
+            'avatar_data' => base64_encode($avatarBytes),
+            'avatar_updated_at' => $avatarUpdatedAt,
         ])->save();
 
         if (is_string($previousPath) && str_starts_with($previousPath, '/storage/avatars/')) {

@@ -35,6 +35,12 @@ const getAuthToken = () =>
 
 export const hasAuthToken = () => getAuthToken() !== null
 
+// Opaque, short-lived equality check; does not expose or persist another token copy.
+export const captureAuthSession = () => {
+  const token = getAuthToken()
+  return () => token !== null && getAuthToken() === token
+}
+
 export const storeAuthToken = (token: string, remember: boolean) => {
   window.sessionStorage.removeItem(AUTH_TOKEN_KEY)
   window.localStorage.removeItem(AUTH_TOKEN_KEY)
@@ -48,10 +54,16 @@ export const clearAuthToken = () => {
   window.localStorage.removeItem(AUTH_TOKEN_KEY)
 }
 
+export const logoutCurrentSession = () => {
+  const token = getAuthToken()
+  clearAuthToken()
+  return token ? api.post('/logout', undefined, { headers: { Authorization: `Bearer ${token}` } }) : Promise.resolve()
+}
+
 api.interceptors.request.use((config) => {
   const token = getAuthToken()
 
-  if (token) {
+  if (token && !config.headers.has('Authorization')) {
     config.headers.Authorization = `Bearer ${token}`
   }
 

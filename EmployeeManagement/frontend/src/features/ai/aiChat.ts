@@ -1,5 +1,7 @@
 import axios from 'axios'
 import api from '../../services/api'
+import { aiTaskIntroduction, aiTaskResults, type AiTaskResult } from './taskResults'
+import { parseAiNavigation, type AiNavigationResult } from './navigationResults'
 
 export type AiPersona = {
   id: number
@@ -11,6 +13,8 @@ export type AiPersona = {
 export type AiChatMessage = {
   role: 'user' | 'assistant'
   content: string
+  taskResults?: AiTaskResult[]
+  navigation?: AiNavigationResult
 }
 
 export type AiPageContext = {
@@ -28,6 +32,8 @@ export type AiPageContext = {
 type ChatResponse = {
   data: {
     message: string
+    tool_executions?: unknown
+    navigation?: unknown
   }
 }
 
@@ -73,21 +79,32 @@ export const sendAiChatMessage = async ({
   message,
   messages,
   context,
+  employeeName,
 }: {
   persona: string
   skill: string
   message: string
   messages: AiChatMessage[]
   context?: AiPageContext
+  employeeName?: string
 }) => {
   if (!skill || disabledSkills.includes(skill)) throw new Error(AI_SKILLS_PAUSED_MESSAGE)
   const response = await api.post<ChatResponse>('/ai/chat', {
     persona,
     skill,
     message,
-    messages,
+    messages: messages.map(({ role, content }) => ({ role, content })),
     ...(context ? { context } : {}),
   })
 
-  return response.data.data.message
+  const data = response.data.data
+  const navigation = parseAiNavigation(data.navigation)
+  if (navigation) return { content: data.message, navigation }
+  const taskResults = aiTaskResults(data.tool_executions).map(result => ({ ...result, today: result.scope === 'my' && /今日|本日/.test(message) }))
+  // Task facts are rendered once, from authorized tool output, never an LLM table.
+  return { content: taskResults.length
+    ? taskResults.every(result => result.error)
+      ? 'タスク情報の確認中に問題が発生しました。'
+      : aiTaskIntroduction(message, employeeName, taskResults.some(result => result.today))
+    : data.message, taskResults }
 }

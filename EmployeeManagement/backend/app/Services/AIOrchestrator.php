@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\AI\Tools\LogActionTool;
+use App\AI\Tools\QueryCaseTasksTool;
 use App\Contracts\AIModelClient;
 use RuntimeException;
 use Throwable;
+use Illuminate\Validation\ValidationException;
 
 class AIOrchestrator
 {
@@ -207,12 +209,22 @@ class AIOrchestrator
                 'status' => 'failed',
             ];
 
+            $error = 'The requested action could not be completed with those parameters. Ask the user for any missing or invalid information before trying again.';
+            if ($toolName === 'query_case_tasks' && $exception instanceof ValidationException) {
+                // Only fixed permission-denial text may reach the model, never task data or raw exceptions.
+                $denial = collect($exception->errors())->flatten()->first(fn ($message) => in_array($message,
+                    [QueryCaseTasksTool::FORBIDDEN_SCOPE, QueryCaseTasksTool::FORBIDDEN_EMPLOYEE], true));
+                if (is_string($denial)) $error = $denial;
+            }
+            if ($toolName === 'query_case_tasks') {
+                $toolExecutions[array_key_last($toolExecutions)]['error_message'] = in_array($error,
+                    [QueryCaseTasksTool::FORBIDDEN_SCOPE, QueryCaseTasksTool::FORBIDDEN_EMPLOYEE], true)
+                    ? $error : 'タスク情報を取得できませんでした。';
+            }
             return [
                 'type' => 'tool_result',
                 'tool_use_id' => $toolUse['id'],
-                'content' => json_encode([
-                    'error' => 'The requested action could not be completed with those parameters. Ask the user for any missing or invalid information before trying again.',
-                ], JSON_THROW_ON_ERROR),
+                'content' => json_encode(['error' => $error], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
             ];
         }
 

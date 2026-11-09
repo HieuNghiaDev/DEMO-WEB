@@ -8,25 +8,34 @@ use App\Models\CaseDocument;
 use App\Models\CaseGeneratedDocument;
 use App\Models\User;
 use App\Services\C001DocumentWorkflowService;
+use App\Services\ApprovalContextAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ApprovalRequestController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request, ApprovalContextAccess $access): JsonResponse
     {
+        $focus = $request->validate(['focus_id' => ['sometimes', 'integer', 'min:1']])['focus_id'] ?? null;
         $approvals = ApprovalRequest::query()
             ->with(['requestedBy', 'approvedBy', 'rejectedBy', 'executedBy'])
+            ->when($focus !== null, fn ($query) => $query->orderByRaw('CASE WHEN id = ? THEN 0 ELSE 1 END', [$focus]))
             ->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")
             ->latest()
-            ->limit(100)
-            ->get()
-            ->map(fn (ApprovalRequest $approval): array => $this->serialize($approval));
+            // Filter JSON resource references before applying the existing result
+            // limit, so hidden requests do not crowd out legitimate approvals.
+            ->lazy(100)
+            ->filter(fn (ApprovalRequest $approval): bool => $access->allows($approval, $request->user()))
+            ->take(100)->collect();
+        $blockedIds = \App\Services\LegalFinalizationGate::pendingApprovalIds($approvals);
+        $canDecide = $request->user()->hasPermission('approval.approve');
+        $rehearsalPending = \App\Services\RehearsalDocumentAuthority::current() !== null;
 
         return response()->json([
-            'approvals' => $approvals,
-            'c001_documents' => $this->c001Documents(),
+            'approvals' => $approvals->map(fn ($approval) => $this->serialize($approval, $canDecide && $access->allows($approval, $request->user(), true),
+                $rehearsalPending || in_array($approval->id, $blockedIds, true)))->values()->all(),
+            'c001_documents' => $this->c001Documents($request->user()),
         ]);
     }
 
@@ -56,6 +65,12 @@ class ApprovalRequestController extends Controller
                 ->lockForUpdate()
                 ->findOrFail($approval->id);
 
+            // Check before both mutation and the already-processed response.
+            abort_unless(app(ApprovalContextAccess::class)->allows($lockedApproval, $actor, true), 403);
+            // Untyped generic approvals cannot stand in for assigned review or legal authority.
+            \App\Services\RehearsalDocumentAuthority::current()?->blockFinalApproval();
+            \App\Services\LegalFinalizationGate::enforceApproval($lockedApproval, $actor);
+
             if ($lockedApproval->status !== 'pending') {
                 return [
                     'error' => true,
@@ -74,6 +89,8 @@ class ApprovalRequestController extends Controller
                     'rejected_by' => $actor->id,
                     'rejected_at' => now(),
                 ]);
+
+            app(\App\Services\ApprovalNotificationService::class)->notifyDecision($lockedApproval);
 
             return [
                 'error' => false,
@@ -94,13 +111,16 @@ class ApprovalRequestController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function serialize(ApprovalRequest $approval): array
+    private function serialize(ApprovalRequest $approval, bool $canDecide = false, bool $legalPending = false): array
     {
         return [
             'id' => $approval->id,
             'action_type' => $approval->action_type,
             'tool_name' => $approval->tool_name,
             'payload' => $approval->payload,
+            'allowed_actions' => ['can_approve' => $canDecide && $approval->status === 'pending' && ! $legalPending,
+                'can_reject' => $canDecide && $approval->status === 'pending' && ! $legalPending,
+                'legal_approval_pending' => $legalPending],
             'requested_by' => $this->serializeUser($approval->requestedBy),
             'status' => $approval->status,
             'created_at' => $approval->created_at?->toISOString(),
@@ -127,9 +147,10 @@ class ApprovalRequestController extends Controller
     }
 
     /** @return \Illuminate\Support\Collection<int, array<string, mixed>> */
-    private function c001Documents()
+    private function c001Documents(User $user)
     {
         return CaseDocument::query()
+            ->whereHas('caseFile', fn ($query) => $query->visibleTo($user))
             ->whereHas('documentType', fn ($query) => $query->where('code', 'C-001'))
             ->whereHas('generatedDocuments.artifacts', fn ($query) => $query
                 ->where('storage_provider', 'google_drive')
@@ -169,6 +190,7 @@ class ApprovalRequestController extends Controller
                     'client_name' => $document->caseFile?->client?->name,
                     'status' => $status,
                     'version' => $version->version,
+                    'legal_approval_pending' => \App\Services\LegalFinalizationGate::policyPending(),
                     'success_fee_percentage' => $version->success_fee_percentage,
                     'generated_at' => $version->created_at?->toISOString(),
                     'generated_by' => $version->createdBy?->name,

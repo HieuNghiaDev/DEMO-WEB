@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Check, CheckCircle2, Clock3, Play, RefreshCw, X, XCircle } from 'lucide-react'
 import api from '../services/api'
 import {
@@ -12,11 +13,14 @@ import {
 import { KpiSkeletonValue, SectionSkeleton } from '../components/loading'
 import { useAuth } from '../contexts/AuthContext'
 import C001DocumentReviewDrawer from '../features/document-creation/components/C001DocumentReviewDrawer'
+import LegalApprovalNotice from '../features/document-creation/components/LegalApprovalNotice'
+import { canReviewAction, reviewActionError, type ReviewCapabilities } from '../features/document-creation/legalApproval'
 
 type ApprovalStatus = 'pending' | 'approved' | 'rejected'
 type ApprovalAction = 'approve' | 'reject'
 type ApprovalUser = { id: number; name: string }
 type ApprovalRequest = {
+  allowed_actions?: ReviewCapabilities
   id: number
   action_type: string
   tool_name: string | null
@@ -33,6 +37,7 @@ type ApprovalRequest = {
 }
 
 type C001ApprovalSummary = {
+  legal_approval_pending?: boolean
   case_id: number
   case_reference: string | null
   case_title: string | null
@@ -78,6 +83,9 @@ const summarizePayload = (payload: Record<string, unknown> | null) => {
 
 function ApprovalRoom() {
   const { user } = useAuth()
+  const [searchParams] = useSearchParams()
+  const focus = searchParams.get('approval')
+  const focusId = focus && /^[1-9]\d*$/.test(focus) ? Number(focus) : null
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([])
   const [c001Documents, setC001Documents] = useState<C001ApprovalSummary[]>([])
   const [selectedC001, setSelectedC001] = useState<C001ApprovalSummary | null>(null)
@@ -85,13 +93,16 @@ function ApprovalRoom() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeAction, setActiveAction] = useState<{ id: number; action: ApprovalAction } | null>(null)
+  const actionInFlight = useRef(false)
 
   const loadApprovals = useCallback(async (manual = false) => {
     if (manual) setIsRefreshing(true)
     else setIsLoading(true)
     setError(null)
     try {
-      const response = await api.get<{ approvals: ApprovalRequest[]; c001_documents?: C001ApprovalSummary[] }>('/approvals')
+      const response = await api.get<{ approvals: ApprovalRequest[]; c001_documents?: C001ApprovalSummary[] }>('/approvals', {
+        params: focusId ? { focus_id: focusId } : undefined,
+      })
       setApprovals(response.data.approvals)
       setC001Documents(response.data.c001_documents ?? [])
     } catch {
@@ -100,7 +111,13 @@ function ApprovalRoom() {
       setIsLoading(false)
       setIsRefreshing(false)
     }
-  }, [])
+  }, [focusId])
+
+  useEffect(() => {
+    if (focusId && approvals.some(approval => approval.id === focusId)) {
+      document.getElementById(`approval-${focusId}`)?.scrollIntoView({ block: 'center' })
+    }
+  }, [approvals, focusId])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -110,6 +127,9 @@ function ApprovalRoom() {
   }, [loadApprovals])
 
   const transitionApproval = async (approvalId: number, action: ApprovalAction) => {
+    const target = approvals.find(approval => approval.id === approvalId)
+    if (actionInFlight.current || target?.status !== 'pending' || !canReviewAction(target.allowed_actions, action)) return
+    actionInFlight.current = true
     setActiveAction({ id: approvalId, action })
     setError(null)
     try {
@@ -117,10 +137,11 @@ function ApprovalRoom() {
       setApprovals((current) =>
         current.map((approval) => (approval.id === approvalId ? response.data.approval : approval)),
       )
-    } catch {
+    } catch (requestError) {
       await loadApprovals(true)
-      setError('申請を更新できませんでした。すでに処理済みの可能性があります。')
+      setError(reviewActionError(requestError, '申請を更新できませんでした。すでに処理済みの可能性があります。'))
     } finally {
+      actionInFlight.current = false
       setActiveAction(null)
     }
   }
@@ -185,15 +206,22 @@ function ApprovalRoom() {
           />
         </MetricStrip>
 
+        {error && (
+          <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs font-medium text-[var(--tm-danger)]">
+            {error}
+          </div>
+        )}
+
         <section className="overflow-hidden rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface)] shadow-xs" aria-labelledby="c001-approval-title">
           <div className="flex items-center justify-between gap-4 border-b border-[var(--tm-border)] bg-[var(--tm-surface-elevated)]/50 px-4 py-3.5 sm:px-5">
             <div>
               <h2 id="c001-approval-title" className="text-sm font-semibold text-[var(--tm-text-primary)]">C-001 文書承認</h2>
-              <p className="mt-0.5 text-xs text-[var(--tm-text-secondary)]">公式PDFを確認して承認・差戻しを行います</p>
+              <p className="mt-0.5 text-xs text-[var(--tm-text-secondary)]">公式PDFと現在の承認状態を確認します</p>
             </div>
             <span className="shrink-0 text-xs font-semibold tabular-nums text-amber-600 dark:text-amber-400">要確認 {pendingC001Count}件</span>
           </div>
-          {isLoading && c001Documents.length === 0 ? <ApprovalLoadingState /> : c001Documents.length === 0 ? (
+          {c001Documents.some(document => document.legal_approval_pending && document.status === 'pending_approval') && <div className="px-4 pt-3 sm:px-5"><LegalApprovalNotice/></div>}
+          {(isLoading || isRefreshing) && c001Documents.length === 0 ? <ApprovalLoadingState /> : c001Documents.length === 0 ? !error && (
             <div className="p-7"><EmptyState icon={<CheckCircle2 className="h-7 w-7 text-emerald-500" />} title="C-001の承認対象はありません" description="作成済みのC-001が承認待ちになると、ここに表示されます。" /></div>
           ) : (
             <div className="divide-y divide-[var(--tm-border)]">
@@ -231,15 +259,9 @@ function ApprovalRoom() {
             </span>
           </div>
 
-          {error && (
-            <div className="m-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs font-medium text-[var(--tm-danger)] sm:m-5">
-              {error}
-            </div>
-          )}
-
-          {isLoading && approvals.length === 0 ? (
+          {(isLoading || isRefreshing) && approvals.length === 0 ? (
             <ApprovalLoadingState />
-          ) : approvals.length === 0 ? (
+          ) : approvals.length === 0 ? !error && (
             <div className="p-8">
               <EmptyState
                 icon={<CheckCircle2 className="h-7 w-7 text-emerald-500" />}
@@ -253,12 +275,12 @@ function ApprovalRoom() {
                 const meta = statusMeta[approval.status]
                 const isApproving = activeAction?.id === approval.id && activeAction.action === 'approve'
                 const isRejecting = activeAction?.id === approval.id && activeAction.action === 'reject'
-                const isActing = activeAction?.id === approval.id
 
                 return (
                   <article
                     key={approval.id}
-                    className="group relative px-4 py-4.5 transition-colors duration-150 hover:bg-[var(--tm-surface-hover)] sm:px-5"
+                    id={`approval-${approval.id}`}
+                    className={`group relative px-4 py-4.5 transition-colors duration-150 hover:bg-[var(--tm-surface-hover)] sm:px-5 ${focusId === approval.id ? 'bg-[var(--tm-surface-hover)] ring-1 ring-inset ring-indigo-500/40' : ''}`}
                   >
                     <span
                       className={`absolute bottom-3 left-0 top-3 w-1 rounded-r ${
@@ -292,6 +314,7 @@ function ApprovalRoom() {
                         <div className="mt-2 rounded-lg border-l-2 border-[var(--tm-primary)] bg-[var(--tm-surface-elevated)] px-3 py-2 text-xs leading-5 text-[var(--tm-text-secondary)]">
                           {summarizePayload(approval.payload)}
                         </div>
+                        {approval.status === 'pending' && approval.allowed_actions?.legal_approval_pending && <LegalApprovalNotice/>}
 
                         <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1 text-xs text-[var(--tm-text-muted)]">
                           <span>
@@ -317,7 +340,7 @@ function ApprovalRoom() {
                           <Button
                             variant="secondary"
                             size="md"
-                            disabled={isActing}
+                            disabled={activeAction !== null || !canReviewAction(approval.allowed_actions, 'reject')}
                             loading={isRejecting}
                             onClick={() => void transitionApproval(approval.id, 'reject')}
                             icon={!isRejecting ? <X size={15} className="text-red-500" /> : undefined}
@@ -328,7 +351,7 @@ function ApprovalRoom() {
                           <Button
                             variant="primary"
                             size="md"
-                            disabled={isActing}
+                            disabled={activeAction !== null || !canReviewAction(approval.allowed_actions, 'approve')}
                             loading={isApproving}
                             onClick={() => void transitionApproval(approval.id, 'approve')}
                             icon={!isApproving ? <Check size={15} /> : undefined}

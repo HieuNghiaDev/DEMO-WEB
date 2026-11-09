@@ -12,6 +12,8 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { AppReleaseProvider } from "./contexts/AppReleaseContext";
 
 import Login from "./pages/Login";
+import ActivationPage from './features/authentication/ActivationPage';
+import MfaSecurityPage from './features/authentication/MfaSecurityPage';
 import EmployeeRoom from "./pages/EmployeeRoom";
 import OrganizationDesign from "./pages/OrganizationDesign";
 import BusinessQuest from "./pages/BusinessQuest";
@@ -33,11 +35,10 @@ function App() {
         <AuthProvider>
           <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/activate-account" element={<ActivationPage />} />
 
           <Route element={<ProtectedRoute />}>
             <Route path="/change-password" element={<ChangePassword />} />
-            {/* Reuse the password screen without changing the mandatory-reset route guard. */}
-            <Route path="/system/password" element={<ChangePassword />} />
             <Route element={<AppReleaseProvider><MainLayout /></AppReleaseProvider>}>
               <Route path="/" element={<EmployeeRoom />} />
               <Route
@@ -48,7 +49,10 @@ function App() {
               <Route path="/visa-progress" element={<VisaProgress />} />
               <Route path="/ai" element={<AIEmployees />} />
               <Route path="/approvals" element={<ApprovalRoom />} />
-              <Route path="/system" element={<SystemSettings />} />
+              <Route path="/system" element={<SystemSettings />}>
+                <Route path="mfa" element={<MfaSecurityPage />} />
+                <Route path="password" element={<ChangePassword inSettings />} />
+              </Route>
               <Route path="/developer" element={<DeveloperConsolePage />} />
               <Route path="/design/case-document-collection" element={<Suspense fallback={<LoadingState message="プレビューを読み込み中…" variant="page" />}><DocumentCollectionMockupPage /></Suspense>} />
             </Route>

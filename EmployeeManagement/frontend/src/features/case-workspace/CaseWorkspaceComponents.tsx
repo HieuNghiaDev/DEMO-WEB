@@ -398,7 +398,7 @@ export function WorkspaceHeader({
   }
 
   return (
-    <header className="cm-dossier-header" style={{ padding: '20px 24px 20px' }}>
+    <header className="cm-dossier-header cm-ws-section cm-ws-case-information" aria-label="案件情報">
       {/* Top Meta Bar */}
       <div className="cm-ws-top-meta">
         <div className="cm-ws-meta-left">

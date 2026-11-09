@@ -337,42 +337,18 @@ class C001DocumentWorkflowService
         ];
     }
 
-    public function approve(CaseFile $caseFile, CaseDocument $caseDocument, User $actor): CaseGeneratedDocument
+    public function approve(CaseFile $caseFile, CaseDocument $caseDocument, User $actor, ?CaseGeneratedDocument $observed = null): CaseGeneratedDocument
     {
-        return DB::transaction(function () use ($caseFile, $caseDocument, $actor) {
-            $case = CaseFile::query()->whereKey($caseFile->id)->lockForUpdate()->firstOrFail();
-            $document = $case->documents()->whereKey($caseDocument->id)->lockForUpdate()->firstOrFail();
-            $this->assertC001($document);
-            $instance = $document->generatedDocuments()->orderByDesc('version')->lockForUpdate()->firstOrFail();
-            $workbook = $instance->artifacts()->where('artifact_type', self::ARTIFACT_TYPE)
-                ->where('storage_provider', 'google_drive')->first();
-            $pdf = $instance->artifacts()->where('artifact_type', self::PDF_ARTIFACT_TYPE)
-                ->where('storage_provider', 'google_drive')->first();
-            if ($instance->workflow_status !== 'review' || ! $workbook || ! $pdf
-                || ! $workbook->uploaded_at || ! $pdf->uploaded_at
-                || $workbook->uploaded_at->lt($instance->updated_at)
-                || $pdf->uploaded_at->lt($instance->updated_at)) {
-                throw ValidationException::withMessages(['workflow_status' => 'Driveに保存され、承認待ちのC-001のみ承認できます。']);
-            }
-            $instance->update([
-                'workflow_status' => 'approved',
-                'approved_data' => $instance->draft_data,
-                'approved_at' => now(),
-                'approved_by' => $actor->id,
-                'updated_by' => $actor->id,
-            ]);
-            $document->update([
-                'collection_status' => 'received',
-                'fulfillment_status' => 'satisfied',
-                'review_status' => 'reviewed',
-            ]);
-
-            return $instance->fresh(['artifacts', 'approvedBy:id,name']);
-        });
+        RehearsalDocumentAuthority::current()?->blockFinalApproval();
+        LegalFinalizationGate::enforce($actor);
+        abort_unless($observed !== null, 409, 'An exact observed C001 version is required.');
+        return app(C001FinalApprovalWriter::class)->approve($caseFile, $caseDocument, $actor, $observed);
     }
 
     public function reject(CaseFile $caseFile, CaseDocument $caseDocument, User $actor): CaseGeneratedDocument
     {
+        RehearsalDocumentAuthority::current()?->blockFinalApproval();
+        LegalFinalizationGate::enforce($actor);
         return DB::transaction(function () use ($caseFile, $caseDocument, $actor) {
             $case = CaseFile::query()->whereKey($caseFile->id)->lockForUpdate()->firstOrFail();
             $document = $case->documents()->whereKey($caseDocument->id)->lockForUpdate()->firstOrFail();

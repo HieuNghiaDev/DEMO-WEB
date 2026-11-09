@@ -1,5 +1,5 @@
 import { SectionSkeleton } from '../components/loading'
-import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AI_CONVERSATION_HISTORY_LIMIT,
   friendlyAiErrorMessage,
@@ -9,8 +9,10 @@ import {
   type AiPersona,
 } from '../features/ai/aiChat'
 import AiEmployeeWorkspace from '../features/ai/AiEmployeeWorkspace'
+import { useAuth } from '../contexts/AuthContext'
 
 function AIEmployees() {
+  const { user } = useAuth()
   const [personas, setPersonas] = useState<AiPersona[]>([])
   const [selectedPersonaId, setSelectedPersonaId] = useState<number | null>(null)
   const [selectedSkills, setSelectedSkills] = useState<Record<string, string>>({})
@@ -94,13 +96,14 @@ function AIEmployees() {
         skill: selectedSkill,
         message: content,
         messages: conversationHistory,
+        employeeName: user?.employee?.full_name || user?.name || '',
       })
 
       setMessagesByPersona((current) => ({
         ...current,
         [personaName]: [
           ...(current[personaName] ?? []),
-          { role: 'assistant', content: assistantMessage },
+          { role: 'assistant', ...assistantMessage },
         ],
       }))
     } catch (requestError) {
@@ -125,10 +128,10 @@ function AIEmployees() {
     }
   }
 
-  const usePrompt = (prompt: string) => {
+  const usePrompt = useCallback((prompt: string) => {
     setMessageInput(prompt)
     window.requestAnimationFrame(() => textareaRef.current?.focus())
-  }
+  }, [])
 
   return (
     <div className="ai-employee-page">
@@ -166,4 +169,7 @@ function AIEmployees() {
   )
 }
 
-export default AIEmployees
+export default function AuthenticatedAIEmployees() {
+  const { user } = useAuth()
+  return <AIEmployees key={`${user?.id ?? 'signed-out'}:${user?.permission_names.join(',') ?? ''}`} />
+}

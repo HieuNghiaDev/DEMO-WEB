@@ -9,7 +9,7 @@ use App\Models\ExternalStorageLocation;
 use App\Models\User;
 use App\Services\GoogleDriveProvisioningService;
 use App\Services\GoogleDriveService;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Mockery;

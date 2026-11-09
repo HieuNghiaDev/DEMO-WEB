@@ -8,9 +8,10 @@ use App\Models\Office;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\OfficeSeeder;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class EmployeeCreationApiTest extends TestCase
@@ -22,6 +23,7 @@ class EmployeeCreationApiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['auth.employee_initial_password' => 'Themis@2026']);
         $this->seed([OfficeSeeder::class, RolePermissionSeeder::class]);
         $this->manager = User::factory()->create();
         $this->manager->roles()->sync([Role::query()->where('name', 'level_4')->value('id')]);
@@ -49,6 +51,37 @@ class EmployeeCreationApiTest extends TestCase
             'office_id' => $office->id,
             'status' => 'active',
         ]);
+
+        $employee = Employee::query()->where('employee_code', 'TMS-26001')->sole();
+        $account = User::query()->with('roles')->where('employee_id', $employee->id)->sole();
+
+        $this->assertSame('TMS-26001', $account->login_id);
+        $this->assertSame('test.employee@themis.local', $account->email);
+        $this->assertTrue($account->is_active);
+        $this->assertTrue($account->must_change_password);
+        // B2.3 intentionally replaces the old shared-password/implicit-Level-2 contract.
+        $this->assertTrue($account->activation_required);
+        $this->assertNull($account->activated_at);
+        $this->assertTrue($account->pii_requires_explicit);
+        $this->assertFalse(Hash::check('Themis@2026', $account->password));
+        $this->assertSame([], $account->roles->pluck('name')->all());
+
+        $this->postJson('/api/login', [
+            'email' => 'test.employee@themis.local',
+            'password' => 'Themis@2026',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonMissingPath('token');
+    }
+
+    public function test_work_email_is_required_because_it_is_the_login_identifier(): void
+    {
+        $this->createEmployee($this->office('THEMIS'))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('work_email');
+
+        $this->assertDatabaseCount('employees', 0);
+        $this->assertDatabaseCount('users', 1);
     }
 
     public function test_second_employee_uses_the_next_yearly_office_sequence(): void

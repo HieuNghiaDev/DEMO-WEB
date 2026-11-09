@@ -35,4 +35,12 @@ class WorkSession extends Model
     {
         return $this->hasOne(EmployeeTask::class);
     }
+
+    public function taskDataVisibleTo(?User $user, ?int $employeeId): bool
+    {
+        if (! \App\Services\TaskVisibility::canViewAssignee($user, $employeeId)) return false;
+        $task = $this->employeeTask;
+        $this->makeHidden('employeeTask');
+        return $task === null || $task->isVisibleTo($user);
+    }
 }

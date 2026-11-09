@@ -1,0 +1,12 @@
+/* Existing global ModalShell owns portal, focus and dismissal behavior. */
+.dc-preview.dc-file-review-dialog { padding: 0; }
+.dc-file-review-dialog h3 { white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+.dc-file-review-dialog .dc-review-target { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--dc-line); }
+.dc-file-review-dialog .dc-review-target > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
+.dc-file-review-dialog .dc-review-target > div > span { color: var(--dc-muted); font-size: 11px; }
+.dc-file-review-dialog .dc-review-target strong { color: var(--dc-ink); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.dc-file-review-dialog .dc-review-target-version { flex: 0 0 auto; padding: 2px 8px; border: 1px solid var(--dc-line); border-radius: 5px; color: var(--dc-muted); background: var(--dc-subtle); font-size: 11px; }
+.dc-file-review-dialog .dc-review-destructive { color: var(--dc-bg); background: var(--dc-danger); border-color: var(--dc-danger); }
+.dc-file-review-dialog .dc-review-destructive:hover:not(:disabled) { background: color-mix(in srgb, var(--dc-danger) 92%, var(--dc-ink)); border-color: var(--dc-danger); }
+.dc-file-review-dialog :is(button, select, textarea):focus-visible { outline: 2px solid var(--tm-focus-ring); outline-offset: 2px; }
+.dc-file-review-dialog [role="alert"] { overflow-wrap: anywhere; }

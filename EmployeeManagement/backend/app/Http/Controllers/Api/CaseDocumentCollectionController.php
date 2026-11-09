@@ -10,8 +10,11 @@ use App\Models\CaseFile;
 use App\Models\DocumentType;
 use App\Models\Employee;
 use App\Models\ReceivedDocument;
+use App\Services\CaseTaskWorkflowService;
 use App\Services\CaseWorkspaceAuditService;
 use App\Services\DocumentCollectionTaskService;
+use App\Services\RequiredDocumentAccess;
+use App\Services\RequiredDocumentFileReview;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -34,13 +37,22 @@ class CaseDocumentCollectionController extends Controller
         'generatedDocument.updatedBy:id,name',
         'generatedDocument.artifacts:id,case_generated_document_id,artifact_type,storage_provider,external_file_id,external_url,filename,uploaded_by,uploaded_at,created_at,updated_at',
         'generatedDocument.artifacts.uploadedBy:id,name',
-        'generatedDocuments:id,case_document_id,version,workflow_status,success_fee_percentage,approved_at,approved_by,updated_at,updated_by',
+        'generatedDocuments:id,case_document_id,version,workflow_status,success_fee_percentage,approved_at,approved_by,created_by,created_at,updated_at,updated_by',
         'generatedDocuments.approvedBy:id,name',
+        'generatedDocuments.createdBy:id,name',
         'generatedDocuments.updatedBy:id,name',
-        'generatedDocuments.artifacts:id,case_generated_document_id,artifact_type,storage_provider,external_file_id,external_url,filename,uploaded_by,uploaded_at,created_at,updated_at',
+        'generatedDocuments.artifacts:id,case_generated_document_id,artifact_type,storage_provider,external_file_id,external_url,filename,mime_type,uploaded_by,uploaded_at,created_at,updated_at',
         'generatedDocuments.artifacts.uploadedBy:id,name',
         'purposes:id,code,name_ja,sort_order',
         'assignedEmployee:id,full_name',
+        'activeCaseTask',
+        'activeCaseTask.assignedEmployee:id,full_name',
+        'activeCaseTask.latestSubmission',
+        'latestCaseTask.assignedEmployee:id,full_name',
+        'latestTaskSubmission.submittedBy:id,name',
+        'latestTaskSubmission.reviewedBy:id,name',
+        'latestEmployeeTask',
+        'receivedDocuments.reviewedBy:id,name',
     ];
 
     public function index(Request $request, CaseFile $caseFile): JsonResponse
@@ -72,6 +84,9 @@ class CaseDocumentCollectionController extends Controller
             COALESCE(SUM(CASE WHEN preservation_priority = 1 THEN 1 ELSE 0 END), 0) AS preservation_count,
             COALESCE(SUM(CASE WHEN collection_result IS NOT NULL THEN 1 ELSE 0 END), 0) AS exception_count", [$now])->first();
 
+        $metadataScope = clone $base;
+        $visibleOverdue = (clone $metadataScope)->where('response_deadline', '<', $now)
+            ->whereNotIn('collection_status', ['received', 'closed'])->count();
         $query = $this->filter($base, $filters, $now);
         $this->sort($query, $filters);
         $page = $query->with(self::RELATIONS)->withCount([
@@ -85,7 +100,7 @@ class CaseDocumentCollectionController extends Controller
             'summary' => ['total' => (int) $counts->total,
                 'necessity' => ['undetermined' => (int) $counts->undetermined, 'required' => (int) $counts->required_count,
                     'not_required' => (int) $counts->not_required],
-                'overdue' => (int) $counts->overdue, 'preservation_priority' => (int) $counts->preservation_count,
+                'overdue' => $visibleOverdue, 'preservation_priority' => (int) $counts->preservation_count,
                 'collection_result_count' => (int) $counts->exception_count, 'filtered_count' => $page->total()],
         ]);
     }
@@ -105,11 +120,22 @@ class CaseDocumentCollectionController extends Controller
             // Same lock order as checklist generation; validate against the latest stored state.
             $case = CaseFile::whereKey($caseFile->id)->lockForUpdate()->firstOrFail();
             $document = $case->documents()->whereKey($caseDocument->id)->lockForUpdate()->firstOrFail();
+            $capabilities = app(RequiredDocumentAccess::class)->capabilities($document, $request->user());
+            abort_unless($capabilities['can_edit'], 403);
+            abort_if($request->has('assigned_employee_id') && ! $capabilities['can_change_assignee'], 403);
+            abort_if($request->has('response_deadline') && ! $capabilities['can_change_deadline'], 403);
+            // Reviewed versions must go through the latest-file review endpoint, not a status PATCH.
+            if ($request->hasAny(['review_status', 'collection_status', 'fulfillment_status'])
+                && ($document->taskSubmissions()->exists() || $document->receivedDocuments()->exists())) {
+                throw ValidationException::withMessages(['review_status' => 'ファイルの確認状態は専用の操作から変更してください。']);
+            }
             $data = $this->validatedPatch($request, $document);
             abort_unless(
-                ! array_key_exists('review_status', $data) || $request->user()?->hasAnyRole(['level_4', 'level_5']),
+                ! array_key_exists('review_status', $data) || (\App\Services\Administration\MainRoles::assigned($request->user())
+                    ? $request->user()?->hasPermission('task.review')
+                    : $request->user()?->hasAnyRole(['level_4', 'level_5'])),
                 403,
-                '資料の確認状態を変更できるのはレベル4またはレベル5のユーザーのみです。'
+                '資料の確認状態を変更する権限がありません。'
             );
             if (isset($data['necessity_status']) && $data['necessity_status'] !== $document->necessity_status) {
                 $decided = $data['necessity_status'] !== 'undetermined';
@@ -234,7 +260,7 @@ class CaseDocumentCollectionController extends Controller
         $data = $request->validate([
             'storage_type' => ['required', Rule::in(ReceivedDocument::STORAGE_TYPES)],
             'title' => ['required', 'string', 'max:255'],
-            'file' => ['nullable', 'required_if:storage_type,upload', 'file', 'max:20480'],
+            'file' => ['nullable', 'required_if:storage_type,upload', 'file', 'max:20480', new \App\Rules\AllowedEvidenceFile],
             'external_url' => ['nullable', 'required_if:storage_type,external_link,google_drive', 'string', 'max:2048', function (string $attribute, mixed $value, \Closure $fail) use ($request): void {
                 if (in_array($request->input('storage_type'), ['external_link', 'google_drive'], true)
                     && (! filter_var($value, FILTER_VALIDATE_URL)
@@ -253,12 +279,18 @@ class CaseDocumentCollectionController extends Controller
             return $caseFile->getConnection()->transaction(function () use ($request, $caseFile, $caseDocument, $audit, $data, &$storedPath) {
                 $case = CaseFile::whereKey($caseFile->id)->lockForUpdate()->firstOrFail();
                 $document = $case->documents()->whereKey($caseDocument->id)->lockForUpdate()->firstOrFail();
+                abort_unless(app(RequiredDocumentAccess::class)->capabilities($document, $request->user())['can_upload'], 403);
+                $workflow = app(CaseTaskWorkflowService::class);
                 $attributes = [
+                    'version' => $workflow->nextVersion($document),
+                    'review_status' => 'pending_review',
                     'case_file_id' => $case->id,
                     'document_type_id' => $document->document_type_id,
                     'title' => $data['title'],
                     'storage_type' => $data['storage_type'],
-                    'received_at' => isset($data['received_at']) ? Carbon::parse($data['received_at']) : now(),
+                    // DATETIME columns use the application timezone. Normalize
+                    // offset-aware input before Eloquent drops its offset.
+                    'received_at' => isset($data['received_at']) ? Carbon::parse($data['received_at'])->setTimezone(config('app.timezone')) : now(),
                     'original_or_copy' => $data['original_or_copy'] ?? null,
                     'return_required' => $data['return_required'] ?? false,
                     'registered_by_employee_id' => $request->user()?->employee_id,
@@ -278,16 +310,20 @@ class CaseDocumentCollectionController extends Controller
                 $received = ReceivedDocument::create($attributes);
                 $document->receivedDocuments()->attach($received->id, ['relationship_type' => 'received']);
                 $reviewReset = $document->review_status === 'reviewed';
-                if ($reviewReset) {
-                    $document->update(['review_status' => 'unreviewed']);
+                $document->update(['collection_status' => 'received', 'review_status' => 'reviewing', 'fulfillment_status' => 'undetermined']);
+                $submitted = $workflow->submitReceived($case, $document, $received, $request, $request->file('file')?->getMimeType() ?? 'application/octet-stream');
+                if (! $submitted) {
+                    $audit->record($case, $request, 'ファイル v'.$received->version.' をアップロード', $received->title, [
+                        'event' => 'document_collection.received_document_registered',
+                        'document_id' => $document->id,
+                        'received_document_id' => $received->id,
+                        'storage_type' => $received->storage_type,
+                        'review_reset' => $reviewReset,
+                        'version' => $received->version,
+                        'actor_user_id' => $request->user()->id,
+                        'document_file_event' => true,
+                    ]);
                 }
-                $audit->record($case, $request, '受領文書を登録', $received->title, [
-                    'event' => 'document_collection.received_document_registered',
-                    'document_id' => $document->id,
-                    'received_document_id' => $received->id,
-                    'storage_type' => $received->storage_type,
-                    'review_reset' => $reviewReset,
-                ]);
 
                 return $this->detail($request, $document)->setStatusCode(201);
             });
@@ -311,13 +347,34 @@ class CaseDocumentCollectionController extends Controller
         return Storage::disk('local')->download($receivedDocument->storage_path, $receivedDocument->original_filename ?: $receivedDocument->title);
     }
 
+    public function reviewFile(Request $request, CaseFile $caseFile, CaseDocument $caseDocument, RequiredDocumentFileReview $review): JsonResponse
+    {
+        abort_unless($caseDocument->case_file_id === $caseFile->id, 404);
+        $data = $request->validate([
+            'source' => ['required', Rule::in(['received', 'task_submission'])],
+            'file_id' => ['required', 'integer', 'min:1'],
+            'action' => ['required', Rule::in(['confirm', 'return'])],
+            'reason' => ['required_if:action,return', 'nullable', Rule::in(RequiredDocumentFileReview::REASONS)],
+            'detail' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        // A detail-serialization failure must not return a save error after the
+        // review has already committed. Keep the response in the transaction.
+        return $caseFile->getConnection()->transaction(function () use ($review, $caseFile, $caseDocument, $request, $data): JsonResponse {
+            $review->review($caseFile, $caseDocument, $request, $data);
+
+            return $this->detail($request, $caseDocument->fresh());
+        });
+    }
+
     private function detail(Request $request, CaseDocument $document): JsonResponse
     {
         // A corrupt cross-case pivot must not leak file metadata or even its count.
         $files = fn ($q) => $q->where('received_documents.case_file_id', $document->case_file_id);
         $document->load([...self::RELATIONS, 'necessityDecidedBy:id,full_name',
-            'receivedDocuments' => fn ($q) => $files($q)->orderBy('received_documents.id'),
-            'receivedDocuments.registeredByEmployee:id,full_name'])
+            'receivedDocuments' => fn ($q) => $files($q)->orderByDesc('version')->orderByDesc('received_documents.id'),
+            'receivedDocuments.registeredByEmployee:id,full_name',
+            'taskSubmissions.submittedBy:id,name', 'taskSubmissions.reviewedBy:id,name'])
             ->loadCount(['receivedDocuments' => $files]);
 
         return response()->json(['document' => (new CaseDocumentCollectionDetailResource($document))->resolve($request)]);

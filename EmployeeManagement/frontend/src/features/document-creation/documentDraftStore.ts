@@ -34,7 +34,7 @@ export type DocumentCreationState = {
   drive: DocumentDriveState
   currentVersion: number | null
   versions: DocumentVersionSummary[]
-  permissions: { canApprove: boolean }
+  permissions: { canApprove: boolean; legalApprovalPending?: boolean }
   c001: C001State | null
 }
 
@@ -54,7 +54,6 @@ export interface DocumentDraftStore {
   createRevision(identity: DocumentDraftIdentity): Promise<DocumentCreationState>
   previewC001(identity: DocumentDraftIdentity, official: boolean, signal?: AbortSignal): Promise<C001WorkbookPreview>
   syncC001(identity: DocumentDraftIdentity, percentage: string): Promise<DocumentCreationState>
-  rejectC001(identity: DocumentDraftIdentity, reason: string): Promise<DocumentCreationState>
 }
 
 type ApiTemplate = {
@@ -74,7 +73,7 @@ type ApiVersionSummary = {
 type ApiCreationState = {
   supported: boolean; template: ApiTemplate | null; document: ApiDocument | null; drive?: DocumentDriveState
   current_version?: number | null; versions?: ApiVersionSummary[]
-  permissions?: { can_approve?: boolean }
+  permissions?: { can_approve?: boolean; legal_approval_pending?: boolean }
   c001?: C001State | null
 }
 
@@ -93,7 +92,7 @@ function mapState(data: ApiCreationState): DocumentCreationState {
       version: version.version, status: version.workflow_status, isCurrent: version.is_current,
       approvedAt: version.approved_at, approvedBy: version.approved_by, driveArtifact: version.drive_artifact,
     })),
-    permissions: { canApprove: data.permissions?.can_approve ?? false },
+    permissions: { canApprove: data.permissions?.can_approve ?? false, legalApprovalPending: data.permissions?.legal_approval_pending === true },
     c001: data.c001 ?? null,
     template: data.template ? {
       id: data.template.id, documentTypeId: data.template.document_type_id,
@@ -141,6 +140,9 @@ export const apiDocumentDraftStore: DocumentDraftStore = {
     try {
       response = await api.get<Blob>(`${path(identity)}/c001/${endpoint}${query}`, { signal, responseType: 'blob' })
     } catch (error) {
+      // Preserve the HTTP status so the shared viewer can suppress external-open
+      // fallback after an authorization failure rather than bypass the API.
+      if (isAxiosError(error) && [401, 403].includes(error.response?.status ?? 0)) throw error
       const errorBlob = isAxiosError(error) && error.response?.data instanceof Blob
         ? error.response.data
         : null
@@ -150,7 +152,7 @@ export const apiDocumentDraftStore: DocumentDraftStore = {
         try {
           payload = JSON.parse(await errorBlob.text()) as { message?: unknown }
         } catch { /* Preserve the original Axios error for a malformed response. */ }
-        if (typeof payload?.message === 'string' && payload.message.trim() !== '') throw new Error(payload.message)
+        if (typeof payload?.message === 'string' && payload.message.trim() !== '') throw new Error(payload.message, { cause: error })
       }
       throw error
     }
@@ -167,9 +169,6 @@ export const apiDocumentDraftStore: DocumentDraftStore = {
   },
   async syncC001(identity, percentage) {
     return mapState((await api.post<ApiCreationState>(`${path(identity)}/c001/sync`, { success_fee_percentage: percentage })).data)
-  },
-  async rejectC001(identity, reason) {
-    return mapState((await api.post<ApiCreationState>(`${path(identity)}/c001/reject`, { reason })).data)
   },
 }
 

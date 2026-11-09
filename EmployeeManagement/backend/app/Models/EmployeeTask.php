@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EmployeeTask extends Model
@@ -34,6 +35,19 @@ class EmployeeTask extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function scopeVisibleTo(Builder $query, ?User $user): Builder
+    {
+        $query->where(fn ($case) => $case->whereNull($query->getModel()->qualifyColumn('case_document_id'))
+            ->orWhereHas('caseDocument', fn ($document) => $document->withTrashed()
+                ->whereHas('caseFile', fn ($access) => $access->visibleTo($user))));
+        return \App\Services\TaskVisibility::scopeAssignment($query, $user, 'employee_id');
+    }
+
+    public function isVisibleTo(?User $user): bool
+    {
+        return static::query()->visibleTo($user)->whereKey($this->id)->exists();
     }
 
     public function caseDocument(): BelongsTo

@@ -1,124 +1,292 @@
-import { CalendarClock, ChevronRight, Search, SlidersHorizontal, X } from 'lucide-react'
-import { useEffect, useId, useMemo, useState } from 'react'
-import type { CaseActivity } from '../../case-workspace/types'
-import { documentCollectionApi } from '../api'
-import { collectionLabels, fulfillmentLabels, reviewLabels } from '../labels'
-import type { CollectionItem, CollectionStatus, EmployeeOption } from '../types'
-import { formatDate, isRequiredDocument, itemToRow } from '../utils'
+import {
+  AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  CircleDashed,
+  FileStack,
+  FileText,
+  Folder,
+  Grid2X2,
+  List,
+  Search,
+  UserRound,
+} from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { SectionSkeleton } from '../../../components/loading'
+import { IconButton } from '../../../components/ui/IconButton'
+import { UserAvatar } from '../../../components/ui/UserAvatar'
+import type { CaseActivity, CaseTask } from '../../case-workspace/types'
 import { useWorkflowCaseDocuments } from '../hooks/useWorkflowCaseDocuments'
+import type { CollectionItem } from '../types'
+import { formatDate, isRequiredDocument, itemToRow } from '../utils'
 import CollectionFeedback from './CollectionFeedback'
 import RequiredDocumentInspector from './RequiredDocumentInspector'
-import { SectionSkeleton } from '../../../components/loading'
+import RequiredWorkflowBadge from './RequiredWorkflowBadge'
+import { requiredWorkflowPresentation, type RequiredWorkflowPresentation } from '../requiredWorkflowPresentation'
+import { REQUIRED_DOCUMENT_PAGE_SIZES, requiredDocumentPage, requiredDocumentRange } from '../requiredDocumentPagination'
+import { fileReviewRefreshWarning } from '../fileReview'
 
-type DeadlineFilter = 'all' | 'overdue' | 'upcoming' | 'unset'
+type WorkFilter = 'all' | 'selected' | 'unaccepted' | 'in_progress' | 'pending_review' | 'changes_requested' | 'completed' | 'overdue' | 'mine'
+type ViewMode = 'list' | 'card'
+type WorkState = RequiredWorkflowPresentation<CollectionItem['workflow_state']['code']>
 
-export default function RequiredDocumentsPanel({ caseId, canUpdate, canReviewDocuments, canReadEmployees, activities, onCandidates, onHistory, onChanged }: {
-  caseId: number; canUpdate: boolean; canReviewDocuments: boolean; canReadEmployees: boolean; activities: CaseActivity[]
-  onCandidates: () => void; onHistory: () => void; onChanged: () => void
-}) {
-  const [revision, setRevision] = useState(0)
-  const collection = useWorkflowCaseDocuments(caseId, true, revision)
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+type Props = {
+  caseId: number
+  initialSelectedId?: number
+  onDocumentClose?: () => void
+  canUpdate: boolean
+  canManageTasks: boolean
+  canReviewDocuments: boolean
+  currentEmployeeId?: number
+  activities: CaseActivity[]
+  tasks?: CaseTask[]
+  onCandidates: () => void
+  onHistory: () => void
+  onChanged: () => void | Promise<boolean>
+  onCreateTasks: (documentIds: number[]) => void
+  onManageTasks: () => void
+  onOpenTask?: (taskId: number) => void
+}
+
+export default function RequiredDocumentsPanel({
+  caseId,
+  initialSelectedId,
+  onDocumentClose,
+  canUpdate,
+  canManageTasks,
+  canReviewDocuments,
+  currentEmployeeId,
+  activities,
+  tasks,
+  onCandidates,
+  onHistory,
+  onChanged,
+  onCreateTasks,
+  onManageTasks,
+  onOpenTask,
+}: Props) {
+  const collection = useWorkflowCaseDocuments(caseId, true)
+  const [selectedId, setSelectedId] = useState<number | null>(initialSelectedId ?? null)
   const [query, setQuery] = useState('')
-  const [status, setStatus] = useState<'all' | CollectionStatus>('all')
-  const [assignee, setAssignee] = useState<'all' | 'unassigned' | number>('all')
-  const [deadline, setDeadline] = useState<DeadlineFilter>('all')
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const [employees, setEmployees] = useState<EmployeeOption[]>([])
-  const [filterClock] = useState(() => Date.now())
-  const filterId = useId()
-
-  useEffect(() => {
-    if (!canReadEmployees) return
-    const controller = new AbortController()
-    void documentCollectionApi.employees(controller.signal).then(value => { if (!controller.signal.aborted) setEmployees(value) }).catch(() => {})
-    return () => controller.abort()
-  }, [canReadEmployees])
+  const [filter, setFilter] = useState<WorkFilter>('all')
+  const [methodFilter, setMethodFilter] = useState('all')
+  const [view, setView] = useState<ViewMode>(() => window.localStorage.getItem('themis:required-documents:view') === 'card' ? 'card' : 'list')
+  const [referenceTime] = useState(Date.now)
+  const [pageNumber, setPageNumber] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
 
   const required = useMemo(() => collection.items.filter(isRequiredDocument), [collection.items])
+  const acquisitionOptions = useMemo(
+    () => [...new Set(required.map(acquisitionLabel))].sort((a, b) => a.localeCompare(b, 'ja')),
+    [required],
+  )
   const filtered = useMemo(() => {
     const term = query.trim().toLocaleLowerCase()
-    const now = filterClock
-    const inSevenDays = now + 7 * 24 * 60 * 60 * 1000
     return required.filter(item => {
-      if (term && !`${item.title} ${item.document_type?.code ?? ''} ${item.document_type?.name_ja ?? ''} ${item.collection_source ?? ''}`.toLocaleLowerCase().includes(term)) return false
-      if (status !== 'all' && item.collection_status !== status) return false
-      if (assignee === 'unassigned' && item.assigned_employee !== null) return false
-      if (typeof assignee === 'number' && item.assigned_employee?.id !== assignee) return false
-      const due = item.response_deadline ? new Date(item.response_deadline).getTime() : null
-      if (deadline === 'unset' && due !== null) return false
-      if (deadline === 'overdue' && (due === null || due >= now || ['received', 'closed'].includes(item.collection_status))) return false
-      if (deadline === 'upcoming' && (due === null || due < now || due > inSevenDays)) return false
+      const state = deriveWorkState(item)
+      const overdue = item.active_task?.is_overdue ?? false
+      if (term && !`${item.title} ${item.document_type?.code ?? ''} ${item.document_type?.name_ja ?? ''} ${acquisitionLabel(item)}`.toLocaleLowerCase().includes(term)) return false
+      if (methodFilter !== 'all' && acquisitionLabel(item) !== methodFilter) return false
+      if (filter === 'mine' && item.active_task?.assigned_employee?.id !== currentEmployeeId) return false
+      if (filter === 'overdue' && !overdue) return false
+      if (filter !== 'all' && filter !== 'mine' && filter !== 'overdue' && state.key !== filter) return false
       return true
     })
-  }, [assignee, deadline, filterClock, query, required, status])
-  const refresh = () => { setRevision(value => value + 1); onChanged() }
-  const activeSecondaryFilters = Number(assignee !== 'all') + Number(deadline !== 'all')
-  const overdueCount = required.filter(item => {
-    const due = item.response_deadline ? new Date(item.response_deadline).getTime() : null
-    return due !== null && due < filterClock && !['received', 'closed'].includes(item.collection_status)
-  }).length
-  const clearSecondaryFilters = () => { setAssignee('all'); setDeadline('all') }
+  }, [currentEmployeeId, filter, methodFilter, query, required])
+  const page = requiredDocumentPage(filtered, pageNumber, pageSize)
+  const resultRange = view === 'list' ? page.range : requiredDocumentRange(filtered.length, filtered.length ? 1 : 0, filtered.length)
+  const resultsReady = !collection.loading && !collection.error
+
+  const counts = useMemo(() => required.reduce((result, item) => {
+    const state = deriveWorkState(item)
+    result[state.key] += 1
+    if (item.active_task?.is_overdue) result.overdue += 1
+    return result
+  }, { selected: 0, unaccepted: 0, in_progress: 0, pending_review: 0, changes_requested: 0, completed: 0, overdue: 0 }), [required])
+
+  const refresh = async () => {
+    const [listLoaded, workspaceLoaded] = await Promise.all([collection.refresh(), onChanged()])
+    return listLoaded && workspaceLoaded !== false
+  }
+  const refreshAfterReview = async () => {
+    if (!await refresh()) throw new Error(fileReviewRefreshWarning)
+  }
+  const openDocument = (id: number) => {
+    setSelectedId(id)
+    // The inspector makes a fresh detail request; refresh its background list too.
+    void collection.refresh()
+  }
+  const closeDocument = () => {
+    setSelectedId(null)
+    onDocumentClose?.()
+  }
+  const selectedItem = required.find(item => item.id === selectedId)
+  const changeView = (next: ViewMode) => { setView(next); window.localStorage.setItem('themis:required-documents:view', next) }
+  const filters: Array<{ value: WorkFilter; label: string; count?: number }> = [
+    { value: 'all', label: 'すべて', count: required.length },
+    ...(['selected', 'unaccepted', 'in_progress', 'pending_review', 'changes_requested', 'completed'] as const).map(value => ({ value, label: requiredWorkflowPresentation(value).label, count: counts[value] })),
+    { value: 'overdue', label: '期限超過', count: counts.overdue },
+  ]
 
   return <div className="dc-preview dc-production dc-required" aria-label="必要資料ワークスペース">
-    <div className="dc-collection-heading"><div><h2>必要資料</h2><p>この案件で「必要」と判断された資料の取得・確認状況を管理します。</p></div>{!canUpdate && <span className="dc-meta">閲覧のみ</span>}</div>
-    <div className="dc-required-summary" aria-label="必要資料サマリー"><span>必要資料 <b>{required.length}</b>件</span><i/><span className={overdueCount ? 'is-attention' : ''}>期限超過 <b>{overdueCount}</b></span><span>確認待ち <b>{required.filter(item => item.review_status === 'unreviewed').length}</b></span><span className={required.some(item => item.fulfillment_status === 'insufficient') ? 'is-attention' : ''}>不足あり <b>{required.filter(item => item.fulfillment_status === 'insufficient').length}</b></span></div>
-    <div className={`dc-workspace ${selectedId !== null ? 'has-inspector' : ''}`}>
-      <div className="dc-master">
-        <div className="dc-required-toolbar">
-          <label className="dc-workflow-search"><Search size={17}/><input aria-label="必要資料を検索" value={query} onChange={event => setQuery(event.target.value)} placeholder="資料名・コード・取得先を検索"/></label>
-          <label>取得状況<select aria-label="取得状況" value={status} onChange={event => setStatus(event.target.value as typeof status)}><option value="all">すべて</option>{Object.entries(collectionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-          <button type="button" className={`dc-button dc-filter-button ${filtersOpen || activeSecondaryFilters ? 'is-active' : ''}`} onClick={() => setFiltersOpen(value => !value)} aria-expanded={filtersOpen} aria-controls={filterId}><SlidersHorizontal size={15}/>絞り込み{activeSecondaryFilters > 0 && ` ${activeSecondaryFilters}`}</button>
-          {filtersOpen && <div id={filterId} className="dc-required-filter-panel"><label>担当者<select aria-label="必要資料の担当者" value={assignee} onChange={event => setAssignee(event.target.value === 'all' || event.target.value === 'unassigned' ? event.target.value : Number(event.target.value))}><option value="all">すべて</option><option value="unassigned">未割当</option>{employees.map(employee => <option key={employee.id} value={employee.id}>{employee.display_name}</option>)}</select></label><label>期限<select aria-label="必要資料の期限" value={deadline} onChange={event => setDeadline(event.target.value as DeadlineFilter)}><option value="all">すべて</option><option value="overdue">期限超過</option><option value="upcoming">7日以内</option><option value="unset">未設定</option></select></label>{activeSecondaryFilters > 0 && <button type="button" className="dc-text-action dc-filter-clear" onClick={clearSecondaryFilters}><X size={14}/>条件をクリア</button>}</div>}
-        </div>
-        <div className="dc-list-caption"><span>{filtered.length} / {required.length}件</span></div>
-        {collection.error
-          ? <CollectionFeedback error={collection.error} onRetry={collection.retry}/>
-          : collection.loading
-            ? <SectionSkeleton className="border-0" label="必要資料を読み込み中…" rows={5} showHeader={false} />
-            : <RequiredDocumentList items={filtered} selectedId={selectedId} referenceTime={filterClock} onSelect={setSelectedId}/>
-        }
-        {!collection.loading && required.length === 0 && <div className="dc-required-empty"><p>必要と判断された資料はまだありません。</p><button type="button" className="dc-button" onClick={onCandidates}>資料収集で候補を確認</button></div>}
-      </div>
-      {selectedId !== null && (
-        <RequiredDocumentInspector key={selectedId} caseId={caseId} itemId={selectedId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} activities={activities} onCandidates={onCandidates} onHistory={onHistory} onClose={() => setSelectedId(null)} onSaved={refresh}/>
-      )}
+    <header className="dc-required-page-head">
+      <span className="dc-required-heading-icon" aria-hidden="true"><Folder size={20}/></span>
+      <div><h2>必要資料</h2><p>この案件で「必要」と判断された資料を管理します。</p></div>
+      {!canUpdate && <span className="dc-meta">閲覧のみ</span>}
+    </header>
+
+    <div className="dc-required-metrics" aria-label="必要資料サマリー">
+      <SummaryCard icon={<FileStack size={16}/>} label="必要資料" value={required.length} tone="indigo" />
+      <SummaryCard icon={<CircleDashed size={16}/>} label="未受領" value={counts.unaccepted} tone="slate" />
+      <SummaryCard icon={<CalendarClock size={16}/>} label="対応・確認中" value={counts.in_progress + counts.pending_review + counts.changes_requested} tone="blue" />
+      <SummaryCard icon={<CheckCircle2 size={16}/>} label="完了" value={counts.completed} tone="emerald" />
+      <SummaryCard icon={<AlertTriangle size={16}/>} label="期限超過" value={counts.overdue} tone="rose" />
     </div>
+
+    <div className="dc-required-controls">
+      <label className="dc-workflow-search"><Search className="dc-search-icon" size={16} aria-hidden="true"/><input aria-label="必要資料を検索" value={query} onChange={event => { setQuery(event.target.value); setPageNumber(1) }} placeholder="資料名・コードで検索..."/></label>
+      <label className="dc-required-method-filter"><span>取得方法</span><select value={methodFilter} onChange={event => { setMethodFilter(event.target.value); setPageNumber(1) }}><option value="all">すべて</option>{acquisitionOptions.map(method => <option key={method} value={method}>{method}</option>)}</select></label>
+      <div className="dc-view-switch" aria-label="表示形式"><button type="button" className={view === 'list' ? 'is-active' : ''} aria-pressed={view === 'list'} onClick={() => changeView('list')}><List size={15}/>リスト</button><button type="button" className={view === 'card' ? 'is-active' : ''} aria-pressed={view === 'card'} onClick={() => changeView('card')}><Grid2X2 size={14}/>カード</button></div>
+    </div>
+
+    <div className="dc-required-filters" aria-label="作業状態で絞り込み">
+      {filters.map(item => <button key={item.value} type="button" className={filter === item.value ? 'is-active' : ''} aria-pressed={filter === item.value} onClick={() => { setFilter(item.value); setPageNumber(1) }}>{item.label}<span>{item.count}</span></button>)}
+      {currentEmployeeId && <button type="button" className={filter === 'mine' ? 'is-active' : ''} aria-pressed={filter === 'mine'} onClick={() => { setFilter('mine'); setPageNumber(1) }}><UserRound size={13}/>自分の担当</button>}
+    </div>
+
+    {resultsReady && <div className="dc-required-result-toolbar">
+      <div><FileStack size={15} aria-hidden="true"/><strong>資料一覧</strong><span className="dc-required-result-count">{filtered.length}件</span></div>
+      <span role="status" aria-live="polite" aria-atomic="true">{resultRange}</span>
+    </div>}
+    {collection.error ? <CollectionFeedback error={collection.error} onRetry={collection.retry}/>
+      : collection.loading ? <SectionSkeleton className="border-0" label="必要資料を読み込み中…" rows={5} showHeader={false}/>
+        : filtered.length ? view === 'list'
+          ? <RequiredList items={page.rows} selectedId={selectedId} referenceTime={referenceTime} onOpen={openDocument}/>
+          : <RequiredCards items={filtered} selectedId={selectedId} referenceTime={referenceTime} onOpen={openDocument}/>
+          : required.length ? <div className="dc-empty-results"><Search size={22}/><h3>該当する必要資料がありません</h3><p>検索または絞り込み条件を変更してください。</p></div>
+            : <div className="dc-required-empty"><p><strong>必要資料はまだありません。</strong><span>資料収集で「必要」と判断された資料がここに表示されます。</span></p><button type="button" className="dc-button dc-primary" onClick={onCandidates}>資料収集を開く</button></div>}
+
+    {resultsReady && view === 'list' && <footer className="dc-required-pagination">
+      <span>{page.range}</span>
+      <nav aria-label="必要資料一覧のページ切替">
+        <IconButton type="button" variant="secondary" size="md" aria-label="前のページ" disabled={page.page === 1 || !page.total} onClick={() => setPageNumber(page.page - 1)}><ChevronLeft size={16} aria-hidden="true"/></IconButton>
+        {page.total > 0 && page.numbers.map((number, index) => <span key={number}>
+          {index > 0 && number > page.numbers[index - 1] + 1 && <span className="dc-required-page-ellipsis" aria-hidden="true">…</span>}
+          <button type="button" className={page.page === number ? 'is-current' : ''} aria-label={`${number}ページ`} aria-current={page.page === number ? 'page' : undefined} onClick={() => setPageNumber(number)}>{number}</button>
+        </span>)}
+        <IconButton type="button" variant="secondary" size="md" aria-label="次のページ" disabled={page.page === page.pages || !page.total} onClick={() => setPageNumber(page.page + 1)}><ChevronRight size={16} aria-hidden="true"/></IconButton>
+      </nav>
+      <label>表示件数<select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPageNumber(1) }}>{REQUIRED_DOCUMENT_PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}</select></label>
+    </footer>}
+
+    {selectedId !== null && <RequiredDocumentInspector key={selectedId} caseId={caseId} itemId={selectedId} refreshKey={JSON.stringify([selectedItem?.updated_at, selectedItem?.workflow_state, selectedItem?.file_review, selectedItem?.active_task])} canUpdate={canUpdate} canManageTasks={canManageTasks} canReviewDocuments={canReviewDocuments} activities={activities} tasks={tasks} onCandidates={onCandidates} onHistory={onHistory} onClose={closeDocument} onSaved={() => { void refresh() }} onReviewed={refreshAfterReview} onCreateTask={() => onCreateTasks([selectedId])} onManageTask={onManageTasks} onOpenTask={onOpenTask}/>}
   </div>
 }
 
-function RequiredDocumentList({ items, selectedId, referenceTime, onSelect }: { items: CollectionItem[]; selectedId: number | null; referenceTime: number; onSelect: (id: number) => void }) {
-  if (!items.length) return <div className="dc-empty-results"><Search size={22}/><h3>該当する必要資料がありません</h3><p>検索または絞り込み条件を変更してください。</p></div>
-  return <div className="dc-required-list"><div className="dc-required-head"><span>資料</span><span>取得作業</span><span>内容充足</span><span>担当者</span><span>回答期限</span><span>確認</span><span aria-hidden="true" /></div>{items.map(item => {
+function SummaryCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: number; tone: string }) {
+  return <article className={`dc-required-metric is-${tone}`}><span aria-hidden="true">{icon}</span><div><small>{label}</small><strong>{value}<em>件</em></strong></div></article>
+}
+
+function RequiredList({ items, selectedId, referenceTime, onOpen }: { items: CollectionItem[]; selectedId: number | null; referenceTime: number; onOpen: (id: number) => void }) {
+  return <div className="dc-required-list dc-required-work-list">
+    <div className="dc-required-head"><span>資料</span><span>状態</span><span>担当者</span><span>期限</span><span>ファイル</span><span>更新日時</span><span/></div>
+    {items.map(item => <RequiredRow key={item.id} item={item} active={selectedId === item.id} referenceTime={referenceTime} onOpen={() => onOpen(item.id)}/>)}
+  </div>
+}
+
+function RequiredRow({ item, active, referenceTime, onOpen }: { item: CollectionItem; active: boolean; referenceTime: number; onOpen: () => void }) {
+  const row = itemToRow(item)
+  const state = deriveWorkState(item)
+  const due = taskDeadline(item)
+  const file = currentFile(item)
+  const deadline = deadlineState(due, state, referenceTime, item.active_task?.is_overdue ?? false)
+  return <button type="button" className={`dc-required-row dc-required-work-row ${active ? 'is-selected' : ''}`} onClick={onOpen} aria-label={`${row.code} ${row.title} の詳細`}>
+    <span className="dc-required-document"><span className="dc-required-document-icon"><FileText size={17}/></span><span><span className="dc-code">{row.code}</span><strong>{row.title}</strong></span></span>
+    <Status state={state}/>
+    <Assignee item={item}/>
+    <Deadline value={due} tone={deadline}/>
+    <span className="dc-file-state">{file ? <><FileText size={14}/><span>v{file.version} · {file.kind}</span></> : '—'}</span>
+    <UpdatedAt value={file?.updatedAt ?? item.updated_at}/>
+    <ChevronRight size={16} className="dc-required-chevron"/>
+  </button>
+}
+
+function RequiredCards({ items, selectedId, referenceTime, onOpen }: { items: CollectionItem[]; selectedId: number | null; referenceTime: number; onOpen: (id: number) => void }) {
+  return <div className="dc-required-cards">{items.map(item => {
     const row = itemToRow(item)
-    const exception = row.result
-    const c001 = item.c001
-    const collectionLabel = c001?.artifact ? '収集済み' : collectionLabels[item.collection_status]
-    const collectionStatusTone = c001?.artifact ? 'is-progress' : collectionTone(item.collection_status)
-    const fulfillmentLabel = c001?.artifact ? '入力済み' : fulfillmentLabels[item.fulfillment_status]
-    const fulfillmentStatusTone = c001?.artifact ? 'is-progress' : fulfillmentTone(item.fulfillment_status)
-    const reviewLabel = c001 ? ({ missing: '未収集', draft: '下書き', pending_approval: '承認待ち', complete: '完了', rejected: '差戻し' } as const)[c001.status] : reviewLabels[item.review_status]
-    const reviewStatusTone = c001 ? (c001.status === 'complete' ? 'is-positive' : c001.status === 'pending_approval' ? 'is-attention' : c001.status === 'rejected' ? 'is-danger' : 'is-neutral') : reviewTone(item.review_status)
-    return <button key={item.id} type="button" className={`dc-required-row ${c001 ? 'is-c001' : ''} ${selectedId === item.id ? 'is-selected' : ''}`} onClick={() => onSelect(item.id)} aria-label={`${row.code} ${row.title} の必要資料詳細`}>
-      <span className="dc-document"><span className="dc-code">{row.code}</span><strong>{row.title}</strong><span className="dc-source">{c001 ? <>報酬金 <b>{c001.success_fee_percentage}%</b></> : ([item.collection_source, row.period].filter(Boolean).join(' · ') || '取得先・対象期間 未設定')}</span>{exception && <span className="dc-required-exception">{exception}</span>}</span>
-      <StatusLane tone={collectionStatusTone} label={collectionLabel}/>
-      <StatusLane tone={fulfillmentStatusTone} label={fulfillmentLabel}/>
-      <span className="dc-owner">{item.assigned_employee?.display_name ?? '未割当'}</span>
-      <Deadline value={item.response_deadline} overdue={row.overdue} referenceTime={referenceTime}/>
-      <StatusLane tone={reviewStatusTone} label={reviewLabel}/>
-      <ChevronRight className="dc-required-chevron" size={15}/>
-    </button>
+    const state = deriveWorkState(item)
+    const due = taskDeadline(item)
+    const file = currentFile(item)
+    const deadline = deadlineState(due, state, referenceTime, item.active_task?.is_overdue ?? false)
+    return <article key={item.id} className={`dc-required-card ${selectedId === item.id ? 'is-selected' : ''}`}><button type="button" onClick={() => onOpen(item.id)} aria-label={`${row.code} ${row.title} の詳細`}>
+      <header><span className="dc-required-document-icon"><FileText size={17}/></span><span className="dc-code">{row.code}</span><Status state={state}/></header>
+      <h3>{row.title}</h3><p>{documentDescription(item)}</p><span className="dc-acquisition-pill">{acquisitionLabel(item)}</span>
+      <dl><div><dt>担当者</dt><dd><Assignee item={item}/></dd></div><div><dt>期限</dt><dd><Deadline value={due} tone={deadline}/></dd></div><div><dt>ファイル</dt><dd>{file ? `v${file.version} · ${file.kind}` : '—'}</dd></div><div><dt>更新日時</dt><dd><UpdatedAt value={file?.updatedAt ?? item.updated_at}/></dd></div></dl>
+    </button></article>
   })}</div>
 }
 
-function StatusLane({ tone, label }: { tone: string; label: string }) { return <span className={`dc-status-lane ${tone}`}><i aria-hidden="true" />{label}</span> }
-
-function Deadline({ value, overdue, referenceTime }: { value: string | null; overdue: boolean; referenceTime: number }) {
-  const due = value ? new Date(value).getTime() : null
-  const days = due === null ? 0 : Math.max(1, Math.ceil((referenceTime - due) / 86_400_000))
-  return <span className={`dc-required-deadline ${overdue ? 'is-overdue' : ''}`}><span><CalendarClock size={12}/>{formatDate(value)}</span>{overdue && <small>期限超過 {days}日</small>}</span>
+function Status({ state }: { state: WorkState }) { return <RequiredWorkflowBadge status={state.key} className="dc-work-status"/> }
+function Assignee({ item }: { item: CollectionItem }) {
+  const employee = item.active_task?.assigned_employee ?? item.assigned_employee
+  return <span className={`dc-required-assignee ${employee ? '' : 'is-empty'}`}>{employee ? <UserAvatar name={employee.display_name} stableKey={employee.id} size="xs" shape="circle"/> : <UserRound size={16}/>}<span>{employee?.display_name ?? '未割当'}</span></span>
+}
+function Deadline({ value, tone }: { value: string | null; tone: 'normal' | 'soon' | 'overdue' | 'completed' }) { return <span className={`dc-required-deadline is-${tone}`}><i/>{value ? formatDate(value) : '未設定'}</span> }
+function UpdatedAt({ value }: { value: string | null }) {
+  if (!value) return <span className="dc-updated">—</span>
+  const formatted = formatDate(value, true).split(/\s+/u)
+  return <span className="dc-updated"><span>{formatted[0]}</span>{formatted[1] && <small>{formatted[1]}</small>}</span>
 }
 
-function collectionTone(status: CollectionStatus) { return status === 'received' || status === 'closed' ? 'is-positive' : status === 'partially_received' || status === 'difficult' ? 'is-attention' : status === 'requested' || status === 'preparing' ? 'is-progress' : 'is-neutral' }
-function reviewTone(status: CollectionItem['review_status']) { return status === 'reviewed' ? 'is-positive' : status === 'returned' ? 'is-attention' : status === 'reviewing' ? 'is-progress' : 'is-neutral' }
-function fulfillmentTone(status: CollectionItem['fulfillment_status']) { return status === 'satisfied' || status === 'satisfied_by_alternative' ? 'is-positive' : status === 'insufficient' ? 'is-attention' : 'is-neutral' }
+function deriveWorkState(item: CollectionItem): WorkState {
+  const code = item.workflow_state?.code ?? 'selected'
+  return requiredWorkflowPresentation(code)
+}
+
+function acquisitionLabel(item: CollectionItem) {
+  if (item.document_type?.handling_type === 'office_generated' && item.document_type.creation_supported) return '自社作成'
+  if (item.document_type?.handling_type === 'official_form') return '外部機関から取得'
+  if (item.document_type?.handling_type === 'reference_only') return '参照資料'
+  if (item.collection_source || item.collection_method) return [item.collection_source, item.collection_method].filter(Boolean).join(' / ')
+  if (item.document_type?.handling_type === 'collected') return '依頼者から回収'
+  return '取得方法未設定'
+}
+
+function documentDescription(item: CollectionItem) {
+  const row = itemToRow(item)
+  return [row.source || acquisitionLabel(item), row.target ? `対象：${row.target}` : null].filter(Boolean).join(' / ')
+}
+function taskDeadline(item: CollectionItem) { return item.active_task ? item.active_task.due_at : item.response_deadline }
+function deadlineState(value: string | null, state: WorkState, referenceTime: number, overdue: boolean): 'normal' | 'soon' | 'overdue' | 'completed' {
+  if (state.key === 'completed') return 'completed'
+  if (!value) return 'normal'
+  const difference = new Date(value).getTime() - referenceTime
+  if (overdue) return 'overdue'
+  if (difference < 0) return 'normal'
+  if (difference <= 3 * 24 * 60 * 60 * 1000) return 'soon'
+  return 'normal'
+}
+function currentFile(item: CollectionItem) {
+  if (item.file_review?.filename && item.file_review.version >= (item.latest_task_submission?.version ?? 0)
+    && item.file_review.version >= (item.generated_versions[0]?.version ?? 0)) return {
+    version: item.file_review.version, kind: fileKind(item.file_review.mime_type ?? null, item.file_review.filename),
+    updatedAt: item.file_review.uploaded_at ?? item.updated_at,
+  }
+  if (item.latest_task_submission) return {
+    version: item.latest_task_submission.version,
+    kind: fileKind(item.latest_task_submission.mime_type, item.latest_task_submission.filename),
+    updatedAt: item.latest_task_submission.submitted_at,
+  }
+  const version = item.generated_versions[0]
+  const artifact = version?.artifacts.find(value => value.mime_type === 'application/pdf' || value.artifact_type.includes('pdf')) ?? version?.artifacts[0]
+  if (version && artifact) return { version: version.version, kind: fileKind(artifact.mime_type, artifact.filename), updatedAt: artifact.uploaded_at ?? version.updated_at }
+  if (item.c001?.artifact) return { version: item.c001.latest_version ?? 1, kind: fileKind(null, item.c001.artifact.filename), updatedAt: item.c001.artifact.last_synced_at }
+  return null
+}
+function fileKind(mimeType: string | null, filename: string) {
+  if (mimeType === 'application/pdf' || filename.toLocaleLowerCase().endsWith('.pdf')) return 'PDF'
+  const extension = filename.split('.').at(-1)
+  return extension ? extension.toLocaleUpperCase() : 'FILE'
+}

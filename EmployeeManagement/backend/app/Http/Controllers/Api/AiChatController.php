@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\AI\Tools\FindCaseResourceTool;
 use App\Http\Controllers\Controller;
 use App\Models\Persona;
-use App\Models\EmployeeTask;
 use App\Services\AIOrchestrator;
 use App\Services\AiProviderBusyException;
 use App\Services\SkillLoader;
@@ -21,7 +21,7 @@ class AiChatController extends Controller
 {
     public function __construct(private AIOrchestrator $orchestrator) {}
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, FindCaseResourceTool $navigation): JsonResponse
     {
         $validated = $request->validate([
             'persona' => ['required', 'string', 'max:255'],
@@ -89,15 +89,26 @@ class AiChatController extends Controller
         ];
 
         try {
+            $target = $navigation->run($request->user(), $validated['message'], $validated['context']['case_id'] ?? null);
+            if ($target !== null) {
+                $japanese = preg_match('/(?:開いて|見せて|探して)(?:ください)?[。！？!?]?\s*$/u', $validated['message']);
+                $message = match ($target['status']) {
+                    'open' => $japanese ? '一致する結果が見つかりました。下のボタンから開けます。' : 'Đã tìm thấy kết quả phù hợp. Bấm nút bên dưới để mở.',
+                    'choose' => $japanese ? '開く対象を選んでください。' : 'Hãy chọn kết quả cần mở.',
+                    'clarify' => $japanese ? '案件番号または資料名を指定してください。' : 'Hãy cho biết mã hồ sơ hoặc tên tài liệu cụ thể hơn.',
+                    default => $japanese ? '閲覧できる一致結果が見つかりませんでした。' : 'Không tìm thấy kết quả phù hợp mà bạn có thể xem.',
+                };
+
+                return response()->json(['data' => [
+                    'persona' => $validated['persona'], 'skill' => $validated['skill'],
+                    'message' => $message, 'tool_executions' => [], 'navigation' => $target,
+                ]]);
+            }
             $triggerContext = [
                 'trigger_type' => 'chat',
                 'user_id' => $request->user()->id,
                 'role' => $request->user()->role,
             ];
-
-            if ($validated['skill'] === 'task_management') {
-                $triggerContext['employee_task_context'] = $this->employeeTaskContext($request);
-            }
 
             if (isset($validated['context'])) {
                 $triggerContext['page_context'] = $validated['context'];
@@ -146,46 +157,4 @@ class AiChatController extends Controller
         ]);
     }
 
-    /** @return array{generated_at: string, timezone: string, tasks: list<array<string, mixed>>} */
-    private function employeeTaskContext(Request $request): array
-    {
-        $employee = $request->user()->employee;
-
-        if (! $employee) {
-            return [
-                'generated_at' => now()->toIso8601String(),
-                'timezone' => config('app.timezone'),
-                'tasks' => [],
-            ];
-        }
-
-        $tasks = EmployeeTask::query()
-            ->with('caseDocument:id,case_file_id,title')
-            ->where('employee_id', $employee->id)
-            ->whereIn('status', ['pending', 'accepted', 'in_progress'])
-            ->orderByRaw("CASE status WHEN 'in_progress' THEN 0 WHEN 'pending' THEN 1 WHEN 'accepted' THEN 2 ELSE 3 END")
-            ->orderBy('due_at')
-            ->get()
-            ->map(fn (EmployeeTask $task) => [
-                'id' => $task->id,
-                'title' => $task->title,
-                'description' => $task->description,
-                'status' => $task->status,
-                'due_at' => $task->due_at?->toIso8601String(),
-                'assigned_at' => $task->created_at?->toIso8601String(),
-                'case_document' => $task->caseDocument ? [
-                    'id' => $task->caseDocument->id,
-                    'case_file_id' => $task->caseDocument->case_file_id,
-                    'title' => $task->caseDocument->title,
-                ] : null,
-            ])
-            ->values()
-            ->all();
-
-        return [
-            'generated_at' => now()->toIso8601String(),
-            'timezone' => config('app.timezone'),
-            'tasks' => $tasks,
-        ];
-    }
 }

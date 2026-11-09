@@ -9,9 +9,9 @@ export function pdfFilename(disposition: string | undefined): string {
   return name.toLowerCase().endsWith('.pdf') ? name : 'document.pdf'
 }
 
-export async function fetchDocumentPdf(caseId: number, documentId: number, version?: number) {
+export async function fetchDocumentPdf(caseId: number, documentId: number, version?: number, signal?: AbortSignal) {
   const query = version ? `?version=${version}` : ''
-  const response = await api.get<Blob>(`/case-files/${caseId}/document-collection/${documentId}/creation/pdf${query}`, { responseType: 'blob' })
+  const response = await api.get<Blob>(`/case-files/${caseId}/document-collection/${documentId}/creation/pdf${query}`, { responseType: 'blob', signal })
   if (!response.data.type.toLowerCase().startsWith('application/pdf') || await response.data.slice(0, 5).text() !== '%PDF-') {
     throw new Error('PDFを取得できませんでした。')
   }

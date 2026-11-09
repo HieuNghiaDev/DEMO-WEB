@@ -63,6 +63,9 @@
   --tm-info: var(--info);
   --tm-ai: #8b5cf6;
   --tm-focus-ring: rgb(91 108 255 / 0.45);
+  /* Application dialogs sit above drawers/previews (9998–10010), feedback (10020),
+     and the floating assistant (70–90). Children order backdrop below the card. */
+  --tm-layer-modal: 10030;
 
   /* Elevation Shadows */
   --tm-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
@@ -593,23 +596,54 @@ html.theme-revealing::view-transition-new(themis-theme-icon) {
 }
 
 .quest-notification-toast {
-  animation: themis-quest-toast-in 1500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* Clear the 54px workspace tools dock and leave a 10px gap. */
+  --toast-bottom: calc(80px + env(safe-area-inset-bottom));
+  --toast-accent: var(--tm-info);
+  position: fixed;
+  z-index: 75;
+  left: calc(12px + env(safe-area-inset-left));
+  right: calc(12px + env(safe-area-inset-right));
+  bottom: var(--toast-bottom);
+  max-width: 26rem;
+  margin-inline: auto;
+  max-height: calc(100dvh - var(--toast-bottom) - 12px - env(safe-area-inset-top));
+  overflow-y: auto;
+  border-color: var(--tm-border);
+  background: var(--tm-surface-elevated);
+  color: var(--tm-text-primary);
+  box-shadow: 0 6px 20px rgb(2 6 23 / 0.18);
+  animation: themis-quest-toast-in 200ms ease-out both;
+}
+
+.quest-notification-toast[data-kind="success"] { --toast-accent: var(--tm-success); }
+.quest-notification-toast[data-kind="warning"] { --toast-accent: var(--tm-warning); }
+.quest-notification-toast[data-kind="error"] { --toast-accent: var(--tm-danger); }
+
+.quest-notification-toast-icon {
+  color: var(--toast-accent);
+  background: color-mix(in srgb, var(--toast-accent) 12%, transparent);
+}
+
+@media (min-width: 768px) {
+  .quest-notification-toast {
+    --toast-bottom: calc(88px + env(safe-area-inset-bottom));
+    left: calc(24px + env(safe-area-inset-left));
+    right: calc(24px + env(safe-area-inset-right));
+    max-width: 22rem;
+    margin-inline-start: auto;
+    margin-inline-end: 0;
+  }
 }
 
 @keyframes themis-quest-toast-in {
   0% {
     opacity: 0;
-    transform: translate3d(0, 1.5rem, 0) scale(0.94);
-  }
-
-  46% {
-    opacity: 1;
-    transform: translate3d(0, -0.2rem, 0) scale(1.01);
+    transform: translateY(8px);
   }
 
   100% {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: translateY(0);
   }
 }
 
@@ -1514,37 +1548,17 @@ html.theme-revealing::view-transition-new(themis-theme-icon) {
 
 .workspace-notification-panel {
   transform-origin: top right;
-  animation: workspace-notification-in 580ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: workspace-notification-in 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .workspace-notification-panel.is-closing {
   pointer-events: none;
-  animation: workspace-notification-out 300ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation: workspace-notification-out 150ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 .workspace-mark-all {
   position: relative;
   overflow: hidden;
-}
-
-.workspace-mark-all.is-complete {
-  color: rgb(5 150 105);
-  background: rgb(236 253 245);
-  animation: workspace-mark-all-complete 1700ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.workspace-mark-all.is-complete::after {
-  position: absolute;
-  inset: -70%;
-  border-radius: 999px;
-  content: "";
-  pointer-events: none;
-  background: radial-gradient(circle, rgb(52 211 153 / 0.46), transparent 58%);
-  animation: workspace-mark-all-ripple 1700ms ease-out both;
-}
-
-.workspace-show-more:active {
-  transform: scale(0.98);
 }
 
 .workspace-office-switch {
@@ -1663,38 +1677,6 @@ html.theme-revealing::view-transition-new(themis-theme-icon) {
     opacity: 0;
     filter: blur(5px);
     transform: translateY(-8px) scale(0.96);
-  }
-}
-
-@keyframes workspace-mark-all-complete {
-  0% {
-    opacity: 0;
-    transform: translateY(2px) scale(0.9);
-  }
-  25% {
-    opacity: 1;
-    color: rgb(5 150 105);
-    transform: translateY(0) scale(1.08);
-  }
-  55% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes workspace-mark-all-ripple {
-  0% {
-    opacity: 0;
-    transform: scale(0.25);
-  }
-  26% { opacity: 0.75; }
-  72%, 100% {
-    opacity: 0;
-    transform: scale(1);
   }
 }
 
@@ -1915,7 +1897,6 @@ html.theme-revealing::view-transition-new(themis-theme-icon) {
   .workspace-bell-button.is-open,
   .workspace-notification-panel,
   .workspace-notification-panel.is-closing,
-  .workspace-mark-all.is-complete,
   .workspace-modal-backdrop,
   .workspace-modal-panel,
   .workspace-office-scene {

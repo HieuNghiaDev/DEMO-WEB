@@ -8,7 +8,7 @@ use App\Models\Office;
 use App\Models\User;
 use App\Services\AttendanceExcelService;
 use Carbon\Carbon;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;

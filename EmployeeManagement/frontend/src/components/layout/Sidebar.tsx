@@ -1,9 +1,10 @@
+import NotificationBell from '../employee-room/NotificationBell'
 import { useEffect, useRef, useState } from 'react'
 import {
   BadgeCheck, BotMessageSquare, Code2, FileSpreadsheet, FolderKanban, Home, LogOut,
   Menu, Settings, UsersRound, X, type LucideIcon,
 } from 'lucide-react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../contexts/AuthContext'
 import LogoutConfirmationDialog from '../settings/LogoutConfirmationDialog'
@@ -65,6 +66,7 @@ function SidebarItem({ path, name, icon: Icon, onSelect }: {
 
 export default function Sidebar() {
   const { user, logout } = useAuth()
+  const showNotificationBell = useLocation().pathname !== '/'
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
@@ -145,6 +147,8 @@ export default function Sidebar() {
         <img src={`${import.meta.env.BASE_URL}images/logoTHEMIS.png`} alt="" className="h-7 w-7 object-contain" />
         <span className="whitespace-nowrap text-sm font-extrabold tracking-tight text-slate-900 dark:text-white">THEMIS HQ</span>
       </NavLink>
+      <div className="flex items-center gap-2">
+      {showNotificationBell && <NotificationBell />}
       <NavLink to="/system?section=account" aria-label={t('sidebar.accountSettings', { name: employeeName })} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:ring-offset-tm-sidebar">
         <UserAvatar
           name={employeeName}
@@ -154,6 +158,7 @@ export default function Sidebar() {
           size="md"
         />
       </NavLink>
+      </div>
     </header>
     {isOpen && <button type="button" onClick={closeMenu} aria-label={t('sidebar.closeMenu')} className="fixed inset-0 z-40 bg-slate-950/50 xl:hidden" />}
     <aside ref={sidebarRef} id="main-sidebar" aria-label={t('sidebar.mainMenu')}
@@ -166,6 +171,7 @@ export default function Sidebar() {
           <p className="text-[16px] font-extrabold tracking-tight text-slate-900 dark:text-white leading-none">THEMIS HQ</p>
           <p className="mt-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 tracking-wide">合同法律事務所</p>
         </div>
+        {showNotificationBell && <div className="hidden xl:block"><NotificationBell /></div>}
         <button type="button" onClick={closeMenu} aria-label={t('sidebar.closeMenu')} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-white/[0.06] dark:hover:text-slate-200 xl:hidden"><X size={18} /></button>
       </div>
       <SidebarUtilityPanel />

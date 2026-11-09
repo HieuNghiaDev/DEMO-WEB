@@ -13,7 +13,7 @@ use App\Models\Office;
 use App\Models\ReceivedDocument;
 use App\Models\Role;
 use App\Models\User;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;

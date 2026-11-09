@@ -8,7 +8,7 @@ use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\CaseTypeSeeder;
 use Database\Seeders\CaseWorkspaceTemplateSeeder;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -24,6 +24,7 @@ class CaseWorkspaceApiTest extends TestCase
         $caseType = CaseType::query()->where('name', '在留期間更新')->firstOrFail();
 
         $case = $this->actingAs($user, 'sanctum')->postJson('/api/case-files', [
+            'classification' => 'normal',
             'case_type_id' => $caseType->id,
             'client' => ['name' => 'Workspace Client', 'client_type' => 'individual'],
             'title' => 'Workspace Client - 在留期間更新',
@@ -108,7 +109,7 @@ class CaseWorkspaceApiTest extends TestCase
             ->assertJsonCount(1, 'case_file.deadlines')
             ->assertJsonCount(1, 'case_file.case_tasks')
             ->assertJsonCount(1, 'case_file.parties')
-            ->assertJsonCount(7, 'case_file.activities')
+            ->assertJsonCount(9, 'case_file.activities')
             ->assertJsonPath('summary.open_tasks', 1);
 
         $this->actingAs($user, 'sanctum')->deleteJson("/api/case-files/{$case['id']}")
@@ -123,6 +124,7 @@ class CaseWorkspaceApiTest extends TestCase
         $user->roles()->sync([Role::query()->where('name', 'level_5')->value('id')]);
         $caseType = CaseType::query()->where('name', '在留期間更新')->firstOrFail();
         $case = $this->actingAs($user, 'sanctum')->postJson('/api/case-files', [
+            'classification' => 'normal',
             'case_type_id' => $caseType->id,
             'client' => ['name' => 'Template Client'],
             'title' => 'Template Client - 在留期間更新',

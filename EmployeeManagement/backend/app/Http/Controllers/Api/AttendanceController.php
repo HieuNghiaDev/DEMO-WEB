@@ -547,6 +547,11 @@ class AttendanceController extends Controller
             $attendance->setRelation('employee', $employee);
         }
 
+        if ($attendance->activeWorkSession
+            && ! $attendance->activeWorkSession->taskDataVisibleTo(auth()->user(), $attendance->employee_id ?? $attendance->employee?->id)) {
+            $attendance->setRelation('activeWorkSession', null);
+        }
+
         return $attendance;
     }
 

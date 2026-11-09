@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
+import { aiDocumentForCase } from '../features/ai/navigationResults'
 import { CaseWorkspaceView } from '../features/case-workspace/CaseWorkspacePage'
 import type { WorkspaceTab } from '../features/case-workspace/types'
 import CaseFormPage from '../features/case-management/CaseFormPage'
 import DocumentEditorPage from '../features/document-creation/DocumentEditorPage'
+import { mainRoleNames } from '../config/mainRoles'
 import NewCaseDialog from '../features/case-management/NewCaseDialog'
 import { caseApi, caseError } from '../features/case-management/api'
 import { caseTypeOptions, filterCases } from '../features/case-management/helpers'
@@ -33,19 +35,29 @@ export function CaseManagement({ user }: { user: CaseViewer }) {
     <Route path="*" element={<Navigate to="/quests" replace/>}/>
   </Routes>
 }
-type CaseDetailLocationState = { caseNotice?: string; workspaceTab?: WorkspaceTab; collectionItemId?: number }
+type CaseDetailLocationState = { caseNotice?: string; workspaceTab?: WorkspaceTab; collectionItemId?: number; taskId?: number; aiDocument?: unknown }
 function CaseDetailRoute({ user }: { user: CaseViewer }) {
   const { caseId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
   if (!caseId || !/^[1-9]\d*$/.test(caseId)) return <Navigate to="/quests" replace/>
   const routeState = location.state as CaseDetailLocationState | null
-  return <CaseWorkspaceView key={caseId} user={user} caseId={Number(caseId)} onBack={() => navigate('/quests')} onEdit={() => navigate(`/quests/${caseId}/edit`)} initialNotice={routeState?.caseNotice} initialTab={routeState?.workspaceTab} initialCollectionItemId={routeState?.collectionItemId}/>
+  const aiDocument = aiDocumentForCase(routeState?.aiDocument, Number(caseId))
+  const documentParam = new URLSearchParams(location.search).get('document') ?? ''
+  const documentId = /^[1-9]\d*$/.test(documentParam) && Number.isSafeInteger(Number(documentParam))
+    ? Number(documentParam)
+    : aiDocument?.document_id
+  const selectionKey = routeState?.taskId ? location.key : documentId || routeState?.collectionItemId ? location.key : ''
+  return <CaseWorkspaceView key={`${caseId}:${selectionKey}`} user={user} caseId={Number(caseId)} onBack={() => navigate('/quests')} onEdit={() => navigate(`/quests/${caseId}/edit`)} initialNotice={routeState?.caseNotice} initialTab={documentId ? 'documents' : routeState?.workspaceTab} initialCollectionItemId={routeState?.collectionItemId} initialTaskId={routeState?.taskId} initialDocumentId={documentId}/>
 }
 function DocumentEditorRoute({ user }: { user: CaseViewer }) {
   const { caseId, documentId } = useParams()
   if (!caseId || !documentId || !/^[1-9]\d*$/.test(caseId) || !/^[1-9]\d*$/.test(documentId)) return <Navigate to="/quests" replace/>
-  return <DocumentEditorPage key={`${caseId}:${documentId}`} caseId={Number(caseId)} documentId={Number(documentId)} canUpdate={user?.permission_names.includes('case.update') ?? false}/>
+  const canWorkOnTask = user?.permission_names.includes('task.update') ?? false
+  const canWorkOnCase = user?.permission_names.includes('case.update') ?? false
+  const hasDocumentGrants = !user?.role_names.some(role => mainRoleNames.includes(role))
+    || (user.permission_names.includes('document.create') && user.permission_names.includes('document.update'))
+  return <DocumentEditorPage key={`${caseId}:${documentId}`} caseId={Number(caseId)} documentId={Number(documentId)} canUpdate={hasDocumentGrants && (canWorkOnCase || canWorkOnTask)}/>
 }
 function CaseListPage({ user }: { user: CaseViewer }) {
   const { t } = useTranslation()
@@ -61,7 +73,7 @@ function CaseListPage({ user }: { user: CaseViewer }) {
   const [employees, setEmployees] = useState<CaseEmployee[]>([])
   const [assigning, setAssigning] = useState<number | null>(null)
   const canCreate = user?.permission_names.includes('case.create') ?? false
-  const canAssign = (user?.permission_names.includes('case.assign') ?? false) && (user?.role_names.some(role => role === 'level_4' || role === 'level_5') ?? false)
+  const canAssign = user?.permission_names.includes('case.assign') ?? false
   const canRead = user?.permission_names.includes('case.view') ?? false
   const [refresh, setRefresh] = useState(0)
   const [creating, setCreating] = useState(false)

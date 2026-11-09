@@ -6,7 +6,93 @@ export type CollectionResult = 'not_exist' | 'not_disclosed' | 'partially_disclo
 export type CollectionPriority = 'low' | 'normal' | 'high' | 'critical'
 export type EmployeeOption = { id: number; display_name: string }
 export type Purpose = { id: number; code: string; name_ja: string }
-export type DocumentType = { id: number; code: string; name_ja: string; creation_supported: boolean }
+export type DocumentHandlingType = 'office_generated' | 'collected' | 'official_form' | 'reference_only'
+export type DocumentType = {
+  id: number
+  code: string
+  name_ja: string
+  description?: string | null
+  handling_type?: DocumentHandlingType | null
+  creation_supported: boolean
+  capabilities?: {
+    generation_supported: boolean
+    collection_only: boolean
+    official_form: boolean
+    reference_only: boolean
+    source_available: boolean
+  }
+}
+export type ActiveCaseTask = {
+  id: number
+  status: 'unaccepted' | 'in_progress' | 'pending_review' | 'changes_requested' | 'completed' | 'cancelled'
+  status_label: string
+  priority: CollectionPriority
+  due_at: string | null
+  is_overdue: boolean
+  allowed_actions: {
+    can_accept: boolean
+    can_submit: boolean
+    can_reassign: boolean
+    can_change_deadline: boolean
+    can_approve: boolean
+    can_reject: boolean
+    can_cancel: boolean
+  }
+  assigned_employee: EmployeeOption | null
+}
+export type TaskSubmission = {
+  received_document_id?: number | null
+  storage_provider?: string
+  review_reason?: string | null
+  review_detail?: string | null
+  id: number
+  version: number
+  source_type: 'manual_upload' | 'auto_generated'
+  review_status: 'pending_review' | 'approved' | 'rejected'
+  filename: string
+  mime_type: string
+  url: string | null
+  submitted_at: string | null
+  submitted_by: { id: number; name: string } | null
+  reviewed_at: string | null
+  reviewed_by: { id: number; name: string } | null
+  review_note: string | null
+}
+export type RequiredDocumentWorkflowState = {
+  code: 'selected' | 'unaccepted' | 'in_progress' | 'pending_review' | 'changes_requested' | 'completed'
+  label: string
+}
+export type DocumentActionCapabilities = {
+  legal_approval_pending?: boolean
+  can_upload: boolean; can_change_assignee: boolean; can_change_deadline: boolean
+  can_review: boolean; can_return: boolean; can_edit: boolean
+}
+export type FileReview = {
+  task_id?: number | null; filename?: string; mime_type?: string | null; uploaded_at?: string | null
+  source: 'received' | 'task_submission'; id: number; version: number
+  status: 'pending_review' | 'approved' | 'rejected' | null
+  reason: string | null; detail: string | null
+  reviewed_by: { id: number; name: string } | null; reviewed_at: string | null
+  returned_by: { id: number; name: string } | null; returned_at: string | null; confirmed_at: string | null
+}
+export type GeneratedDocumentVersion = {
+  id: number
+  version: number
+  workflow_status: string
+  created_at: string | null
+  updated_at: string | null
+  created_by: { id: number; name: string } | null
+  approved_by: { id: number; name: string } | null
+  artifacts: Array<{
+    id: number
+    artifact_type: string
+    filename: string
+    mime_type: string | null
+    url: string | null
+    uploaded_at: string | null
+    uploaded_by: { id: number; name: string } | null
+  }>
+}
 export type C001WorkflowStatus = 'missing' | 'draft' | 'pending_approval' | 'complete' | 'rejected'
 export type C001Artifact = {
   external_file_id: string
@@ -42,6 +128,8 @@ export type C001State = {
 }
 
 export interface CollectionItem {
+  capabilities?: DocumentActionCapabilities
+  file_review?: FileReview | null
   id: number
   title: string
   document_type: DocumentType | null
@@ -58,6 +146,9 @@ export interface CollectionItem {
   fulfillment_status: FulfillmentStatus
   review_status: ReviewStatus
   assigned_employee: EmployeeOption | null
+  active_task: ActiveCaseTask | null
+  workflow_state: RequiredDocumentWorkflowState
+  latest_task_submission: TaskSubmission | null
   requested_at: string | null
   response_deadline: string | null
   collection_priority: CollectionPriority
@@ -66,11 +157,16 @@ export interface CollectionItem {
   applicability_condition_snapshot: string | null
   is_template_generated: boolean
   received_document_count: number
+  generated_versions: GeneratedDocumentVersion[]
   c001: C001State | null
   created_at: string | null
   updated_at: string | null
 }
 export interface ReceivedDocument {
+  review_status?: 'pending_review' | 'approved' | 'rejected' | null
+  review_reason?: string | null
+  review_detail?: string | null
+  reviewed_at?: string | null
   id: number
   title: string
   original_filename: string | null
@@ -86,6 +182,9 @@ export interface ReceivedDocument {
   relationship_type: string
 }
 export interface CollectionDetail {
+  capabilities?: DocumentActionCapabilities
+  file_review?: FileReview | null
+  task_submissions?: TaskSubmission[]
   id: number
   title: string
   document_type: (DocumentType & { description: string | null }) | null
@@ -102,9 +201,13 @@ export interface CollectionDetail {
   fulfillment_status: FulfillmentStatus
   review_status: ReviewStatus
   assigned_employee: EmployeeOption | null
+  active_task: ActiveCaseTask | null
+  workflow_state: RequiredDocumentWorkflowState
+  latest_task_submission: TaskSubmission | null
   is_template_generated: boolean
   received_document_count: number
   received_documents: ReceivedDocument[]
+  generated_versions: GeneratedDocumentVersion[]
   c001: C001State | null
   created_at: string | null
   updated_at: string | null

@@ -1,15 +1,16 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { Briefcase, Calendar, Car, CheckCircle2, ChevronRight, FilePlus, FileText, FolderOpen, Mail, MapPin, NotebookPen, Phone, Search, User, UserRound, Users, X } from 'lucide-react'
 import { caseApi, caseError } from './api'
-import { caseTypeOptions, generatedCaseTitle, newClientDraft, newDraft, validateClient } from './helpers'
-import type { CaseClient, CaseDraft, CaseEmployee, CaseFieldErrors, CaseTypeOption, CaseViewer, ClientDraft } from './types'
+import { classificationError, caseTypeOptions, generatedCaseTitle, newClientDraft, newDraft, validateClient } from './helpers'
+import type { CaseClassification, CaseClient, CaseDraft, CaseEmployee, CaseFieldErrors, CaseTypeOption, CaseViewer, ClientDraft } from './types'
+import CaseClassificationField from './CaseClassificationField'
 import { ButtonSpinner, SectionSkeleton } from '../../components/loading'
 
 type Props = { user: CaseViewer; onClose: () => void; onCreated: (id: number) => void }
 const canonicalNames = new Set(['労災', '交通事故'])
 const id = (field: string) => `new-case-${field}`
 const normalizeBirthDate = (value: string): string | null => {
-  const match = value.trim().match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/)
+  const match = value.trim().match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/)
   if (!match) return null
   const [, year, month, day] = match
   const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)))
@@ -25,7 +26,7 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
   const dialog = useRef<HTMLDialogElement>(null)
   const form = useRef<HTMLFormElement>(null)
   const submitLock = useRef(false)
-  const canAssign = (user?.role_names.some(role => role === 'level_4' || role === 'level_5') ?? false) && (user?.permission_names.includes('employee.view') ?? false)
+  const canAssign = (user?.permission_names.includes('case.assign') ?? false) && (user?.permission_names.includes('employee.view') ?? false)
   const [clients, setClients] = useState<CaseClient[]>([])
   const [types, setTypes] = useState<CaseTypeOption[]>([])
   const [employees, setEmployees] = useState<CaseEmployee[]>([])
@@ -35,6 +36,7 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
   const [clientDraft, setClientDraft] = useState<ClientDraft>(newClientDraft)
   const [dob, setDob] = useState('')
   const [selectedClient, setSelectedClient] = useState<CaseClient | null>(null)
+  const [classification, setClassification] = useState<CaseClassification>('')
   const [draft, setDraft] = useState<CaseDraft>(newDraft)
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
@@ -83,6 +85,8 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
   }
   const validateForReview = () => {
     const next = selectedClient ? {} : validateClient(clientDraft)
+    const classificationMessage = classificationError(classification)
+    if (classificationMessage) next.classification = classificationMessage
     if (!selectedClient && !clientDraft.name.trim()) next.name = clientDraft.client_type === 'corporate' ? '組織名を入力してください。' : '氏名を入力してください。'
     if (!selectedClient && dob.trim() && !normalizeBirthDate(dob)) next['client.birth_date'] = '生年月日は年/月/日の形式で入力してください。'
     if (!draft.case_type_id || !selectedType) next.case_type_id = '事件類型を選択してください。'
@@ -91,6 +95,7 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
     setFields({}); setError(''); return true
   }
   const createPayload = () => ({
+    classification,
     ...(selectedClient ? { client_id: selectedClient.id } : { client: {
       ...Object.fromEntries(Object.entries(clientDraft).map(([key, value]) => [key, value.trim() || null])),
       birth_date: dob.trim() ? normalizeBirthDate(dob) : null,
@@ -101,7 +106,7 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
     ...(canAssign && draft.assigned_employee_id ? { assigned_employee_id: Number(draft.assigned_employee_id) } : {}),
   })
   const confirmCreate = async () => {
-    if (submitLock.current) return
+    if (submitLock.current || !validateForReview()) return
     submitLock.current = true; setSaving(true); setError('')
     try {
       const item = await caseApi.create(createPayload())
@@ -249,6 +254,11 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
               <div><h3 id="ncf-case-heading">案件</h3><p>案件の種類を選択してください。</p></div>
             </div>
 
+            <CaseClassificationField value={classification} error={fields.classification} onChange={value => {
+              setClassification(value)
+              setFields(current => { const next = { ...current }; delete next.classification; return next })
+            }}/>
+
             {/* Case type cards */}
             <div className="cm-ncf-type-grid" role="group" aria-label="事件類型">
               {quickTypes.map(type => (
@@ -282,7 +292,7 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
                   </span>
                   <ChevronRight size={16} className={`cm-ncf-assignee-chevron${pickerOpen ? ' is-open' : ''}`}/>
                 </button>
-                {!canAssign && <p className="cm-ncf-assignee-hint">担当者は作成後にレベル4以上の担当者が設定できます。</p>}
+                {!canAssign && <p className="cm-ncf-assignee-hint">担当者は作成後に権限を持つユーザーが設定できます。</p>}
                 {pickerOpen && (
                   <div className="cm-assignee-popover">
                     <div className="cm-search-control"><Search size={15}/><input aria-label="担当者を検索" value={employeeQuery} placeholder="社員を検索" onChange={event => setEmployeeQuery(event.target.value)}/></div>
@@ -342,7 +352,7 @@ function ReviewDialog({ client, clientDraft, birthDate, type, employee, summary,
     .filter(([, value]) => Boolean(value)).map(([label, value]) => [label, value ?? ''])
   return <dialog ref={dialog} className="dc-confirm cm-review-dialog cm-simple-review" aria-labelledby="case-review-title" onCancel={event => { event.preventDefault(); if (!saving) onBack() }}>
     <header><div><h2 id="case-review-title">登録内容の確認</h2><p className="dc-meta">以下の内容で案件を作成します。内容をご確認ください。</p></div></header>
-    <div className="cm-review-body"><ReviewBlock title="依頼者" rows={[[client ? '依頼者種別' : '登録方法', client ? '既存の依頼者' : '新規依頼者として登録'], ['氏名 / 組織名', source.name], ...(source.name_kana ? [['フリガナ', source.name_kana]] : []), ...(birthDate && !client ? [['生年月日', birthDate]] : []), ['区分', source.client_type === 'corporate' ? '組織' : '個人'], ...contact]}/><ReviewBlock title="案件" rows={[["事件類型", type?.name ?? ''], ['担当者', employee?.full_name ?? '未割当'], ...(summary.trim() ? [['案件メモ', summary.trim()]] : [])]}/></div>
+    <div className="cm-review-body"><ReviewBlock title="依頼者" rows={[[client ? '依頼者種別' : '登録方法', client ? '既存の依頼者' : '新規依頼者として登録'], ['氏名 / 組織名', source.name], ...(source.name_kana ? [['フリガナ', source.name_kana]] : []), ...(birthDate && !client ? [['生年月日', birthDate]] : []), ['区分', source.client_type === 'corporate' ? '組織' : '個人'], ...contact]}/><ReviewBlock title="案件" rows={[["案件区分", "通常案件"], ["事件類型", type?.name ?? ''], ['担当者', employee?.full_name ?? '未割当'], ...(summary.trim() ? [['案件メモ', summary.trim()]] : [])]}/></div>
     <footer><button type="button" className="dc-button" disabled={saving} onClick={onBack}>修正する</button><button type="button" className="dc-button dc-primary" disabled={saving} onClick={onConfirm}>{saving && <ButtonSpinner size={14} />}{saving ? '作成中…' : 'この内容で案件を作成'}</button></footer>
   </dialog>
 }

@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import axios from "axios";
@@ -13,7 +14,10 @@ import api, {
   clearAuthToken,
   hasAuthToken,
   storeAuthToken,
+  logoutCurrentSession,
 } from "../services/api";
+import { AuthFlow, type AuthSnapshot, type AuthSession } from '../features/authentication/authFlow';
+import { authTransport } from '../features/authentication/authApi';
 
 export type AuthOffice = {
   id: number;
@@ -61,10 +65,7 @@ type LoginCredentials = {
 
 type UserResponse = {
   user: AuthUser;
-};
-
-type LoginResponse = UserResponse & {
-  token: string;
+  authentication: { requires_mfa: boolean };
 };
 
 type ChangePasswordInput = {
@@ -77,7 +78,11 @@ type AuthContextValue = {
   user: AuthUser | null;
   isLoading: boolean;
   sessionRestoreError: boolean;
-  login: (credentials: LoginCredentials) => Promise<void>;
+  login: (credentials: LoginCredentials) => Promise<boolean>;
+  authFlow: AuthFlow;
+  authState: AuthSnapshot;
+  requiresMfa: boolean;
+  completeMfaAction: (kind: 'codes' | 'device' | 'opt-in', data: unknown) => void;
   changePassword: (input: ChangePasswordInput) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -104,6 +109,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [sessionRestoreError, setSessionRestoreError] = useState(false);
   const authRevisionRef = useRef(0);
+  const [requiresMfa, setRequiresMfa] = useState(false);
+  const [authFlow] = useState(() => new AuthFlow(authTransport, (session: AuthSession, remember) => {
+    storeAuthToken(session.token, remember);
+    setUser(normalizeAuthUser(session.user));
+    setRequiresMfa(session.authentication.requires_mfa);
+    setSessionRestoreError(false);
+    // A verified new session must not wait for an older bootstrap /me promise.
+    setIsLoading(false);
+  }));
+  const authState = useSyncExternalStore(authFlow.subscribe, authFlow.getSnapshot);
 
   const refreshUser = useCallback(async () => {
     const revision = authRevisionRef.current;
@@ -111,6 +126,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (!hasAuthToken()) {
       if (revision === authRevisionRef.current) {
         setUser(null);
+        setRequiresMfa(false);
         setSessionRestoreError(false);
       }
       return;
@@ -119,10 +135,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       const response = await api.get<UserResponse>("/me", {
         params: { _fresh: Date.now() },
+        timeout: 30_000,
       });
 
       if (revision === authRevisionRef.current) {
         setUser(normalizeAuthUser(response.data.user));
+        setRequiresMfa(response.data.authentication?.requires_mfa === true);
         setSessionRestoreError(false);
       }
     } catch (error) {
@@ -132,9 +150,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Only an explicit unauthenticated response proves that the token is
         // invalid or expired. A timeout, 429, or 5xx response must not log an
         // employee out simply because the server is temporarily unavailable.
-        if (axios.isAxiosError(error) && error.response?.status === 401) {
+        if (axios.isAxiosError(error) && [401, 419].includes(error.response?.status ?? 0)) {
           clearAuthToken();
           setUser(null);
+          setRequiresMfa(false);
           setSessionRestoreError(false);
           return;
         }
@@ -161,17 +180,54 @@ export function AuthProvider({ children }: AuthProviderProps) {
     void loadUser();
   }, [refreshUser]);
 
+  useEffect(() => {
+    if (!authState.expiresAt) return;
+    const timer = window.setTimeout(authFlow.expire, Math.max(0, authState.expiresAt - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [authFlow, authState.expiresAt]);
+
+  useEffect(() => {
+    const expireSession = () => {
+      ++authRevisionRef.current; authFlow.reset(); clearAuthToken(); setUser(null); setRequiresMfa(false); setSessionRestoreError(false); setIsLoading(false);
+    };
+    window.addEventListener('themis-auth-expired', expireSession);
+    return () => { window.removeEventListener('themis-auth-expired', expireSession); authFlow.reset(); };
+  }, [authFlow]);
+
+  useEffect(() => {
+    if (!user || !hasAuthToken()) return;
+
+    const sendHeartbeat = () => {
+      if (!hasAuthToken()) return;
+      void api.post("/presence/heartbeat").catch(() => {
+        // Presence is best-effort. Authentication failures are handled by the
+        // normal protected-route and session restoration flow.
+      });
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") sendHeartbeat();
+    };
+
+    sendHeartbeat();
+    const intervalId = window.setInterval(sendHeartbeat, 30_000);
+    window.addEventListener("online", sendHeartbeat);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("online", sendHeartbeat);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [user]);
+
   const login = async (credentials: LoginCredentials) => {
-    const revision = ++authRevisionRef.current;
-    const response = await api.post<LoginResponse>("/login", credentials);
-
-    if (revision !== authRevisionRef.current) return;
-
-    storeAuthToken(response.data.token, credentials.remember);
-    // The login response is generated from a fresh database query. Reusing it
-    // avoids a cached /me response restoring an old password-change flag.
-    setUser(normalizeAuthUser(response.data.user));
+    if (authFlow.getSnapshot().busy) return false;
+    ++authRevisionRef.current;
+    clearAuthToken();
+    setUser(null);
+    setRequiresMfa(false);
     setSessionRestoreError(false);
+    return authFlow.login(credentials);
   };
 
   const changePassword = async (input: ChangePasswordInput) => {
@@ -180,21 +236,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
       current_password: input.currentPassword,
       password: input.password,
       password_confirmation: input.passwordConfirmation,
-    });
+    }, { timeout: 30_000 });
 
     if (revision !== authRevisionRef.current) return;
 
     clearAuthToken();
+    authFlow.reset();
+    setRequiresMfa(false);
     setUser(null);
     setSessionRestoreError(false);
   };
 
   const logout = async () => {
     const revision = ++authRevisionRef.current;
+    authFlow.reset();
+    setRequiresMfa(false);
+    const request = logoutCurrentSession();
+    setUser(null);
+    setSessionRestoreError(false);
+    setIsLoading(false);
     try {
-      if (hasAuthToken()) {
-        await api.post("/logout");
-      }
+      await request;
     } finally {
       if (revision === authRevisionRef.current) {
         clearAuthToken();
@@ -204,6 +266,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  const completeMfaAction = (kind: 'codes' | 'device' | 'opt-in', data: unknown) => {
+    if (kind === 'codes') authFlow.receiveRecoveryCodes(data);
+    else if (kind === 'device') authFlow.receiveDeviceChallenge(data);
+    else authFlow.receiveOptInChallenge(data);
+    ++authRevisionRef.current;
+    // Enrollment returns a limited pre-auth challenge. Retire this browser's
+    // old PAT before the clean enrollment request; other sessions are revoked
+    // by the backend when enrollment is confirmed.
+    if (kind !== 'codes') void logoutCurrentSession().catch(() => undefined);
+    else clearAuthToken();
+    setUser(null); setRequiresMfa(false); setSessionRestoreError(false);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -211,6 +286,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         isLoading,
         sessionRestoreError,
         login,
+        authFlow,
+        authState,
+        requiresMfa,
+        completeMfaAction,
         changePassword,
         logout,
         refreshUser,

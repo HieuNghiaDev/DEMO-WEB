@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\AI\Tools\LogActionTool;
+use App\AI\Tools\QueryCaseTasksTool;
 use App\AI\Tools\RequestApprovalTool;
 use App\AI\Tools\Tool;
 use RuntimeException;
@@ -15,8 +16,9 @@ class ToolRegistry
     public function __construct(
         LogActionTool $logActionTool,
         RequestApprovalTool $requestApprovalTool,
+        QueryCaseTasksTool $queryCaseTasksTool,
     ) {
-        foreach ([$logActionTool, $requestApprovalTool] as $tool) {
+        foreach ([$logActionTool, $requestApprovalTool, $queryCaseTasksTool] as $tool) {
             $this->register($tool);
         }
     }

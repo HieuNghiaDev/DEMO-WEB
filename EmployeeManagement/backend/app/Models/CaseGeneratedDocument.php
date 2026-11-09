@@ -10,9 +10,29 @@ class CaseGeneratedDocument extends Model
 {
     public const WORKFLOW_STATUSES = ['draft', 'review', 'approved'];
 
+    protected static function booted(): void
+    {
+        static::saving(function (self $document): void {
+            if ($document->exists && \Illuminate\Support\Facades\Schema::hasTable('c001_legal_decisions')
+                && \Illuminate\Support\Facades\DB::table('c001_legal_decisions')->where('case_generated_document_id', $document->id)->exists()
+                && $document->isDirty()) throw new \LogicException('Legally approved version is immutable.');
+        });
+        static::created(fn (self $document) => \App\Services\C001VersionProvenance::record($document, 'created', $document->created_by));
+        static::updated(function (self $document): void {
+            if ($document->wasChanged(['draft_data', 'success_fee_percentage', 'document_generation_template_id', 'case_document_id', 'version', 'created_by', 'updated_by'])) {
+                \App\Services\C001VersionProvenance::record($document, 'edited', $document->updated_by);
+            }
+        });
+    }
+
     public function artifacts(): HasMany
     {
         return $this->hasMany(GeneratedDocumentArtifact::class);
+    }
+
+    public function taskSubmissions(): HasMany
+    {
+        return $this->hasMany(CaseTaskSubmission::class);
     }
 
     protected $fillable = [

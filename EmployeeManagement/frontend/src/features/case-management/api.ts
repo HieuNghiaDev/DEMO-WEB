@@ -25,6 +25,7 @@ export function caseError(error: unknown): { message: string; fields: CaseFieldE
       return { message: '入力内容を確認してください。', fields }
     }
     if (error.response?.status === 403) return { message: 'この操作を行う権限がありません。', fields }
+    if (error.response?.status === 409 && error.response.data?.code === 'confidential_case_admission_pending') return { message: '機密案件のアクセスメンバー設定は現在準備中です。', fields }
     if (error.response?.status === 404) return { message: '案件が見つかりません。一覧へ戻って確認してください。', fields }
     if (error.response?.status === 401) return { message: 'ログイン状態を確認してください。', fields }
   }

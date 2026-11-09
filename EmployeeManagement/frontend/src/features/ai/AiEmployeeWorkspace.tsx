@@ -11,11 +11,15 @@ import {
   SendHorizontal,
   Sparkles,
 } from 'lucide-react'
-import type { FormEvent, KeyboardEvent, RefObject } from 'react'
+import { useCallback, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
+import { useNavigate } from 'react-router-dom'
+import AssistantMessageContent from '../../components/ai/AssistantMessageContent'
+import { aiTaskLocation } from './taskResults'
 import ThemisAIMascot from '../../components/ai/ThemisAIMascot'
 import { InlineLoader } from '../../components/loading'
 import { Button } from '../../components/ui'
 import type { AiChatMessage, AiPersona } from './aiChat'
+import { aiNavigationLocation, type AiNavigationOption } from './navigationResults'
 import { AI_SKILLS_PAUSED_MESSAGE, aiSkillLabels } from './aiChat'
 import './aiEmployeePage.css'
 
@@ -189,6 +193,15 @@ function AiSidebar({ recentConversations, onUsePrompt }: Pick<AiEmployeeWorkspac
 }
 
 export default function AiEmployeeWorkspace(props: AiEmployeeWorkspaceProps) {
+  const navigate = useNavigate()
+  const openNavigation = (option: AiNavigationOption) => {
+    const target = aiNavigationLocation(option)
+    navigate({ pathname: target.pathname, search: target.search }, { state: target.state })
+  }
+  const handleOpenTask = useCallback((caseId: number, taskId: number) => {
+    const target = aiTaskLocation({ case_id: caseId, task_id: taskId })
+    navigate(target.pathname, { state: target.state })
+  }, [navigate])
   const {
     personas,
     selectedPersona,
@@ -202,6 +215,7 @@ export default function AiEmployeeWorkspace(props: AiEmployeeWorkspaceProps) {
     onSelectSkill,
     onUsePrompt,
   } = props
+  const firstTaskResponseIndex = chatMessages.findIndex(message => message.taskResults?.some(result => !result.error && result.tasks.length > 0))
   const hasConversation = chatMessages.length > 0 || isSending || Boolean(chatError)
 
   return (
@@ -274,7 +288,7 @@ export default function AiEmployeeWorkspace(props: AiEmployeeWorkspaceProps) {
               {chatMessages.map((message, index) => (
                 <div className={`ai-message is-${message.role}`} key={`${message.role}-${index}`}>
                   {message.role === 'assistant' && <ThemisAIMascot compact expression="softSmile" interactive={false} />}
-                  <div>{message.content}</div>
+                  <div className={(message.taskResults?.length || message.navigation?.options.length) ? 'themis-ai-structured-body' : undefined}>{message.role === 'assistant' ? <AssistantMessageContent content={message.content} navigation={message.navigation} onNavigate={openNavigation} taskResults={message.taskResults} onUsePrompt={onUsePrompt} onOpenTask={handleOpenTask} showTaskGuidance={index === firstTaskResponseIndex} /> : message.content}</div>
                 </div>
               ))}
               {isSending && <div className="ai-message is-assistant"><ThemisAIMascot compact activity="processing" interactive={false} /><div><InlineLoader ai label="AIが回答を生成中…" /></div></div>}

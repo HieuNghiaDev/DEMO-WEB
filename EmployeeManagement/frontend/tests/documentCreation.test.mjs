@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
+import { compileFunction } from 'node:vm'
+import { createRequire } from 'node:module'
 import ts from 'typescript'
 
 // Exercise the real API store with a transport stub, not the browser E2E.
 const source = readFileSync(new URL('../src/features/document-creation/documentDraftStore.ts', import.meta.url), 'utf8')
 const compiled = ts.transpileModule(source.replace("import api from '../../services/api'", 'const api = globalThis.__creationTransport'), {
-  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText
 let response
 let failure
@@ -18,7 +20,14 @@ globalThis.__creationTransport = Object.fromEntries(['get', 'post', 'patch'].map
 }]))
 let storageReads = 0
 globalThis.window = { sessionStorage: { getItem() { storageReads++; return '{"status":"approved","draft":{"client_name":"OLD"}}' } } }
-const { documentDraftStore, documentDisplayData } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`)
+const requireExternal = createRequire(import.meta.url)
+const pdfModule = { exports: {} }
+const pdfSource = readFileSync(new URL('../src/features/document-creation/documentPdf.ts', import.meta.url), 'utf8').replace("import api from '../../services/api'", 'const api = globalThis.__creationTransport')
+const pdfCompiled = ts.transpileModule(pdfSource, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
+compileFunction(pdfCompiled, ['exports', 'require', 'module'])(pdfModule.exports, requireExternal, pdfModule)
+const storeModule = { exports: {} }
+compileFunction(compiled, ['exports', 'require', 'module'])(storeModule.exports, specifier => specifier === './documentPdf' ? pdfModule.exports : requireExternal(specifier), storeModule)
+const { documentDraftStore, documentDisplayData } = storeModule.exports
 const identity = { caseId: 33, documentId: 1 }
 const state = status => ({ supported: true, template: null, document: {
   id: 1, workflow_status: status, draft_data: { client_name: 'MYSQL DRAFT' },
@@ -65,7 +74,8 @@ test('editor clears stale notices before requests, locks double actions, and ren
   assert.match(editor, /if \(actionInFlight.current\) return false/)
   assert.match(editor, /setSaving\(true\); setActionError\(''\); setNotice\(''\)/)
   assert.match(editor, /setDraft\(documentDisplayData\(creation.record\)\)/)
-  assert.match(editor, /if \(await perform\([\s\S]*?setNotice\('下書きを保存しました。'\)/)
+  assert.match(editor, /if \(await perform\([\s\S]*?setNotice\('下書きを保存しました。[^']*'\)/)
+  assert.doesNotMatch(editor, /documentDraftStore\.approve|onApprove=/)
 })
 
 test('document view remains available while editing is permission and workflow gated', () => {

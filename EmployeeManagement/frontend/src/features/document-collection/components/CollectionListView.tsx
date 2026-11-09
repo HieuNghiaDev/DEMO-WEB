@@ -1,7 +1,9 @@
-import { ChevronDown, ChevronRight, ChevronUp, Info, Search, ShieldAlert } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronUp, FileText, Folder, FolderOpen, Info, Search, ShieldAlert } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Button } from '../../../components/ui/Button'
 import type { CollectionResult, CollectionStatus, FulfillmentStatus, NecessityStatus, ReviewStatus } from '../types'
+import './collectionRows.css'
 
 /** Presentation only; both adapters supply explicit labels and state. No fixtures or API logic. */
 export interface CollectionRowView {
@@ -16,47 +18,32 @@ export interface CollectionRowView {
 export default function CollectionListView({
   items, selectedId, onSelect, canSelect = true, bulkSelectedIds = [],
   onToggleBulkSelection = () => {}, onSetVisibleSelection = () => {},
-  selectionMode = false, selectionScope = 'undetermined',
-  onSelectionModeChange = () => {}, onSelectionScopeChange = () => {},
+  selectionMode = false, selectionBusy = false, onSelectionModeChange,
   totalCount, filteredCount
 }: {
   items: CollectionRowView[]; selectedId: string | null; onSelect: (id: string) => void
   canSelect?: boolean; bulkSelectedIds?: number[]; onToggleBulkSelection?: (id: number) => void
   onSetVisibleSelection?: (ids: number[], selected: boolean) => void
-  selectionMode?: boolean; selectionScope?: NecessityStatus
-  onSelectionModeChange?: (enabled: boolean) => void; onSelectionScopeChange?: (status: NecessityStatus) => void
+  selectionMode?: boolean; selectionBusy?: boolean; onSelectionModeChange?: (enabled: boolean) => void
   totalCount?: number; filteredCount?: number
 }) {
   const { t } = useTranslation()
   const groupOf = (item: CollectionRowView) => item.unnecessary ? 'NOT_REQUIRED' : item.purposes[0]?.code ?? 'UNGROUPED'
   const groups = [...new Set(items.map(groupOf))].sort((a, b) => a === b ? 0 : a === 'NOT_REQUIRED' ? 1 : b === 'NOT_REQUIRED' ? -1 : a.localeCompare(b))
 
-  const [expanded, setExpanded] = useState<string[]>([])
-  const normalExpanded = useRef<string[]>([])
-  const previousSelectionMode = useRef(selectionMode)
   const groupKey = groups.join('\u0000')
-
-  useEffect(() => {
+  const [expanded, setExpanded] = useState<string[]>([])
+  const [previousGroupKey, setPreviousGroupKey] = useState(groupKey)
+  if (groupKey !== previousGroupKey) {
+    setPreviousGroupKey(groupKey)
     const availableGroups = groupKey ? groupKey.split('\u0000') : []
-    setExpanded(current => {
-      if (selectionMode) {
-        if (!previousSelectionMode.current) {
-          normalExpanded.current = current.filter(group => availableGroups.includes(group))
-        }
-        return availableGroups
-      }
-
-      if (previousSelectionMode.current) {
-        return normalExpanded.current.filter(group => availableGroups.includes(group))
-      }
-
-      return current.filter(group => availableGroups.includes(group))
-    })
-    previousSelectionMode.current = selectionMode
-  }, [groupKey, selectionMode])
+    // Selection mode never owns expansion; only prune groups removed by the view.
+    setExpanded(current => current.filter(group => availableGroups.includes(group)))
+  }
 
   const visibleIds = items.map(item => Number(item.id))
   const isAllVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => bulkSelectedIds.includes(id))
+  const isSomeVisibleSelected = !isAllVisibleSelected && visibleIds.some(id => bulkSelectedIds.includes(id))
 
   const total = totalCount ?? items.length
   const filtered = filteredCount ?? items.length
@@ -75,50 +62,24 @@ export default function CollectionListView({
       </div>
 
       {/* 2. BULK / OPERATIONAL COMMAND ROW */}
-      <div className="dc-command-row">
+      <div className={`dc-command-row ${selectionMode ? 'is-bulk-mode' : 'is-browser-mode'}`}>
         <div className="dc-command-left">
-          <label className="dc-command-check-label">
-            <input
-              type="checkbox"
-              checked={selectionMode}
-              disabled={!total || !canSelect}
-              onChange={event => onSelectionModeChange(event.target.checked)}
-              aria-label="一括選択"
-            />
-            <span className="dc-command-title">一括選択</span>
-          </label>
-
-          {selectionMode && (
-            <>
-              <div className="dc-selection-scope" role="group" aria-label="選択対象の必要性">
-                {(['undetermined', 'required', 'not_required'] as const).map(status => (
-                  <button
-                    key={status}
-                    type="button"
-                    className={`dc-scope-button is-${status} ${selectionScope === status ? 'is-active' : ''}`}
-                    aria-pressed={selectionScope === status}
-                    onClick={() => onSelectionScopeChange(status)}
-                  >
-                    {t(`documentCollection.status.necessity.${status}`)}
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                className="dc-command-select-all-btn"
-                disabled={!visibleIds.length || !canSelect}
-                onClick={() => onSetVisibleSelection(visibleIds, !isAllVisibleSelected)}
-              >
-                {isAllVisibleSelected ? '表示中の資料の選択を解除' : `表示中の資料をすべて選択（${visibleIds.length}件）`}
-              </button>
-            </>
-          )}
-
-          {selectionMode && bulkSelectedIds.length > 0 && (
-            <span className="dc-bulk-badge" aria-live="polite">
-              {bulkSelectedIds.length}件選択中
-            </span>
-          )}
+          {selectionMode && <>
+            <label className="dc-command-check-label">
+              <SelectionCheckbox
+                checked={isAllVisibleSelected}
+                indeterminate={isSomeVisibleSelected}
+                disabled={!visibleIds.length || !canSelect || selectionBusy}
+                onChange={event => onSetVisibleSelection(visibleIds, event.target.checked)}
+                label="表示中の資料をすべて選択"
+              />
+              <span className="dc-command-title">すべて選択</span>
+            </label>
+            <span className="dc-bulk-badge" role="status" aria-live="polite" aria-atomic="true">{bulkSelectedIds.length}件選択</span>
+          </>}
+          {(canSelect || selectionMode) && onSelectionModeChange && <Button type="button" size="sm" variant="outline" aria-pressed={selectionMode} onClick={() => onSelectionModeChange(!selectionMode)} disabled={selectionBusy || (!selectionMode && !items.length)}>
+            {selectionMode ? '一括操作を終了' : '一括操作'}
+          </Button>}
         </div>
 
         <div className="dc-command-right">
@@ -133,59 +94,66 @@ export default function CollectionListView({
         </div>
       </div>
 
-      {/* 3. COLUMN HEADER ROW */}
-      <div className={`dc-table-head ${selectionMode ? 'has-selection' : ''}`}>
-        {selectionMode ? (
-          <label className="dc-th-check-label" aria-label="全資料を選択">
-            <input
-              type="checkbox"
-              checked={isAllVisibleSelected}
-              disabled={!visibleIds.length || !canSelect}
-              onChange={event => onSetVisibleSelection(visibleIds, event.target.checked)}
-            />
-          </label>
-        ) : <span className="dc-th-check-spacer" aria-hidden="true" />}
-        <span className="dc-th-doc">{t('documentCollection.list.documentAndSource')}</span>
-        <span className="dc-th-axes">{t('documentCollection.list.axes')}</span>
-        <span className="dc-th-owner">{t('documentCollection.list.assigneeAndDeadline')}</span>
-        <span className="dc-th-chevron" aria-hidden="true" />
-      </div>
-
-      {/* 4. GROUPS */}
+      {/* 3. GROUPS */}
       <div className="dc-groups-container">
         {groups.map(purpose => {
           const rows = items.filter(item => groupOf(item) === purpose)
           const open = expanded.includes(purpose)
-          const selectedInGroup = rows.filter(item => bulkSelectedIds.includes(Number(item.id))).length
+          const selectedInGroup = selectionMode ? rows.filter(item => bulkSelectedIds.includes(Number(item.id))).length : 0
+          const groupIds = rows.map(item => Number(item.id))
           const label = purpose === 'NOT_REQUIRED' ? t('documentCollection.list.notRequiredGroup') : rows[0]?.purposes[0]?.label ?? t('documentCollection.list.purposeUnset')
+          // Metrics describe these same visible, representative-purpose rows.
+          const metrics = [
+            { tone: 'required', label: t('documentCollection.status.necessity.required'), count: rows.filter(item => item.necessityStatus === 'required').length },
+            { tone: 'not-required', label: t('documentCollection.status.necessity.not_required'), count: rows.filter(item => item.necessityStatus === 'not_required').length },
+            { tone: 'undetermined', label: t('documentCollection.status.necessity.undetermined'), count: rows.filter(item => item.necessityStatus === 'undetermined').length },
+            { tone: 'overdue', label: t('documentCollection.overdue'), count: rows.filter(item => item.overdue).length },
+            { tone: 'preservation', label: t('documentCollection.preservationPriority'), count: rows.filter(item => item.preservation).length },
+          ]
           return (
             <section className={`dc-group ${open ? 'is-open' : 'is-closed'}`} key={purpose} aria-label={label}>
+              <div className={`dc-group-header ${selectionMode ? 'has-selection' : ''}`}>
+                {selectionMode && <label className="dc-group-check" onClick={event => event.stopPropagation()}>
+                  <SelectionCheckbox
+                    checked={groupIds.length > 0 && selectedInGroup === groupIds.length}
+                    indeterminate={selectedInGroup > 0 && selectedInGroup < groupIds.length}
+                    disabled={!canSelect || selectionBusy || !groupIds.length}
+                    onChange={event => onSetVisibleSelection(groupIds, event.target.checked)}
+                    label={`「${label}」の資料をすべて選択`}
+                  />
+                </label>}
               <button
                 type="button"
                 className="dc-group-title"
                 aria-expanded={open}
                 onClick={() => setExpanded(current => open ? current.filter(value => value !== purpose) : [...current, purpose])}
               >
-                <span className="dc-group-chevron" aria-hidden="true">
-                  {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                </span>
+                <span className="dc-group-folder" aria-hidden="true">{open ? <FolderOpen size={22}/> : <Folder size={22}/>}</span>
                 <span className="dc-group-code">
                   {purpose === 'NOT_REQUIRED' || purpose === 'UNGROUPED' ? '—' : purpose === 'COMMON' ? t('documentCollection.list.commonGroup') : purpose}
                 </span>
-                <strong className="dc-group-name">{label}</strong>
+                <strong className="dc-group-name" title={label}>{label}</strong>
+                <span className="dc-group-metrics">
+                  {metrics.map(metric => <span key={metric.tone} className={`dc-group-metric is-${metric.tone}`} title={`${metric.label} ${metric.count}件`} aria-label={`${metric.label} ${metric.count}件`}>
+                    {metric.tone === 'preservation' ? <ShieldAlert size={15} aria-hidden="true"/> : <span className={`dc-metric-dot is-${metric.tone}`} aria-hidden="true"/>}
+                    <span aria-hidden="true">{metric.count}</span>
+                  </span>)}
+                </span>
                 <span className={`dc-count ${selectedInGroup > 0 ? 'has-selected' : ''}`}>
                   {selectedInGroup > 0 ? `${selectedInGroup} / ${rows.length}件` : `${rows.length}件`}
                 </span>
+                <span className="dc-group-end-chevron" aria-hidden="true">{open ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}</span>
               </button>
+              </div>
               {open && (
                 <div className="dc-group-body">
                   {rows.map(item => (
                     <CollectionRow
                       key={item.id}
                       item={item}
-                      selected={item.id === selectedId}
-                      selectedForBulk={bulkSelectedIds.includes(Number(item.id))}
-                      canSelect={canSelect}
+                      selected={!selectionMode && item.id === selectedId}
+                      selectedForBulk={selectionMode && bulkSelectedIds.includes(Number(item.id))}
+                      canSelect={canSelect && !selectionBusy}
                       selectionMode={selectionMode}
                       onToggleBulkSelection={() => onToggleBulkSelection(Number(item.id))}
                       onSelect={() => onSelect(item.id)}
@@ -201,20 +169,16 @@ export default function CollectionListView({
           <div className="dc-empty-results">
             <Search size={24} />
             <h3>
-              {selectionMode
-                ? `「${t(`documentCollection.status.necessity.${selectionScope}`)}」の資料はありません`
-                : t('documentCollection.list.noDocuments')}
+              {t('documentCollection.list.noDocuments')}
             </h3>
             <p>
-              {selectionMode
-                ? '上の必要性を切り替えて、選択する資料を表示してください。'
-                : t('documentCollection.list.changeSearch')}
+              {t('documentCollection.list.changeSearch')}
             </p>
           </div>
         )}
       </div>
 
-      {/* 5. BOTTOM INFORMATIONAL NOTE */}
+      {/* 4. BOTTOM INFORMATIONAL NOTE */}
       <div className="dc-list-footer">
         <Info size={14} className="dc-footer-icon" aria-hidden="true" />
         <span>複数目的に該当する資料は、代表目的で表示しています。</span>
@@ -231,148 +195,69 @@ function CollectionRow({
   onToggleBulkSelection: () => void; onSelect: () => void
 }) {
   const { t } = useTranslation()
+  const activate = () => {
+    if (selectionMode) { if (canSelect) onToggleBulkSelection() }
+    else onSelect()
+  }
+  // Screening rows show one stored metadata value; full details stay in the inspector.
+  const metadata = item.source?.trim() || (item.target?.trim() ? `対象：${item.target.trim()}` : '')
 
   return (
     <div
       data-document-id={item.id}
-      className={`dc-row ${selectionMode ? 'has-selection' : ''} ${selected ? 'is-selected' : ''} ${selectedForBulk ? 'is-bulk-selected' : ''} ${item.unnecessary ? 'is-unnecessary' : ''}`}
+      data-necessity={item.necessityStatus}
+      className={`dc-row dc-screening-row ${selectionMode ? 'has-selection' : ''} ${selected ? 'is-selected' : ''} ${selectedForBulk ? 'is-bulk-selected' : ''} ${item.unnecessary ? 'is-unnecessary' : ''}`}
+      onClick={activate}
     >
-      {/* Column 0: Checkbox */}
-      {selectionMode ? (
+      {selectionMode && (
         <label className="dc-row-check" onClick={e => e.stopPropagation()}>
           <input
             type="checkbox"
             checked={selectedForBulk}
             disabled={!canSelect}
             onChange={onToggleBulkSelection}
-            aria-label={`${item.title}を一括操作の対象に選択`}
+            aria-label={`「${item.title}」を選択`}
           />
         </label>
-      ) : <span className="dc-row-check-spacer" aria-hidden="true" />}
+      )}
+      <span className="dc-row-file-icon" aria-hidden="true"><FileText size={18}/></span>
 
-      {/* Main Row Content (Clickable to open inspector) */}
+      {/* Clicks delegate to the row; checkbox labels stop propagation. */}
       <div
         className="dc-row-content"
         role="button"
         tabIndex={0}
-        onClick={onSelect}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect() } }}
-        aria-pressed={selected}
-        aria-label={t('documentCollection.list.detailAria', { code: item.code, title: item.title, source: item.source ?? '' })}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate() } }}
+        aria-pressed={selectionMode ? selectedForBulk : selected}
+        aria-disabled={selectionMode && !canSelect ? true : undefined}
+        aria-label={selectionMode ? `「${item.title}」を選択` : [t('documentCollection.list.detailAria', { code: item.code, title: item.title, source: item.source ?? '' }), item.necessity, item.preservation ? t('documentCollection.preservationPriority') : null].filter(Boolean).join(' · ')}
       >
-        {/* Column 1: Document Identity */}
-        <div className="dc-col-doc">
-          <div className="dc-code-row">
-            <span className="dc-doc-code">{item.code}</span>
-            {item.purposes.length > 0 && (
-              <span className="dc-doc-purposes" title={item.purposes.map(p => `${p.code} · ${p.label}`).join(' / ')}>
-                {item.purposes.map(p => p.code).join(' · ')}
-              </span>
-            )}
-            {item.origin && <span className="dc-doc-origin">{item.origin}</span>}
-          </div>
-          <strong className="dc-doc-title">{item.title}</strong>
-          <span className="dc-source">
-            {item.source || '事務所で作成'} ／ {item.target ? `対象：${item.target}` : '依頼者から回収・対象：未指定'}
-          </span>
-          {item.period && <span className="dc-doc-period">{item.period}</span>}
-          {item.preservation && (
-            <span className="dc-warning dc-preservation">
-              <ShieldAlert size={13} aria-hidden="true" />
-              <span>{t('documentCollection.preservationPriority')}{item.preservationText && ` · ${item.preservationText}`}</span>
-            </span>
-          )}
-        </div>
-
-        {/* Column 2: 2x2 Operational Status Module */}
-        <div className="dc-col-status-module" aria-label="状態マトリクス">
-          {/* Row 1 Left: 要否 */}
-          <div className="dc-status-cell">
-            <span className="dc-status-lbl">{t('documentCollection.list.necessityShort')}</span>
-            {item.necessityStatus === 'required' ? (
-              <span className="dc-pill dc-pill-required">{item.necessity}</span>
-            ) : item.necessityStatus === 'not_required' ? (
-              <span className="dc-pill dc-pill-not-required">{item.necessity}</span>
-            ) : (
-              <span className="dc-status-plain dc-text-muted">{item.necessity}</span>
-            )}
-          </div>
-
-          {/* Row 1 Right: 取得 */}
-          <div className="dc-status-cell">
-            <span className="dc-status-lbl">{t('documentCollection.list.collectionShort')}</span>
-            {item.collectionStatus === 'preparing' ? (
-              <span className="dc-pill dc-pill-amber">{item.collection}</span>
-            ) : item.collectionStatus === 'not_started' ? (
-              <span className="dc-status-plain dc-text-dark">{item.collection}</span>
-            ) : item.collectionStatus === 'received' ? (
-              <span className="dc-pill dc-pill-green">{item.collection}</span>
-            ) : item.collectionStatus === 'requested' ? (
-              <span className="dc-pill dc-pill-indigo">{item.collection}</span>
-            ) : item.collectionStatus === 'partially_received' ? (
-              <span className="dc-pill dc-pill-amber">{item.collection}</span>
-            ) : (
-              <span className="dc-status-plain dc-text-slate">{item.collection}</span>
-            )}
-          </div>
-
-          {/* Row 2 Left: 充足 */}
-          <div className="dc-status-cell">
-            <span className="dc-status-lbl">{t('documentCollection.list.fulfillmentShort')}</span>
-            {item.fulfillmentStatus === 'satisfied' || item.fulfillmentStatus === 'satisfied_by_alternative' ? (
-              <span className="dc-pill dc-pill-green">{item.fulfillment}</span>
-            ) : item.fulfillmentStatus === 'insufficient' ? (
-              <span className="dc-pill dc-pill-amber">{item.fulfillment}</span>
-            ) : (
-              <span className="dc-status-plain dc-text-muted">{item.fulfillment}</span>
-            )}
-          </div>
-
-          {/* Row 2 Right: 確認 */}
-          <div className="dc-status-cell">
-            <span className="dc-status-lbl">{t('documentCollection.list.reviewShort')}</span>
-            {item.reviewStatus === 'reviewed' ? (
-              <span className="dc-pill dc-pill-green">{item.review}</span>
-            ) : item.reviewStatus === 'returned' ? (
-              <span className="dc-pill dc-pill-red">{item.review}</span>
-            ) : (
-              <span className="dc-status-plain dc-text-muted">{item.review}</span>
-            )}
-          </div>
-        </div>
-
-        {/* Column 3: Assignee & Deadline (Sub-divided by hairline) */}
-        <div className="dc-col-owner-deadline">
-          <div className="dc-owner-block">
-            <div className="dc-owner-row">
-              <span className="dc-owner-lbl">取得担当</span>
-              <strong className="dc-owner-val">
-                {item.hasAssignee ? item.assignee : (item.collectionStatus === 'not_started' ? '未着手' : '未割当')}
-              </strong>
-            </div>
-            <div className="dc-owner-row">
-              <span className="dc-owner-lbl">確認担当</span>
-              <span className={`dc-reviewer-val ${item.reviewStatus === 'reviewed' ? 'is-reviewed' : ''}`}>
-                {item.review}
-              </span>
-            </div>
-          </div>
-
-          <div className="dc-owner-divider" aria-hidden="true" />
-
-          <div className="dc-deadline-block">
-            <span className="dc-deadline-lbl">回答期限</span>
-            <span className={`dc-deadline-val ${item.overdue ? 'is-overdue' : ''}`}>
-              {item.deadline}
-            </span>
-          </div>
-        </div>
-
-        {/* Column 4: Right Chevron */}
-        <div className="dc-col-chevron" aria-hidden="true">
-          <ChevronRight size={18} className="dc-row-chevron" />
-        </div>
+        <span className="dc-screening-code" title={item.code}>{item.code}</span>
+        <strong className="dc-screening-title" title={item.title}>
+          <span className="dc-screening-title-text">{item.title}</span>
+          {item.preservation && <span className="dc-screening-preservation" role="img" aria-label={t('documentCollection.preservationPriority')} title={[t('documentCollection.preservationPriority'), item.preservationText].filter(Boolean).join(' · ')}><ShieldAlert size={14} aria-hidden="true" /></span>}
+        </strong>
+        <span className="dc-screening-meta" title={metadata}>{metadata}</span>
+        <span className="dc-screening-status">{item.necessity}</span>
+        <span className="dc-screening-chevron" aria-hidden="true">
+          {!selectionMode && <ChevronRight size={16} />}
+        </span>
       </div>
     </div>
   )
+}
+
+function SelectionCheckbox({ checked, indeterminate, disabled, label, onChange }: {
+  checked: boolean
+  indeterminate: boolean
+  disabled: boolean
+  label: string
+  onChange: React.ChangeEventHandler<HTMLInputElement>
+}) {
+  const input = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (input.current) input.current.indeterminate = indeterminate
+  }, [indeterminate])
+
+  return <input ref={input} type="checkbox" checked={checked} disabled={disabled} onChange={onChange} aria-checked={indeterminate ? 'mixed' : checked} aria-label={label}/>
 }

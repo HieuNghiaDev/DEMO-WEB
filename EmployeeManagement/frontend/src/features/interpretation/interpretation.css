@@ -1,0 +1,58 @@
+.ip-panel { min-width: 0; color: var(--tm-text-primary); }
+.ip-heading, .ip-heading h2, .ip-actions, .ip-drawer-header, .ip-drawer-header h2, .ip-drawer-footer, .ip-detail-state, .ip-pagination { display: flex; align-items: center; gap: 10px; }
+.ip-heading { justify-content: space-between; flex-wrap: wrap; margin-bottom: 18px; }
+.ip-heading h2, .ip-drawer-header h2 { font-size: 17px; font-weight: 700; margin: 0; }
+.ip-heading h2 svg, .ip-drawer-header h2 svg { color: var(--tm-primary); }
+.ip-heading p, .ip-drawer-header p, .ip-help { color: var(--tm-text-secondary); font-size: 12px; line-height: 1.6; margin: 5px 0 0; }
+.ip-actions { flex-wrap: wrap; }
+.ip-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+.ip-metric { padding: 9px 12px; border: 1px solid var(--tm-border); border-radius: 8px; background: var(--tm-surface-elevated); display: flex; justify-content: space-between; align-items: center; min-height: 54px; }
+.ip-metric > div > span { font-size: 11px; color: var(--tm-text-secondary); }
+.ip-metric > div > div > span { font-size: 19px; color: var(--tm-text-primary); }
+.ip-status { width: max-content; white-space: nowrap; }
+.ip-list { border: 1px solid var(--tm-border); border-radius: 8px; overflow: hidden; }
+.ip-row { display: grid; grid-template-columns: minmax(165px, 1.2fr) minmax(110px, 1fr) minmax(100px, 1fr) 80px 70px; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid var(--tm-border); min-width: 0; }
+.ip-row:last-child { border-bottom: 0; }
+.ip-row:hover { background: var(--tm-surface-hover); }
+.ip-row-time, .ip-row-main, .ip-row-person { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ip-row-time time, .ip-row-main strong, .ip-row-person strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ip-row-time span, .ip-row-main span, .ip-row-person span { font-size: 11px; color: var(--tm-text-secondary); }
+.ip-empty { padding: 32px 14px; text-align: center; border-block: 1px solid var(--tm-border); }
+.ip-empty svg { color: var(--tm-text-muted); margin: 0 auto; }
+.ip-empty h3 { font-size: 14px; margin: 10px 0 6px; }
+.ip-empty p { color: var(--tm-text-secondary); font-size: 12px; margin-bottom: 12px; }
+.ip-pagination { justify-content: space-between; font-size: 12px; color: var(--tm-text-secondary); padding: 14px 0 0; }
+.ip-error, .ip-success { padding: 10px 12px; border: 1px solid var(--tm-border); border-radius: 6px; margin: 12px 0; font-size: 12px; }
+.ip-error { border-color: var(--tm-danger); color: var(--tm-danger); background: var(--tm-surface-elevated); }
+.ip-error a { display: block; text-decoration: underline; margin: 5px 0; }
+.ip-success { color: var(--tm-success); }
+.ip-skeleton > div { height: 56px; border-radius: 6px; margin: 10px 0; background: var(--tm-surface-elevated); animation: ip-pulse 1.2s ease-in-out infinite alternate; }
+.ip-backdrop { position: absolute; inset: 0; background: rgb(2 6 23 / 45%); }
+.ip-drawer { position: absolute; right: 0; top: 0; bottom: 0; width: min(560px, 100%); height: 100dvh; background: var(--tm-surface); color: var(--tm-text-primary); border-left: 1px solid var(--tm-border); display: flex; flex-direction: column; animation: ip-enter 180ms ease-out; }
+.ip-drawer-header { justify-content: space-between; flex-shrink: 0; padding: 18px 20px; border-bottom: 1px solid var(--tm-border); }
+.ip-drawer-header p { overflow-wrap: anywhere; }
+.ip-drawer-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px; }
+.ip-drawer-footer { justify-content: flex-end; flex-shrink: 0; border-top: 1px solid var(--tm-border); padding: 12px 20px; background: var(--tm-surface-elevated); }
+.ip-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.ip-field { display: flex; flex-direction: column; gap: 6px; margin: 13px 0; font-size: 12px; min-width: 0; }
+.ip-field > span { color: var(--tm-text-secondary); }
+.ip-field b { color: var(--tm-danger); }
+.ip-field input, .ip-field select, .ip-field textarea { width: 100%; min-width: 0; min-height: 38px; padding: 8px 10px; border: 1px solid var(--tm-border); background: var(--tm-surface-elevated); color: var(--tm-text-primary); border-radius: 6px; font: inherit; }
+.ip-field textarea { min-height: 80px; resize: vertical; }
+.ip-field input:focus-visible, .ip-field select:focus-visible, .ip-field textarea:focus-visible { outline: 2px solid var(--tm-focus-ring); outline-offset: 2px; }
+.ip-field [aria-invalid=true] { border-color: var(--tm-danger); }
+.ip-field :disabled { opacity: .65; }
+.ip-field-error { color: var(--tm-danger); font-size: 11px; }
+.ip-detail-section { border-top: 1px solid var(--tm-border); padding-top: 14px; margin-top: 18px; }
+.ip-detail-section h3 { margin: 0 0 10px; font-size: 13px; font-weight: 700; }
+.ip-detail-state { justify-content: space-between; font-size: 11px; color: var(--tm-text-secondary); }
+.ip-registration { padding-top: 8px; }
+.ip-history { padding: 0; margin: 0; list-style: none; }
+.ip-history li { padding: 9px 0; border-bottom: 1px solid var(--tm-border); display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.ip-history span { color: var(--tm-text-secondary); font-size: 11px; }
+@keyframes ip-enter { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes ip-pulse { to { opacity: .45; } }
+@media (max-width: 1024px) { .ip-row { grid-template-columns: minmax(150px, 1fr) minmax(90px, 1fr) minmax(90px, 1fr) 75px; gap: 8px; } .ip-row > button { grid-column: 4; } }
+@media (max-width: 768px) { .ip-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .ip-row > button { grid-column: 2; justify-self: end; } .ip-status { grid-column: 1; } .ip-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .ip-form-grid { grid-template-columns: minmax(0, 1fr); gap: 0; } .ip-drawer-body { padding: 12px; } .ip-drawer-header, .ip-drawer-footer { padding: 12px; } }
+@media (prefers-reduced-motion: reduce) { .ip-drawer, .ip-skeleton > div { animation: none; } }

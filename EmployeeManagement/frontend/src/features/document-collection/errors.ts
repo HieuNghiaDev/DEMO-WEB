@@ -18,3 +18,12 @@ export function collectionError(error: unknown): CollectionError {
   }
   return { status, fields, message: (status && messages[status]) || '資料収集データを取得・保存できませんでした。接続を確認して再試行してください。', retryable: !status || status >= 500 || status === 429 }
 }
+
+export function fileReviewError(failure: unknown): string {
+  const error = collectionError(failure)
+  if (error.status === 403) return 'この資料を確認する権限がありません。'
+  if (error.status === 409) return 'この資料は現在確認できる状態ではありません。'
+  if (error.status === 422) return Object.values(error.fields).join(' ') || '入力内容を確認してください。'
+  if (error.status && error.status < 500) return error.message
+  return '保存に失敗しました。再度お試しください。'
+}

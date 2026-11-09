@@ -1,0 +1,42 @@
+.dc-document-preview-layer { position: fixed; inset: 0; z-index: 10010; display: grid; place-items: stretch; }
+.dc-document-preview-backdrop { position: absolute; inset: 0; background: rgb(2 6 23 / .72); }
+.dc-document-preview { position: relative; z-index: 1; display: flex; min-width: 0; min-height: 0; flex-direction: column; background: var(--bg-app); }
+.dc-document-preview header { display: flex; min-height: 58px; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 18px; border-bottom: 1px solid var(--border-default); background: var(--bg-elevated); color: var(--text-primary); }
+.dc-document-preview header > div { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.dc-document-preview header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dc-document-preview header span { flex-shrink: 0; color: var(--text-secondary); font-size: 12px; }
+.dc-document-preview-actions { justify-content: flex-end; }
+.dc-document-preview-actions > :is(a, button), .dc-document-preview-state button, .dc-document-preview-state a { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--border-strong); border-radius: 6px; background: transparent; padding: 0 11px; color: var(--text-primary); font-size: 12px; font-weight: 650; text-decoration: none; }
+.dc-document-preview-actions > button { width: 38px; padding: 0; }
+.dc-document-preview-actions > :is(a, button):focus-visible, .dc-document-preview-state :is(a, button):focus-visible { outline: 2px solid var(--tm-primary); outline-offset: 2px; }
+.dc-document-preview-body { position: relative; display: grid; min-width: 0; min-height: 0; flex: 1; place-items: stretch; overflow: hidden; background: var(--bg-elevated); }
+.dc-document-preview :is(iframe, img) { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg-elevated); opacity: 0; }
+.dc-document-preview img { object-fit: contain; }
+.dc-document-preview :is(iframe, img).is-ready { opacity: 1; }
+.dc-document-preview-state { position: relative; z-index: 1; display: grid; min-height: 240px; place-items: center; align-content: center; gap: 10px; padding: 32px; color: var(--text-secondary); text-align: center; }
+.dc-document-preview-state > svg { animation: dc-document-preview-spin 900ms linear infinite; }
+.dc-document-preview-state strong { color: var(--text-primary); font-size: 14px; }
+.dc-document-preview-state.is-error > svg { color: var(--danger); animation: none; }
+.dc-document-preview-state.is-external > svg { animation: none; }
+.dc-document-preview-state p { max-width: 480px; font-size: 12px; line-height: 1.6; }
+.dc-document-preview-state > div { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 6px; }
+.dc-pdf-canvas-viewer { display: flex; min-width: 0; min-height: 0; flex-direction: column; }
+.dc-pdf-canvas-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; flex-shrink: 0; padding: 8px; border-bottom: 1px solid var(--border-default); color: var(--text-secondary); font-size: 12px; }
+.dc-pdf-canvas-toolbar label { display: flex; align-items: center; gap: 6px; margin-left: 8px; }
+.dc-pdf-canvas-toolbar select { min-height: 30px; border: 1px solid var(--border-strong); border-radius: 6px; padding: 0 6px; background: var(--bg-elevated); color: var(--text-primary); }
+.dc-pdf-canvas-toolbar a { display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; color: var(--text-primary); border: 1px solid var(--border-strong); border-radius: 6px; }
+.dc-pdf-canvas-toolbar :is(a, select):focus-visible { outline: 2px solid var(--tm-primary); outline-offset: 2px; }
+.dc-pdf-canvas-pages { position: relative; min-height: 0; flex: 1; overflow: auto; scrollbar-gutter: stable; padding: 16px; }
+.dc-pdf-canvas-pages canvas { display: block; margin: 0 auto; }
+.dc-pdf-canvas-pages > .dc-document-preview-state { position: absolute; inset: 0; }
+@keyframes dc-document-preview-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 640px) {
+  .dc-document-preview header strong { max-width: 46vw; }
+  .dc-document-preview-actions > a { width: 38px; overflow: hidden; padding: 0; color: transparent; }
+  .dc-document-preview-actions > a svg { flex-shrink: 0; color: var(--text-primary); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-document-preview-state > svg { animation: none; }
+}

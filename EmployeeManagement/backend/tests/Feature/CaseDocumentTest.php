@@ -7,7 +7,7 @@ use App\Models\CaseFile;
 use App\Models\Client;
 use App\Models\Role;
 use App\Models\User;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;

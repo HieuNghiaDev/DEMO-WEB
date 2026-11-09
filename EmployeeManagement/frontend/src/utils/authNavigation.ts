@@ -7,7 +7,7 @@ export function getLoginDestination(requested: unknown, mustChangePassword = fal
   }
 
   const pathname = requested.split(/[?#]/, 1)[0].replace(/\/+$/, '').toLowerCase() || '/'
-  if (['/login', '/change-password', '/system/password'].includes(pathname)) {
+  if (['/login', '/activate-account', '/change-password', '/system/password'].includes(pathname)) {
     return '/'
   }
 

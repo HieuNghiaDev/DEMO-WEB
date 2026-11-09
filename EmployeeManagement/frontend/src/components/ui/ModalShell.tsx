@@ -1,6 +1,8 @@
-import React, { useEffect, type ReactNode } from 'react'
+import React, { useEffect, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { IconButton } from './IconButton'
+import { useModalEnvironment } from './useModalEnvironment'
 
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'full'
 
@@ -17,6 +19,9 @@ export interface ModalShellProps {
   className?: string
   overlayClassName?: string
   backdropClassName?: string
+  /** Keep an existing feature dialog's markup while reusing the global modal layer. */
+  customContent?: boolean
+  dismissible?: boolean
 }
 
 const sizeClasses: Record<ModalSize, string> = {
@@ -40,38 +45,35 @@ export const ModalShell: React.FC<ModalShellProps> = ({
   className = '',
   overlayClassName = '',
   backdropClassName = '',
+  customContent = false,
+  dismissible = true,
 }) => {
+  const layerRef = useRef<HTMLDivElement>(null)
+  const dismissRef = useRef({ onClose, dismissible })
   useEffect(() => {
-    if (!isOpen) return
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    document.body.style.overflow = 'hidden'
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = ''
-    }
-  }, [isOpen, onClose])
+    dismissRef.current = { onClose, dismissible }
+  }, [onClose, dismissible])
+  const dismiss = () => { if (dismissRef.current.dismissible) dismissRef.current.onClose() }
+  useModalEnvironment(isOpen, layerRef, dismissRef)
 
   if (!isOpen) return null
 
-  return (
+  return createPortal(
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 sm:p-6 ${overlayClassName}`}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
+      ref={layerRef}
+      className={`fixed inset-0 ${customContent ? '' : 'flex items-center justify-center overflow-y-auto p-4 sm:p-6'} ${overlayClassName}`}
+      style={{ zIndex: 'var(--tm-layer-modal)' }}
+      role={customContent ? undefined : 'dialog'}
+      aria-modal={customContent ? undefined : true}
+      aria-labelledby={customContent ? undefined : titleId}
+      tabIndex={-1}
+      onMouseDown={customContent ? event => { if (event.target === event.currentTarget) dismiss() } : undefined}
     >
+      {customContent ? children : <>
       {/* Backdrop */}
       <div
         className={`fixed inset-0 bg-black/65 backdrop-blur-[2px] transition-opacity duration-200 ${backdropClassName}`}
-        onClick={onClose}
+        onClick={dismiss}
         aria-hidden="true"
       />
 
@@ -108,14 +110,14 @@ export const ModalShell: React.FC<ModalShellProps> = ({
             variant="ghost"
             size="sm"
             aria-label="閉じる"
-            onClick={onClose}
+            onClick={dismiss}
           >
             <X className="h-4 w-4" />
           </IconButton>
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
           {children}
         </div>
 
@@ -126,7 +128,9 @@ export const ModalShell: React.FC<ModalShellProps> = ({
           </div>
         )}
       </div>
-    </div>
+      </>}
+    </div>,
+    document.body,
   )
 }
 

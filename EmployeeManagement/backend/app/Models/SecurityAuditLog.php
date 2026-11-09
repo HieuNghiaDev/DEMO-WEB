@@ -7,6 +7,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SecurityAuditLog extends Model
 {
+    public function save(array $options = [])
+    {
+        if ($this->exists && $this->isDirty()) {
+            throw new \LogicException('Security audit history is append-only.');
+        }
+        return parent::save($options);
+    }
+
+    public function delete()
+    {
+        throw new \LogicException('Security audit history is append-only.');
+    }
+
     public const UPDATED_AT = null;
 
     protected $fillable = [

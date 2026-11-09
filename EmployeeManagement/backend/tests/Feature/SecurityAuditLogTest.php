@@ -8,7 +8,7 @@ use App\Models\SecurityAuditLog;
 use App\Models\User;
 use App\Services\AttendanceExcelService;
 use App\Services\SecurityAuditLogger;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Laravel\Sanctum\Sanctum;

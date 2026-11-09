@@ -18,6 +18,7 @@ class DocumentCollectionTaskService
      */
     public function synchronize(CaseDocument $document, Request $request): ?EmployeeTask
     {
+        CaseAccessService::rehearsal()?->authorizeWrite($request->user(), $document->case_file_id);
         if (! $document->assigned_employee_id || ! $document->requested_at) {
             return null;
         }
@@ -64,7 +65,8 @@ class DocumentCollectionTaskService
             'status' => 'pending',
         ]);
 
-        if ($employee->user) {
+        if ($employee->user && (! CaseAccessService::rehearsal()
+            || CaseAccessService::rehearsal()->allows($employee->user, $document->case_file_id))) {
             EmployeeNotification::create([
                 'user_id' => $employee->user->id,
                 'kind' => 'info',

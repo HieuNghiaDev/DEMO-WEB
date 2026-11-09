@@ -7,7 +7,7 @@ use App\Models\Office;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\OfficeSeeder;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -16,7 +16,7 @@ class EmployeePasswordResetApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_level_four_user_can_generate_a_temporary_password_for_an_employee(): void
+    public function test_level_four_without_explicit_reset_permission_cannot_change_a_password(): void
     {
         $this->seed([OfficeSeeder::class, RolePermissionSeeder::class]);
 
@@ -37,63 +37,14 @@ class EmployeePasswordResetApiTest extends TestCase
         ]);
         $targetUser->createToken('existing-employee-session');
 
-        $response = $this->actingAs($manager, 'sanctum')
+        $this->actingAs($manager, 'sanctum')
             ->putJson("/api/employees/{$employee->id}/password-reset")
-            ->assertOk()
-            ->assertJsonStructure(['message', 'temporary_password']);
+            ->assertForbidden();
 
-        $temporaryPassword = $response->json('temporary_password');
-
-        $this->assertIsString($temporaryPassword);
-        $this->assertSame(12, strlen($temporaryPassword));
-        $this->assertMatchesRegularExpression('/[A-Z]/', $temporaryPassword);
-        $this->assertMatchesRegularExpression('/[a-z]/', $temporaryPassword);
-        $this->assertStringContainsString('!', $temporaryPassword);
-
-        $targetUser->refresh();
-        $this->assertTrue($targetUser->must_change_password);
-        $this->assertTrue(Hash::check($temporaryPassword, $targetUser->password));
-        $this->assertDatabaseCount('personal_access_tokens', 0);
-
-        $this->app['auth']->forgetGuards();
-        $temporaryLogin = $this->postJson('/api/login', [
-            'email' => $targetUser->email,
-            'password' => $temporaryPassword,
-        ])
-            ->assertOk()
-            ->assertJsonPath('user.must_change_password', true);
-        $temporaryToken = $temporaryLogin->json('token');
-
-        $this->withToken($temporaryToken)
-            ->getJson('/api/me')
-            ->assertOk()
-            ->assertJsonPath('user.must_change_password', true);
-
-        $newPassword = 'EmployeeSecure@2026';
-        $this->withToken($temporaryToken)
-            ->putJson('/api/password', [
-                'current_password' => $temporaryPassword,
-                'password' => $newPassword,
-                'password_confirmation' => $newPassword,
-            ])
-            ->assertOk()
-            ->assertJsonPath('reauthentication_required', true);
-
-        $this->app['auth']->forgetGuards();
-        $this->withToken($temporaryToken)
-            ->getJson('/api/me')
-            ->assertUnauthorized();
-
-        $newLogin = $this->postJson('/api/login', [
-            'email' => $targetUser->email,
-            'password' => $newPassword,
-        ])
-            ->assertOk()
-            ->assertJsonPath('user.must_change_password', false);
-
-        $this->withToken($newLogin->json('token'))
-            ->getJson('/api/me')
-            ->assertOk()
-            ->assertJsonPath('user.must_change_password', false);
+        // HOSTING-G2 supersedes the old Level-only reset policy. Positive recovery with
+        // explicit permission, real TOTP, expiry and password change is covered in HostingG2.
+        $this->assertFalse($targetUser->fresh()->must_change_password);
+        $this->assertTrue(Hash::check('OldPassword!1', $targetUser->fresh()->password));
+        $this->assertSame(1, $targetUser->tokens()->count());
     }
 }

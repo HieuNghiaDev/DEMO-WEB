@@ -24,6 +24,7 @@ class VisaProgressController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        abort_if($request->user()?->hasRole('part_time'), 403);
         $cacheKey = 'visa_progress.dashboard';
 
         if ($request->boolean('refresh')) {

@@ -1,0 +1,15 @@
+.auth-security-page { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; background: var(--tm-bg); color: var(--tm-text-primary); }
+.auth-security-panel { width: 100%; max-width: 460px; min-width: 0; border: 1px solid var(--tm-border); border-radius: 12px; padding: 24px; background: var(--tm-surface); }
+.auth-security-panel h1 { font-size: 20px; font-weight: 650; line-height: 1.4; margin-bottom: 8px; }
+.auth-security-form { display: grid; gap: 16px; min-width: 0; }
+.auth-security-form label { display: grid; gap: 6px; font-size: 13px; font-weight: 500; }
+.auth-security-form input:not([type=checkbox]), .auth-security-form textarea { width: 100%; min-width: 0; border: 1px solid var(--tm-border); border-radius: 8px; background: var(--tm-surface-elevated); color: var(--tm-text-primary); padding: 10px 12px; font-size: 14px; }
+.auth-security-form input:focus-visible, .auth-security-form textarea:focus-visible { outline: 2px solid var(--tm-focus-ring); outline-offset: 2px; }
+.auth-security-form p, .auth-security-help { font-size: 13px; line-height: 1.6; color: var(--tm-text-secondary); }
+.auth-security-form code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; border: 1px solid var(--tm-border); border-radius: 6px; padding: 8px; font-size: 12px; }
+.auth-security-error { padding: 10px 12px; border: 1px solid var(--tm-danger); border-radius: 8px; color: var(--tm-danger); font-size: 13px; line-height: 1.5; }
+.auth-security-codes { display: grid; gap: 8px; padding: 0; list-style: none; }
+.auth-security-codes code { font-size: 12px; }
+.auth-security-form .auth-security-ack { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; }
+.auth-security-ack input { flex-shrink: 0; margin-top: 4px; accent-color: var(--tm-primary); }
+@media (max-width: 480px) { .auth-security-panel { padding: 20px 16px; } }

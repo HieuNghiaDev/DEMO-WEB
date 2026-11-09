@@ -4477,3 +4477,148 @@ body.themis-drawer-open .themis-ai-launcher {
 .dark .cw-pt-contact-icon {
   color: #64748B;
 }
+
+/* Case Detail owns three separate surfaces; the shell remains only a layout
+   container, retaining its existing container queries and tab lifecycle. */
+.cm-page.cm-case-detail,
+.dark .cm-page.cm-case-detail {
+  background: var(--tm-bg);
+}
+
+.cm-case-detail .cm-workspace-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.cm-case-detail .cm-workspace-shell > .cm-ws-section {
+  min-width: 0;
+  width: 100%;
+  padding: 18px 24px 20px;
+  border: 1px solid var(--tm-border);
+  border-radius: 16px;
+  background: var(--tm-surface);
+  box-shadow: var(--tm-shadow-md);
+}
+
+.cm-case-detail .cm-workspace-shell > .cm-ws-content-surface { padding: 20px 24px; }
+
+.cm-case-detail .cm-workspace-shell > .cm-ws-case-information {
+  --tm-ws-surface-main: var(--tm-surface);
+  --tm-ws-surface-card: var(--tm-surface-elevated);
+  --tm-ws-border-soft: var(--tm-border-subtle);
+  border-bottom: 1px solid var(--tm-border) !important;
+}
+
+.cm-case-detail .cm-ws-contact-rail { margin-bottom: 16px; }
+.cm-case-detail .cm-ws-contact-item { min-width: 0; max-width: 100%; }
+.cm-case-detail .cm-ws-contact-text { min-width: 0; overflow-wrap: anywhere; }
+.cm-case-detail .cm-ws-summary-grid { grid-template-columns: minmax(0, 1fr); }
+.cm-case-detail .cm-ws-summary-card { min-height: 80px; padding: 12px 14px; border-radius: 10px; }
+
+.cm-case-detail .cm-workspace-shell > .cm-ws-navigation { padding: 12px 20px; }
+.cm-case-detail .cm-ws-navigation .cm-ws-tab-strip {
+  display: block;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+}
+
+/* Override the legacy nested rail surface, not its active state or handlers. */
+.cm-case-detail .cm-ws-navigation .cm-ws-tab-rail {
+  width: 100% !important;
+  max-width: none !important;
+  height: 48px;
+  min-height: 48px;
+  padding: 4px;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.cm-case-detail .cm-ws-navigation .cm-ws-tab {
+  flex: 1 0 auto !important;
+  min-width: max-content !important;
+  padding: 8px 12px;
+  border-radius: 8px !important;
+  font-size: 13px;
+}
+
+.cm-case-detail .cm-ws-required-content { background: var(--tm-surface); }
+.cm-case-detail .cm-ws-required-content > .dc-required { min-width: 0; }
+.cm-ws-required-content .dc-required-page-head { align-items: center; gap: 12px; }
+.cm-ws-required-content .dc-required-page-head > div { flex: 1; min-width: 0; }
+.cm-ws-required-content .dc-required-heading-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: var(--tm-primary-muted);
+  color: var(--tm-primary);
+}
+.cm-ws-required-content .dc-required-metric {
+  min-height: 56px;
+  padding: 8px 12px;
+  gap: 8px;
+  border-radius: 10px;
+  background: var(--tm-surface-elevated);
+  box-shadow: none;
+}
+.cm-ws-required-content .dc-required-metric small { font-size: 11px; line-height: 1.2; }
+.cm-ws-required-content .dc-required-metric strong { font-size: 18px; font-weight: 700; }
+.cm-ws-required-content .dc-required .dc-required-head > span { display: block; }
+.cm-ws-required-content .dc-required .dc-required-work-row {
+  min-height: 60px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+.cm-ws-required-content .dc-required .dc-required-work-row.is-selected { box-shadow: inset 3px 0 var(--dc-blue); }
+@media (hover: hover) {
+  .cm-ws-required-content .dc-required .dc-required-work-row:hover { transform: none; box-shadow: none; }
+}
+
+/* Usable workspace width, not just viewport width, accounts for the sidebar. */
+@container case-workspace (min-width: 540px) {
+  .cm-case-detail .cm-ws-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1280px) {
+  @container case-workspace (min-width: 960px) {
+    .cm-case-detail .cm-ws-summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+}
+@container case-workspace (max-width: 980px) {
+  .cm-case-detail .cm-workspace-shell > .cm-ws-content-surface { padding: 18px 20px; }
+  .cm-ws-required-content .dc-required-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cm-ws-required-content .dc-required .dc-required-controls { grid-template-columns: minmax(0, 1fr) minmax(170px, 220px); }
+  .cm-ws-required-content .dc-required .dc-view-switch { grid-column: 1 / -1; justify-self: start; }
+  .cm-ws-required-content .dc-required .dc-required-head,
+  .cm-ws-required-content .dc-required .dc-required-work-row {
+    grid-template-columns: minmax(180px, 1.6fr) minmax(88px, .7fr) minmax(100px, .9fr) 100px 84px 18px;
+    gap: 10px;
+  }
+  .cm-ws-required-content .dc-required .dc-required-head > span:nth-child(6),
+  .cm-ws-required-content .dc-required .dc-required-work-row > .dc-updated { display: none; }
+}
+@container case-workspace (max-width: 740px) {
+  .cm-ws-required-content .dc-required .dc-required-head { display: none; }
+  .cm-ws-required-content .dc-required .dc-required-work-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
+  .cm-ws-required-content .dc-required .dc-required-work-row > :is(.dc-required-document, .dc-work-status, .dc-required-assignee, .dc-required-deadline) { grid-column: 1; }
+  .cm-ws-required-content .dc-required .dc-required-work-row > :is(.dc-file-state, .dc-updated) { display: none; }
+  .cm-ws-required-content .dc-required .dc-required-chevron { grid-column: 2; grid-row: 1; }
+}
+@container case-workspace (max-width: 540px) {
+  .cm-case-detail .cm-workspace-shell > .cm-ws-section { padding: 16px; }
+  .cm-case-detail .cm-workspace-shell > .cm-ws-navigation { padding: 10px 12px; }
+  .cm-ws-required-content .dc-required-metrics { grid-template-columns: minmax(0, 1fr); }
+  .cm-ws-required-content .dc-required-metric:first-child { grid-column: auto; }
+  .cm-ws-required-content .dc-required .dc-required-controls { grid-template-columns: minmax(0, 1fr); }
+}

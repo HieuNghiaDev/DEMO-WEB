@@ -160,6 +160,72 @@ class GoogleDriveService
         }
     }
 
+    /** Upload an immutable task submission while retaining the provider-side idempotency key. */
+    public function storeTaskSubmission(string $bytes, string $filename, string $mimeType, string $folderId, string $key): array
+    {
+        try {
+            if (! preg_match('/^[a-f0-9]{64}$/', $key) || trim($filename) === '' || trim($mimeType) === '') {
+                throw new GeneratedDocumentDriveException('提出ファイルの保存情報が不正です。');
+            }
+            if (! $this->writeConfigured()) {
+                throw new GeneratedDocumentDriveException('Google Driveへの保存は現在利用できません。');
+            }
+            $this->assertWritableFolder($folderId);
+            $existing = $this->findTaskSubmissionFile($folderId, $key);
+            if ($existing) {
+                return $this->taskSubmissionMetadata($existing);
+            }
+
+            $attemptKey = 'task_submission_drive.attempt.'.$key;
+            if (Cache::has($attemptKey)) {
+                throw new GeneratedDocumentDriveException('前回の保存結果を確認できません。管理者に確認してください。');
+            }
+            $boundary = 'themis_'.bin2hex(random_bytes(16));
+            $checksum = hash('sha256', $bytes);
+            $metadata = json_encode([
+                'name' => $filename,
+                'parents' => [$folderId],
+                'mimeType' => $mimeType,
+                'appProperties' => ['themis_task_submission' => $key, 'sha256' => $checksum],
+            ], JSON_THROW_ON_ERROR);
+            $body = "--{$boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n{$metadata}\r\n"
+                ."--{$boundary}\r\nContent-Type: {$mimeType}\r\n\r\n{$bytes}\r\n--{$boundary}--\r\n";
+            Cache::forever($attemptKey, true);
+            $response = $this->writeRequest()->timeout(45)->withBody($body, 'multipart/related; boundary='.$boundary)
+                ->post('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,mimeType,createdTime,appProperties');
+            if (! $response->successful()) {
+                if (in_array($response->status(), [400, 401, 403, 404], true)) {
+                    Cache::forget($attemptKey);
+                }
+                throw new GeneratedDocumentDriveException('ファイルのGoogle Driveへの保存に失敗しました。');
+            }
+
+            return $this->taskSubmissionMetadata($response->json());
+        } catch (GeneratedDocumentDriveException $error) {
+            throw $error;
+        } catch (Throwable) {
+            throw new GeneratedDocumentDriveException('ファイルのGoogle Driveへの保存に失敗しました。');
+        }
+    }
+
+    public function deleteFile(string $fileId): bool
+    {
+        try {
+            $response = $this->writeRequest()->delete($this->fileUrl($this->validFileId($fileId)), [
+                'supportsAllDrives' => 'true',
+            ]);
+
+            return $response->successful() || $response->status() === 404;
+        } catch (Throwable $error) {
+            Log::error('Google Drive file cleanup failed.', [
+                'external_file_id' => $fileId,
+                'exception' => $error::class,
+            ]);
+
+            return false;
+        }
+    }
+
     /** @return array{id: string, name: string, mime_type: string} */
     public function resolveExactTemplateFile(string $folderId, string $filename, ?string $preferredFileId = null): array
     {
@@ -444,6 +510,40 @@ class GoogleDriveService
         }
 
         return $response->json('files.0');
+    }
+
+    private function findTaskSubmissionFile(string $folder, string $key): ?array
+    {
+        $response = $this->writeRequest()->get('https://www.googleapis.com/drive/v3/files', [
+            'q' => "'{$folder}' in parents and trashed = false and appProperties has { key='themis_task_submission' and value='{$key}' }",
+            'fields' => 'incompleteSearch,files(id,name,mimeType,createdTime,appProperties)',
+            'pageSize' => 2,
+            'supportsAllDrives' => 'true',
+            'includeItemsFromAllDrives' => 'true',
+        ]);
+        if (! $response->successful() || $response->json('incompleteSearch') === true
+            || ! is_array($response->json('files')) || count($response->json('files')) > 1) {
+            throw new GeneratedDocumentDriveException('保存済みの提出ファイルを確認できませんでした。');
+        }
+
+        return $response->json('files.0');
+    }
+
+    private function taskSubmissionMetadata(mixed $data): array
+    {
+        $id = $this->validFileId($data['id'] ?? null);
+        if (! is_string($data['name'] ?? null) || ! is_string($data['mimeType'] ?? null)) {
+            throw new GeneratedDocumentDriveException('Google Driveの保存結果を確認できませんでした。');
+        }
+
+        return [
+            'external_file_id' => $id,
+            'external_url' => 'https://drive.google.com/file/d/'.$id.'/view',
+            'filename' => $data['name'],
+            'mime_type' => $data['mimeType'],
+            'checksum' => $data['appProperties']['sha256'] ?? null,
+            'uploaded_at' => $data['createdTime'] ?? now()->toISOString(),
+        ];
     }
 
     private function uploadMetadata(mixed $data): array

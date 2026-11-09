@@ -18,6 +18,8 @@ import {
 
 import { useAuth } from "../contexts/AuthContext";
 import { getLoginDestination } from "../utils/authNavigation";
+import AuthChallengePage from '../features/authentication/AuthChallengePage';
+import { Link } from 'react-router-dom';
 
 type LoginErrorResponse = {
   message?: string;
@@ -35,7 +37,7 @@ type LoginLocationState = {
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, isLoading, login } = useAuth();
+  const { user, isLoading, login, authState, authFlow } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -51,9 +53,14 @@ export default function Login() {
 
   useEffect(() => {
     if (!isLoading && user) {
+      if (authFlow.getSnapshot().phase === 'authenticated') {
+        window.sessionStorage.setItem('themis_login_notification', JSON.stringify({ createdAt: new Date().toISOString() }));
+      }
       navigate(destination, { replace: true });
     }
-  }, [destination, isLoading, navigate, user]);
+  }, [authFlow, destination, isLoading, navigate, user]);
+
+  useEffect(() => () => authFlow.reset(), [authFlow]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -67,16 +74,15 @@ export default function Login() {
       setIsSubmitting(true);
       setErrorMessage("");
 
-      await login({
+      const authenticated = await login({
         email: email.trim().toLowerCase(),
         password,
         remember,
       });
 
-      window.sessionStorage.setItem(
-        "themis_login_notification",
-        JSON.stringify({ createdAt: new Date().toISOString() }),
-      );
+      setPassword('');
+      if (!authenticated) { setErrorMessage(authFlow.getSnapshot().error); return; }
+
       // Auth state is committed asynchronously. The effect above performs the
       // navigation only after `user` is available, preventing ProtectedRoute
       // from observing a transient null user and returning to this page.
@@ -102,6 +108,8 @@ export default function Login() {
       setIsSubmitting(false);
     }
   };
+
+  if (!['idle', 'submitting_password', 'authenticated'].includes(authState.phase)) return <AuthChallengePage />;
 
   return (
     <main className="themis-login relative min-h-screen overflow-hidden bg-[#080d1f] lg:flex lg:bg-[linear-gradient(108deg,#080d1f_0%,#0b1027_43%,#17183e_53%,#6f7196_65%,#d9ddeb_78%,#f7f8fc_91%,#f6f3ff_100%)]">
@@ -395,6 +403,7 @@ export default function Login() {
                 )}
               </button>
             </form>
+            <Link to="/activate-account" className="mt-4 block text-center text-sm text-indigo-600 underline">Kích hoạt tài khoản bằng mã mời</Link>
 
             <div className="mt-5 flex items-center justify-center gap-1.5 text-[10px] text-slate-400">
               <ShieldCheck size={13} className="text-emerald-500" />

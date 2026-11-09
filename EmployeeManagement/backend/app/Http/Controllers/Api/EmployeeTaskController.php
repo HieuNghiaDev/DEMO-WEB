@@ -83,7 +83,7 @@ class EmployeeTaskController extends Controller
 
         return response()->json([
             'message' => '業務を依頼しました。',
-            'task' => $task,
+            'task' => $task->isVisibleTo($request->user()) ? $task : null,
         ], 201);
     }
 
@@ -98,6 +98,7 @@ class EmployeeTaskController extends Controller
         }
 
         $tasks = EmployeeTask::query()
+            ->visibleTo($request->user())
             ->with('workSession')
             ->where('employee_id', $employee->id)
             ->whereIn('status', [
@@ -133,6 +134,16 @@ class EmployeeTaskController extends Controller
             'message' => '業務を確認しました。',
             'task' => $task,
         ]);
+    }
+
+    public function myTask(Request $request, EmployeeTask $task): JsonResponse
+    {
+        abort_unless($request->user()->employee_id === $task->employee_id && $task->isVisibleTo($request->user()), 404);
+
+        return response()->json(['task' => [
+            ...$task->only(['id', 'title', 'description', 'status', 'due_at', 'case_document_id']),
+            'case_id' => $task->caseDocument()->withTrashed()->value('case_file_id'),
+        ]]);
     }
 
     /** Start or complete a task that belongs to the signed-in employee. */

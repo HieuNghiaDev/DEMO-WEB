@@ -7,19 +7,31 @@ use App\Http\Requests\UpdateCaseIncidentRequest;
 use App\Models\CaseFile;
 use App\Services\CaseDocumentChecklistService;
 use App\Services\CaseWorkspaceAuditService;
-use Illuminate\Support\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class CaseWorkspaceController extends Controller
 {
-    public function show(CaseFile $caseFile): JsonResponse
+    public function show(Request $request, CaseFile $caseFile): JsonResponse
     {
         $caseFile->load([
             'client.employments', 'caseTypeOption.parent', 'department', 'assignedEmployee', 'createdByEmployee',
             'documents.createdByEmployee', 'documents.confirmedByEmployee', 'documents.templateItem',
-            'parties', 'deadlines', 'caseTasks.assignedEmployee', 'activities.createdByEmployee',
+            // CaseDocument::toArray checks these relations for task-metadata privacy.
+            // Batch-load them rather than issuing three lazy lookups per document.
+            'documents.activeCaseTask', 'documents.latestCaseTask', 'documents.latestEmployeeTask',
+            'parties', 'deadlines',
+            'caseTasks' => fn ($q) => $q->visibleTo($request->user())->with([
+                'assignedEmployee:id,full_name,avatar_path',
+                'caseDocument.documentType:id,code,name_ja,handling_type',
+                'latestSubmission.submittedBy:id,name',
+                'latestSubmission.reviewedBy:id,name',
+                'submissions.submittedBy:id,name',
+                'submissions.reviewedBy:id,name',
+            ]),
+            'activities' => fn ($q) => $q->visibleTaskData($request->user())->with('createdByEmployee')->limit(50),
         ]);
 
         $documents = $caseFile->documents;

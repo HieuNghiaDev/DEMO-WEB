@@ -2,17 +2,25 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\GeneratedDocumentDriveException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreCaseTaskBatchRequest;
 use App\Models\CaseDeadline;
+use App\Models\CaseDocument;
 use App\Models\CaseFile;
 use App\Models\CaseParty;
 use App\Models\CaseTask;
+use App\Models\CaseTaskSubmission;
+use App\Models\Employee;
+use App\Services\CaseTaskService;
+use App\Services\CaseTaskWorkflowService;
 use App\Services\CaseWorkspaceAuditService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class CaseWorkspaceItemController extends Controller
 {
@@ -65,8 +73,14 @@ class CaseWorkspaceItemController extends Controller
     public function updateDeadline(Request $request, CaseFile $caseFile, CaseDeadline $deadline): JsonResponse
     {
         $this->ensureBelongsToCase($caseFile, $deadline);
-        $deadline->update($this->deadlineData($request, true));
-        $this->auditService->record($caseFile, $request, '期限を更新', $deadline->title, ['deadline_id' => $deadline->id, 'status' => $deadline->status]);
+        DB::transaction(function () use ($request, $caseFile, $deadline) {
+            $before = $deadline->only(['title', 'due_at', 'status', 'priority', 'notes']);
+            $deadline->update($this->deadlineData($request, true));
+            $this->auditService->record($caseFile, $request, '期限を更新', $deadline->title, [
+                'event' => 'deadline.updated', 'deadline_id' => $deadline->id, 'status' => $deadline->status,
+                'before' => $before, 'after' => $deadline->only(['title', 'due_at', 'status', 'priority', 'notes']),
+            ]);
+        });
 
         return response()->json(['deadline' => $deadline->fresh()]);
     }
@@ -82,47 +96,199 @@ class CaseWorkspaceItemController extends Controller
 
     public function storeTask(Request $request, CaseFile $caseFile): JsonResponse
     {
-        $task = $caseFile->caseTasks()->create($this->taskData($request));
-        $this->auditService->record($caseFile, $request, 'タスクを追加', $task->title, ['task_id' => $task->id]);
+        $data = $this->taskData($request);
+        $task = app(CaseTaskService::class)->createStandalone($caseFile, $request, $data);
 
-        return response()->json(['task' => $task->load('assignedEmployee')], 201);
+        return response()->json(['task' => $task->isVisibleTo($request->user()) ? $task->load('assignedEmployee') : null], 201);
     }
 
-    public function updateTask(Request $request, CaseFile $caseFile, CaseTask $task): JsonResponse
+    public function indexTasks(Request $request, CaseFile $caseFile): JsonResponse
     {
-        $this->ensureBelongsToCase($caseFile, $task);
-        $data = $this->taskData($request, true);
-        if (($data['status'] ?? null) === 'completed' && ! $task->completed_at) {
-            $data['completed_at'] = now();
-        } elseif (isset($data['status']) && $data['status'] !== 'completed') {
-            $data['completed_at'] = null;
+        $filters = $request->validate([
+            'status' => ['sometimes', Rule::in(CaseTask::STATUSES)],
+            'assignee_id' => ['sometimes', 'integer', 'min:1'],
+            'search' => ['sometimes', 'string', 'max:255'],
+            'overdue' => ['sometimes', 'boolean'],
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'between:1,100'],
+        ]);
+        $query = $caseFile->caseTasks()->visibleTo($request->user());
+        if (isset($filters['status'])) {
+            $query->where('status', $filters['status']);
         }
-        $task->update($data);
-        $this->auditService->record($caseFile, $request, 'タスクを更新', $task->title, ['task_id' => $task->id, 'status' => $task->status]);
+        if (isset($filters['assignee_id'])) {
+            $query->where('assigned_employee_id', $filters['assignee_id']);
+        }
+        if (isset($filters['search'])) {
+            $term = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $filters['search']).'%';
+            $query->where(fn ($q) => $q->whereRaw("title LIKE ? ESCAPE '!'", [$term])
+                ->orWhereRaw("description LIKE ? ESCAPE '!'", [$term]));
+        }
+        if (! empty($filters['overdue'])) {
+            $query->whereIn('status', CaseTask::ACTIVE_STATUSES)->where('due_at', '<', now());
+        }
+        $query->with($this->taskRelations());
+        if ($request->hasAny(['page', 'per_page'])) {
+            $page = $query->paginate($filters['per_page'] ?? 25);
 
-        return response()->json(['task' => $task->fresh()->load('assignedEmployee')]);
+            return response()->json(['tasks' => $page->items(), 'pagination' => [
+                'current_page' => $page->currentPage(), 'per_page' => $page->perPage(),
+                'last_page' => $page->lastPage(), 'total' => $page->total(),
+                'from' => $page->firstItem(), 'to' => $page->lastItem(),
+            ]]);
+        }
+        $tasks = $query->get();
+
+        return response()->json(['tasks' => $tasks]);
     }
 
-    public function destroyTask(Request $request, CaseFile $caseFile, CaseTask $task): JsonResponse
+    public function showTask(Request $request, CaseFile $caseFile, CaseTask $task): JsonResponse
     {
         $this->ensureBelongsToCase($caseFile, $task);
-        $task->delete();
-        $this->auditService->record($caseFile, $request, 'タスクを削除', $task->title, ['task_id' => $task->id]);
+        abort_unless($task->isVisibleTo($request->user()), 403, 'このタスクを閲覧する権限がありません。');
 
-        return response()->json(['message' => 'タスクを削除しました。']);
+        return response()->json(['task' => $task->load($this->taskRelations())]);
+    }
+
+    public function taskOptions(Request $request, CaseFile $caseFile): JsonResponse
+    {
+        $documents = CaseDocument::query()
+            ->where('case_file_id', $caseFile->id)
+            ->where('necessity_status', 'required')
+            ->with(['documentType:id,code,name_ja'])
+            ->withExists(['caseTasks as has_existing_task' => fn ($query) => $query
+                ->withTrashed()->where('case_file_id', $caseFile->id)])
+            ->with(['caseTasks' => fn ($query) => $query
+                ->withTrashed()
+                ->where('case_file_id', $caseFile->id)
+                ->visibleTo($request->user())
+                ->with('assignedEmployee:id,full_name')
+                ->orderByDesc('id')])
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        $employees = Employee::query()
+            ->where('status', 'active')
+            ->orderBy('full_name')
+            ->get(['id', 'full_name', 'avatar_path', 'office_id']);
+
+        return response()->json([
+            'required_documents' => $documents,
+            'employees' => $employees,
+        ]);
+    }
+
+    public function storeTaskBatch(
+        StoreCaseTaskBatchRequest $request,
+        CaseFile $caseFile,
+        CaseTaskService $service,
+    ): JsonResponse {
+        $tasks = $service->createBatch($caseFile, $request);
+
+        return response()->json([
+            'message' => 'タスクを作成しました。',
+            'tasks' => $tasks->filter(fn (CaseTask $task) => $task->isVisibleTo($request->user()))->values(),
+        ], 201);
+    }
+
+    public function updateTask(Request $request, CaseFile $caseFile, CaseTask $task, CaseTaskWorkflowService $workflow): JsonResponse
+    {
+        $this->ensureBelongsToCase($caseFile, $task);
+        if ($request->has('status')) {
+            throw ValidationException::withMessages([
+                'status' => '状態は専用の操作から変更してください。',
+            ]);
+        }
+        $data = $request->validate([
+            'assigned_employee_id' => ['sometimes', 'integer', 'exists:employees,id'],
+            'due_at' => ['sometimes', 'nullable', 'date'],
+            'priority' => ['sometimes', Rule::in(CaseTask::PRIORITIES)],
+            'description' => ['sometimes', 'nullable', 'string', 'max:5000'],
+        ]);
+        $task = $workflow->manage($caseFile, $task, $request, $data);
+
+        return response()->json(['task' => $task->isVisibleTo($request->user()) ? $task : null]);
+    }
+
+    public function destroyTask(Request $request, CaseFile $caseFile, CaseTask $task, CaseTaskWorkflowService $workflow): JsonResponse
+    {
+        $this->ensureBelongsToCase($caseFile, $task);
+        $workflow->cancel($caseFile, $task, $request);
+
+        return response()->json(['message' => 'タスクをキャンセルしました。']);
+    }
+
+    public function acceptTask(Request $request, CaseFile $caseFile, CaseTask $task, CaseTaskWorkflowService $workflow): JsonResponse
+    {
+        $this->ensureBelongsToCase($caseFile, $task);
+
+        return response()->json(['task' => $workflow->accept($caseFile, $task, $request)]);
+    }
+
+    public function submitTask(Request $request, CaseFile $caseFile, CaseTask $task, CaseTaskWorkflowService $workflow): JsonResponse
+    {
+        $this->ensureBelongsToCase($caseFile, $task);
+        $workflow->assertSubmitAllowed($task, $request->user());
+        $data = $request->validate(['file' => ['required', 'file', 'max:20480', new \App\Rules\AllowedEvidenceFile]]);
+        try {
+            $submission = $workflow->submitUpload($caseFile, $task, $data['file'], $request);
+        } catch (GeneratedDocumentDriveException $error) {
+            return $error->safeResponse();
+        }
+
+        return response()->json([
+            'submission' => $submission,
+            'task' => $task->fresh()->load($this->taskRelations()),
+        ], 201);
+    }
+
+    public function approveTaskSubmission(
+        Request $request,
+        CaseFile $caseFile,
+        CaseTask $task,
+        CaseTaskSubmission $submission,
+        CaseTaskWorkflowService $workflow,
+    ): JsonResponse {
+        $this->ensureBelongsToCase($caseFile, $task);
+
+        $task = $workflow->approve($caseFile, $task, $submission, $request);
+
+        return response()->json(['task' => $task->isVisibleTo($request->user()) ? $task : null]);
+    }
+
+    public function rejectTaskSubmission(
+        Request $request,
+        CaseFile $caseFile,
+        CaseTask $task,
+        CaseTaskSubmission $submission,
+        CaseTaskWorkflowService $workflow,
+    ): JsonResponse {
+        $this->ensureBelongsToCase($caseFile, $task);
+        $data = $request->validate(['reason' => ['required', 'string', 'max:5000']]);
+
+        $task = $workflow->reject($caseFile, $task, $submission, $request, $data['reason']);
+
+        return response()->json(['task' => $task->isVisibleTo($request->user()) ? $task : null]);
     }
 
     public function storeActivity(Request $request, CaseFile $caseFile): JsonResponse
     {
         $data = $request->validate([
-            'activity_type' => ['required', Rule::in(['communication', 'event', 'note', 'submission', 'medical', 'incident'])],
+            'activity_type' => ['required', Rule::in(['communication'])],
+            'metadata' => ['prohibited'],
             'channel' => ['nullable', Rule::in(['meeting', 'phone', 'email', 'line', 'internal', 'other'])],
             'title' => ['required', 'string', 'max:255'],
             'content' => ['nullable', 'string', 'max:10000'],
             'occurred_at' => ['required', 'date'],
         ]);
         $data['created_by_employee_id'] = $request->user()?->employee_id;
-        $activity = $caseFile->activities()->create($data);
+        $activity = DB::transaction(function () use ($request, $caseFile, $data) {
+            $activity = $caseFile->activities()->create($data);
+            $this->auditService->record($caseFile, $request, '連絡・面談履歴を追加', $activity->title, ['event' => 'communication.created', 'communication_id' => $activity->id]);
+
+            return $activity;
+        });
 
         return response()->json(['activity' => $activity->load('createdByEmployee')], 201);
     }
@@ -218,8 +384,7 @@ class CaseWorkspaceItemController extends Controller
             'assigned_employee_id' => ['nullable', 'exists:employees,id'],
             'title' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
-            'status' => ['nullable', Rule::in(['pending', 'in_progress', 'completed', 'cancelled'])],
-            'priority' => ['nullable', Rule::in(['low', 'normal', 'high', 'critical'])],
+            'priority' => ['nullable', Rule::in(CaseTask::PRIORITIES)],
             'due_at' => ['nullable', 'date'],
         ]);
     }
@@ -227,5 +392,17 @@ class CaseWorkspaceItemController extends Controller
     private function ensureBelongsToCase(CaseFile $caseFile, Model $model): void
     {
         abort_unless((int) $model->getAttribute('case_file_id') === $caseFile->id, 404);
+    }
+
+    private function taskRelations(): array
+    {
+        return [
+            'assignedEmployee:id,full_name,avatar_path',
+            'caseDocument.documentType:id,code,name_ja,handling_type',
+            'latestSubmission.submittedBy:id,name',
+            'latestSubmission.reviewedBy:id,name',
+            'submissions.submittedBy:id,name',
+            'submissions.reviewedBy:id,name',
+        ];
     }
 }

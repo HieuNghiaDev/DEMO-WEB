@@ -5,65 +5,160 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\EmployeeNotification;
+use App\Models\EmployeeTask;
 use App\Models\Office;
 use App\Models\Role;
+use App\Models\User;
 use App\Services\EmployeeCodeGenerator;
 use App\Services\SecurityAuditLogger;
+use App\Services\TaskVisibility;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use App\Services\Administration\AdminCapabilities;
+use App\Services\Administration\AdminContinuityGuard;
+use App\Services\Administration\AdministrativeRoleService;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Schema;
 
 class OrganizationController extends Controller
 {
-    public function resetPassword(Request $request, Employee $employee, SecurityAuditLogger $auditLogger): JsonResponse
+    public function resetPassword(Request $request, Employee $employee): JsonResponse
     {
-        $actor = $request->user();
-        abort_unless($actor?->hasAnyRole(['level_4', 'level_5']), 403, 'Level 4以上の権限が必要です。');
-
-        $targetUser = $employee->user;
-        abort_unless($targetUser !== null, 422, 'この社員にはログインアカウントがありません。');
-        abort_if($actor->id === $targetUser->id, 403, '自分のパスワードはパスワード変更画面から更新してください。');
-        abort_if($targetUser->hasRole('level_5') && ! $actor->hasRole('level_5'), 403, 'Level 5のパスワードをリセットできるのはLevel 5のみです。');
-
-        $temporaryPassword = Str::upper(Str::random(4)).Str::lower(Str::random(4)).Str::random(3).'!';
-
-        $targetUser->forceFill(['password' => Hash::make($temporaryPassword), 'must_change_password' => true])->save();
-        $targetUser->tokens()->delete();
-        $auditLogger->record($request, 'auth.password.reset_by_manager', 'success', $actor, $actor->employee, $targetUser->login_id, ['target_employee_id' => $employee->id]);
-
-        return response()->json(['message' => '仮パスワードを生成しました。本人は次回ログイン時に変更が必要です。', 'temporary_password' => $temporaryPassword]);
+        $handover = app(\App\Services\Administration\EmployeePasswordReset::class)->reset($request->user(), $employee);
+        return response()->json(['message' => '仮パスワードを発行しました。15分以内に本人へ安全に引き渡し、変更してください。', ...$handover])
+            ->header('Cache-Control', 'no-store, private');
     }
 
     public function store(Request $request, EmployeeCodeGenerator $employeeCodeGenerator): JsonResponse
     {
+        Gate::authorize('create', Employee::class);
         $validated = $request->validate([
             'employee_code' => ['prohibited'],
             'full_name' => ['required', 'string', 'max:255'],
             'full_name_kana' => ['nullable', 'string', 'max:255'],
             'office_id' => ['required', 'integer', 'exists:offices,id'],
             'position_title' => ['nullable', 'string', 'max:255'],
-            'work_email' => ['nullable', 'email', 'max:255', 'unique:employees,work_email'],
+            'work_email' => [
+                'required',
+                'email',
+                'max:255',
+                'unique:employees,work_email',
+                'unique:users,email',
+            ],
             'gender' => ['nullable', 'string', 'in:male,female,other'],
             'hire_date' => ['required', 'date'],
         ]);
 
-        $employee = DB::transaction(function () use ($validated, $employeeCodeGenerator): Employee {
+        $employee = DB::transaction(function () use ($validated, $employeeCodeGenerator, $request): Employee {
             $office = Office::query()->findOrFail($validated['office_id']);
+            $workEmail = Str::lower($validated['work_email']);
 
-            return Employee::create([
+            $employee = Employee::create([
                 ...$validated,
+                'work_email' => $workEmail,
                 'employee_code' => $employeeCodeGenerator->allocate($office),
                 'employment_type' => 'full_time',
                 'status' => 'active',
             ]);
+
+            $user = $employee->user()->create([
+                'login_id' => $employee->employee_code,
+                'name' => $employee->full_name,
+                'email' => $workEmail,
+                'role' => 'employee',
+                'is_active' => true,
+                'must_change_password' => true,
+            ]);
+            // No approved new-account bundle/mapping exists yet. Do not infer Level 2
+            // from an empty assignment or accept role/lifecycle fields from the client.
+
+            app(SecurityAuditLogger::class)->recordRequired(
+                $request->user(), 'administration.employee_created', ['type' => 'employees', 'id' => $employee->id],
+                ['target' => ['exists' => false]],
+                ['target' => ['user_id' => $user->id, 'employee_id' => $employee->id, 'roles' => [],
+                    'permissions' => [], 'active' => true, 'activation_required' => true]],
+                ['phase' => Schema::hasTable('security_administration_state') ? 'preparation' : 'legacy_compat',
+                    'revision' => Schema::hasTable('security_administration_state') ? DB::table('security_administration_state')->where('id', 1)->value('revision') : 0],
+            );
+
+            return $employee;
         });
 
         return response()->json([
-            'message' => '社員を登録しました。',
-            'employee' => $employee->load('office:id,office_code,name,address'),
+            'message' => '社員と有効化待ちのアカウントを登録しました。承認済みの経路で招待を発行してください。',
+            'employee' => $employee->load([
+                'office:id,office_code,name,address',
+                'user.roles:id,name,display_name',
+            ]),
         ], 201);
+    }
+
+    public function destroy(Request $request, Employee $employee, SecurityAuditLogger $auditLogger): JsonResponse
+    {
+        return app(AdminContinuityGuard::class)->run(
+            fn () => $this->destroyEmployee($request, $employee, $auditLogger),
+            $employee, 'administration.employee_deleted', $request->user(), true,
+        );
+    }
+
+    private function destroyEmployee(Request $request, Employee $employee, SecurityAuditLogger $auditLogger): JsonResponse
+    {
+        $actor = $request->user();
+        $isAdmin = AdminCapabilities::isCanonicalAdmin($actor);
+        abort_unless($isAdmin || $actor->hasAnyRole(['level_4', 'level_5']), 403);
+        $targetUser = $employee->user;
+        if ($isAdmin) {
+            \Illuminate\Support\Facades\Gate::forUser($actor)->authorize('disable', $employee);
+            abort_if($targetUser && AdminCapabilities::isProtectedLegalSubject($targetUser), 403);
+        }
+
+        if ($targetUser !== null) {
+            abort_if($actor->id === $targetUser->id, 403, '自分自身のアカウントは削除できません。');
+            abort_if(
+                $targetUser->hasRole('level_5') && ! $actor->hasRole('level_5'),
+                403,
+                'Level 5のアカウントを削除できるのはLevel 5のみです。'
+            );
+
+            if ($targetUser->hasRole('level_5')) {
+                $levelFiveRole = Role::query()->where('name', 'level_5')->firstOrFail();
+                abort_if($levelFiveRole->users()->count() <= 1, 422, '最後のLevel 5は削除できません。');
+            }
+        }
+
+        $targetUserId = $targetUser?->id;
+        $targetLoginId = $targetUser?->login_id ?? $employee->employee_code;
+        $targetEmployeeId = $employee->id;
+
+        DB::transaction(function () use ($employee, $targetUser, $targetUserId): void {
+            if ($targetUser !== null) {
+                $targetUser->tokens()->delete();
+                DB::table('sessions')->where('user_id', $targetUserId)->delete();
+                $targetUser->delete();
+            }
+
+            $employee->update([
+                'status' => 'resigned',
+                'termination_date' => $employee->termination_date ?? today(),
+            ]);
+            $employee->delete();
+        });
+
+        $auditLogger->record(
+            $request,
+            'auth.account.deleted_by_manager',
+            'success',
+            $actor,
+            $actor->employee,
+            $targetLoginId,
+            ['target_employee_id' => $targetEmployeeId]
+        );
+
+        return response()->json(['message' => '社員を削除しました。']);
     }
 
     /**
@@ -73,18 +168,11 @@ class OrganizationController extends Controller
     {
         $user = $request->user();
 
-        /*
-         * Chỉ manager/admin mới xem dữ liệu cá nhân nhạy cảm.
-         *
-         * Employee thường vẫn xem được:
-         * - tên
-         * - mã nhân viên
-         * - phòng ban
-         * - chức vụ
-         * - trạng thái làm việc
-         * - công việc hiện tại
-         */
-        $canViewPrivate = $user->hasPermission('employee.update');
+        // Work permissions never grant private read. Resolve fresh explicit eligibility
+        // once, then apply the shared subject boundary to every row (default: self only).
+        $privateGate = Gate::forUser($user);
+        $canViewPrivate = $privateGate->allows('viewPrivateDirectory', Employee::class);
+        $onlineUserIds = \App\Services\EmployeeOnlinePresence::userIds();
 
         $employees = Employee::query()
             ->with([
@@ -117,11 +205,12 @@ class OrganizationController extends Controller
                             'outside',
                         ])
                         ->orderByDesc('clock_in')
-                        ->with('activeWorkSession');
+                        ->with('activeWorkSession.employeeTask:id,work_session_id');
                 },
 
-                'tasks' => function ($query) {
+                'tasks' => function ($query) use ($user) {
                     $query
+                        ->visibleTo($user)
                         ->select([
                             'id',
                             'employee_id',
@@ -142,10 +231,31 @@ class OrganizationController extends Controller
             ->orderBy('office_id')
             ->orderBy('department_id')
             ->orderBy('full_name')
-            ->get()
-            ->map(function (Employee $employee) use ($canViewPrivate) {
+            ->get();
+
+        // Reuse the assignment/case scopes unchanged, in bounded batch queries.
+        // These ID sets live only in this projection; no cross-request permission cache.
+        $attendanceOwners = $employees->filter(fn (Employee $employee) => $employee->attendances->isNotEmpty());
+        $visibleAssignees = $attendanceOwners->isEmpty() ? collect() : TaskVisibility::scopeAssignment(Employee::query(), $user, 'id')
+            ->whereKey($attendanceOwners->modelKeys())->pluck('id')->flip();
+        $sessionTaskIds = $employees->map(fn (Employee $employee) => $employee->attendances->first()
+            ?->activeWorkSession?->employeeTask?->id)->filter()->unique()->values();
+        $visibleSessionTasks = $sessionTaskIds->isEmpty() ? collect() : EmployeeTask::query()
+            ->visibleTo($user)->whereKey($sessionTaskIds)->pluck('id')->flip();
+
+        $employees = $employees->map(function (Employee $employee) use ($canViewPrivate, $privateGate, $onlineUserIds, $visibleAssignees, $visibleSessionTasks) {
+                $canViewEmployeePrivate = $canViewPrivate && $privateGate->allows('viewPrivateSubject', $employee);
                 $attendance = $employee->attendances->first();
                 $quest = $employee->tasks->first();
+                $sessionTask = $attendance?->activeWorkSession?->employeeTask;
+                if ($attendance?->activeWorkSession && (! $visibleAssignees->has($employee->id)
+                    || ($sessionTask !== null && ! $visibleSessionTasks->has($sessionTask->id)))) {
+                    $attendance->setRelation('activeWorkSession', null);
+                }
+                $isOnline = $employee->user !== null && isset($onlineUserIds[$employee->user->id]);
+                $workStatus = $isOnline
+                    ? ($attendance?->status ?? 'online')
+                    : 'offline';
 
                 return [
                     'id' => $employee->id,
@@ -202,23 +312,23 @@ class OrganizationController extends Controller
                      * Dữ liệu riêng tư.
                      * Employee thường không nhận các giá trị này.
                      */
-                    'phone' => $canViewPrivate
+                    'phone' => $canViewEmployeePrivate
                         ? $employee->phone
                         : null,
 
-                    'date_of_birth' => $canViewPrivate
+                    'date_of_birth' => $canViewEmployeePrivate
                         ? $employee->date_of_birth?->toDateString()
                         : null,
 
-                    'nationality_code' => $canViewPrivate
+                    'nationality_code' => $canViewEmployeePrivate
                         ? $employee->nationality_code
                         : null,
 
-                    /*
-                     * Nếu không có attendance đang mở
-                     * => offline.
-                     */
-                    'work_status' => $attendance?->status ?? 'offline',
+                    'presence_status' => $isOnline ? 'online' : 'offline',
+
+                    // Attendance remains the source for working/break/outside;
+                    // browser presence decides whether the employee is offline.
+                    'work_status' => $workStatus,
 
                     'attendance' => $attendance
                         ? [
@@ -238,7 +348,7 @@ class OrganizationController extends Controller
 
                             'status' => $attendance->status,
 
-                            'current_task' => $attendance->activeWorkSession
+                            'current_task' => ! $visibleAssignees->has($employee->id) ? null : ($attendance->activeWorkSession
                                 ? [
                                     'id' => $attendance->activeWorkSession->id,
                                     'task_description' => $attendance->activeWorkSession->task_description,
@@ -254,7 +364,7 @@ class OrganizationController extends Controller
                                         'started_at' => $quest->accepted_at,
                                         'expected_end_at' => $quest->due_at,
                                     ]
-                                    : null),
+                                    : null)),
                         ]
                         : null,
                 ];
@@ -266,6 +376,10 @@ class OrganizationController extends Controller
 
                 'working' => $employees
                     ->where('work_status', 'working')
+                    ->count(),
+
+                'online' => $employees
+                    ->where('presence_status', 'online')
                     ->count(),
 
                 'break' => $employees
@@ -283,20 +397,59 @@ class OrganizationController extends Controller
 
             'employees' => $employees->values(),
 
-            'available_roles' => $user->hasPermission('employee.manage_roles')
+            'main_roles_enabled' => ($mainRoles = \App\Services\Administration\MainRoles::installed()),
+            'available_roles' => $mainRoles
+                ? $this->mainRoleOptions($user)
+                : ($user->hasPermission('employee.manage_roles')
                 ? Role::query()
                     ->select(['id', 'name', 'display_name'])
                     ->when(! $user->hasRole('level_5'), fn ($query) => $query->where('name', '!=', 'developer'))
                     ->orderBy('id')
                     ->get()
-                : [],
+                : []),
         ]);
+    }
+
+    private function mainRoleOptions(User $user): array
+    {
+        $assignable = $user->hasPermission('employee.manage_roles')
+            ? \App\Services\Administration\MainRoles::assignableNames($user) : [];
+        $roles = Role::whereIn('name', \App\Services\Administration\MainRoles::NAMES)->get(['id', 'name', 'display_name'])->keyBy('name');
+
+        return array_map(fn ($name) => [
+            ...$roles->get($name)->only(['id', 'name', 'display_name']),
+            'assignable' => in_array($name, $assignable, true),
+        ], \App\Services\Administration\MainRoles::NAMES);
     }
 
     public function updateRoles(Request $request, Employee $employee): JsonResponse
     {
         $actor = $request->user();
+        if (\App\Services\Administration\MainRoles::installed() && \App\Services\Administration\MainRoles::assigned($actor)) {
+            $validated = $request->validate(['role_ids' => ['required', 'array', 'size:1'], 'role_ids.*' => ['integer', 'exists:roles,id']]);
+            abort_unless($employee->user, 422);
+            app(AdministrativeRoleService::class)->assignMainRole($actor, $employee->user, Role::findOrFail($validated['role_ids'][0]));
+            return response()->json(['message' => '権限を更新しました。', 'employee_id' => $employee->id,
+                'roles' => $employee->user->roles()->get(['roles.id', 'name', 'display_name'])]);
+        }
+        if (AdminCapabilities::isCanonicalAdmin($actor)) {
+            $validated = $request->validate(['role_ids' => ['required', 'array', 'size:1'], 'role_ids.*' => ['integer', 'distinct', 'exists:roles,id']]);
+            abort_unless($employee->user, 422);
+            app(AdministrativeRoleService::class)->assign($actor, $employee->user, Role::findOrFail($validated['role_ids'][0]));
+            return response()->json(['message' => '権限を更新しました。', 'employee_id' => $employee->id, 'roles' => $employee->user->roles()->get()]);
+        }
+        return app(AdminContinuityGuard::class)->run(
+            fn () => $this->updateLegacyRoles($request, $employee),
+            $employee->user ?? $employee, 'administration.roles_assigned', $actor, true,
+        );
+    }
+
+    private function updateLegacyRoles(Request $request, Employee $employee): JsonResponse
+    {
+        $actor = $request->user();
         $targetUser = $employee->user;
+        abort_if($targetUser && AdminCapabilities::isProtectedLegalSubject($targetUser), 403,
+            '法的承認権限の変更には、独立した所有者承認の手続きが必要です。');
 
         abort_unless(
             $targetUser !== null,
@@ -319,6 +472,21 @@ class OrganizationController extends Controller
             ->whereIn('id', $validated['role_ids'])
             ->get(['id', 'name']);
         $roleNames = $roles->pluck('name');
+        abort_if(\App\Services\Administration\MainRoles::installed()
+            && ($roleNames->intersect(\App\Services\Administration\MainRoles::NAMES)->isNotEmpty()
+                || \App\Services\Administration\MainRoles::assigned($targetUser)), 403);
+        abort_if($roleNames->intersect(['admin', 'verified_lawyer'])->isNotEmpty(), 403, 'Protected roles require an independent approved workflow.');
+        $grantNames = Role::whereIn('id', $roles->pluck('id'))->with('permissions')->get()
+            ->flatMap(fn (Role $role) => $role->permissions->pluck('name'));
+        abort_if($grantNames->intersect([
+            'employee.view_private', 'employee.verify_lawyer', 'document.approve_legal', 'document.review_internal',
+            'employee.activation.manage', 'employee.reset_password', 'audit.view', 'settings.manage', 'case.manage_access',
+        ])->isNotEmpty(), 403, 'Protected grants cannot be assigned through a legacy role alias.');
+        abort_if($grantNames->intersect(['developer.view', 'developer.release.manage'])->isNotEmpty() && ! $actor->hasRole('level_5'), 403);
+        // Continuity validation is kept distinct from legacy Level rules and returns the contract 422.
+        if (AdminCapabilities::isCanonicalAdmin($targetUser)) {
+            throw ValidationException::withMessages(['admin' => 'A verified replacement administrator is required.']);
+        }
         $isGrantingLevelFive = $roleNames->contains('level_5');
         $isGrantingDeveloper = $roleNames->contains('developer');
         $superAdminRole = Role::query()
@@ -375,6 +543,7 @@ class OrganizationController extends Controller
 
     public function updateEmployment(Request $request, Employee $employee): JsonResponse
     {
+        Gate::authorize('updateWorkData', $employee);
         $validated = $request->validate([
             'employment_type' => ['required', 'string', 'in:full_time,part_time,contract,intern'],
         ]);

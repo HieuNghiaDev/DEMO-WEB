@@ -6453,38 +6453,38 @@
 
 /* 労災: cool indigo/blue */
 .cm-cc-type-badge--labor {
-  background: #EEF2FF;
-  border: 1px solid rgba(99, 102, 241, 0.25);
-  color: #4338CA;
+  background: #E0E7FF;
+  border: 1px solid rgba(79, 70, 229, 0.42);
+  color: #3730A3;
 }
 .dark .cm-cc-type-badge--labor {
-  background: rgba(99, 102, 241, 0.16);
-  border-color: rgba(99, 102, 241, 0.35);
-  color: #A5B4FC;
+  background: rgba(99, 102, 241, 0.22);
+  border-color: rgba(129, 140, 248, 0.48);
+  color: #C7D2FE;
 }
 
 /* 交通事故: warm amber */
 .cm-cc-type-badge--traffic {
-  background: #FFF7E8;
-  border: 1px solid rgba(245, 158, 11, 0.26);
-  color: #B45309;
+  background: #FEF3C7;
+  border: 1px solid rgba(217, 119, 6, 0.42);
+  color: #92400E;
 }
 .dark .cm-cc-type-badge--traffic {
-  background: rgba(245, 158, 11, 0.14);
-  border-color: rgba(245, 158, 11, 0.35);
-  color: #FCD34D;
+  background: rgba(245, 158, 11, 0.20);
+  border-color: rgba(251, 191, 36, 0.48);
+  color: #FDE68A;
 }
 
 /* Other: neutral slate */
 .cm-cc-type-badge--other {
-  background: #F1F5F9;
-  border: 1px solid #E2E8F0;
-  color: #475569;
+  background: #E2E8F0;
+  border: 1px solid #CBD5E1;
+  color: #334155;
 }
 .dark .cm-cc-type-badge--other {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.10);
-  color: #94A3B8;
+  background: rgba(148, 163, 184, 0.14);
+  border-color: rgba(148, 163, 184, 0.28);
+  color: #CBD5E1;
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

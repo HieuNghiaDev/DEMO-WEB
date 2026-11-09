@@ -51,6 +51,13 @@ return [
     */
 
     'channels' => [
+        'email_verification' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/email-verification.log'),
+            'level' => 'debug',
+            'permission' => 0600,
+            'replace_placeholders' => true,
+        ],
 
         'stack' => [
             'driver' => 'stack',

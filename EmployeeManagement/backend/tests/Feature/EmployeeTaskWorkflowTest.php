@@ -7,7 +7,7 @@ use App\Models\Employee;
 use App\Models\EmployeeTask;
 use App\Models\Office;
 use App\Models\User;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -264,9 +264,29 @@ class EmployeeTaskWorkflowTest extends TestCase
         $notificationId = $this->getJson('/api/notifications')->assertOk()
             ->assertJsonCount(1, 'notifications')
             ->assertJsonPath('notifications.0.assigned_task_id', $taskId)->json('notifications.0.id');
+        foreach ([
+            ['Overdue', now()->subDay(), 'in_progress'],
+            ['Due soon', now()->addHours(8), 'accepted'],
+            ['Complete', now()->subHours(1), 'completed'],
+        ] as [$title, $due, $status]) {
+            \App\Models\EmployeeTask::create([
+                'employee_id' => $this->employee->id, 'assigned_by' => $manager->id,
+                'title' => $title, 'duration_minutes' => 60, 'due_at' => $due, 'status' => $status,
+            ]);
+        }
+        $this->getJson('/api/notifications/center?details=1')->assertOk()
+            ->assertJsonPath('unread_count', 1)->assertJsonPath('notifications.0.assigned_task_id', $taskId)
+            ->assertJsonCount(3, 'my_tasks_summary.items')
+            ->assertJsonPath('my_tasks_summary.items.0.title', 'Overdue')->assertJsonPath('my_tasks_summary.items.0.attention', 0)
+            ->assertJsonPath('my_tasks_summary.items.1.title', 'Due soon')->assertJsonPath('my_tasks_summary.items.1.attention', 1)
+            ->assertJsonPath('my_tasks_summary.items.2.id', $taskId)->assertJsonPath('my_tasks_summary.items.2.attention', 2);
+        $this->getJson("/api/my/tasks/{$taskId}")->assertOk()->assertJsonPath('task.id', $taskId);
 
         Sanctum::actingAs($otherUser);
         $this->getJson('/api/my/tasks')->assertOk()->assertJsonCount(0, 'tasks');
+        $this->getJson("/api/my/tasks/{$taskId}")->assertNotFound();
+        $this->getJson('/api/notifications/center?details=1')->assertOk()
+            ->assertJsonPath('unread_count', 0)->assertJsonCount(0, 'my_tasks_summary.items');
         $this->getJson('/api/notifications')->assertOk()->assertJsonCount(0, 'notifications');
         $this->patchJson("/api/tasks/{$taskId}/accept")->assertForbidden();
         $this->patchJson("/api/tasks/{$taskId}/status", ['status' => 'completed'])->assertForbidden();

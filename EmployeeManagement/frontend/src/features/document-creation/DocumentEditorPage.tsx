@@ -19,6 +19,7 @@ import DocumentPdfDownloadButton from './components/DocumentPdfDownloadButton'
 import DocumentDriveButton from './components/DocumentDriveButton'
 import C001WorkbookDownloadButton from './components/C001WorkbookDownloadButton'
 import C001PdfDownloadButton from './components/C001PdfDownloadButton'
+import LegalApprovalNotice from './components/LegalApprovalNotice'
 import { LoadingState } from '../../components/ui'
 import { ButtonSpinner } from '../../components/loading'
 
@@ -70,8 +71,8 @@ export default function DocumentEditorPage({ caseId, documentId, canUpdate }: { 
   const [record, setRecord] = useState<DocumentDraftRecord | null>(null)
   const [drive, setDrive] = useState<DocumentDriveState>({ available: false, artifact: null })
   const [versions, setVersions] = useState<DocumentVersionSummary[]>([])
-  const [canApprove, setCanApprove] = useState(false)
   const [c001, setC001] = useState<C001State | null>(null)
+  const [legalApprovalPending, setLegalApprovalPending] = useState(false)
   const [fee, setFee] = useState('20')
   const [savedFee, setSavedFee] = useState('20')
   const [confirmGeneration, setConfirmGeneration] = useState(false)
@@ -106,7 +107,8 @@ export default function DocumentEditorPage({ caseId, documentId, canUpdate }: { 
         setContext({ caseFile: workspace.case_file, document, template: creation.template })
         setRecord(creation.record); setDraft(documentDisplayData(creation.record))
         setDrive(creation.drive); setVersions(creation.versions)
-        setCanApprove(creation.permissions.canApprove); setC001(creation.c001)
+        setC001(creation.c001)
+        setLegalApprovalPending(creation.permissions.legalApprovalPending === true)
         setFee(nextFee); setSavedFee(nextFee); setConfirmGeneration(false)
         setWorkbookPreview(null); setPreviewError('')
       })
@@ -154,6 +156,7 @@ export default function DocumentEditorPage({ caseId, documentId, canUpdate }: { 
     if ((status === 'not_created' || status === 'draft' || c001EditingReview) && dirty && !window.confirm('保存していない変更を破棄して資料収集へ戻りますか？')) return
     navigate(`/quests/${caseId}`, { state: { workspaceTab: 'collection', collectionItemId: documentId } })
   }
+  const openTaskWorkflow = () => navigate(`/quests/${caseId}`, { state: { workspaceTab: 'tasks', taskId: context?.document.active_task?.id } })
   const update = (field: string, value: string) => {
     setDraft(current => current ? { ...current, [field]: value } : current)
     setErrors(current => ({ ...current, [field]: undefined })); setNotice(''); setActionError('')
@@ -164,7 +167,8 @@ export default function DocumentEditorPage({ caseId, documentId, canUpdate }: { 
     const nextFee = next.c001?.success_fee_percentage || fee
     setRecord(next.record); setDraft(values); setDrive(next.drive)
     setVersions(next.versions)
-    setCanApprove(next.permissions.canApprove); setC001(next.c001)
+    setC001(next.c001)
+    setLegalApprovalPending(next.permissions.legalApprovalPending === true)
     setFee(nextFee); setSavedFee(nextFee)
     if (next.c001) { setWorkbookPreview(null); setPreviewError('') }
   }
@@ -216,10 +220,6 @@ export default function DocumentEditorPage({ caseId, documentId, canUpdate }: { 
     navigate(`${editPath}?mode=edit`, { replace: true })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
-  const approve = async () => {
-    if (!canApprove) return
-    if (await perform(() => documentDraftStore.approve({ caseId, documentId }))) setNotice('文書を承認して完了しました。')
-  }
   const createRevision = async () => {
     if (!canUpdate || status !== 'approved' || isHistorical) return
     if (await perform(() => documentDraftStore.createRevision({ caseId, documentId }))) {
@@ -267,16 +267,17 @@ export default function DocumentEditorPage({ caseId, documentId, canUpdate }: { 
     {isHistorical ? <p className="c001-permission-note">履歴版 v{record?.version} を表示しています。この版は変更・上書きされません。</p> : status === 'approved' ? <p className="c001-permission-note">{isC001 ? '承認済みのC-001はこのワークフローから変更できません。' : '承認済みスナップショットです。変更する場合は改訂版を作成します。'}</p> : !canUpdate ? <p className="c001-permission-note">この画面は閲覧のみです。</p> : null}
     {notice && <p className="c001-notice" role="status">{notice}</p>}
     {actionError && <p className="c001-page-state is-error" role="alert">{actionError}</p>}
+    {legalApprovalPending && status !== 'approved' && <LegalApprovalNotice/>}
 
     {(status === 'not_created' || status === 'draft') && !showC001SavedPreview && (isC001 && c001
       ? <C001ConfigurationEditor state={c001} fee={fee} feeValid={feeValid} disabled={viewOnly || !canUpdate || saving} busy={saving} showActions={!viewOnly} onFeeChange={value => { setFee(value); setNotice(''); setActionError('') }} onCancel={returnToCollection} onSave={() => void saveDraft()} onPreview={() => void preview()}/>
       : viewOnly
-        ? <ReviewView template={context.template} draft={draft} documentVersion={record?.version} approved={false} readOnly disabled busy={false} onEdit={() => undefined} onApprove={() => undefined}/>
+        ? <ReviewView template={context.template} draft={draft} documentVersion={record?.version} approved={false} readOnly disabled onEdit={() => undefined}/>
         : <EditorForm template={context.template} draft={draft} errors={errors} disabled={!canUpdate || saving} busy={saving} onChange={update} onCancel={returnToCollection} onSave={() => void saveDraft()} onPreview={() => void preview()}/>) }
     {c001EditingReview && c001 && <C001ConfigurationEditor state={c001} fee={fee} feeValid={feeValid} disabled={saving} busy={saving} showActions onFeeChange={value => { setFee(value); setNotice(''); setActionError('') }} onCancel={() => navigate(`${editPath}?mode=view`, { replace: true })} onSave={() => void saveDraft()} onPreview={() => void preview()}/>}
-    {isC001 && c001 && !c001EditingReview && (status === 'review' || showC001SavedPreview) && <C001Preview caseId={caseId} documentId={documentId} version={record?.version ?? c001.latest_version ?? 1} template={context.template} preview={workbookPreview} previewLoading={previewBusy} previewError={previewError} state={c001} busy={saving} canUpdate={canUpdate && !isHistorical} confirming={confirmGeneration} onRetryPreview={retryPreview} onEdit={startC001Edit} onRequestGenerate={() => setConfirmGeneration(true)} onCancelGenerate={() => setConfirmGeneration(false)} onGenerate={() => void generateC001()}/>}
-    {status === 'review' && !isC001 && <ReviewView template={context.template} draft={draft} documentVersion={record?.version} approved={false} readOnly={viewOnly || !canApprove} disabled={!canApprove || saving} busy={saving} onEdit={() => void editAgain()} onApprove={() => void approve()}/>}
-    {status === 'approved' && isC001 && c001 && <C001Preview caseId={caseId} documentId={documentId} version={record?.version ?? c001.latest_version ?? 1} template={context.template} preview={workbookPreview} previewLoading={previewBusy} previewError={previewError} state={c001} busy={saving} canUpdate={false} confirming={false} approvedView onRetryPreview={() => undefined} onEdit={() => undefined} onRequestGenerate={() => undefined} onCancelGenerate={() => undefined} onGenerate={() => undefined}/>}
+    {isC001 && c001 && !c001EditingReview && (status === 'review' || showC001SavedPreview) && <C001Preview taskAction={context.document.active_task && <button type="button" className="dc-button" onClick={openTaskWorkflow}>タスクを開く</button>} caseId={caseId} documentId={documentId} version={record?.version ?? c001.latest_version ?? 1} template={context.template} preview={workbookPreview} previewLoading={previewBusy} previewError={previewError} state={c001} busy={saving} canUpdate={canUpdate && !isHistorical} confirming={confirmGeneration} onRetryPreview={retryPreview} onEdit={startC001Edit} onRequestGenerate={() => setConfirmGeneration(true)} onCancelGenerate={() => setConfirmGeneration(false)} onGenerate={() => void generateC001()}/>}
+    {status === 'review' && !isC001 && <ReviewView template={context.template} draft={draft} documentVersion={record?.version} approved={false} readOnly={viewOnly} disabled={!canUpdate || saving} onEdit={() => void editAgain()} taskAction={<button type="button" className="dc-button" onClick={openTaskWorkflow}>タスクを開く</button>}/>}
+    {status === 'approved' && isC001 && c001 && <C001Preview taskAction={context.document.active_task && <button type="button" className="dc-button" onClick={openTaskWorkflow}>タスクを開く</button>} caseId={caseId} documentId={documentId} version={record?.version ?? c001.latest_version ?? 1} template={context.template} preview={workbookPreview} previewLoading={previewBusy} previewError={previewError} state={c001} busy={saving} canUpdate={false} confirming={false} approvedView onRetryPreview={() => undefined} onEdit={() => undefined} onRequestGenerate={() => undefined} onCancelGenerate={() => undefined} onGenerate={() => undefined}/>}
     {status === 'approved' && !isC001 && <ReviewView
       template={context.template}
       draft={draft}
@@ -284,9 +285,7 @@ export default function DocumentEditorPage({ caseId, documentId, canUpdate }: { 
       approved
       readOnly
       disabled
-      busy={saving}
       onEdit={() => undefined}
-      onApprove={() => undefined}
       pdfAction={<DocumentPdfDownloadButton caseId={caseId} documentId={documentId} version={record?.version}/>}
       driveAction={<DocumentDriveButton caseId={caseId} documentId={documentId} version={record?.version} drive={drive} onSaved={setDrive}/>}
     />}
@@ -331,7 +330,7 @@ function C001ConfigurationEditor({ state, fee, feeValid, disabled, busy, showAct
   </section>
 }
 
-function C001Preview({ caseId, documentId, version, template, preview, previewLoading, previewError, state, busy, canUpdate, confirming, approvedView = false, onRetryPreview, onEdit, onRequestGenerate, onCancelGenerate, onGenerate }: { caseId: number; documentId: number; version: number; template: DocumentTemplateDefinition; preview: C001PdfPreview | null; previewLoading: boolean; previewError: string; state: C001State; busy: boolean; canUpdate: boolean; confirming: boolean; approvedView?: boolean; onRetryPreview: () => void; onEdit: () => void; onRequestGenerate: () => void; onCancelGenerate: () => void; onGenerate: () => void }) {
+function C001Preview({ caseId, documentId, version, template, preview, previewLoading, previewError, state, busy, canUpdate, confirming, approvedView = false, onRetryPreview, onEdit, onRequestGenerate, onCancelGenerate, onGenerate, taskAction }: { caseId: number; documentId: number; version: number; template: DocumentTemplateDefinition; preview: C001PdfPreview | null; previewLoading: boolean; previewError: string; state: C001State; busy: boolean; canUpdate: boolean; confirming: boolean; approvedView?: boolean; onRetryPreview: () => void; onEdit: () => void; onRequestGenerate: () => void; onCancelGenerate: () => void; onGenerate: () => void; taskAction?: ReactNode }) {
   const [previewZoom, setPreviewZoom] = useState<number | 'page-fit'>('page-fit')
   const driveUrl = safeDriveUrl(state.pdf_artifact?.url)
   const readyForApproval = state.status === 'pending_approval'
@@ -360,10 +359,10 @@ function C001Preview({ caseId, documentId, version, template, preview, previewLo
     </div>
     {finalized && state.artifact && <div className="c001-artifact"><div><span>GOOGLE DRIVE · PDF / XLSX</span><strong>{state.artifact.filename}</strong></div><dl><div><dt>作成日時</dt><dd>{displayDate(state.artifact.generated_at)}</dd></div><div><dt>最終同期</dt><dd>{displayDate(state.artifact.last_synced_at)}</dd></div><div><dt>作成者</dt><dd>{state.artifact.generated_by || '—'}</dd></div></dl></div>}
     {confirming && <div className="c001-generate-confirm" role="alert"><div><strong>C-001 v{workingVersion}を確定して保存しますか？</strong><p>現在のプレビュー内容と報酬金 {state.success_fee_percentage}% を新しい版としてDriveへ保存します。既存の版とマスターは変更しません。</p></div><div><button type="button" className="dc-button" disabled={busy} onClick={onCancelGenerate}>キャンセル</button><button type="button" className="dc-button dc-primary" disabled={busy} onClick={onGenerate}>{busy ? <ButtonSpinner size={14}/> : <CheckCircle2 size={14}/>}確定・保存</button></div></div>}
-    <div className="c001-bottom-actions c001-review-actions"><p>{completed ? '承認時点のPDFと元のExcelを表示しています。' : readyForApproval ? 'PDFとExcelをDriveへ保存済みです。承認・差戻しは承認室で行ってください。' : finalized ? '保存済みの版は変更されません。編集すると次の版を準備します。' : 'このPDFは一時確認用です。Drive保存も版の確定も行われていません。'}</p><div>{finalized && <C001PdfDownloadButton caseId={caseId} documentId={documentId} version={version}/>} {finalized && <C001WorkbookDownloadButton caseId={caseId} documentId={documentId} version={version}/>} {finalized && driveUrl && <a className="dc-button" href={driveUrl} target="_blank" rel="noopener noreferrer"><ExternalLink size={14}/>Google Driveで開く</a>}{canUpdate && <button type="button" className="dc-button" disabled={busy} onClick={onEdit}><FilePenLine size={14}/>編集に戻る</button>}{canUpdate && !finalized && !readyForApproval && !completed && !confirming && <button type="button" className="dc-button dc-primary" disabled={busy || !preview} onClick={onRequestGenerate}><CheckCircle2 size={14}/>確定・保存</button>}</div></div>
+    <div className="c001-bottom-actions c001-review-actions"><p>{completed ? '承認時点のPDFと元のExcelを表示しています。' : readyForApproval ? 'PDFとExcelをDriveへ保存済みです。承認・差戻しはタスク画面で行ってください。' : finalized ? '保存済みの版は変更されません。編集すると次の版を準備します。' : 'このPDFは一時確認用です。Drive保存も版の確定も行われていません。'}</p><div>{finalized && <C001PdfDownloadButton caseId={caseId} documentId={documentId} version={version}/>} {finalized && <C001WorkbookDownloadButton caseId={caseId} documentId={documentId} version={version}/>} {finalized && driveUrl && <a className="dc-button" href={driveUrl} target="_blank" rel="noopener noreferrer"><ExternalLink size={14}/>Google Driveで開く</a>}{canUpdate && <button type="button" className="dc-button" disabled={busy} onClick={onEdit}><FilePenLine size={14}/>編集に戻る</button>}{canUpdate && !finalized && !readyForApproval && !completed && !confirming && <button type="button" className="dc-button dc-primary" disabled={busy || !preview} onClick={onRequestGenerate}><CheckCircle2 size={14}/>確定・保存</button>}{taskAction}</div></div>
   </section>
 }
 
-function ReviewView({ template, draft, documentVersion, approved, readOnly = false, disabled, busy, onEdit, onApprove, pdfAction, driveAction }: { template: DocumentTemplateDefinition; draft: DocumentDraft; documentVersion?: number; approved: boolean; readOnly?: boolean; disabled: boolean; busy: boolean; onEdit: () => void; onApprove: () => void; pdfAction?: ReactNode; driveAction?: ReactNode }) {
-  return <section className="c001-review" aria-labelledby="document-review-title"><div className="c001-review-heading"><div><span>{approved ? '承認済み文書' : '確認プレビュー'}</span><h2 id="document-review-title">{template.name}</h2></div>{approved && <CheckCircle2 size={24}/>}</div><DocumentReviewRenderer template={template} draft={draft} documentVersion={documentVersion}/><div className="c001-bottom-actions">{approved ? <><p>承認時点の内容を表示しています。</p><div>{pdfAction}{driveAction}</div></> : readOnly ? <p>保存済みの内容を閲覧しています。</p> : <><p>内容を確認してから承認してください。</p><div><button type="button" className="dc-button" disabled={disabled} onClick={onEdit}>編集に戻る</button><button type="button" className="dc-button dc-primary" disabled={disabled} onClick={onApprove}><CheckCircle2 size={15}/>{busy ? '承認中…' : '承認する'}</button></div></>}</div></section>
+function ReviewView({ template, draft, documentVersion, approved, readOnly = false, disabled, onEdit, pdfAction, driveAction, taskAction }: { template: DocumentTemplateDefinition; draft: DocumentDraft; documentVersion?: number; approved: boolean; readOnly?: boolean; disabled: boolean; onEdit: () => void; pdfAction?: ReactNode; driveAction?: ReactNode; taskAction?: ReactNode }) {
+  return <section className="c001-review" aria-labelledby="document-review-title"><div className="c001-review-heading"><div><span>{approved ? '承認済み文書' : '確認プレビュー'}</span><h2 id="document-review-title">{template.name}</h2></div>{approved && <CheckCircle2 size={24}/>}</div><DocumentReviewRenderer template={template} draft={draft} documentVersion={documentVersion}/><div className="c001-bottom-actions">{approved ? <><p>承認時点の内容を表示しています。</p><div>{pdfAction}{driveAction}</div></> : <><p>承認・差戻しはタスク画面で行ってください。</p><div>{!readOnly && <button type="button" className="dc-button" disabled={disabled} onClick={onEdit}>編集に戻る</button>}{taskAction}</div></>}</div></section>
 }

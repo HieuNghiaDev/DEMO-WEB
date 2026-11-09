@@ -7,7 +7,7 @@ use App\Models\Client;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\CaseTypeSeeder;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -30,6 +30,7 @@ class ClientEmploymentApiTest extends TestCase
     {
         foreach (['労災', '交通事故'] as $typeName) {
             $this->actingAs($this->user, 'sanctum')->postJson('/api/case-files', [
+                'classification' => 'normal',
                 'title' => "Quick {$typeName}",
                 'case_type_id' => CaseType::query()->where('name', $typeName)->sole()->id,
                 'client' => ['name' => "{$typeName} Client", 'client_type' => 'individual'],
@@ -42,6 +43,7 @@ class ClientEmploymentApiTest extends TestCase
     public function test_case_creation_persists_current_and_past_employments_with_the_client(): void
     {
         $response = $this->actingAs($this->user, 'sanctum')->postJson('/api/case-files', [
+            'classification' => 'normal',
             'title' => 'Employment history case',
             'case_type_id' => CaseType::query()->where('name', '労災')->sole()->id,
             'client' => ['name' => 'Employment Client', 'client_type' => 'individual'],
@@ -71,6 +73,7 @@ class ClientEmploymentApiTest extends TestCase
     public function test_invalid_employment_prevents_the_entire_intake_from_being_created(): void
     {
         $this->actingAs($this->user, 'sanctum')->postJson('/api/case-files', [
+            'classification' => 'normal',
             'title' => 'Invalid employment case',
             'case_type_id' => CaseType::query()->where('name', '労災')->sole()->id,
             'client' => ['name' => 'Should Not Persist'],

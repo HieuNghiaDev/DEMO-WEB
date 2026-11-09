@@ -16,7 +16,7 @@ class CaseWorkspaceAuditService
             'title' => $title,
             'content' => $content,
             'occurred_at' => now(),
-            'metadata' => $metadata ?: null,
+            'metadata' => [...$metadata, 'history_kind' => 'system', 'actor_user_id' => $request->user()?->id, 'actor_label' => $request->user()?->name],
         ]);
     }
 }

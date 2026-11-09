@@ -7,6 +7,7 @@ use App\Models\CaseFile;
 use App\Models\CaseType;
 use App\Models\Client;
 use App\Models\ClientEmployment;
+use App\Services\CaseWorkspaceAuditService;
 use App\Services\GoogleDriveProvisioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,9 +20,10 @@ use Throwable;
 
 class CaseFileController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         return response()->json(['case_files' => CaseFile::query()
+            ->visibleTo($request->user())
             ->with(['client', 'caseTypeOption', 'department', 'assignedEmployee', 'createdByEmployee'])
             ->withCount($this->documentProgressCounts())
             ->latest()->get()]);
@@ -30,6 +32,18 @@ class CaseFileController extends Controller
     public function store(Request $request, GoogleDriveProvisioningService $drive): JsonResponse
     {
         $data = $this->validated($request);
+        if (($data['status'] ?? null) === 'closed' && \App\Services\Administration\MainRoles::assigned($request->user())) {
+            abort_unless($request->user()->hasPermission('case.delete'), 403, '案件を終了する権限がありません。');
+        }
+
+        $classification = Arr::pull($data, 'classification');
+        // Operational membership admission has not been approved. Reject before any write/provider call.
+        if ($classification === 'confidential') {
+            return response()->json([
+                'code' => 'confidential_case_admission_pending',
+                'message' => '機密案件のアクセスメンバー設定は現在準備中です。',
+            ], 409);
+        }
 
         if (! empty($data['assigned_employee_id'])) {
             $this->ensureCanAssignCase($request);
@@ -37,7 +51,7 @@ class CaseFileController extends Controller
 
         $this->resolveCaseType($data);
 
-        $caseFile = DB::transaction(function () use ($data, $request): CaseFile {
+        $caseFile = DB::transaction(function () use ($data, $request, $classification): CaseFile {
             $clientData = Arr::pull($data, 'client');
             $employments = Arr::pull($data, 'employments', []);
 
@@ -64,7 +78,15 @@ class CaseFileController extends Controller
 
             $data['created_by_employee_id'] = $request->user()?->employee_id;
 
-            return CaseFile::query()->create($data);
+            // Keep the storage flag guarded; only this validated create contract classifies the new record.
+            $caseFile = new CaseFile($data);
+            $caseFile->is_confidential = false;
+            $caseFile->save();
+            app(CaseWorkspaceAuditService::class)->record($caseFile, $request, '案件を作成', $caseFile->title, [
+                'event' => 'case.created', 'classification' => $classification,
+            ]);
+
+            return $caseFile;
         });
 
         // Checklist initialization is an explicit action, never a side effect of case creation.
@@ -74,27 +96,31 @@ class CaseFileController extends Controller
         ], 201);
     }
 
-    public function show(CaseFile $caseFile): JsonResponse
+    public function show(Request $request, CaseFile $caseFile): JsonResponse
     {
         $caseFile->loadCount($this->documentProgressCounts());
 
         return response()->json(['case_file' => $caseFile->load([
             'client.employments', 'caseTypeOption', 'department', 'assignedEmployee', 'createdByEmployee', 'documents.createdByEmployee',
             'precedents.createdByEmployee', 'meetingLogs.createdByEmployee', 'customSections.createdByEmployee',
-            'parties', 'activities.createdByEmployee',
+            'parties', 'activities' => fn ($q) => $q->visibleTaskData($request->user())->with('createdByEmployee'),
         ])]);
     }
 
     public function update(Request $request, CaseFile $caseFile): JsonResponse
     {
         $data = $this->validated($request, true);
+        if (($data['status'] ?? null) === 'closed' && $caseFile->status !== 'closed'
+            && \App\Services\Administration\MainRoles::assigned($request->user())) {
+            abort_unless($request->user()->hasPermission('case.delete'), 403, '案件を終了する権限がありません。');
+        }
 
         if (array_key_exists('assigned_employee_id', $data)) {
             $this->ensureCanAssignCase($request);
         }
 
         $this->resolveCaseType($data);
-        $caseFile->update($data);
+        $caseFile = $this->updateWithHistory($caseFile, $request, $data, '案件情報を更新');
 
         return response()->json(['case_file' => $caseFile->load(['client', 'caseTypeOption', 'department', 'assignedEmployee', 'createdByEmployee'])]);
     }
@@ -107,11 +133,28 @@ class CaseFileController extends Controller
             'assigned_employee_id' => ['nullable', 'exists:employees,id'],
         ]);
 
-        $caseFile->update($data);
+        $caseFile = $this->updateWithHistory($caseFile, $request, $data, '案件担当者を変更');
 
         return response()->json([
             'case_file' => $caseFile->load(['client', 'caseTypeOption', 'department', 'assignedEmployee', 'createdByEmployee']),
         ]);
+    }
+
+    private function updateWithHistory(CaseFile $caseFile, Request $request, array $data, string $title): CaseFile
+    {
+        return DB::transaction(function () use ($caseFile, $request, $data, $title) {
+            $caseFile = CaseFile::whereKey($caseFile->id)->lockForUpdate()->firstOrFail();
+            $before = $caseFile->only(array_keys($data));
+            $caseFile->fill($data);
+            if ($caseFile->isDirty()) {
+                $caseFile->save();
+                app(CaseWorkspaceAuditService::class)->record($caseFile, $request, $title, $caseFile->title, [
+                    'event' => 'case.updated', 'before' => $before, 'after' => $caseFile->only(array_keys($data)),
+                ]);
+            }
+
+            return $caseFile;
+        });
     }
 
     public function provisionDrive(CaseFile $caseFile, GoogleDriveProvisioningService $drive): JsonResponse
@@ -129,6 +172,8 @@ class CaseFileController extends Controller
     private function validated(Request $request, bool $partial = false): array
     {
         return $request->validate([
+            'classification' => [$partial ? 'prohibited' : 'required', 'string', Rule::in(['normal', 'confidential'])],
+            'is_confidential' => ['prohibited'],
             'title' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
             'case_type' => [$partial ? 'sometimes' : 'prohibited'],
             'case_type_id' => [$partial ? 'sometimes' : 'required', 'integer', Rule::exists('case_types', 'id')->where('is_active', true)],
@@ -187,9 +232,10 @@ class CaseFileController extends Controller
     private function ensureCanAssignCase(Request $request): void
     {
         abort_unless(
-            $request->user()?->hasAnyRole(['level_4', 'level_5']),
+            $request->user()?->hasPermission('case.assign') && (\App\Services\Administration\MainRoles::assigned($request->user())
+                || $request->user()?->hasAnyRole(['level_4', 'level_5'])),
             403,
-            '案件の担当者を変更できるのはレベル4以上のユーザーのみです。'
+            '案件の担当者を変更する権限がありません。'
         );
     }
 

@@ -53,7 +53,8 @@ class AuthTokenTest extends TestCase
             'status' => 'active',
         ]);
 
-        User::create([
+        // Already-active legacy identity; provisioning/activation is tested through the real API in B23.
+        User::factory()->create([
             'employee_id' => $employee->id,
             'login_id' => 'TM003',
             'name' => $employee->full_name,

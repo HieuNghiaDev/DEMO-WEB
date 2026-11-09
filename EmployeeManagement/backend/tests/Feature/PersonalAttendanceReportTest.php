@@ -6,7 +6,7 @@ use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\Office;
 use App\Models\User;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;

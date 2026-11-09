@@ -6,10 +6,12 @@ use App\Models\CaseFile;
 use App\Models\CaseType;
 use App\Models\Client;
 use App\Models\Persona;
+use App\Models\Permission;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\ToolRegistry;
 use Database\Seeders\CleanV2MasterSeeder;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -77,6 +79,15 @@ class CleanV2Test extends TestCase
         $user = User::factory()->create(['role' => 'admin']);
         Persona::create(['name' => 'secretary', 'display_name' => 'AI', 'active' => true,
             'skills' => ['task_management', 'morning_briefing']]);
+        // A03: first prove the legacy alias cannot reach AI. Then arrange only the
+        // explicit capability required to exercise the disabled-skill business boundary.
+        $this->actingAs($user, 'sanctum')->postJson('/api/ai/chat', [
+            'persona' => 'secretary', 'skill' => 'morning_briefing', 'message' => 'test',
+        ])->assertForbidden();
+        $role = Role::create(['name' => 'synthetic_disabled_skill_reader', 'display_name' => 'Synthetic AI capability']);
+        $role->permissions()->attach(Permission::where('name', 'ai.use')->sole()->id);
+        $user->roles()->sync([$role->id]);
+        $this->assertSame(['ai.use'], $user->permission_names);
         foreach (['morning_briefing'] as $skill) {
             $this->actingAs($user, 'sanctum')->postJson('/api/ai/chat', [
                 'persona' => 'secretary', 'skill' => $skill, 'message' => 'test',

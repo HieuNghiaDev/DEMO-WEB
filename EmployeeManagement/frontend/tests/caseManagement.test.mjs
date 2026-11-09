@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { caseDraft, casePayload, caseTypeOptions, dateValue, filterCases, generatedCaseTitle, newClientDraft, newDraft, validateCase, validateClient } from '../src/features/case-management/helpers.ts'
 import { mapCaseFile } from '../src/pages/business-quest/helpers.ts'
+import { productionArrow } from './helpers/loadTypeScript.mjs'
+import ts from 'typescript'
 
 const types = [{ id: 5, name: '労災', children: [{ id: 51, name: '障害（補償）給付', parent_id: 5 }] }, { id: 9, name: 'その他' }]
 const valid = () => ({ ...newDraft(), client_id: '7', title: '相談案件', case_type_id: '51' })
@@ -82,9 +84,44 @@ test('new-case review code contains no checklist side effect and keeps mutations
   assert.match(dialog, /入力内容を確認/)
   assert.match(dialog, /登録内容の確認/)
   assert.match(dialog, /この内容で案件を作成/)
-  assert.match(dialog, /await caseApi\.createClient/)
+  assert.doesNotMatch(dialog, /caseApi\.createClient/, 'Client and case must be created atomically, without an orphan client write')
   assert.match(dialog, /await caseApi\.create\(createPayload/)
   for (const removed of ['案件状態', '優先度', '部署', '開始日', '目標完了日', '案件名', '案件番号', '依頼者備考', '案件の詳細設定', '詳細区分']) assert.doesNotMatch(dialog, new RegExp(removed))
   assert.doesNotMatch(dialog, /status:|priority:|department_id:|opened_at:|target_completion_at:/)
   assert.doesNotMatch(dialog, /stepLabels|setStep|次へ|戻る|toVietnameseFurigana/)
+})
+
+test('final confirmation submits one atomic nested client/case payload and rejects duplicate clicks', async () => {
+  const source = readFileSync(new URL('../src/features/case-management/NewCaseDialog.tsx', import.meta.url), 'utf8')
+  const bindings = { classification: 'normal', selectedClient: null, clientDraft: { name: ' Synthetic Client ', phone: '' }, dob: '',
+    normalizeBirthDate: value => value, title: 'Synthetic case', draft: { case_type_id: '5', summary: ' ', assigned_employee_id: '8' }, canAssign: false }
+  const payload = productionArrow(source, 'createPayload', bindings)
+  assert.deepEqual(payload(), { classification: 'normal', client: { name: 'Synthetic Client', phone: null, birth_date: null }, title: 'Synthetic case', case_type_id: 5, summary: null })
+  assert.deepEqual(productionArrow(source, 'createPayload', { ...bindings, selectedClient: { id: 7 } })(),
+    { classification: 'normal', client_id: 7, title: 'Synthetic case', case_type_id: 5, summary: null })
+  let release
+  const pending = new Promise(resolve => { release = resolve })
+  const calls = [], created = [], saving = []
+  const confirm = productionArrow(source, 'confirmCreate', {
+    submitLock: { current: false }, validateForReview: () => true, setSaving: value => saving.push(value), setError() {}, createPayload: payload,
+    caseApi: { async create(value) { calls.push(value); await pending; return { id: 12 } } },
+    onCreated: id => created.push(id), caseError: error => { throw error }, setReviewing() {}, showErrors() {},
+  })
+  assert.equal(calls.length, 0, 'Preparing/reviewing the payload must not write')
+  const first = confirm(); await confirm()
+  assert.equal(calls.length, 1); assert.deepEqual(calls[0], payload()); assert.deepEqual(created, [])
+  release(); await first
+  assert.deepEqual(created, [12]); assert.deepEqual(saving, [true, false])
+  const tree = ts.createSourceFile('NewCaseDialog.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const confirmations = []
+  const visit = node => {
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(tree) === 'ReviewDialog') {
+      confirmations.push(node.attributes.properties.find(attribute => attribute.name?.getText(tree) === 'onConfirm'))
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(tree)
+  assert.equal(confirmations.length, 1)
+  assert.equal(confirmations[0].initializer.expression.getText(tree), '() => void confirmCreate()')
+  assert.match(source, /if \(validateForReview\(\)\) setReviewing\(true\)/)
 })

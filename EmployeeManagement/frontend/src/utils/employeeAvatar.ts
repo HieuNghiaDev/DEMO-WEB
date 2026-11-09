@@ -8,7 +8,7 @@ export const getEmployeeAvatarImageUrl = (
 
   if (/^https?:\/\//i.test(avatarPath)) return avatarPath;
 
-  if (avatarPath.startsWith("/storage/")) {
+  if (avatarPath.startsWith("/storage/") || avatarPath.startsWith("/api/")) {
     return `${backendBaseUrl}${avatarPath}`;
   }
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Models\CaseFile;
 use App\Services\GoogleDriveProvisioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,9 +14,9 @@ use Throwable;
 
 class ClientController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return response()->json(['clients' => Client::query()->latest()->get()]);
+        return response()->json(['clients' => \App\Services\CaseAccessService::clientsVisibleTo(Client::query(), $request->user())->latest()->get()]);
     }
 
     public function store(Request $request, GoogleDriveProvisioningService $drive): JsonResponse
@@ -30,9 +31,12 @@ class ClientController extends Controller
 
     public function show(Client $client, GoogleDriveProvisioningService $drive): JsonResponse
     {
+        $hiddenContext = $client->caseFiles()->withTrashed()->whereNotIn('id',
+            \App\Services\CaseAccessService::contentScope(CaseFile::withTrashed(), request()->user())->select('case_files.id'))->exists();
         return response()->json([
-            'client' => $client->load(['caseFiles', 'employments']),
-            'drive' => $drive->clientState($client),
+            'client' => $client->load(['caseFiles' => fn ($cases) => $cases->visibleTo(request()->user()), 'employments']),
+            // A shared client folder can contain cases outside this actor's scope.
+            'drive' => $hiddenContext ? ['status' => 'restricted', 'url' => null] : $drive->clientState($client),
         ]);
     }
 

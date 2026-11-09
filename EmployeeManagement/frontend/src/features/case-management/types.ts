@@ -4,6 +4,7 @@ import type { AuthUser } from '../../contexts/AuthContext'
 export type CaseViewer = Pick<AuthUser, 'permission_names' | 'role_names'> | null
 
 export type CasePriority = 'low' | 'normal' | 'high' | 'critical'
+export type CaseClassification = '' | 'normal' | 'confidential'
 export type CaseTypeOption = { id: number; name: string; parent_id?: number | null; parent?: { id: number; name: string } | null; children?: CaseTypeOption[] }
 export type CaseClient = ClientProfile & { notes?: string | null }
 export type ClientEmploymentStatus = 'employed' | 'leave' | 'former' | 'unknown'

@@ -47,13 +47,88 @@ export type CaseDeadline = {
 
 export type CaseTask = {
   id: number
+  created_at?: string | null
+  updated_at?: string | null
+  case_document_id: number | null
   title: string
   description: string | null
-  status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+  status: 'unaccepted' | 'in_progress' | 'pending_review' | 'changes_requested' | 'completed' | 'cancelled'
+  status_label: string
   priority: 'low' | 'normal' | 'high' | 'critical'
   due_at: string | null
+  accepted_at: string | null
   completed_at: string | null
+  is_overdue: boolean
+  allowed_actions: {
+    legal_approval_pending?: boolean
+    can_accept: boolean
+    can_submit: boolean
+    can_reassign: boolean
+    can_change_deadline: boolean
+    can_approve: boolean
+    can_reject: boolean
+    can_cancel: boolean
+  }
   assigned_employee: { id: number; full_name: string; avatar_path?: string | null } | null
+  case_document: {
+    id: number
+    title: string
+    document_type: { id: number; code: string; name_ja: string; handling_type?: string | null } | null
+  } | null
+  latest_submission: CaseTaskSubmission | null
+  submissions: CaseTaskSubmission[]
+}
+
+export type CaseTaskSubmission = {
+  received_document_id?: number | null
+  storage_provider?: string
+  review_reason?: string | null
+  review_detail?: string | null
+  id: number
+  case_task_id?: number
+  case_document_id?: number
+  version: number
+  source_type: 'manual_upload' | 'auto_generated'
+  review_status: 'pending_review' | 'approved' | 'rejected'
+  external_url: string
+  filename: string
+  mime_type: string
+  submitted_at: string
+  reviewed_at: string | null
+  review_note: string | null
+  submitted_by: { id: number; name: string | null } | null
+  reviewed_by: { id: number; name: string | null } | null
+}
+
+export type CaseTaskEmployeeOption = {
+  id: number
+  full_name: string
+  avatar_path: string | null
+  office_id: number | null
+}
+
+export type CaseTaskRequirementOption = {
+  id: number
+  has_existing_task: boolean
+  title: string
+  category: string | null
+  document_type: { id: number; code: string; name_ja: string } | null
+  case_tasks: Array<Pick<CaseTask, 'id' | 'status' | 'due_at'> & {
+    assigned_employee: { id: number; full_name: string } | null
+  }>
+}
+
+export type CaseTaskOptionsResponse = {
+  required_documents: CaseTaskRequirementOption[]
+  employees: CaseTaskEmployeeOption[]
+}
+
+export type CreateCaseTaskBatchItem = {
+  case_document_id: number
+  assigned_employee_id: number
+  due_date: string
+  priority?: CaseTask['priority']
+  note?: string | null
 }
 
 export type CaseActivity = {
@@ -64,7 +139,7 @@ export type CaseActivity = {
   content: string | null
   occurred_at: string
   created_by_employee: { full_name: string } | null
-  metadata?: { event?: string; document_id?: number; changes?: Record<string, { before: unknown; after: unknown }> } | null
+  metadata?: { event?: string; document_id?: number; task_id?: number; case_task_id?: number; case_document_id?: number; changes?: Record<string, { before: unknown; after: unknown }> } | null
 }
 
 export type CaseWorkspace = Omit<CaseDetail, 'documents'> & {
@@ -95,7 +170,7 @@ export type WorkspaceSummary = {
 }
 
 export type WorkspaceResponse = { case_file: CaseWorkspace; summary: WorkspaceSummary }
-export type WorkspaceTab = 'overview' | 'collection' | 'documents' | 'tasks' | 'deadlines' | 'parties' | 'timeline'
+export type WorkspaceTab = 'overview' | 'collection' | 'documents' | 'tasks' | 'interpretation' | 'deadlines' | 'parties' | 'timeline'
 
 export type EntityKind = 'company' | 'organization' | 'person' | 'insurer' | 'police' | 'other'
 

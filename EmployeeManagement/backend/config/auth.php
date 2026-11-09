@@ -114,4 +114,16 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | New Employee Initial Password
+    |--------------------------------------------------------------------------
+    |
+    | Accounts created with an employee profile must change this temporary
+    | password immediately after their first successful login.
+    |
+    */
+
+    'employee_initial_password' => env('EMPLOYEE_INITIAL_PASSWORD', 'Themis@2026'),
+
 ];

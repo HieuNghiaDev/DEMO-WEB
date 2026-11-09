@@ -161,6 +161,25 @@ class AIOrchestratorTest extends TestCase
         $this->assertSame('I could not update that task. Please confirm the task ID.', $result['text']);
     }
 
+    public function test_task_permission_denial_reaches_the_model_without_task_data(): void
+    {
+        $skills = Mockery::mock(SkillLoader::class)->makePartial();
+        $skills->shouldReceive('load')->with('test_assistance')->andReturn([
+            'name' => 'test_assistance', 'trigger' => 'chat', 'tools' => ['query_case_tasks'],
+            'instructions' => 'Read authorized task data only.',
+        ]);
+        $this->app->instance(SkillLoader::class, $skills);
+        [$orchestrator, $client] = $this->orchestrator([
+            self::toolResponse('private_tasks', 'query_case_tasks', ['scope' => 'my']),
+            self::textResponse('タスクを閲覧する権限がありません。'),
+        ]);
+        $result = $orchestrator->runSkill('secretary', 'test_assistance', self::messages());
+        $toolResult = $client->calls[1]['messages'][2]['content'][0];
+        $this->assertSame(['error' => \App\AI\Tools\QueryCaseTasksTool::FORBIDDEN_SCOPE], json_decode($toolResult['content'], true));
+        $this->assertNull($result['tool_executions'][0]['output']);
+        $this->assertSame(\App\AI\Tools\QueryCaseTasksTool::FORBIDDEN_SCOPE, $result['tool_executions'][0]['error_message']);
+    }
+
     /** @return array{0: AIOrchestrator, 1: SequencedClaudeClient} */
     private function orchestrator(array $responses, ?PersonaLoader $personaLoader = null): array
     {

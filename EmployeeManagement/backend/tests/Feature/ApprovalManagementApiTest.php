@@ -111,6 +111,25 @@ class ApprovalManagementApiTest extends TestCase
         ]);
     }
 
+    public function test_ordinary_decision_notifies_the_requester_once_and_is_a_focusable_target(): void
+    {
+        $requester = $this->authorizedUser(['approval.view']);
+        $reviewer = $this->authorizedUser(['approval.approve']);
+        $approval = ApprovalRequest::create([
+            'action_type' => 'review_document', 'requested_by' => $requester->id, 'status' => 'pending',
+        ]);
+        ApprovalRequest::create(['action_type' => 'review_document', 'status' => 'pending']);
+        $this->actingAs($reviewer, 'sanctum')
+            ->patchJson("/api/approvals/{$approval->id}/approve")->assertOk();
+        $this->patchJson("/api/approvals/{$approval->id}/approve")->assertStatus(409);
+        $this->getJson('/api/notifications/center')->assertExactJson(['unread_count' => 0]);
+        $this->actingAs($requester, 'sanctum')->getJson('/api/notifications/center?details=1')->assertOk()
+            ->assertJsonPath('unread_count', 1)->assertJsonCount(1, 'notifications')
+            ->assertJsonPath('notifications.0.approval_id', $approval->id);
+        $this->getJson("/api/approvals?focus_id={$approval->id}")->assertOk()
+            ->assertJsonPath('approvals.0.id', $approval->id)->assertJsonPath('approvals.0.status', 'approved');
+    }
+
     public function test_processed_requests_cannot_transition_again(): void
     {
         $reviewer = $this->authorizedUser(['approval.approve']);

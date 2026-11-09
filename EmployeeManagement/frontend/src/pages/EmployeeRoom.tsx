@@ -5,11 +5,12 @@ import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import OfficeSwitcher from "../components/employee-room/OfficeSwitcher";
+import NotificationBell from "../components/employee-room/NotificationBell";
 import { getEmployeeAvatarImageUrl } from "../utils/employeeAvatar";
 import { UserAvatar } from "../components/ui";
 import { ButtonSpinner } from "../components/loading";
+import InternalChatPanel from "../features/internal-chat/InternalChatPanel";
 import {
-  Bell,
   Play,
   Briefcase,
   Coffee,
@@ -192,18 +193,6 @@ type NewNotification = Pick<
   UserNotification,
   "sourceKey" | "title" | "message" | "kind" | "assignedTaskId"
 >;
-
-type RemoteNotification = {
-  id: number;
-  kind: NotificationKind;
-  title: string;
-  message: string;
-  created_at: string;
-  read_at: string | null;
-  assigned_task_id: number | null;
-  approval_id: number | null;
-  target_path: string | null;
-};
 
 const loadStoredNotifications = (storageKey: string): UserNotification[] => {
   if (!storageKey) return [];
@@ -677,17 +666,9 @@ export default function EmployeeRoom() {
   const [selectedOffice, setSelectedOffice] = useState<OfficeId>(() =>
     resolveOfficeRoom(user?.employee?.office?.office_code),
   );
-  const [notifications, setNotifications] = useState<UserNotification[]>(() =>
+  const [, setNotifications] = useState<UserNotification[]>(() =>
     loadStoredNotifications(notificationStorageKey),
   );
-  const [isNotificationPanelOpen, setIsNotificationPanelOpen] =
-    useState(false);
-  const [isNotificationPanelClosing, setIsNotificationPanelClosing] =
-    useState(false);
-  const [isShowingAllNotifications, setIsShowingAllNotifications] =
-    useState(false);
-  const [isMarkingAllNotifications, setIsMarkingAllNotifications] =
-    useState(false);
   const [isStatusModalClosing, setIsStatusModalClosing] = useState(false);
   const [toastNotification, setToastNotification] =
     useState<UserNotification | null>(null);
@@ -701,18 +682,10 @@ export default function EmployeeRoom() {
   const [assignedTaskError, setAssignedTaskError] = useState("");
   const knownPendingTaskIdsRef = useRef<Set<number> | null>(null);
   const questAudioContextRef = useRef<AudioContext | null>(null);
-  const knownRemoteNotificationIdsRef = useRef<Set<number> | null>(null);
   const officeMapRef = useRef<HTMLDivElement | null>(null);
   const [isOfficeMapFullscreen, setIsOfficeMapFullscreen] = useState(false);
   const [officeMapOrientationHint, setOfficeMapOrientationHint] =
     useState(false);
-
-  const unreadNotificationCount = notifications.filter(
-    (notification) => !notification.isRead,
-  ).length;
-  const visibleNotifications = isShowingAllNotifications
-    ? notifications
-    : notifications.slice(0, 6);
 
   const statusLabels: Record<WorkStatus, string> = {
     working: "勤務中",
@@ -834,69 +807,6 @@ export default function EmployeeRoom() {
     [notificationStorageKey, saveNotifications],
   );
 
-  const loadRemoteNotifications = useCallback(async () => {
-    try {
-      const response = await api.get<{ notifications: RemoteNotification[] }>(
-        "/notifications",
-      );
-      const remoteNotifications = response.data.notifications.map(
-        (notification): UserNotification => ({
-          id: `server-${notification.id}`,
-          sourceKey: `server-${notification.id}`,
-          title: notification.title,
-          message: notification.message,
-          kind: notification.kind,
-          createdAt: notification.created_at,
-          isRead: notification.read_at !== null,
-          serverId: notification.id,
-          assignedTaskId: notification.assigned_task_id ?? undefined,
-          approvalId: notification.approval_id ?? undefined,
-          targetPath: notification.target_path ?? undefined,
-        }),
-      );
-
-      const unreadNotification = remoteNotifications.find(
-        (notification) => !notification.isRead,
-      );
-      const previousIds = knownRemoteNotificationIdsRef.current;
-      const newestNotification = previousIds
-        ? remoteNotifications.find(
-            (notification) =>
-              !notification.isRead &&
-              !previousIds.has(notification.serverId ?? -1),
-          )
-        : unreadNotification;
-
-      knownRemoteNotificationIdsRef.current = new Set(
-        remoteNotifications.flatMap((notification) =>
-          notification.serverId ? [notification.serverId] : [],
-        ),
-      );
-
-      setNotifications((current) => {
-        const localNotifications = current.filter(
-          (notification) => notification.serverId === undefined,
-        );
-        const nextNotifications = [...remoteNotifications, ...localNotifications]
-          .sort(
-            (left, right) =>
-              new Date(right.createdAt).getTime() -
-              new Date(left.createdAt).getTime(),
-          )
-          .slice(0, 50);
-
-        saveNotifications(nextNotifications);
-        return nextNotifications;
-      });
-
-      if (newestNotification) {
-        setToastNotification(newestNotification);
-      }
-    } catch {
-      // API không sẵn sàng thì vẫn giữ các thông báo đã lưu tại máy này.
-    }
-  }, [saveNotifications]);
-
   const playNewQuestSound = useCallback(() => {
     if (typeof window === "undefined" || !("AudioContext" in window)) {
       return;
@@ -929,10 +839,6 @@ export default function EmployeeRoom() {
   }, []);
 
   const markNotificationAsRead = (notificationId: string) => {
-    const notification = notifications.find(
-      (item) => item.id === notificationId,
-    );
-
     setNotifications((current) => {
       const nextNotifications = current.map((notification) =>
         notification.id === notificationId
@@ -944,95 +850,19 @@ export default function EmployeeRoom() {
       return nextNotifications;
     });
 
-    if (notification?.serverId) {
-      void api.patch(`/notifications/${notification.serverId}/read`).catch(() => {
-        void loadRemoteNotifications();
-      });
-    }
-  };
-
-  const markAllNotificationsAsRead = () => {
-    if (isMarkingAllNotifications) return;
-    setIsMarkingAllNotifications(true);
-    const hasUnreadRemoteNotifications = notifications.some(
-      (notification) => notification.serverId !== undefined && !notification.isRead,
-    );
-
-    setNotifications((current) => {
-      const nextNotifications = current.map((notification) => ({
-        ...notification,
-        isRead: true,
-      }));
-
-      saveNotifications(nextNotifications);
-      return nextNotifications;
-    });
-
-    if (hasUnreadRemoteNotifications) {
-      void api.patch("/notifications/read-all").catch(() => {
-        void loadRemoteNotifications();
-      });
-    }
-
-    window.setTimeout(() => setIsMarkingAllNotifications(false), 1700);
-  };
-
-  const closeNotificationPanel = () => {
-    if (isNotificationPanelClosing) return;
-    setIsNotificationPanelClosing(true);
-    window.setTimeout(() => {
-      setIsNotificationPanelOpen(false);
-      setIsNotificationPanelClosing(false);
-      setIsShowingAllNotifications(false);
-    }, 300);
-  };
-
-  const toggleNotificationPanel = () => {
-    if (isNotificationPanelOpen) {
-      closeNotificationPanel();
-      return;
-    }
-
-    setIsNotificationPanelClosing(false);
-    setIsNotificationPanelOpen(true);
   };
 
   const handleNotificationClick = (notification: UserNotification) => {
     markNotificationAsRead(notification.id);
-
-    if (notification.targetPath) {
-      closeNotificationPanel();
-      navigate(notification.targetPath);
-    }
+    if (notification.targetPath) navigate(notification.targetPath);
   };
 
   useEffect(() => {
-    // Khi đổi tài khoản, danh sách thông báo từ server phải được xem là mới.
-    // Nếu giữ ID của tài khoản trước, thông báo của nhân viên vừa đăng nhập
-    // có thể không hiện toast ngay lần đầu.
-    knownRemoteNotificationIdsRef.current = null;
     const loadId = window.setTimeout(() => {
       setNotifications(loadStoredNotifications(notificationStorageKey));
     }, 0);
-
     return () => window.clearTimeout(loadId);
   }, [notificationStorageKey]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const initialLoadId = window.setTimeout(() => {
-      void loadRemoteNotifications();
-    }, 0);
-    const intervalId = window.setInterval(() => {
-      void loadRemoteNotifications();
-    }, 20_000);
-
-    return () => {
-      window.clearTimeout(initialLoadId);
-      window.clearInterval(intervalId);
-    };
-  }, [loadRemoteNotifications, user]);
 
   // Nhân viên chỉ xuất hiện trong đúng phòng thuộc văn phòng của họ.
   // Các bản ghi cũ thiếu office_code vẫn tạm đặt ở THEMIS để không biến mất.
@@ -1938,151 +1768,7 @@ export default function EmployeeRoom() {
                 </span>
               </div>
 
-              {/* Notification bell */}
-              <div className="relative z-50">
-                <button
-                  type="button"
-                  aria-label="通知を表示"
-                  aria-expanded={isNotificationPanelOpen}
-                  onClick={toggleNotificationPanel}
-                  className={`workspace-bell-button relative flex h-9 w-9 items-center justify-center rounded-xl bg-white text-gray-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-gray-50 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700 ${
-                    isNotificationPanelOpen
-                      ? "is-open text-indigo-600 ring-indigo-100 dark:text-indigo-300 dark:ring-indigo-500/30"
-                      : ""
-                  }`}
-                >
-                  <Bell size={18} />
-
-                  {unreadNotificationCount > 0 && (
-                    <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white dark:ring-slate-900">
-                      {unreadNotificationCount > 99
-                        ? "99+"
-                        : unreadNotificationCount}
-                    </span>
-                  )}
-                </button>
-
-                {(isNotificationPanelOpen || isNotificationPanelClosing) && (
-                  <div className={`workspace-notification-panel fixed inset-x-3 top-28 z-50 w-auto overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl shadow-slate-900/15 sm:absolute sm:inset-x-auto sm:right-0 sm:top-11 sm:w-[min(24rem,calc(100vw-2rem))] ${isNotificationPanelClosing ? "is-closing" : ""}`}>
-                    <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3.5">
-                      <div>
-                        <h2 className="font-bold text-gray-800">通知</h2>
-                        <p className="text-[11px] text-gray-400">
-                          {unreadNotificationCount > 0
-                            ? `未読 ${unreadNotificationCount}件`
-                            : "新しい通知はありません"}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        {(unreadNotificationCount > 0 || isMarkingAllNotifications) && (
-                          <button
-                            type="button"
-                            onClick={markAllNotificationsAsRead}
-                            disabled={isMarkingAllNotifications}
-                            className={`workspace-mark-all inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-default sm:px-2.5 sm:text-xs ${isMarkingAllNotifications ? "is-complete" : ""}`}
-                          >
-                            {isMarkingAllNotifications && <CheckCircle2 size={13} />}
-                            {isMarkingAllNotifications ? "既読にしました" : "すべて既読"}
-                          </button>
-                        )}
-
-                        <button
-                          type="button"
-                          aria-label="通知パネルを閉じる"
-                          onClick={closeNotificationPanel}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-                        >
-                          <X size={17} />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="max-h-[26rem] overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="px-6 py-10 text-center">
-                          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100 text-gray-400">
-                            <Bell size={21} />
-                          </div>
-                          <p className="mt-3 text-sm font-semibold text-gray-500">
-                            通知はまだありません
-                          </p>
-                          <p className="mt-1 text-xs text-gray-400">
-                            勤怠状況や外出予定をお知らせします
-                          </p>
-                        </div>
-                      ) : (
-                        visibleNotifications.map((notification) => (
-                          <button
-                            key={notification.id}
-                            type="button"
-                            onClick={() => handleNotificationClick(notification)}
-                            className={`flex w-full gap-3 border-b border-gray-50 px-4 py-3 text-left transition last:border-b-0 hover:bg-gray-50 ${
-                              notification.isRead ? "bg-white" : "bg-indigo-50/45"
-                            }`}
-                          >
-                            <span
-                              className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-                                notification.kind === "success"
-                                  ? "bg-emerald-100 text-emerald-600"
-                                  : notification.kind === "warning"
-                                    ? "bg-amber-100 text-amber-600"
-                                    : notification.kind === "error"
-                                      ? "bg-red-100 text-red-600"
-                                      : "bg-blue-100 text-blue-600"
-                              }`}
-                            >
-                              {notification.kind === "success" ? (
-                                <CheckCircle2 size={18} />
-                              ) : notification.kind === "warning" ||
-                                notification.kind === "error" ? (
-                                <AlertTriangle size={18} />
-                              ) : (
-                                <Info size={18} />
-                              )}
-                            </span>
-
-                            <span className="min-w-0 flex-1">
-                              <span className="flex items-start justify-between gap-2">
-                                <span className="text-sm font-bold text-gray-800">
-                                  {notification.title}
-                                </span>
-                                {!notification.isRead && (
-                                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
-                                )}
-                              </span>
-                              <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">
-                                {notification.message}
-                              </span>
-                              <span className="mt-1.5 block text-[10px] text-gray-400">
-                                {formatNotificationTime(notification.createdAt)}
-                              </span>
-                            </span>
-                          </button>
-                        ))
-                      )}
-                      {notifications.length > 6 && (
-                        <button
-                          type="button"
-                          onClick={() => setIsShowingAllNotifications((current) => !current)}
-                          className="workspace-show-more flex w-full items-center justify-center gap-1.5 border-t border-gray-100 px-4 py-3 text-xs font-bold text-indigo-600 transition hover:bg-indigo-50"
-                        >
-                          {isShowingAllNotifications ? "閉じる" : `もっと見る（残り ${notifications.length - 6}件）`}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {(isNotificationPanelOpen || isNotificationPanelClosing) && (
-                <button
-                  type="button"
-                  aria-label="通知を閉じる"
-                  onClick={closeNotificationPanel}
-                  className="fixed inset-0 z-40 cursor-default"
-                />
-              )}
+              <NotificationBell />
 
             </div>
           </div>
@@ -2377,14 +2063,14 @@ export default function EmployeeRoom() {
                 </p>
 
                 {workStatus === "outside" && (
-                  <div className="mb-3 flex flex-col gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-3.5 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-orange-800">外出・出張を終了しますか？</p>
-                      <p className="mt-1 text-[11px] text-orange-700">帰社した今の時刻を実際の終了時刻として記録します。予定より早くても遅くても記録できます。</p>
-                      {ownActiveAttendance?.outside_expected_end && <p className="mt-1.5 text-[11px] font-semibold text-orange-700">帰社予定: {formatWorkTime(ownActiveAttendance.outside_expected_end)}</p>}
+                    <div className="mb-3 flex flex-col gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-3.5 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-xs font-bold text-orange-800">外出・出張を終了しますか？</p>
+                        <p className="mt-1 text-[11px] text-orange-700">帰社した今の時刻を実際の終了時刻として記録します。予定より早くても遅くても記録できます。</p>
+                        {ownActiveAttendance?.outside_expected_end && <p className="mt-1.5 text-[11px] font-semibold text-orange-700">帰社予定: {formatWorkTime(ownActiveAttendance.outside_expected_end)}</p>}
+                      </div>
+                      <button type="button" onClick={() => handleStatusRequest("working")} disabled={isSubmitting} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-orange-500/25 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"><CheckCircle2 size={15} />外出を終了・帰社</button>
                     </div>
-                    <button type="button" onClick={() => handleStatusRequest("working")} disabled={isSubmitting} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-orange-500/25 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"><CheckCircle2 size={15} />外出を終了・帰社</button>
-                  </div>
                 )}
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -2455,8 +2141,12 @@ export default function EmployeeRoom() {
 
         {/* Right Column */}
         <div className="flex flex-col gap-6">
-          {/* Assigned tasks */}
-          <div className="order-2 relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="order-1">
+            <InternalChatPanel variant="embedded" />
+          </div>
+
+          {/* Retained for future notification entry; hidden only in Employee Room. */}
+          <div hidden className="hidden order-3 relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <div className={`absolute left-0 right-0 top-0 h-1 ${myQuestTasks.length ? "bg-indigo-500" : "bg-slate-300 dark:bg-slate-700"}`} />
 
             <div className="mb-4">
@@ -2599,7 +2289,7 @@ export default function EmployeeRoom() {
                     <p className={`mt-0.5 text-xs font-bold ${color}`}>{value}</p>
                   </div>
                 ))}
-              </div>
+            </div>
 
             {timelineError && (
               <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-[10px] font-semibold text-red-600 dark:bg-red-500/10 dark:text-red-300">{timelineError}</p>
@@ -2638,7 +2328,7 @@ export default function EmployeeRoom() {
           )}
 
           {/* Member Activity Card — replaces AI card */}
-          <div className="order-1 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="order-2 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
             {/* Card header */}
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
@@ -2762,129 +2452,82 @@ export default function EmployeeRoom() {
       </div>
 
       {/* In-app notification toast */}
-      {toastNotification && (
+      {toastNotification && createPortal(
         <div
-          role="alert"
-          className={`quest-notification-toast fixed bottom-5 right-5 z-[120] w-[min(25rem,calc(100vw-2rem))] overflow-hidden rounded-[1.4rem] border bg-white/95 shadow-2xl shadow-slate-950/25 backdrop-blur-xl dark:bg-slate-900/95 ${
-            toastNotification.kind === "success"
-              ? "border-emerald-200/90"
-              : toastNotification.kind === "warning"
-                ? "border-amber-200/90"
-                : toastNotification.kind === "error"
-                  ? "border-red-200/90"
-                  : "border-indigo-200/90"
-          }`}
+          className="quest-notification-toast flex items-start gap-2.5 rounded-xl border p-3"
+          data-kind={toastNotification.kind}
         >
-          <div
-            className={`absolute inset-x-0 top-0 h-1 ${
-              toastNotification.kind === "success"
-                ? "bg-emerald-500"
-                : toastNotification.kind === "warning"
-                  ? "bg-amber-500"
-                  : toastNotification.kind === "error"
-                    ? "bg-red-500"
-                  : "bg-indigo-500"
-            }`}
-          />
-          <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3 dark:border-slate-800">
-            <div className="flex items-center gap-2">
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  toastNotification.kind === "success"
-                    ? "bg-emerald-500"
-                    : toastNotification.kind === "warning"
-                      ? "bg-amber-500"
-                      : toastNotification.kind === "error"
-                        ? "bg-red-500"
-                        : "bg-indigo-500"
-                }`}
-              />
-              <span className="text-[10px] font-extrabold tracking-[0.16em] text-slate-500 dark:text-slate-400">NEW NOTIFICATION</span>
-            </div>
-            <span className="rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">未読</span>
-          </div>
+          <span
+            className="quest-notification-toast-icon flex size-8 shrink-0 items-center justify-center rounded-lg"
+            aria-hidden="true"
+          >
+            {toastNotification.assignedTaskId ? (
+              <Briefcase size={20} />
+            ) : toastNotification.kind === "success" ? (
+              <CheckCircle2 size={20} />
+            ) : toastNotification.kind === "warning" ||
+              toastNotification.kind === "error" ? (
+              <AlertTriangle size={20} />
+            ) : (
+              <Info size={20} />
+            )}
+          </span>
 
-          <div className="flex items-start gap-3.5 px-5 pb-4 pt-4">
-            <span
-              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ring-4 ${
-                toastNotification.kind === "success"
-                  ? "bg-emerald-100 text-emerald-600 ring-emerald-50 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/5"
-                  : toastNotification.kind === "warning"
-                    ? "bg-amber-100 text-amber-600 ring-amber-50 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/5"
-                    : toastNotification.kind === "error"
-                      ? "bg-red-100 text-red-600 ring-red-50 dark:bg-red-500/15 dark:text-red-300 dark:ring-red-500/5"
-                      : "bg-indigo-100 text-indigo-600 ring-indigo-50 dark:bg-indigo-500/15 dark:text-indigo-300 dark:ring-indigo-500/5"
-              }`}
-            >
-              {toastNotification.assignedTaskId ? (
-                <Briefcase size={20} />
-              ) : toastNotification.kind === "success" ? (
-                <CheckCircle2 size={20} />
-              ) : toastNotification.kind === "warning" ||
-                toastNotification.kind === "error" ? (
-                <AlertTriangle size={20} />
-              ) : (
-                <Info size={20} />
-              )}
-            </span>
-
-            <div className="min-w-0 flex-1">
-              <p className="text-[15px] font-bold tracking-[-0.01em] text-slate-900 dark:text-white">
-                {toastNotification.title}
-              </p>
-              <p className="mt-1 text-sm leading-5 text-slate-500 dark:text-slate-300">
-                {toastNotification.message}
-              </p>
-
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
-                  {formatNotificationTime(toastNotification.createdAt)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleNotificationClick(toastNotification);
-                    setToastNotification(null);
-                  }}
-                  className="rounded-lg px-2 py-1 text-[11px] font-bold text-indigo-600 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-500/10"
-                >
-                  {toastNotification.targetPath ? "確認する" : "既読にする"}
-                </button>
-              </div>
-
-              {toastNotification.assignedTaskId &&
-                (() => {
-                  const task = assignedTasks.find(
-                    (item) => item.id === toastNotification.assignedTaskId,
-                  );
-                  const isUpdating = updatingAssignedTaskId === task?.id;
-
-                  if (!task || task.status !== "pending") return null;
-
-                  return (
-                    <button
-                      type="button"
-                      disabled={updatingAssignedTaskId !== null}
-                      onClick={() => void handleAcceptAssignedTask(task)}
-                      className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-bold text-white shadow-sm shadow-indigo-500/25 transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <CheckCircle2 size={15} />
-                      {isUpdating ? "確認中..." : "業務を確認して受け取る"}
-                    </button>
-                  );
-                })()}
+          <div className="min-w-0 flex-1">
+            <div role={toastNotification.kind === "error" ? "alert" : "status"} className="[overflow-wrap:anywhere]">
+              <p className="text-sm font-semibold">{toastNotification.title}</p>
+              <p className="mt-0.5 text-xs leading-5 text-tm-text-secondary">{toastNotification.message}</p>
             </div>
 
-            <button
-              type="button"
-              aria-label="通知を閉じる"
-              onClick={() => setToastNotification(null)}
-              className="-ml-1 -mt-1 rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-            >
-              <X size={16} />
-            </button>
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-x-2">
+              <span className="text-[11px] text-tm-text-secondary">
+                {formatNotificationTime(toastNotification.createdAt)}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  handleNotificationClick(toastNotification);
+                  setToastNotification(null);
+                }}
+                className="min-h-8 rounded-md px-2 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-500/10"
+              >
+                {toastNotification.targetPath ? "確認する" : "既読にする"}
+              </button>
+            </div>
+
+            {toastNotification.assignedTaskId &&
+              (() => {
+                const task = assignedTasks.find(
+                  (item) => item.id === toastNotification.assignedTaskId,
+                );
+                const isUpdating = updatingAssignedTaskId === task?.id;
+
+                if (!task || task.status !== "pending") return null;
+
+                return (
+                  <button
+                    type="button"
+                    disabled={updatingAssignedTaskId !== null}
+                    onClick={() => void handleAcceptAssignedTask(task)}
+                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-bold text-white shadow-sm shadow-indigo-500/25 transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <CheckCircle2 size={15} />
+                    {isUpdating ? "確認中..." : "業務を確認して受け取る"}
+                  </button>
+                );
+              })()}
           </div>
-        </div>
+
+          <button
+            type="button"
+            aria-label="通知を閉じる"
+            onClick={() => setToastNotification(null)}
+            className="flex size-9 shrink-0 items-center justify-center rounded-md text-tm-text-secondary transition hover:bg-[var(--tm-surface-hover)] hover:text-tm-text-primary"
+          >
+            <X size={16} />
+          </button>
+        </div>,
+        document.body,
       )}
 
       {/* Attendance Start Confirmation Modal */}

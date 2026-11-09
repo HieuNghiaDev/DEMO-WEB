@@ -13,7 +13,13 @@ export const documentCollectionApi = {
     return (await api.get<CollectionListResponse>(collectionPath(caseId), { params, signal })).data
   },
   async detail(caseId: number, itemId: number, signal?: AbortSignal) {
-    return (await api.get<{ document: CollectionDetail }>(`${collectionPath(caseId)}/${itemId}`, { signal })).data.document
+    const document = (await api.get<{ document: CollectionDetail }>(`${collectionPath(caseId)}/${itemId}`, { signal })).data.document
+    // Fail through the existing drawer feedback instead of mounting with an
+    // incomplete list/detail contract (for example an older deployed API).
+    if (!document?.workflow_state || !Array.isArray(document.generated_versions) || !Array.isArray(document.received_documents)) {
+      throw new Error('必要資料の詳細を取得できませんでした。再読み込みしてください。')
+    }
+    return document
   },
   async update(caseId: number, itemId: number, payload: CollectionPatch) {
     return (await api.patch<{ document: CollectionDetail }>(`${collectionPath(caseId)}/${itemId}`, payload)).data.document
@@ -22,10 +28,15 @@ export const documentCollectionApi = {
     return (await api.patch<BulkNecessityResponse>(`${collectionPath(caseId)}/bulk-necessity`, payload)).data
   },
   async registerReceivedDocument(caseId: number, itemId: number, formData: FormData) {
-    return (await api.post<{ document: CollectionDetail }>(`${collectionPath(caseId)}/${itemId}/received-documents`, formData)).data.document
+    // Suppress the shared JSON default so the browser sends the file binary
+    // with its own multipart boundary, as in the Task upload path.
+    return (await api.post<{ document: CollectionDetail }>(`${collectionPath(caseId)}/${itemId}/received-documents`, formData, { headers: { 'Content-Type': null } })).data.document
   },
-  async downloadReceivedDocument(caseId: number, itemId: number, receivedDocumentId: number) {
-    return (await api.get<Blob>(`${collectionPath(caseId)}/${itemId}/received-documents/${receivedDocumentId}/download`, { responseType: 'blob' })).data
+  async reviewFile(caseId: number, itemId: number, payload: { source: 'received' | 'task_submission'; file_id: number; action: 'confirm' | 'return'; reason?: string; detail?: string }) {
+    return (await api.post<{ document: CollectionDetail }>(`${collectionPath(caseId)}/${itemId}/file-review`, payload)).data.document
+  },
+  async downloadReceivedDocument(caseId: number, itemId: number, receivedDocumentId: number, signal?: AbortSignal) {
+    return (await api.get<Blob>(`${collectionPath(caseId)}/${itemId}/received-documents/${receivedDocumentId}/download`, { responseType: 'blob', signal })).data
   },
   async employees(signal?: AbortSignal): Promise<EmployeeOption[]> {
     const { data } = await api.get<{ employees: Array<{ id: number; full_name: string }> }>('/organization', { signal })

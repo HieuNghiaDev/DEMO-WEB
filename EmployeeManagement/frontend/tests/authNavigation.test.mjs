@@ -9,7 +9,7 @@ test('does not resume either password form after reauthentication', () => {
 })
 
 test('normalizes transient routes with search, hash, case or trailing slash', () => {
-  for (const pathname of ['/login/', '/LOGIN', '/change-password?from=reset', '/system/password/', '/SYSTEM/PASSWORD', '/system/password#form']) {
+  for (const pathname of ['/login/', '/LOGIN', '/activate-account', '/ACTIVATE-ACCOUNT?ignored=1', '/change-password?from=reset', '/system/password/', '/SYSTEM/PASSWORD', '/system/password#form']) {
     assert.equal(getLoginDestination(pathname), '/')
   }
 })

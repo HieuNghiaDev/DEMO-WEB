@@ -11,12 +11,12 @@ export const statusMap: Record<ApiCaseFile['status'], CaseStatus> = {
 }
 
 export const statusConfig: Record<CaseStatus, { label: string; dot: string; badge: string }> = {
-  received: { label: '受付済み', dot: 'bg-cyan-500', badge: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-400/25 dark:bg-cyan-400/10 dark:text-cyan-300' },
-  reviewing: { label: '確認中', dot: 'bg-amber-500', badge: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/25 dark:bg-amber-400/10 dark:text-amber-300' },
-  in_progress: { label: '対応中', dot: 'bg-sky-500', badge: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-400/25 dark:bg-sky-400/10 dark:text-sky-300' },
-  waiting: { label: '書類待ち', dot: 'bg-orange-500', badge: 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-400/25 dark:bg-orange-400/10 dark:text-orange-300' },
-  waiting_payment: { label: '支払待ち', dot: 'bg-violet-500', badge: 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/25 dark:bg-violet-400/10 dark:text-violet-300' },
-  completed: { label: '完了', dot: 'bg-emerald-500', badge: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-300' },
+  received: { label: '受付済み', dot: 'bg-cyan-600', badge: 'border-cyan-400 bg-cyan-100 text-cyan-800 dark:border-cyan-400/45 dark:bg-cyan-400/20 dark:text-cyan-200' },
+  reviewing: { label: '確認中', dot: 'bg-amber-600', badge: 'border-amber-400 bg-amber-100 text-amber-800 dark:border-amber-400/45 dark:bg-amber-400/20 dark:text-amber-200' },
+  in_progress: { label: '対応中', dot: 'bg-sky-600', badge: 'border-sky-400 bg-sky-100 text-sky-800 dark:border-sky-400/45 dark:bg-sky-400/20 dark:text-sky-200' },
+  waiting: { label: '書類待ち', dot: 'bg-orange-600', badge: 'border-orange-400 bg-orange-100 text-orange-800 dark:border-orange-400/45 dark:bg-orange-400/20 dark:text-orange-200' },
+  waiting_payment: { label: '支払待ち', dot: 'bg-violet-600', badge: 'border-violet-400 bg-violet-100 text-violet-800 dark:border-violet-400/45 dark:bg-violet-400/20 dark:text-violet-200' },
+  completed: { label: '完了', dot: 'bg-emerald-600', badge: 'border-emerald-400 bg-emerald-100 text-emerald-800 dark:border-emerald-400/45 dark:bg-emerald-400/20 dark:text-emerald-200' },
 }
 
 export const caseStatusOptions: Array<{ value: ApiCaseFile['status']; label: string }> = [

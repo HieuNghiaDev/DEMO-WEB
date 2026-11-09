@@ -7,7 +7,7 @@ use App\Models\CaseType;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\CaseTypeSeeder;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use RuntimeException;
@@ -28,6 +28,7 @@ class CaseIntakeWorkspacePersistenceTest extends TestCase
     private function createCase(User $user, string $name = 'Client', string $caseType = '労災'): array
     {
         return $this->actingAs($user, 'sanctum')->postJson('/api/case-files', [
+            'classification' => 'normal',
             'title' => "$name / $caseType",
             'case_type_id' => CaseType::query()->where('name', $caseType)->sole()->id,
             'client' => ['name' => $name, 'client_type' => 'individual'],
@@ -243,6 +244,7 @@ class CaseIntakeWorkspacePersistenceTest extends TestCase
         $this->seed([RolePermissionSeeder::class, CaseTypeSeeder::class]);
         $user = $this->userWithRole('level_5');
         $case = $this->actingAs($user, 'sanctum')->postJson('/api/case-files', [
+            'classification' => 'normal',
             'title' => 'Date test', 'case_type_id' => CaseType::query()->where('name', '労災')->sole()->id,
             'summary' => '相談メモ',
             'client' => ['name' => 'Birth Date Client', 'birth_date' => '1998-04-12'],
@@ -259,6 +261,7 @@ class CaseIntakeWorkspacePersistenceTest extends TestCase
 
         try {
             $this->withoutExceptionHandling()->actingAs($user, 'sanctum')->postJson('/api/case-files', [
+                'classification' => 'normal',
                 'title' => 'Rollback test', 'case_type_id' => CaseType::query()->where('name', '労災')->sole()->id,
                 'client' => ['name' => 'Rollback Client', 'birth_date' => '1998-04-12'],
             ]);

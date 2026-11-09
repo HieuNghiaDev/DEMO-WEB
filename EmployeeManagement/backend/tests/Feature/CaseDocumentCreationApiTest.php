@@ -23,7 +23,7 @@ use App\Services\GoogleDriveProvisioningService;
 use App\Services\GoogleDriveService;
 use Database\Seeders\DocumentGenerationTemplateSeeder;
 use Database\Seeders\DocumentTypeMasterSeeder;
-use Database\Seeders\RolePermissionSeeder;
+use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -215,7 +215,7 @@ class CaseDocumentCreationApiTest extends TestCase
         $this->patchJson($this->url().'/draft', ['draft_data' => $this->validDraft()])->assertOk();
         $versionTwo = DocumentGenerationTemplate::where('version', 2)->sole();
         $this->postJson($this->url().'/review', ['draft_data' => $this->validDraft()])->assertOk();
-        $this->postJson($this->url().'/approve')->assertOk();
+        $this->historicalApprovedFixture();
         DocumentGenerationTemplate::create([
             'document_type_id' => $versionTwo->document_type_id, 'version' => 3,
             'renderer_type' => 'generic_legal_document', 'format' => 'html',
@@ -300,7 +300,7 @@ class CaseDocumentCreationApiTest extends TestCase
     {
         $v1 = $this->validDraft(['notes' => '承認済み v1']);
         $this->postJson($this->url().'/review', ['draft_data' => $v1])->assertOk();
-        $this->postJson($this->url().'/approve')->assertOk();
+        $this->historicalApprovedFixture();
         $approvedV1 = CaseGeneratedDocument::sole()->getAttributes();
 
         $this->postJson($this->url().'/revision')->assertOk()
@@ -318,7 +318,7 @@ class CaseDocumentCreationApiTest extends TestCase
         $v2 = $this->validDraft(['notes' => '修正済み v2']);
         $this->patchJson($this->url().'/draft', ['draft_data' => $v2])->assertOk();
         $this->postJson($this->url().'/review', ['draft_data' => $v2])->assertOk();
-        $this->postJson($this->url().'/approve')->assertOk();
+        $this->historicalApprovedFixture();
 
         $this->getJson($this->url().'?version=1')->assertOk()
             ->assertJsonPath('document.version', 1)
@@ -459,7 +459,7 @@ class CaseDocumentCreationApiTest extends TestCase
     {
         $draft = $this->validDraft(['client_name' => '../山田/太郎:確認', 'notes' => '日本語の保存内容です。']);
         $this->postJson($this->url().'/review', ['draft_data' => $draft])->assertOk();
-        $this->postJson($this->url().'/approve')->assertOk();
+        $this->historicalApprovedFixture();
         $before = CaseGeneratedDocument::sole()->getAttributes();
         $this->case->client->update(['name' => 'LIVE CLIENT CHANGED']);
         $this->case->update(['title' => 'LIVE CASE CHANGED']);
@@ -511,7 +511,7 @@ class CaseDocumentCreationApiTest extends TestCase
     public function test_pdf_uses_pinned_inactive_version_and_rejects_unsupported_renderer(): void
     {
         $this->postJson($this->url().'/review', ['draft_data' => $this->validDraft()])->assertOk();
-        $this->postJson($this->url().'/approve')->assertOk();
+        $this->historicalApprovedFixture();
         $v2 = DocumentGenerationTemplate::where('version', 2)->sole();
         $v2->update(['is_active' => false]);
         DocumentGenerationTemplate::create([
@@ -566,11 +566,23 @@ class CaseDocumentCreationApiTest extends TestCase
         ], $overrides);
     }
 
+    /** Arrange a historical snapshot, NOT an approval API bypass or proof of successful legal finalization. */
+    private function historicalApprovedFixture(): CaseGeneratedDocument
+    {
+        $this->assertSame('sqlite', config('database.default'));
+        $this->assertSame(':memory:', config('database.connections.sqlite.database'));
+        $instance = $this->document->generatedDocuments()->latest('version')->firstOrFail();
+        $this->assertSame('review', $instance->workflow_status);
+        $instance->forceFill(['workflow_status' => 'approved', 'approved_data' => $instance->draft_data,
+            'approved_at' => now(), 'approved_by' => $this->user->id])->save();
+        return $instance->fresh();
+    }
+
     public function test_drive_upload_reuses_pdf_snapshot_and_stores_one_artifact_across_repeated_requests(): void
     {
         $draft = $this->validDraft();
         $this->postJson($this->url().'/review', ['draft_data' => $draft])->assertOk();
-        $this->postJson($this->url().'/approve')->assertOk();
+        $this->historicalApprovedFixture();
         $this->case->client->update(['name' => 'Changed live name']);
         $v2 = DocumentGenerationTemplate::where('version', 2)->sole();
         DocumentGenerationTemplate::create(['document_type_id' => $v2->document_type_id, 'version' => 3, 'renderer_type' => 'unsupported', 'format' => 'html', 'template_body' => 'NEW', 'field_schema' => [], 'is_active' => true]);
@@ -596,10 +608,10 @@ class CaseDocumentCreationApiTest extends TestCase
     public function test_each_approved_revision_is_saved_as_a_separate_drive_artifact(): void
     {
         $this->postJson($this->url().'/review', ['draft_data' => $this->validDraft(['notes' => 'v1'])])->assertOk();
-        $this->postJson($this->url().'/approve')->assertOk();
+        $this->historicalApprovedFixture();
         $this->postJson($this->url().'/revision')->assertOk();
         $this->postJson($this->url().'/review', ['draft_data' => $this->validDraft(['notes' => 'v2'])])->assertOk();
-        $this->postJson($this->url().'/approve')->assertOk();
+        $this->historicalApprovedFixture();
 
         $pdf = Mockery::mock(DocumentPdfRenderer::class)->makePartial();
         $pdf->shouldReceive('render')->twice()->andReturnUsing(fn (CaseGeneratedDocument $instance) => '%PDF-v'.$instance->version);
@@ -655,7 +667,7 @@ class CaseDocumentCreationApiTest extends TestCase
     {
         config(['services.google_drive.write_enabled' => false]);
         $this->postJson($this->url().'/review', ['draft_data' => $this->validDraft()])->assertOk();
-        $this->postJson($this->url().'/approve')->assertOk();
+        $this->historicalApprovedFixture();
         $this->getJson($this->url())->assertOk()->assertJsonPath('drive.available', false)->assertJsonPath('drive.artifact', null);
         $this->postJson($this->url().'/google-drive')->assertStatus(503);
         $this->assertDatabaseCount('generated_document_artifacts', 0);
@@ -665,7 +677,7 @@ class CaseDocumentCreationApiTest extends TestCase
     public function test_failed_drive_upload_has_no_artifact(): void
     {
         $this->postJson($this->url().'/review', ['draft_data' => $this->validDraft()])->assertOk();
-        $this->postJson($this->url().'/approve')->assertOk();
+        $this->historicalApprovedFixture();
         $drive = Mockery::mock(GoogleDriveService::class);
         $drive->shouldReceive('canWriteGeneratedDocuments')->andReturn(true);
         $drive->shouldReceive('storeGeneratedPdf')->once()->andThrow(new GeneratedDocumentDriveException('Upload failed'));
@@ -678,7 +690,7 @@ class CaseDocumentCreationApiTest extends TestCase
     public function test_pdf_failure_does_not_call_drive_upload(): void
     {
         $this->postJson($this->url().'/review', ['draft_data' => $this->validDraft()])->assertOk();
-        $this->postJson($this->url().'/approve')->assertOk();
+        $this->historicalApprovedFixture();
         $drive = Mockery::mock(GoogleDriveService::class);
         $drive->shouldReceive('canWriteGeneratedDocuments')->andReturn(true);
         $drive->shouldNotReceive('storeGeneratedPdf');
@@ -691,7 +703,7 @@ class CaseDocumentCreationApiTest extends TestCase
     public function test_drive_success_followed_by_database_failure_reports_recovery_without_success(): void
     {
         $this->postJson($this->url().'/review', ['draft_data' => $this->validDraft()])->assertOk();
-        $this->postJson($this->url().'/approve')->assertOk();
+        $this->historicalApprovedFixture();
         $drive = Mockery::mock(GoogleDriveService::class);
         $drive->shouldReceive('canWriteGeneratedDocuments')->andReturn(true);
         $drive->shouldReceive('storeGeneratedPdf')->once()->andReturn($this->remoteArtifact());

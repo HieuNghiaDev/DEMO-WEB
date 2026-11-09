@@ -1,0 +1,92 @@
+.workspace-tools-dock {
+  position: fixed;
+  z-index: 70;
+  inset-inline-end: calc(16px + env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border: 1px solid var(--tm-border);
+  border-radius: 16px;
+  background: var(--tm-surface-elevated);
+  box-shadow: 0 3px 12px rgb(2 6 23 / 0.12);
+}
+
+.workspace-tools-dock:not(:has(.workspace-tools-dock-action)) {
+  display: none;
+}
+
+body.themis-drawer-open .workspace-tools-dock {
+  visibility: hidden;
+}
+
+.workspace-tools-dock .workspace-tools-dock-action {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: auto !important;
+  min-width: 44px;
+  height: 44px !important;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--tm-text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  transform: none;
+  transition: background-color 150ms ease;
+}
+
+.workspace-tools-dock .workspace-tools-dock-action:hover,
+.workspace-tools-dock .workspace-tools-dock-action:active {
+  background: var(--tm-surface-hover);
+  transform: none;
+}
+
+.workspace-tools-dock .workspace-tools-dock-action:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+
+.workspace-tools-dock .internal-chat-launcher-icon {
+  color: var(--brand);
+}
+
+.workspace-tools-dock .themis-ai-launcher--docked {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+}
+
+.workspace-tools-dock .themis-ai-launcher--docked .themis-head {
+  width: 29px !important;
+  height: 29px !important;
+  filter: none;
+}
+
+.workspace-tools-dock .themis-ai-launcher-online {
+  right: auto;
+  left: 31px;
+  bottom: 9px;
+  border-color: var(--tm-surface-elevated);
+  box-shadow: none;
+}
+
+@media (min-width: 768px) {
+  .workspace-tools-dock {
+    inset-inline-end: calc(24px + env(safe-area-inset-right));
+    bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-tools-dock .workspace-tools-dock-action {
+    transition: none;
+  }
+}

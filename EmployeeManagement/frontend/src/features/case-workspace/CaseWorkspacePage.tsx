@@ -2,15 +2,18 @@ import { Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState } fr
 import { createPortal } from 'react-dom'
 import axios from 'axios'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Building2, CheckCircle2,
-  Clock3, Mail, MessageSquareText, MoreHorizontal, Phone,
+  Clock3, Mail, MoreHorizontal, Phone,
   Plus, RefreshCw, Shield, ShieldCheck, Trash2, UserRound, Users, X,
-  CalendarDays, Folder, ChevronRight,
+  CalendarDays, Folder, ChevronRight, Languages,
   LayoutGrid, ClipboardList, SquareCheckBig, History
 } from 'lucide-react'
 
 import { useAuth } from '../../contexts/AuthContext'
+import { Button } from '../../components/ui/Button'
+import { reviewActionError } from '../document-creation/legalApproval'
 import i18n from '../../i18n'
 import { ButtonSpinner } from '../../components/loading'
 import type { CaseViewer } from '../case-management/types'
@@ -20,6 +23,9 @@ import RelatedEntityDrawer from './RelatedEntityDrawer'
 import IncidentSummaryEditDrawer from './IncidentSummaryEditDrawer'
 import { RelatedEntityAddDrawer } from './RelatedEntityAddDrawer'
 import ClientEditDrawer from './ClientEditDrawer'
+import CreateCaseTasksDrawer from './CreateCaseTasksDrawer'
+import TasksPanel from './TasksPanel'
+import CaseHistoryPanel from './CaseHistoryPanel'
 import {
   WorkspaceHeader,
   IncidentSummaryCard,
@@ -29,14 +35,15 @@ import {
   buildRelatedEntities,
 } from './CaseWorkspaceComponents'
 import type {
-  CaseActivity, CaseDeadline, CaseParty, CaseTask, CaseWorkspace,
+  CaseDeadline, CaseParty, CaseTask, CaseWorkspace,
   RelatedEntity, WorkspaceDocument, WorkspaceResponse, WorkspaceSummary, WorkspaceTab,
 } from './types'
 
-type DialogKind = 'task' | 'deadline' | 'party' | 'activity'
-type Props = { caseId: number; user?: CaseViewer; onBack: () => void; onEdit?: () => void; initialNotice?: string; initialTab?: WorkspaceTab; initialCollectionItemId?: number }
+type DialogKind = 'deadline' | 'party'
+type Props = { caseId: number; user?: CaseViewer; onBack: () => void; onEdit?: () => void; initialNotice?: string; initialTab?: WorkspaceTab; initialCollectionItemId?: number; initialTaskId?: number; initialDocumentId?: number }
 const DocumentCollectionPanel = lazy(() => import('../document-collection/DocumentCollectionPanel'))
 const RequiredDocumentsPanel = lazy(() => import('../document-collection/components/RequiredDocumentsPanel'))
+const InterpretationPanel = lazy(() => import('../interpretation/InterpretationPanel'))
 
 const inputClass = 'h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 dark:border-tm-border dark:bg-tm-control dark:text-[var(--tm-text-primary)] dark:placeholder:text-[var(--tm-text-muted)] dark:focus:border-indigo-400'
 const textareaClass = `${inputClass} min-h-24 py-2`
@@ -48,7 +55,7 @@ const tabs: Array<{ id: WorkspaceTab; icon: typeof LayoutGrid }> = [
   { id: 'collection', icon: ClipboardList },
   { id: 'documents', icon: Folder },
   { id: 'tasks', icon: SquareCheckBig },
-  { id: 'deadlines', icon: CalendarDays },
+  { id: 'interpretation', icon: Languages },
   { id: 'parties', icon: Users },
   { id: 'timeline', icon: History },
 ]
@@ -58,11 +65,21 @@ export function CaseWorkspaceView(props: Props) {
 }
 
 export default function CaseWorkspacePage(props: Props) {
-  const { caseId, onBack, onEdit: _onEdit, initialNotice, initialTab, initialCollectionItemId } = props
+  const { caseId, onBack, initialNotice, initialTab, initialCollectionItemId, initialTaskId, initialDocumentId } = props
   const { user } = useAuth()
+  const navigate = useNavigate()
   const { t } = useTranslation()
-  const [tab, setTab] = useState<WorkspaceTab>(initialTab ?? 'overview')
+  const [tab, selectTab] = useState<WorkspaceTab>(initialTab ?? 'overview')
+  const [documentToOpen, setDocumentToOpen] = useState(initialDocumentId)
+  const setTab = (next: WorkspaceTab) => {
+    if (next !== 'documents') setDocumentToOpen(undefined)
+    selectTab(next)
+  }
   const [data, setData] = useState<WorkspaceResponse | null>(null)
+  const [loadedScope, setLoadedScope] = useState('')
+  const requestRevision = useRef(0)
+  const workspaceScope = `${caseId}:${user?.id ?? 'signed-out'}`
+  const activeScope = useRef(workspaceScope)
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -74,8 +91,17 @@ export default function CaseWorkspacePage(props: Props) {
   const [editingEntity, setEditingEntity] = useState<RelatedEntity | null>(null)
   const [isIncidentDrawerOpen, setIsIncidentDrawerOpen] = useState(false)
   const [isClientEditDrawerOpen, setIsClientEditDrawerOpen] = useState(false)
+  const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false)
+  const [taskDrawerDocumentIds, setTaskDrawerDocumentIds] = useState<number[]>([])
+  const [taskToOpen, setTaskToOpen] = useState<number | null>(initialTaskId ?? null)
   const canUpdate = user?.permission_names.includes('case.update') ?? false
-  const canReviewDocuments = canUpdate && (user?.role_names.some(role => role === 'level_4' || role === 'level_5') ?? false)
+  const canManageTasks = user?.permission_names.includes('task.manage') ?? false
+  const canReviewTasks = user?.permission_names.includes('task.review') ?? false
+  const canReviewDocuments = canUpdate && (user?.permission_names.includes('task.review') ?? false)
+  const openTaskDrawer = (documentIds: number[] = []) => {
+    setTaskDrawerDocumentIds(documentIds)
+    setIsTaskDrawerOpen(true)
+  }
 
   const openEntityDrawer = (entity: RelatedEntity) => {
     setSelectedEntity(entity)
@@ -83,52 +109,87 @@ export default function CaseWorkspacePage(props: Props) {
   }
 
   const reload = async (quiet = false) => {
+    if (activeScope.current !== workspaceScope) return false
+    const revision = ++requestRevision.current
     if (!quiet) setLoading(true)
     setError(null)
     try {
-      setData(await caseWorkspaceApi.show(caseId))
+      const response = await caseWorkspaceApi.show(caseId)
+      if (revision !== requestRevision.current) return false
+      setData(response)
+      setLoadedScope(workspaceScope)
+      return true
     } catch (requestError) {
+      if (revision !== requestRevision.current) return false
+      if (loadedScope !== workspaceScope || (axios.isAxiosError(requestError) && [401, 403, 404].includes(requestError.response?.status ?? 0))) setData(null)
+      setLoadedScope(workspaceScope)
       setError(apiError(requestError, t('cases.workspace.loadFailed')))
+      return false
     } finally {
-      setLoading(false)
+      if (revision === requestRevision.current) setLoading(false)
     }
   }
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void reload() }, 0)
-    return () => window.clearTimeout(timer)
-    // `reload` intentionally reads the current case id; changing case id remounts this workspace.
+    activeScope.current = workspaceScope
+    const timer = window.setTimeout(() => { setWorking(false); void reload() }, 0)
+    return () => { window.clearTimeout(timer); requestRevision.current += 1 }
+    // Scope refreshes prevent a newly signed-in account seeing the previous account's tasks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [caseId])
+  }, [workspaceScope])
 
-  const run = async (action: () => Promise<unknown>, success?: string) => {
+  const run = async (action: () => Promise<unknown>, success?: string, contextualError = false, reviewError = false) => {
+    const actionScope = workspaceScope
     setWorking(true)
     setError(null)
     setNotice(null)
     try {
       await action()
+      if (activeScope.current !== actionScope) return false
       if (success) setNotice(success)
       setDialog(null)
       await reload(true)
+      return true
     } catch (requestError) {
-      setError(apiError(requestError, '処理を完了できませんでした。入力内容を確認してください。'))
+      if (activeScope.current !== actionScope) return false
+      if (contextualError) throw requestError
+      const message = apiError(requestError, '処理を完了できませんでした。入力内容を確認してください。')
+      setError(reviewError ? reviewActionError(requestError, message) : message)
+      return false
     } finally {
-      setWorking(false)
+      if (activeScope.current === actionScope) setWorking(false)
     }
   }
 
   const clearNotice = useCallback(() => setNotice(null), [])
 
-  if (loading) return <WorkspaceSkeleton onBack={onBack}/>
+  const runTask = (taskId: number, action: () => Promise<CaseTask | null | { task: CaseTask } | void>, success: string, contextualError = false, reviewError = false) => run(async () => {
+    const result = await action()
+    if (activeScope.current !== workspaceScope) return
+    if (result === undefined) return
+    const updated = result && 'task' in result ? result.task : result
+    // Apply only the server-confirmed task response. Keep the full workspace
+    // refresh so linked required-document state and history also stay current.
+    setData(current => current ? { ...current, case_file: { ...current.case_file, case_tasks: updated
+      ? current.case_file.case_tasks.map(task => task.id === taskId ? { ...task, ...updated } : task)
+      : current.case_file.case_tasks.filter(task => task.id !== taskId) } } : current)
+  }, success, contextualError, reviewError)
+
+  if (loading || loadedScope !== workspaceScope) return <WorkspaceSkeleton onBack={onBack} taskView={tab === 'tasks'}/>
   if (!data) return <WorkspaceFailure error={error} onBack={onBack} onRetry={() => void reload()}/>
 
   const caseFile = data.case_file
+  const openRelatedTask = (taskId: number) => {
+    if (!caseFile.case_tasks.some(task => task.id === taskId)) return
+    setTaskToOpen(taskId)
+    setTab('tasks')
+  }
   const dialogTitle: Record<DialogKind, string> = {
-    task: 'タスクを追加', deadline: '期限を追加',
-    party: '関係者を追加', activity: '連絡・イベントを記録',
+    deadline: '期限を追加',
+    party: '関係者を追加',
   }
 
-  return <main className="dc-preview cm-page">
+  return <main className="dc-preview cm-page cm-case-detail">
     <div className="cm-ws-backbar">
       <button type="button" onClick={onBack} className="cm-ws-backlink" aria-label="戻る">
         <ArrowLeft size={17} className="cm-ws-backlink-icon" />
@@ -149,33 +210,35 @@ export default function CaseWorkspacePage(props: Props) {
         onSelectEntity={openEntityDrawer}
       />
 
-      <div className="cm-ws-tab-strip">
-        <nav className="cm-command-rail cm-ws-tab-rail" aria-label={t('cases.workspace.ariaLabel')} role="tablist">
-          {tabs.map(({ id, icon: Icon }, index) => {
-            const isActive = tab === id
-            const showSeparator = index > 0 && !isActive && tab !== tabs[index - 1].id
-            return (
-              <Fragment key={id}>
-                {showSeparator && <span className="cm-tab-separator" aria-hidden="true" />}
-                <button
-                  type="button"
-                  role="tab"
-                  className={`cm-rail-tab cm-ws-tab ${isActive ? 'is-active is-selected' : ''}`}
-                  onClick={() => setTab(id)}
-                  aria-selected={isActive}
-                  aria-current={isActive ? 'page' : undefined}
-                >
-                  <Icon size={19} className="cm-rail-icon cm-ws-tab-icon"/>
-                  <span className="cm-ws-tab-label">{t(`cases.tabs.${id}`)}</span>
-                  {isActive && <span className="cm-ws-tab-indicator" aria-hidden="true" />}
-                </button>
-              </Fragment>
-            )
-          })}
-        </nav>
-      </div>
+      <section className="cm-ws-section cm-ws-navigation" aria-label="案件ナビゲーション">
+        <div className="cm-ws-tab-strip">
+          <nav className="cm-command-rail cm-ws-tab-rail" aria-label={t('cases.workspace.ariaLabel')} role="tablist">
+            {tabs.map(({ id, icon: Icon }, index) => {
+              const isActive = tab === id
+              const showSeparator = index > 0 && !isActive && tab !== tabs[index - 1].id
+              return (
+                <Fragment key={id}>
+                  {showSeparator && <span className="cm-tab-separator" aria-hidden="true" />}
+                  <button
+                    type="button"
+                    role="tab"
+                    className={`cm-rail-tab cm-ws-tab ${isActive ? 'is-active is-selected' : ''}`}
+                    onClick={() => setTab(id)}
+                    aria-selected={isActive}
+                    aria-current={isActive ? 'page' : undefined}
+                  >
+                    <Icon size={19} className="cm-rail-icon cm-ws-tab-icon"/>
+                    <span className="cm-ws-tab-label">{t(`cases.tabs.${id}`)}</span>
+                    {isActive && <span className="cm-ws-tab-indicator" aria-hidden="true" />}
+                  </button>
+                </Fragment>
+              )
+            })}
+          </nav>
+        </div>
+      </section>
 
-      <div className="cm-tab-content">
+      <div className={`cm-tab-content cm-ws-section cm-ws-content-surface ${tab === 'documents' ? 'cm-ws-required-content' : ''}`}>
         {tab === 'collection' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingCollection')}</p>}><DocumentCollectionPanel key={caseId} caseId={caseId} initialSelectedId={initialCollectionItemId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onHistory={() => setTab('timeline')} onBack={onBack} onChanged={() => void reload(true)} /></Suspense>}
         {tab === 'overview' && (
           <OverviewPanel
@@ -188,17 +251,49 @@ export default function CaseWorkspacePage(props: Props) {
             onEditIncident={() => setIsIncidentDrawerOpen(true)}
           />
         )}
-        {tab === 'documents' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingDocuments')}</p>}><RequiredDocumentsPanel key={caseId} caseId={caseId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities ?? []} onCandidates={() => setTab('collection')} onHistory={() => setTab('timeline')} onChanged={() => void reload(true)}/></Suspense>}
-        {tab === 'tasks' && <TasksPanel tasks={caseFile.case_tasks ?? []} canUpdate={canUpdate} working={working} onAdd={() => setDialog('task')} onStatus={(task, status) => void run(() => caseWorkspaceApi.updateTask(caseId, task.id, { status }), 'タスクを更新しました。')} onDelete={(task) => confirmDelete(task.title) && void run(() => caseWorkspaceApi.deleteTask(caseId, task.id), 'タスクを削除しました。')}/>}
+        {tab === 'documents' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingDocuments')}</p>}><RequiredDocumentsPanel key={caseId} caseId={caseId} initialSelectedId={documentToOpen} onDocumentClose={() => setDocumentToOpen(undefined)} canUpdate={canUpdate} canManageTasks={canManageTasks} canReviewDocuments={canReviewDocuments} currentEmployeeId={user?.employee?.id} activities={caseFile.activities ?? []} tasks={caseFile.case_tasks} onCandidates={() => setTab('collection')} onHistory={() => setTab('timeline')} onChanged={() => reload(true)} onCreateTasks={openTaskDrawer} onManageTasks={() => setTab('tasks')} onOpenTask={openRelatedTask}/></Suspense>}
+        {tab === 'tasks' && <TasksPanel
+          key={workspaceScope}
+          caseId={caseId}
+          tasks={caseFile.case_tasks ?? []}
+          initialTaskId={taskToOpen}
+          onInitialTaskHandled={() => setTaskToOpen(null)}
+          activities={caseFile.activities ?? []}
+          canManage={canManageTasks}
+          canReview={canReviewTasks}
+          working={working}
+          error={error}
+          onRetry={() => void reload(true)}
+          onAdd={() => openTaskDrawer()}
+          onUpdate={(task, payload) => runTask(task.id, () => caseWorkspaceApi.updateTask(caseId, task.id, payload), 'タスクを更新しました。')}
+          onAccept={(task) => runTask(task.id, () => caseWorkspaceApi.acceptTask(caseId, task.id), 'タスクを受領しました。')}
+          onSubmit={(task, file) => runTask(task.id, () => caseWorkspaceApi.submitTask(caseId, task.id, file), 'ファイルを提出しました。', true)}
+          onGenerate={(task) => task.case_document_id && navigate(`/quests/${caseId}/documents/${task.case_document_id}/edit`)}
+          onApprove={(task) => task.latest_submission ? runTask(task.id, () => caseWorkspaceApi.approveTaskSubmission(caseId, task.id, task.latest_submission!.id), '提出物を承認しました。', false, true) : Promise.resolve(false)}
+          onReject={(task, reason) => task.latest_submission ? runTask(task.id, () => caseWorkspaceApi.rejectTaskSubmission(caseId, task.id, task.latest_submission!.id, reason), '提出物を差し戻しました。', false, true) : Promise.resolve(false)}
+          onCancel={(task) => runTask(task.id, () => caseWorkspaceApi.deleteTask(caseId, task.id), 'タスクをキャンセルしました。')}
+        />}
         {tab === 'deadlines' && <DeadlinesPanel deadlines={caseFile.deadlines ?? []} canUpdate={canUpdate} working={working} onAdd={() => setDialog('deadline')} onComplete={(deadline) => void run(() => caseWorkspaceApi.updateDeadline(caseId, deadline.id, { status: deadline.status === 'completed' ? 'open' : 'completed' }), '期限の状態を更新しました。')} onDelete={(deadline) => confirmDelete(deadline.title) && void run(() => caseWorkspaceApi.deleteDeadline(caseId, deadline.id), '期限を削除しました。')}/>}
+        {tab === 'interpretation' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">通訳依頼を読み込み中…</p>}><InterpretationPanel key={workspaceScope} caseId={caseId} caseLabel={caseFile.reference_number || caseFile.title} clientName={caseFile.client?.name ?? ''} onChanged={() => void reload(true)}/></Suspense>}
         {tab === 'parties' && <PartiesPanel caseFile={caseFile} canUpdate={canUpdate} onAdd={() => { setEditingEntity(null); setIsAddEntityDrawerOpen(true) }} onSelectEntity={openEntityDrawer} onDelete={(party) => confirmDelete(party.name) && void run(() => caseWorkspaceApi.deleteParty(caseId, party.id), '関係者を削除しました。')}/>}
-        {tab === 'timeline' && <TimelinePanel activities={caseFile.activities ?? []} canUpdate={canUpdate} onAdd={() => setDialog('activity')}/>}
+        {tab === 'timeline' && <CaseHistoryPanel key={workspaceScope} caseId={caseId} onChanged={() => reload(true)} onOpenTask={openRelatedTask}/>}
       </div>
     </div>
 
     {dialog && <WorkspaceDialog title={dialogTitle[dialog]} working={working} onClose={() => !working && setDialog(null)}>
       <CreateItemForm kind={dialog} working={working} onSubmit={(payload) => void run(() => createItem(dialog, caseId, payload), '保存しました。')}/>
     </WorkspaceDialog>}
+
+    <CreateCaseTasksDrawer
+      caseId={caseId}
+      isOpen={isTaskDrawerOpen}
+      initialSelectedIds={taskDrawerDocumentIds}
+      onClose={() => { setIsTaskDrawerOpen(false); setTaskDrawerDocumentIds([]) }}
+      onCreated={async count => {
+        await reload(true)
+        setNotice(`${count}件のタスクを作成しました。`)
+      }}
+    />
 
     <RelatedEntityDrawer
       entity={selectedEntity}
@@ -336,6 +431,7 @@ function OverviewPanel({
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end"><Button size="sm" variant="outline" icon={<CalendarDays size={15}/>} onClick={() => onOpenTab('deadlines')}>期限管理を開く</Button></div>
       {/* Desktop 2-Column Command Layout */}
       <div className="cm-ws-overview-layout">
         <div className="cm-ws-left-col">
@@ -446,7 +542,6 @@ function SuccessToast({ message, onDismiss }: { message: string; onDismiss: () =
   }, [closing, onDismiss])
 
   useEffect(() => {
-    setClosing(false)
     autoDismissTimer.current = window.setTimeout(() => {
       setClosing(true)
       closeTimer.current = window.setTimeout(onDismiss, 170)
@@ -561,7 +656,6 @@ function MobileAccordionSection({
   )
 }
 
-function TasksPanel({ tasks, canUpdate, working, onAdd, onStatus, onDelete }: { tasks: CaseTask[]; canUpdate: boolean; working: boolean; onAdd: () => void; onStatus: (task: CaseTask, status: CaseTask['status']) => void; onDelete: (task: CaseTask) => void }) { return <><PanelToolbar title="担当タスク" description="担当者、期限、進捗を案件単位で追跡します。" actions={canUpdate && <button type="button" onClick={onAdd} className={primaryButton}><Plus size={16}/>タスクを追加</button>}/><div className="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white dark:divide-white/[0.055] dark:border-tm-border dark:bg-tm-surface-elevated">{tasks.map((task) => <div key={task.id} className="grid gap-3 px-4 py-3 hover:bg-slate-50/70 dark:hover:bg-tm-surface-hover md:grid-cols-[minmax(0,1fr)_9rem_9rem_2.5rem] md:items-center"><div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-slate-900 dark:text-white">{task.title}</p><PriorityBadge priority={task.priority}/></div><p className="mt-1 text-xs text-slate-500">{task.assigned_employee?.full_name ?? '未割当'} · {task.due_at ? `期限 ${shortDate(task.due_at)}` : '期限未設定'}</p></div><select disabled={!canUpdate || working} value={task.status} onChange={(event) => onStatus(task, event.target.value as CaseTask['status'])} className="h-9 rounded-md border border-slate-300 bg-white px-2 text-xs dark:border-tm-border dark:bg-tm-control dark:text-[var(--tm-text-secondary)]"><option value="pending">未着手</option><option value="in_progress">対応中</option><option value="completed">完了</option><option value="cancelled">取消</option></select><span className="text-xs text-slate-500">{task.description || '詳細なし'}</span>{canUpdate && <button type="button" onClick={() => onDelete(task)} aria-label={`${task.title}を削除`} className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"><Trash2 size={15}/></button>}</div>)}{tasks.length === 0 && <EmptyRow text="タスクはまだ登録されていません。"/>}</div></> }
 
 function DeadlinesPanel({ deadlines, canUpdate, working, onAdd, onComplete, onDelete }: { deadlines: CaseDeadline[]; canUpdate: boolean; working: boolean; onAdd: () => void; onComplete: (deadline: CaseDeadline) => void; onDelete: (deadline: CaseDeadline) => void }) { return <><PanelToolbar title="期限管理" description="在留期限、提出期限、追加資料期限、時効を一元管理します。" actions={canUpdate && <button type="button" onClick={onAdd} className={primaryButton}><Plus size={16}/>期限を追加</button>}/><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{deadlines.map((deadline) => { const days = remainingDays(deadline.due_at); const isDone = deadline.status === 'completed'; return <article key={deadline.id} className={`border-l-4 rounded-lg border border-slate-200 bg-white p-4 dark:border-tm-border dark:bg-tm-surface-elevated ${isDone ? 'border-l-green-500' : days < 0 ? 'border-l-red-500' : days <= 7 ? 'border-l-amber-500' : 'border-l-blue-500'}`}><div className="flex items-start justify-between gap-3"><div><p className="text-xs text-slate-500">{deadlineTypeLabel(deadline.deadline_type)}</p><h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{deadline.title}</h3></div><PriorityBadge priority={deadline.priority}/></div><div className="mt-4 flex items-end justify-between"><div><p className="text-lg font-semibold text-slate-900 dark:text-white">{shortDate(deadline.due_at)}</p><p className={`mt-1 text-xs font-medium ${isDone ? 'text-green-600' : days < 0 ? 'text-red-600' : days <= 7 ? 'text-amber-600' : 'text-slate-500'}`}>{isDone ? '完了済み' : days < 0 ? `${Math.abs(days)}日超過` : `残り${days}日`}</p></div>{canUpdate && <div className="flex gap-1"><button type="button" disabled={working} onClick={() => onComplete(deadline)} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-500/10"><CheckCircle2 size={17}/></button><button type="button" onClick={() => onDelete(deadline)} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"><Trash2 size={16}/></button></div>}</div></article>})}{deadlines.length === 0 && <div className="md:col-span-2 xl:col-span-3"><EmptyRow text="期限はまだ登録されていません。"/></div>}</div></> }
 
@@ -793,17 +887,14 @@ function PartiesEntityCard({
   )
 }
 
-function TimelinePanel({ activities, canUpdate, onAdd }: { activities: CaseActivity[]; canUpdate: boolean; onAdd: () => void }) { return <><PanelToolbar title="連絡・イベント履歴" description="電話、メール、面談、提出、事故、通院などを時系列で残します。" actions={canUpdate && <button type="button" onClick={onAdd} className={primaryButton}><Plus size={16}/>履歴を追加</button>}/><div className="relative ml-2 space-y-0 before:absolute before:bottom-5 before:left-4 before:top-5 before:w-px before:bg-slate-200 dark:before:bg-white/[0.055]">{activities.map((activity) => <article key={activity.id} className="relative flex gap-4 pb-5"><span className="relative z-10 mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-4 border-white bg-blue-100 text-blue-700 dark:border-[var(--tm-surface)] dark:bg-indigo-500/20 dark:text-indigo-300"><MessageSquareText size={13}/></span><div className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-tm-border dark:bg-tm-surface-elevated"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-medium text-blue-600 dark:text-indigo-300">{activityTypeLabel(activity.activity_type)}{activity.channel ? ` · ${channelLabel(activity.channel)}` : ''}</p><h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{activity.title}</h3></div><time className="text-xs text-slate-400">{dateTime(activity.occurred_at)}</time></div>{activity.content && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600 dark:text-slate-300">{activity.content}</p>}<p className="mt-2 text-xs text-slate-400">{activity.created_by_employee?.full_name ?? 'システム'}</p></div></article>)}{activities.length === 0 && <EmptyRow text="連絡・イベント履歴はまだありません。"/>}</div></> }
 
 function CreateItemForm({ kind, working, onSubmit }: { kind: DialogKind; working: boolean; onSubmit: (payload: Record<string, unknown>) => void }) {
   const [fields, setFields] = useState<Record<string, string>>({ status: 'pending', priority: 'normal', party_type: 'other', deadline_type: 'submission', activity_type: 'communication', channel: 'meeting', occurred_at: localDateTime() })
   const update = (name: string, value: string) => setFields((current) => ({ ...current, [name]: value }))
   const submit = (event: React.FormEvent) => { event.preventDefault(); const payload = Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, value || null])); onSubmit(payload) }
   return <form onSubmit={submit} className="space-y-4">
-    {kind === 'task' && <><Field label="タスク名 *"><input required value={fields.title ?? ''} onChange={(e) => update('title', e.target.value)} className={inputClass}/></Field><Field label="説明"><textarea value={fields.description ?? ''} onChange={(e) => update('description', e.target.value)} className={textareaClass}/></Field><div className="grid gap-3 sm:grid-cols-2"><Field label="優先度"><PrioritySelect value={fields.priority} onChange={(value) => update('priority', value)}/></Field><Field label="期限"><input type="datetime-local" value={fields.due_at ?? ''} onChange={(e) => update('due_at', e.target.value)} className={inputClass}/></Field></div></>}
     {kind === 'deadline' && <><Field label="期限名 *"><input required value={fields.title ?? ''} onChange={(e) => update('title', e.target.value)} className={inputClass}/></Field><div className="grid gap-3 sm:grid-cols-2"><Field label="期限種別"><select value={fields.deadline_type} onChange={(e) => update('deadline_type', e.target.value)} className={inputClass}><option value="residence">在留期限</option><option value="submission">提出期限</option><option value="additional">追加資料期限</option><option value="limitation">時効</option><option value="document">書類期限</option><option value="internal">内部期限</option><option value="other">その他</option></select></Field><Field label="優先度"><PrioritySelect value={fields.priority} onChange={(value) => update('priority', value)}/></Field></div><Field label="日時 *"><input required type="datetime-local" value={fields.due_at ?? ''} onChange={(e) => update('due_at', e.target.value)} className={inputClass}/></Field><Field label="補足"><textarea value={fields.notes ?? ''} onChange={(e) => update('notes', e.target.value)} className={textareaClass}/></Field></>}
     {kind === 'party' && <><div className="grid gap-3 sm:grid-cols-2"><Field label="関係者区分"><select value={fields.party_type} onChange={(e) => update('party_type', e.target.value)} className={inputClass}><option value="family">家族</option><option value="employer">勤務先</option><option value="opponent">相手方</option><option value="insurer">保険会社</option><option value="medical">医療機関</option><option value="supporter">支援者</option><option value="other">その他</option></select></Field><Field label="氏名 *"><input required value={fields.name ?? ''} onChange={(e) => update('name', e.target.value)} className={inputClass}/></Field></div><Field label="組織名"><input value={fields.organization ?? ''} onChange={(e) => update('organization', e.target.value)} className={inputClass}/></Field><div className="grid gap-3 sm:grid-cols-2"><Field label="電話"><input value={fields.phone ?? ''} onChange={(e) => update('phone', e.target.value)} className={inputClass}/></Field><Field label="メール"><input type="email" value={fields.email ?? ''} onChange={(e) => update('email', e.target.value)} className={inputClass}/></Field></div></>}
-    {kind === 'activity' && <><div className="grid gap-3 sm:grid-cols-2"><Field label="記録種別"><select value={fields.activity_type} onChange={(e) => update('activity_type', e.target.value)} className={inputClass}><option value="communication">連絡</option><option value="event">イベント</option><option value="submission">提出</option><option value="medical">通院・医療</option><option value="incident">事故・事実</option><option value="note">内部メモ</option></select></Field><Field label="チャネル"><select value={fields.channel} onChange={(e) => update('channel', e.target.value)} className={inputClass}><option value="meeting">面談</option><option value="phone">電話</option><option value="email">メール</option><option value="line">LINE</option><option value="internal">社内</option><option value="other">その他</option></select></Field></div><Field label="タイトル *"><input required value={fields.title ?? ''} onChange={(e) => update('title', e.target.value)} className={inputClass}/></Field><Field label="日時 *"><input required type="datetime-local" value={fields.occurred_at ?? ''} onChange={(e) => update('occurred_at', e.target.value)} className={inputClass}/></Field><Field label="内容"><textarea value={fields.content ?? ''} onChange={(e) => update('content', e.target.value)} className={textareaClass}/></Field></>}
     <div className="flex justify-end border-t border-slate-200 pt-4 dark:border-white/10"><button type="submit" disabled={working} className={primaryButton}>{working && <ButtonSpinner size={14}/>} {working ? '保存中…' : '保存する'}</button></div>
   </form>
 }
@@ -816,17 +907,13 @@ function PanelToolbar({ title, description, actions }: { title: string; descript
 function EmptyRow({ text }: { text: string }) { return <div className="flex min-h-24 items-center justify-center px-4 py-8 text-center text-sm text-slate-500"><ShieldCheck size={18} className="mr-2 text-slate-400"/>{text}</div> }
 function PriorityBadge({ priority, translated = false }: { priority: CaseTask['priority'] | CaseDeadline['priority']; translated?: boolean }) { const { t } = useTranslation(); const config = { low: ['低', 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'], normal: ['通常', 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'], high: ['高', 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'], critical: ['最優先', 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300'] }[priority]; return <span className={`inline-flex h-6 items-center rounded-md px-2 text-xs font-medium ${config[1]}`}>{translated ? t(`cases.priority.${priority}`) : config[0]}</span> }
 
-function WorkspaceSkeleton({ onBack }: { onBack: () => void }) { const { t } = useTranslation(); return <div className="p-5"><button type="button" onClick={onBack} className={secondaryButton}><ArrowLeft size={16}/>{t('cases.workspace.backToList')}</button><div className="mt-4 h-52 animate-pulse rounded-xl border border-slate-200 bg-white dark:border-tm-border dark:bg-tm-surface-elevated"/><div className="mt-4 h-96 animate-pulse rounded-xl border border-slate-200 bg-white dark:border-tm-border dark:bg-tm-surface-elevated"/></div> }
+function WorkspaceSkeleton({ onBack, taskView = false }: { onBack: () => void; taskView?: boolean }) { const { t } = useTranslation(); return <div className="p-5"><button type="button" onClick={onBack} className={secondaryButton}><ArrowLeft size={16}/>{t('cases.workspace.backToList')}</button><div className="mt-4 h-52 animate-pulse rounded-xl border border-slate-200 bg-white dark:border-tm-border dark:bg-tm-surface-elevated"/>{taskView ? <div className="cm-task-loading" role="status" aria-label="タスクを読み込み中…"><span className="sr-only">タスクを読み込み中…</span><div className="cm-task-loading-title"/>{[0, 1, 2, 3].map(row => <div key={row} className="cm-task-loading-row"><span/><span/><span/><span/></div>)}</div> : <div className="mt-4 h-96 animate-pulse rounded-xl border border-slate-200 bg-white dark:border-tm-border dark:bg-tm-surface-elevated"/>}</div> }
 function WorkspaceFailure({ error, onBack, onRetry }: { error: string | null; onBack: () => void; onRetry: () => void }) { const { t } = useTranslation(); return <div className="p-5"><button type="button" onClick={onBack} className={secondaryButton}><ArrowLeft size={16}/>{t('cases.workspace.backToList')}</button><div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-500/30 dark:bg-red-500/10"><AlertTriangle className="mx-auto text-red-500"/><h1 className="mt-3 text-lg font-semibold text-red-800 dark:text-red-200">{t('cases.workspace.loadFailed')}</h1><p className="mt-1 text-sm text-red-600 dark:text-red-300">{error}</p><button type="button" onClick={onRetry} className={`${primaryButton} mt-4`}><RefreshCw size={16}/>{t('cases.workspace.retry')}</button></div></div> }
 
-async function createItem(kind: DialogKind, caseId: number, payload: Record<string, unknown>) { if (kind === 'task') return caseWorkspaceApi.createTask(caseId, payload); if (kind === 'deadline') return caseWorkspaceApi.createDeadline(caseId, payload); if (kind === 'party') return caseWorkspaceApi.createParty(caseId, payload); return caseWorkspaceApi.createActivity(caseId, payload) }
+async function createItem(kind: DialogKind, caseId: number, payload: Record<string, unknown>) { return kind === 'deadline' ? caseWorkspaceApi.createDeadline(caseId, payload) : caseWorkspaceApi.createParty(caseId, payload) }
 function confirmDelete(name: string) { return window.confirm(`「${name}」を削除しますか？この操作は画面上から取り消せません。`) }
 function apiError(error: unknown, fallback: string) { if (!axios.isAxiosError(error)) return fallback; const validation = error.response?.data?.errors as Record<string, string[]> | undefined; return validation ? Object.values(validation).flat()[0] : error.response?.data?.message ?? fallback }
 function shortDate(value: string) { return new Intl.DateTimeFormat(i18n.language, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value)) }
-function dateTime(value: string) { return new Intl.DateTimeFormat(i18n.language, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
 function remainingDays(value: string) { const target = new Date(value); const today = new Date(); target.setHours(0, 0, 0, 0); today.setHours(0, 0, 0, 0); return Math.ceil((target.getTime() - today.getTime()) / 86400000) }
 function localDateTime() { const date = new Date(Date.now() - new Date().getTimezoneOffset() * 60000); return date.toISOString().slice(0, 16) }
 function deadlineTypeLabel(type: CaseDeadline['deadline_type']) { return ({ residence: '在留期限', submission: '提出期限', additional: '追加資料期限', limitation: '時効', document: '書類期限', internal: '内部期限', other: 'その他' } as Record<string, string>)[type] }
-
-function activityTypeLabel(type: CaseActivity['activity_type']) { return ({ communication: '連絡', event: 'イベント', note: '内部メモ', submission: '提出', medical: '通院・医療', incident: '事故・事実' } as Record<string, string>)[type] }
-function channelLabel(channel: NonNullable<CaseActivity['channel']>) { return ({ meeting: '面談', phone: '電話', email: 'メール', line: 'LINE', internal: '社内', other: 'その他' } as Record<string, string>)[channel] }

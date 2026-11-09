@@ -225,7 +225,9 @@ class PasswordSecurityTest extends TestCase
             'status' => 'active',
         ]);
 
-        return User::create([
+        // Legacy temporary/rotated account, not a new pending invitation. Keep all
+        // password, CLI and historical-migration assertions unchanged.
+        return User::factory()->create([
             'employee_id' => $employee->id,
             'login_id' => $loginId,
             'name' => $employee->full_name,

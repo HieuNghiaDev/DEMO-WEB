@@ -3,6 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\Permission;
+use App\Models\CaseDocument;
+use App\Models\CaseFile;
+use App\Models\Client;
+use App\Models\DocumentType;
+use App\Models\DocumentGenerationTemplate;
+use App\Models\ReceivedDocument;
 use App\Models\Persona;
 use App\Models\Employee;
 use App\Models\EmployeeTask;
@@ -34,6 +40,147 @@ class AiChatApiTest extends TestCase
         $this->actingAs(User::factory()->create(), 'sanctum')
             ->postJson('/api/ai/chat', $this->requestPayload())
             ->assertForbidden();
+    }
+
+    public function test_case_navigation_requires_case_view_and_does_not_reveal_confidential_cases(): void
+    {
+        $this->createPersona();
+        $user = $this->createAiUser();
+        $client = Client::create(['name' => 'Nguyễn Văn A']);
+        $normal = CaseFile::create(['client_id' => $client->id, 'title' => 'Synthetic matter', 'reference_number' => 'CASE-00050', 'status' => 'active']);
+        $secret = CaseFile::create(['client_id' => $client->id, 'title' => 'Hidden matter', 'reference_number' => 'CASE-00051', 'status' => 'active']);
+        $secret->forceFill(['is_confidential' => true])->save();
+        $this->mock(AIOrchestrator::class)->shouldNotReceive('runSkill');
+
+        $this->actingAs($user, 'sanctum');
+        $this->navigateAi('Mở CASE-00050')->assertJsonPath('data.navigation.status', 'not_found');
+        $this->grantCaseView($user);
+        $this->navigateAi('CASE-00050を開いて')->assertJsonPath('data.navigation.status', 'open')
+            ->assertJsonPath('data.navigation.options.0.case_id', $normal->id);
+        $this->navigateAi('Mở hồ sơ của Nguyễn Văn A')->assertJsonCount(1, 'data.navigation.options')
+            ->assertJsonPath('data.navigation.options.0.case_id', $normal->id);
+        $this->navigateAi('Mở CASE-00051')->assertJsonPath('data.navigation.status', 'not_found')->assertJsonMissing(['label' => 'Hidden matter']);
+        $this->navigateAi('Mở tài liệu mới nhất trong hồ sơ của CASE-00051')->assertJsonPath('data.navigation.status', 'not_found');
+
+        CaseFile::create(['client_id' => $client->id, 'title' => 'Second matter', 'reference_number' => 'CASE-00052', 'status' => 'active']);
+        $this->navigateAi('Mở hồ sơ của Nguyễn Văn A')->assertJsonPath('data.navigation.status', 'choose')->assertJsonCount(2, 'data.navigation.options');
+        $this->navigateAi('Tìm hồ sơ CASE-00050')->assertJsonPath('data.navigation.status', 'choose');
+        $withoutReference = CaseFile::create(['client_id' => $client->id, 'title' => 'Display code matter', 'status' => 'active']);
+        $this->navigateAi(sprintf('Mở CASE-%05d', $withoutReference->id))->assertJsonPath('data.navigation.options.0.case_id', $withoutReference->id);
+    }
+
+    public function test_navigation_distinguishes_document_types_and_opens_only_the_requested_file_version(): void
+    {
+        $this->createPersona();
+        $user = $this->createAiUser();
+        $this->grantCaseView($user);
+        $this->actingAs($user, 'sanctum');
+        $this->mock(AIOrchestrator::class)->shouldNotReceive('runSkill');
+        $client = Client::create(['name' => 'Nguyễn Văn A']);
+        $case = CaseFile::create(['client_id' => $client->id, 'title' => 'Synthetic matter', 'reference_number' => 'CASE-00050', 'status' => 'active']);
+        $other = CaseFile::create(['client_id' => $client->id, 'title' => 'Other matter', 'reference_number' => 'CASE-00051', 'status' => 'active']);
+        $other->forceFill(['is_confidential' => true])->save();
+        $contract = $this->finderDocument($case, 'C-001', '委任契約書');
+        $mandate = $this->finderDocument($case, 'C-002', '委任状（民事）');
+        $invoice = $this->finderDocument($case, 'D-099', '請求書');
+        $contractFile = $this->finderFile($contract, $case, 'contract.pdf', 1);
+        $old = $this->finderFile($mandate, $case, 'mandate-v1.pdf', 1);
+        $latest = $this->finderFile($mandate, $case, 'mandate-v2.pdf', 2);
+        $invoiceFile = $this->finderFile($invoice, $case, 'invoice.pdf', 1);
+        $invoiceFile->forceFill(['updated_at' => now()->addHour()])->save();
+        $this->finderFile($mandate, $other, 'hidden-pivot.pdf', 9);
+
+        $this->navigateAi('Mở hợp đồng ủy quyền của Nguyễn Văn A')->assertJsonPath('data.navigation.options.0.document_version_id', $contractFile->id);
+        $this->navigateAi('Mở giấy ủy quyền mới nhất của Nguyễn Văn A')->assertJsonPath('data.navigation.status', 'open')
+            ->assertJsonPath('data.navigation.options.0.document_version_id', $latest->id)
+            ->assertJsonMissingPath('data.navigation.options.0.url');
+        $this->navigateAi('Nguyễn Văn A の委任状を開いて')->assertJsonPath('data.navigation.status', 'choose')->assertJsonCount(2, 'data.navigation.options');
+        $this->navigateAi('Mở giấy ủy quyền v1 của CASE-00050')->assertJsonPath('data.navigation.options.0.document_version_id', $old->id);
+        $this->navigateAi('Mở hóa đơn của CASE-00050')->assertJsonPath('data.navigation.options.0.document_version_id', $invoiceFile->id);
+        $this->navigateAi('Mở tài liệu mới nhất trong hồ sơ của CASE-00050')->assertJsonPath('data.navigation.options.0.document_version_id', $invoiceFile->id);
+        $this->navigateAi('Mở mandate-v1.pdf của CASE-00050')->assertJsonPath('data.navigation.options.0.document_version_id', $old->id);
+        $this->navigateAi('Mở hidden-pivot.pdf của CASE-00050')->assertJsonPath('data.navigation.status', 'not_found');
+        $this->navigateAi('Mở file %.pdf của CASE-00050')->assertJsonPath('data.navigation.status', 'not_found');
+
+        $client->update(['name_vn' => 'Phạm Gia Huy']);
+        $this->navigateAi('tim ho so uy quyen cua khach hang Huy')
+            ->assertJsonPath('data.navigation.status', 'choose')
+            ->assertJsonCount(3, 'data.navigation.options')
+            ->assertJsonPath('data.navigation.options.0.action', 'open_case_document')
+            ->assertJsonPath('data.navigation.options.0.client_name', 'Phạm Gia Huy')
+            ->assertJsonPath('data.navigation.options.0.case_code', 'CASE-00050')
+            ->assertJsonMissing(['document_version_id' => $invoiceFile->id]);
+        $this->navigateAi('mo giay uy quyen moi nhat cua khach hang Huy')
+            ->assertJsonPath('data.navigation.options.0.document_version_id', $latest->id);
+        $this->navigateAi('tim ho so cua khach hang Huy')
+            ->assertJsonCount(1, 'data.navigation.options')
+            ->assertJsonPath('data.navigation.options.0.client_name', 'Phạm Gia Huy')
+            ->assertJsonPath('data.navigation.options.0.case_id', $case->id);
+
+        $second = CaseFile::create(['client_id' => $client->id, 'title' => 'Second visible matter', 'reference_number' => 'CASE-00052', 'status' => 'active']);
+        $secondMandate = $second->documents()->create(['title' => $mandate->title, 'document_type_id' => $mandate->document_type_id, 'category' => 'required']);
+        $secondFile = $this->finderFile($secondMandate, $second, 'second-mandate.pdf', 1);
+        $hiddenMandate = $other->documents()->create(['title' => $mandate->title, 'document_type_id' => $mandate->document_type_id, 'category' => 'required']);
+        $hiddenFile = $this->finderFile($hiddenMandate, $other, 'confidential-mandate.pdf', 1);
+
+        $this->navigateAi('tim giay uy quyen cua khach hang Huy')
+            ->assertJsonPath('data.navigation.status', 'choose')
+            ->assertJsonCount(3, 'data.navigation.options')
+            ->assertJsonFragment(['case_id' => $second->id, 'document_version_id' => $secondFile->id])
+            ->assertJsonMissing(['document_version_id' => $hiddenFile->id]);
+    }
+
+    public function test_navigation_returns_a_stored_c001_pdf_version_without_exposing_drive_metadata_or_enabling_approval(): void
+    {
+        $this->createPersona();
+        $user = $this->createAiUser();
+        $this->grantCaseView($user);
+        $this->actingAs($user, 'sanctum');
+        $this->mock(AIOrchestrator::class)->shouldNotReceive('runSkill');
+        $client = Client::create(['name' => 'A']);
+        $case = CaseFile::create(['client_id' => $client->id, 'title' => 'Synthetic matter', 'reference_number' => 'CASE-00050', 'status' => 'active']);
+        $document = $this->finderDocument($case, 'C-001', '委任契約書');
+        $template = DocumentGenerationTemplate::create(['document_type_id' => $document->document_type_id, 'version' => 1,
+            'renderer_type' => 'generic_legal_document', 'format' => 'html', 'template_body' => 'synthetic', 'field_schema' => [], 'is_active' => true]);
+        $v1 = $document->generatedDocuments()->create(['document_generation_template_id' => $template->id, 'version' => 1,
+            'workflow_status' => 'review', 'draft_data' => [], 'created_by' => $user->id]);
+        $v1->artifacts()->create(['artifact_type' => 'pdf', 'storage_provider' => 'google_drive', 'external_file_id' => 'synthetic-file-id',
+            'external_url' => 'https://example.test/synthetic', 'filename' => 'contract.pdf', 'mime_type' => 'application/pdf',
+            'uploaded_by' => $user->id, 'uploaded_at' => now()]);
+        $document->generatedDocuments()->create(['document_generation_template_id' => $template->id, 'version' => 2,
+            'workflow_status' => 'draft', 'draft_data' => [], 'created_by' => $user->id]);
+
+        $this->navigateAi('Aさんの委任契約書を見せて')->assertJsonPath('data.navigation.status', 'open')
+            ->assertJsonPath('data.navigation.options.0.source', 'generated')
+            ->assertJsonPath('data.navigation.options.0.document_version_id', $v1->id)
+            ->assertDontSee('synthetic-file-id')->assertDontSee('example.test');
+        $this->navigateAi('Mở C-001 v2 của CASE-00050')->assertJsonPath('data.navigation.status', 'not_found');
+        $this->assertSame('review', $v1->fresh()->workflow_status);
+    }
+
+    private function navigateAi(string $message): \Illuminate\Testing\TestResponse
+    {
+        return $this->postJson('/api/ai/chat', [...$this->requestPayload(), 'message' => $message])->assertOk();
+    }
+
+    private function grantCaseView(User $user): void
+    {
+        $permission = Permission::firstOrCreate(['name' => 'case.view'], ['display_name' => 'View cases']);
+        $user->roles()->firstOrFail()->permissions()->syncWithoutDetaching([$permission->id]);
+    }
+
+    private function finderDocument(CaseFile $case, string $code, string $title): CaseDocument
+    {
+        $type = DocumentType::create(['code' => $code, 'name_ja' => $title]);
+        return $case->documents()->create(['title' => $title, 'document_type_id' => $type->id, 'category' => 'required']);
+    }
+
+    private function finderFile(CaseDocument $document, CaseFile $case, string $name, int $version): ReceivedDocument
+    {
+        $file = ReceivedDocument::create(['case_file_id' => $case->id, 'title' => $name, 'original_filename' => $name,
+            'storage_type' => 'upload', 'storage_path' => 'synthetic/'.$name, 'version' => $version]);
+        $document->receivedDocuments()->attach($file->id, ['relationship_type' => 'primary']);
+        return $file;
     }
 
     public function test_chat_endpoint_validates_the_message(): void
@@ -141,7 +288,25 @@ class AiChatApiTest extends TestCase
             ->assertOk();
     }
 
-    public function test_task_management_skill_receives_only_the_authenticated_employees_open_tasks(): void
+    public function test_chat_serializes_structured_task_tool_output_without_changing_text_contract(): void
+    {
+        $this->createPersona();
+        $execution = [
+            'name' => 'query_case_tasks', 'tool_use_id' => 'actual-tool', 'status' => 'success',
+            'output' => ['scope' => 'my', 'tasks' => [], 'total_count' => 0, 'has_more' => false, 'next_offset' => null],
+        ];
+        $orchestrator = Mockery::mock(AIOrchestrator::class);
+        $orchestrator->shouldReceive('runSkill')->once()->andReturn([
+            'persona' => 'secretary', 'skill' => 'test_assistance', 'text' => '現在、担当タスクはありません。',
+            'tool_executions' => [$execution], 'stop_reason' => 'end_turn',
+        ]);
+        $this->app->instance(AIOrchestrator::class, $orchestrator);
+        $this->actingAs($this->createAiUser(), 'sanctum')->postJson('/api/ai/chat', $this->requestPayload())
+            ->assertOk()->assertJsonPath('data.message', '現在、担当タスクはありません。')
+            ->assertJsonPath('data.tool_executions.0', $execution);
+    }
+
+    public function test_task_management_does_not_inject_legacy_employee_tasks_into_the_case_task_pipeline(): void
     {
         Persona::create(['name' => 'secretary', 'display_name' => 'AI 秘書', 'skills' => ['task_management'], 'active' => true]);
         $office = Office::create(['office_code' => 'AI', 'name' => 'AI office', 'status' => 'active']);
@@ -152,11 +317,10 @@ class AiChatApiTest extends TestCase
         EmployeeTask::create(['employee_id' => $other->id, 'title' => '他人のタスク', 'duration_minutes' => 60, 'status' => 'pending']);
 
         $orchestrator = Mockery::mock(AIOrchestrator::class);
-        $orchestrator->shouldReceive('runSkill')->once()->withArgs(function (string $persona, string $skill, array $messages, array $context): bool {
+        $orchestrator->shouldReceive('runSkill')->once()->withArgs(function (string $persona, string $skill, array $messages, array $context) use ($user): bool {
             return $persona === 'secretary' && $skill === 'task_management'
                 && $messages === [['role' => 'user', 'content' => '今日のタスクを教えて']]
-                && count($context['employee_task_context']['tasks'] ?? []) === 1
-                && $context['employee_task_context']['tasks'][0]['title'] === '今日の資料収集';
+                && $context === ['trigger_type' => 'chat', 'user_id' => $user->id, 'role' => $user->role];
         })->andReturn(['persona' => 'secretary', 'skill' => 'task_management', 'text' => '1件あります。', 'tool_executions' => [], 'stop_reason' => 'end_turn']);
         $this->app->instance(AIOrchestrator::class, $orchestrator);
 

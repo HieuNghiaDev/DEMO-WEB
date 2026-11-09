@@ -61,3 +61,9 @@ export function filterCases(cases: BusinessCase[], keyword: string, status: 'all
     && (status === 'all' || item.status === status) && (caseType === 'all' || item.caseType === caseType)
     && (quick === 'all' || (quick === 'documents_complete' ? item.documentsTotal > 0 && item.documentsDone === item.documentsTotal : item.status === quick)))
 }
+
+// Creation only: editing an existing case must not silently reclassify it.
+export function classificationError(value: string): string {
+  if (value === 'confidential') return '機密案件のアクセスメンバー設定は現在準備中です。'
+  return value === 'normal' ? '' : '案件区分を選択してください。'
+}

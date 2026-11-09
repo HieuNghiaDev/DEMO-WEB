@@ -23,20 +23,24 @@ import {
   Search,
   ShieldCheck,
   SlidersHorizontal,
+  Trash2,
   UserCog,
   UserRound,
   Users,
   X,
 } from 'lucide-react'
 import api from '../services/api'
+import { mainRoleNames } from '../config/mainRoles'
 import { useAuth } from '../contexts/AuthContext'
 import { ButtonSpinner, KpiSkeletonValue, LoadingOverlay, MobileCardSkeleton, Skeleton, TableSkeleton } from '../components/loading'
 import { CasePageHeader } from '../features/case-management/CasePrimitives'
 import '../features/case-management/caseManagement.css'
 import { UserAvatar } from '../components/ui'
 import { getEmployeeAvatarImageUrl } from '../utils/employeeAvatar'
+import StepUpDialog from '../features/authentication/StepUpDialog'
+import { AuthFailure, record } from '../features/authentication/authFlow'
 
-type WorkStatus = 'working' | 'break' | 'outside' | 'offline'
+type WorkStatus = 'online' | 'working' | 'break' | 'outside' | 'offline'
 
 type CurrentTask = {
   id: number
@@ -55,6 +59,7 @@ type AttendanceInfo = {
 }
 
 type RoleOption = {
+  assignable?: boolean
   id: number
   name: string
   display_name: string
@@ -88,12 +93,14 @@ type OrganizationEmployee = {
   } | null
 
   work_status: WorkStatus
+  presence_status: 'online' | 'offline'
   attendance: AttendanceInfo | null
 }
 
 type OrganizationResponse = {
   employees: OrganizationEmployee[]
   available_roles: RoleOption[]
+  main_roles_enabled?: boolean
 }
 
 const rolePresentation = {
@@ -180,6 +187,11 @@ const statusConfig: Record<
     badge: string
   }
 > = {
+  online: {
+    label: 'オンライン',
+    dot: 'bg-emerald-500',
+    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/50',
+  },
   working: {
     label: '勤務中',
     dot: 'bg-emerald-500',
@@ -202,7 +214,9 @@ const statusConfig: Record<
   },
 }
 
+
 const statusAccentMap: Record<WorkStatus, string> = {
+  online: 'bg-emerald-500',
   working: 'bg-emerald-500',
   break: 'bg-amber-500',
   outside: 'bg-blue-500',
@@ -210,6 +224,7 @@ const statusAccentMap: Record<WorkStatus, string> = {
 }
 
 const mobileAccentMap: Record<WorkStatus, string> = {
+  online: 'border-l-emerald-500',
   working: 'border-l-emerald-500',
   break: 'border-l-amber-500',
   outside: 'border-l-blue-500',
@@ -296,6 +311,7 @@ export default function OrganizationDesign() {
   const { user } = useAuth()
   const [employees, setEmployees] = useState<OrganizationEmployee[]>([])
   const [availableRoles, setAvailableRoles] = useState<RoleOption[]>([])
+  const [mainRolesEnabled, setMainRolesEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -310,9 +326,26 @@ export default function OrganizationDesign() {
 
   // Modals & Panels
   const [selectedEmployee, setSelectedEmployee] = useState<OrganizationEmployee | null>(null)
+  const [employeeDetailTab, setEmployeeDetailTab] = useState<DetailTab>('profile')
   const [isAccessGuideOpen, setIsAccessGuideOpen] = useState(false)
   const [isCreateEmployeeOpen, setIsCreateEmployeeOpen] = useState(false)
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
+  const canManageRoles = user?.permission_names.includes('employee.manage_roles') === true
+    && (!mainRolesEnabled || availableRoles.some(role => role.assignable))
+
+  const employeeEntry = (employee: OrganizationEmployee) => ({
+    onClick: () => {
+      setEmployeeDetailTab('profile')
+      setSelectedEmployee(employee)
+    },
+    mainRolesEnabled,
+    onManageRoles: canManageRoles && mainRolesEnabled && !getRoleTargetBlock(employee, user?.id)
+      ? () => {
+          setEmployeeDetailTab('roles')
+          setSelectedEmployee(employee)
+        }
+      : undefined,
+  })
 
   const loadOrganization = useCallback(async (manual = false) => {
     if (manual) {
@@ -326,6 +359,10 @@ export default function OrganizationDesign() {
       const response = await api.get<OrganizationResponse>('/organization')
       setEmployees(response.data.employees)
       setAvailableRoles(response.data.available_roles)
+      setMainRolesEnabled(response.data.main_roles_enabled === true)
+      if (response.data.main_roles_enabled) {
+        setRoleFilter(current => current === 'unmapped' || mainRoleNames.includes(current) ? current : 'all')
+      }
     } catch (error) {
       setErrorMessage(
         axios.isAxiosError(error)
@@ -368,6 +405,7 @@ export default function OrganizationDesign() {
   const summary = useMemo(
     () => ({
       total: officeScopedEmployees.length,
+      online: officeScopedEmployees.filter((e) => e.presence_status === 'online').length,
       working: officeScopedEmployees.filter((e) => e.work_status === 'working').length,
       break: officeScopedEmployees.filter((e) => e.work_status === 'break').length,
       outside: officeScopedEmployees.filter((e) => e.work_status === 'outside').length,
@@ -385,12 +423,19 @@ export default function OrganizationDesign() {
           return false
         }
         // Status filter
-        if (statusFilter !== 'all' && employee.work_status !== statusFilter) {
+        if (
+          statusFilter !== 'all'
+          && (statusFilter === 'online'
+            ? employee.presence_status !== 'online'
+            : employee.work_status !== statusFilter)
+        ) {
           return false
         }
         // Role filter
         if (roleFilter !== 'all') {
-          const hasRole = employee.roles.some((r) => r.name === roleFilter)
+          const hasRole = roleFilter === 'unmapped'
+            ? !employee.roles.some(role => mainRoleNames.includes(role.name))
+            : employee.roles.some(role => role.name === roleFilter)
           if (!hasRole) return false
         }
         // Search query
@@ -504,19 +549,19 @@ export default function OrganizationDesign() {
             </div>
           </button>
 
-          {/* 勤務中 */}
+          {/* オンライン */}
           <button
             type="button"
-            onClick={() => handleKpiStatusClick('working')}
-            className={`cm-clv-kpi-card cm-clv-kpi-emerald is-clickable ${statusFilter === 'working' ? 'is-active' : ''}`}
+            onClick={() => handleKpiStatusClick('online')}
+            className={`cm-clv-kpi-card cm-clv-kpi-emerald is-clickable ${statusFilter === 'online' ? 'is-active' : ''}`}
           >
             <div className="cm-clv-kpi-icon">
               <BriefcaseBusiness size={14} />
             </div>
             <div className="cm-clv-kpi-body">
-              <span className="cm-clv-kpi-label">勤務中</span>
+              <span className="cm-clv-kpi-label">オンライン</span>
               <div className="cm-clv-kpi-value-row">
-                {metricValue(summary.working)}
+                {metricValue(summary.online)}
               </div>
             </div>
           </button>
@@ -585,7 +630,7 @@ export default function OrganizationDesign() {
         )}
 
         {/* ── Access Level Guide (Compact Strip) ────────────────── */}
-        <section className="cm-org-access-strip">
+        {!mainRolesEnabled && <section className="cm-org-access-strip">
           <button
             type="button"
             aria-expanded={isAccessGuideOpen}
@@ -646,7 +691,7 @@ export default function OrganizationDesign() {
               </div>
             </div>
           )}
-        </section>
+        </section>}
 
         {/* ── Search + Filter Toolbar ───────────────────────────── */}
         <section className="cm-case-toolbar">
@@ -687,6 +732,7 @@ export default function OrganizationDesign() {
                   className="cm-case-control cm-case-select w-full"
                 >
                   <option value="all">すべての勤務状態</option>
+                  <option value="online">オンライン</option>
                   <option value="working">勤務中</option>
                   <option value="break">休憩中</option>
                   <option value="outside">外出中</option>
@@ -698,17 +744,12 @@ export default function OrganizationDesign() {
               {/* Role filter select */}
               <div className="relative min-w-0 cm-case-select-role">
                 <select
-                  aria-label="アクセスレベル"
+                  aria-label={mainRolesEnabled ? 'ロール' : 'アクセスレベル'}
                   value={roleFilter}
                   onChange={(e) => setRoleFilter(e.target.value)}
                   className="cm-case-control cm-case-select w-full"
                 >
-                  <option value="all">すべてのアクセスレベル</option>
-                  <option value="level_5">レベル 5 (システム管理)</option>
-                  <option value="level_4">レベル 4 (運営管理)</option>
-                  <option value="level_3">レベル 3 (専門業務)</option>
-                  <option value="level_2">レベル 2 (通常業務)</option>
-                  <option value="level_1">レベル 1 (基本業務)</option>
+                  <EmployeeRoleFilterOptions mainRolesEnabled={mainRolesEnabled} />
                 </select>
                 <ChevronDown size={14} className="cm-case-select-icon" />
               </div>
@@ -805,7 +846,7 @@ export default function OrganizationDesign() {
                 <EmployeeGridCard
                   key={employee.id}
                   employee={employee}
-                  onClick={() => setSelectedEmployee(employee)}
+                  {...employeeEntry(employee)}
                 />
               ))}
             </div>
@@ -818,7 +859,7 @@ export default function OrganizationDesign() {
                   <div>社員情報</div>
                   <div>所属事務所</div>
                   <div>役職・雇用区分</div>
-                  <div>アクセス権限</div>
+                  <div>{mainRolesEnabled ? 'ロール' : 'アクセス権限'}</div>
                   <div>勤務状況</div>
                   <div>現在の作業</div>
                   <div />
@@ -830,7 +871,7 @@ export default function OrganizationDesign() {
                     <EmployeeTableRow
                       key={employee.id}
                       employee={employee}
-                      onClick={() => setSelectedEmployee(employee)}
+                      {...employeeEntry(employee)}
                     />
                   ))}
                 </div>
@@ -842,7 +883,7 @@ export default function OrganizationDesign() {
                   <EmployeeMobileCard
                     key={employee.id}
                     employee={employee}
-                    onClick={() => setSelectedEmployee(employee)}
+                    {...employeeEntry(employee)}
                   />
                 ))}
               </div>
@@ -913,17 +954,35 @@ export default function OrganizationDesign() {
         <EmployeeDetailModal
           key={selectedEmployee.id}
           employee={selectedEmployee}
+          initialTab={employeeDetailTab}
           canAssignTasks={
             (user?.permission_names.includes('task.assign') ?? false)
             && selectedEmployee.id !== user?.employee_id
           }
-          canManageRoles={user?.permission_names.includes('employee.manage_roles') ?? false}
+          canManageRoles={canManageRoles}
           canUpdateEmployment={user?.permission_names.includes('employee.update') ?? false}
           canResetPassword={
-            user?.role_names.some((role) => role === 'level_4' || role === 'level_5') ?? false
+            (user?.permission_names.includes('employee.reset_password') ?? false)
+            && selectedEmployee.user_id !== user?.id
           }
-          canEditRoles={selectedEmployee.user_id !== user?.id}
+          canDeleteEmployee={
+            selectedEmployee.user_id !== user?.id
+            && (user?.permission_names.includes('employee.disable') ?? false)
+            && (
+              user?.role_names.includes('level_5')
+              || (user?.role_names.includes('admin')
+                && !selectedEmployee.roles.some(role => ['admin', 'level_5', 'verified_lawyer', 'c001_owner_legal_approver'].includes(role.name)))
+              || (
+                user?.role_names.includes('level_4')
+                && !selectedEmployee.roles.some((role) => role.name === 'level_5')
+              )
+              || false
+            )
+          }
+          roleTargetBlock={mainRolesEnabled ? getRoleTargetBlock(selectedEmployee, user?.id)
+            : selectedEmployee.user_id === user?.id ? '自分自身の権限は変更できません。' : null}
           availableRoles={availableRoles}
+          mainRolesEnabled={mainRolesEnabled}
           onRolesUpdated={(roles) => {
             setEmployees((curr) =>
               curr.map((item) => (item.id === selectedEmployee.id ? { ...item, roles } : item)),
@@ -938,12 +997,17 @@ export default function OrganizationDesign() {
               curr?.id === selectedEmployee.id ? { ...curr, ...employment } : curr,
             )
           }}
+          onDeleted={() => {
+            setSelectedEmployee(null)
+            void loadOrganization(true)
+          }}
           onClose={() => setSelectedEmployee(null)}
         />
       )}
 
       {isMobileFilterOpen && (
         <MobileFilterSheet
+          mainRolesEnabled={mainRolesEnabled}
           roleFilter={roleFilter}
           statusFilter={statusFilter}
           onClear={() => {
@@ -963,13 +1027,19 @@ export default function OrganizationDesign() {
 /* Subcomponents                                                             */
 /* ========================================================================= */
 
+type EmployeeEntryProps = {
+  employee: OrganizationEmployee
+  onClick: () => void
+  mainRolesEnabled: boolean
+  onManageRoles?: () => void
+}
+
 function EmployeeTableRow({
   employee,
   onClick,
-}: {
-  employee: OrganizationEmployee
-  onClick: () => void
-}) {
+  mainRolesEnabled,
+  onManageRoles,
+}: EmployeeEntryProps) {
   const status = statusConfig[employee.work_status]
   const isActive = employee.work_status === 'working'
 
@@ -1027,7 +1097,7 @@ function EmployeeTableRow({
 
         {/* 4. Access Level */}
         <div>
-          <AccessLevelBadge roles={employee.roles} />
+          <EmployeeRoleBadge employee={employee} mainRolesEnabled={mainRolesEnabled} onManageRoles={onManageRoles} />
         </div>
 
         {/* 5. Work Status */}
@@ -1081,10 +1151,9 @@ function EmployeeTableRow({
 function EmployeeMobileCard({
   employee,
   onClick,
-}: {
-  employee: OrganizationEmployee
-  onClick: () => void
-}) {
+  mainRolesEnabled,
+  onManageRoles,
+}: EmployeeEntryProps) {
   const status = statusConfig[employee.work_status]
   const isActive = employee.work_status === 'working'
 
@@ -1131,7 +1200,7 @@ function EmployeeMobileCard({
       <div className="cm-org-mobile-badges">
         <span className="cm-cc-type-tag">{employmentTypeLabels[employee.employment_type ?? ''] ?? '雇用区分未登録'}</span>
         {employee.position_title && <span className="cm-org-mobile-position">{employee.position_title}</span>}
-        <AccessLevelBadge roles={employee.roles} />
+        <EmployeeRoleBadge employee={employee} mainRolesEnabled={mainRolesEnabled} onManageRoles={onManageRoles} />
       </div>
 
       <div className="cm-org-mobile-status-row">
@@ -1163,10 +1232,9 @@ function EmployeeMobileCard({
 function EmployeeGridCard({
   employee,
   onClick,
-}: {
-  employee: OrganizationEmployee
-  onClick: () => void
-}) {
+  mainRolesEnabled,
+  onManageRoles,
+}: EmployeeEntryProps) {
   const status = statusConfig[employee.work_status]
   const isActive = employee.work_status === 'working'
 
@@ -1219,7 +1287,7 @@ function EmployeeGridCard({
           </div>
 
           <div className="pt-1">
-            <AccessLevelBadge roles={employee.roles} />
+            <EmployeeRoleBadge employee={employee} mainRolesEnabled={mainRolesEnabled} onManageRoles={onManageRoles} />
           </div>
         </div>
 
@@ -1245,22 +1313,44 @@ function EmployeeGridCard({
   )
 }
 
-function AccessLevelBadge({ roles }: { roles: RoleOption[] }) {
-  const role = roles[0]
-  if (!role) {
-    return <span className="text-[10px] font-medium text-slate-400">権限未設定</span>
-  }
+function getRoleTargetBlock(employee: OrganizationEmployee, actorId?: number) {
+  if (!employee.user_id) return 'ログインアカウントが登録されていません。'
+  if (employee.user_id === actorId) return '自分自身のロールは変更できません。'
+  if (employee.roles.some(role => role.name === 'admin')) return 'ADMIN は保護対象のため、この画面から変更できません。'
+  if (employee.employee_status !== 'active') return '在籍中の社員のみロールを変更できます。'
+  return null
+}
 
-  const level = accessLevelGuide[role.name as keyof typeof accessLevelGuide]
-  const visual = rolePresentation[role.name as keyof typeof rolePresentation]
+function EmployeeRoleBadge({ employee, mainRolesEnabled, onManageRoles }: Omit<EmployeeEntryProps, 'onClick'>) {
+  const role = employee.roles.find(item => mainRoleNames.includes(item.name)) ?? (mainRolesEnabled ? undefined : employee.roles[0])
+  const level = role && accessLevelGuide[role.name as keyof typeof accessLevelGuide]
+  const visual = role && rolePresentation[role.name as keyof typeof rolePresentation]
   const Icon = visual?.icon ?? ShieldCheck
+  const label = level?.title ?? role?.display_name ?? (mainRolesEnabled ? '主ロール未割当' : '権限未設定')
+  const style = visual?.badgeClass ?? 'border-[var(--tm-border)] bg-[var(--tm-surface)] text-[var(--tm-text-secondary)]'
+  const className = `inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-left text-[10px] font-semibold ${style}`
+  const content = <><Icon size={11} className="shrink-0" /><span className="break-words">{label}</span></>
 
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${visual?.badgeClass ?? 'bg-slate-100 text-slate-700 border-slate-200'}`}>
-      <Icon size={11} />
-      <span>{level?.title ?? role.display_name}</span>
-    </span>
-  )
+  return onManageRoles ? (
+    <button type="button" aria-label={`${employee.full_name}のロールを変更`} title="ロールを変更"
+      className={`${className} hover:border-[var(--tm-primary)] focus-visible:outline-2 focus-visible:outline-[var(--tm-primary)]`}
+      onClick={event => { event.stopPropagation(); onManageRoles() }}>
+      {content}<ChevronRight size={11} className="shrink-0" />
+    </button>
+  ) : <span className={className}>{content}</span>
+}
+
+function EmployeeRoleFilterOptions({ mainRolesEnabled }: { mainRolesEnabled: boolean }) {
+  return mainRolesEnabled ? <>
+    <option value="all">すべてのロール</option>
+    {mainRoleNames.map(name => <option key={name} value={name}>{name.toUpperCase()}</option>)}
+    <option value="unmapped">主ロール未割当</option>
+  </> : <>
+    <option value="all">すべてのアクセスレベル</option>
+    {Object.entries(accessLevelGuide).reverse().map(([name, level]) => (
+      <option key={name} value={name}>{level.title} ({level.summary})</option>
+    ))}
+  </>
 }
 
 function EmptyEmployeeState({
@@ -1296,6 +1386,7 @@ function EmptyEmployeeState({
 }
 
 function MobileFilterSheet({
+  mainRolesEnabled,
   statusFilter,
   roleFilter,
   onStatusFilterChange,
@@ -1303,6 +1394,7 @@ function MobileFilterSheet({
   onClear,
   onClose,
 }: {
+  mainRolesEnabled: boolean
   statusFilter: WorkStatus | 'all'
   roleFilter: string | 'all'
   onStatusFilterChange: (value: WorkStatus | 'all') => void
@@ -1336,6 +1428,7 @@ function MobileFilterSheet({
             <span className="text-xs font-semibold text-[var(--tm-text-secondary)]">勤務状態</span>
             <select aria-label="勤務状態" className="cm-org-mobile-filter-select" onChange={(event) => onStatusFilterChange(event.target.value as WorkStatus | 'all')} value={statusFilter}>
               <option value="all">すべての勤務状態</option>
+              <option value="online">オンライン</option>
               <option value="working">勤務中</option>
               <option value="break">休憩中</option>
               <option value="outside">外出中</option>
@@ -1344,14 +1437,9 @@ function MobileFilterSheet({
           </label>
 
           <label className="block space-y-1.5">
-            <span className="text-xs font-semibold text-[var(--tm-text-secondary)]">アクセスレベル</span>
-            <select aria-label="アクセスレベル" className="cm-org-mobile-filter-select" onChange={(event) => onRoleFilterChange(event.target.value)} value={roleFilter}>
-              <option value="all">すべてのアクセスレベル</option>
-              <option value="level_5">レベル 5 (システム管理)</option>
-              <option value="level_4">レベル 4 (運営管理)</option>
-              <option value="level_3">レベル 3 (専門業務)</option>
-              <option value="level_2">レベル 2 (通常業務)</option>
-              <option value="level_1">レベル 1 (基本業務)</option>
+            <span className="text-xs font-semibold text-[var(--tm-text-secondary)]">{mainRolesEnabled ? 'ロール' : 'アクセスレベル'}</span>
+            <select className="cm-org-mobile-filter-select" onChange={(event) => onRoleFilterChange(event.target.value)} value={roleFilter}>
+              <EmployeeRoleFilterOptions mainRolesEnabled={mainRolesEnabled} />
             </select>
           </label>
         </div>
@@ -1391,37 +1479,52 @@ function useOrganizationDialog(onClose: () => void) {
 
 function EmployeeDetailModal({
   employee,
+  initialTab,
   canAssignTasks,
   canManageRoles,
   canUpdateEmployment,
   canResetPassword,
-  canEditRoles,
+  canDeleteEmployee,
+  roleTargetBlock,
   availableRoles,
+  mainRolesEnabled,
   onRolesUpdated,
   onEmploymentUpdated,
+  onDeleted,
   onClose,
 }: {
   employee: OrganizationEmployee
+  initialTab: DetailTab
   canAssignTasks: boolean
   canManageRoles: boolean
   canUpdateEmployment: boolean
   canResetPassword: boolean
-  canEditRoles: boolean
+  canDeleteEmployee: boolean
+  roleTargetBlock: string | null
   availableRoles: RoleOption[]
+  mainRolesEnabled: boolean
   onRolesUpdated: (roles: RoleOption[]) => void
   onEmploymentUpdated: (employment: Pick<OrganizationEmployee, 'position_title' | 'employment_type'>) => void
+  onDeleted: () => void
   onClose: () => void
 }) {
-  useOrganizationDialog(onClose)
-
-  const [activeTab, setActiveTab] = useState<DetailTab>('profile')
+  const [activeTab, setActiveTab] = useState<DetailTab>(initialTab)
   const [showEmail, setShowEmail] = useState(false)
 
   // Roles state
-  const [roleIds, setRoleIds] = useState<number[]>(() => employee.roles.map((role) => role.id))
+  const currentMainRole = employee.roles.find(role => mainRoleNames.includes(role.name))
+  const [roleIds, setRoleIds] = useState<number[]>(() => mainRolesEnabled
+    ? (currentMainRole ? [currentMainRole.id] : []) : employee.roles.map(role => role.id))
   const [savingRoles, setSavingRoles] = useState(false)
   const [rolesError, setRolesError] = useState('')
   const [rolesSuccess, setRolesSuccess] = useState('')
+  const { requiresMfa } = useAuth()
+  const [roleStepUp, setRoleStepUp] = useState<{ userId: number; roleId: number } | null>(null)
+  const [resetStepUp, setResetStepUp] = useState(false)
+  const canEditRoles = roleTargetBlock === null
+  const selectedRole = availableRoles.find(role => role.id === roleIds[0])
+  const canSaveRoles = canManageRoles && canEditRoles && !savingRoles && !roleStepUp && roleIds.length === 1
+    && (!mainRolesEnabled || (selectedRole?.assignable === true && selectedRole.id !== currentMainRole?.id))
 
   // Employment state
   const [employmentType, setEmploymentType] = useState(employee.employment_type ?? 'full_time')
@@ -1444,6 +1547,21 @@ function EmployeeDetailModal({
   const [resetError, setResetError] = useState('')
   const [resetSuccess, setResetSuccess] = useState('')
   const [resettingPassword, setResettingPassword] = useState(false)
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
+  const [deletingEmployee, setDeletingEmployee] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
+  const closeEmployeeDialog = useCallback(() => {
+    if (roleStepUp || resetStepUp) return
+    if (showDeleteConfirmation) {
+      if (!deletingEmployee) setShowDeleteConfirmation(false)
+      return
+    }
+
+    if (!deletingEmployee) onClose()
+  }, [deletingEmployee, onClose, resetStepUp, roleStepUp, showDeleteConfirmation])
+
+  useOrganizationDialog(closeEmployeeDialog)
 
   const status = statusConfig[employee.work_status]
   const isEmployeeOnline = employee.work_status !== 'offline' && employee.attendance !== null
@@ -1455,7 +1573,12 @@ function EmployeeDetailModal({
   }
 
   const saveRoles = async () => {
-    if (roleIds.length === 0 || savingRoles) return
+    if (!canSaveRoles) return
+    if (requiresMfa || mainRolesEnabled) {
+      if (employee.user_id && roleIds.length === 1) setRoleStepUp({ userId: employee.user_id, roleId: roleIds[0] })
+      else setRolesError('ログインアカウントまたは選択したロールを確認できません。')
+      return
+    }
     try {
       setSavingRoles(true)
       setRolesError('')
@@ -1527,27 +1650,11 @@ function EmployeeDetailModal({
     }
   }
 
-  const resetPassword = async () => {
+  const resetPassword = () => {
     if (resettingPassword || !employee.user_id) return
-    try {
-      setResettingPassword(true)
-      setResetError('')
-      setResetSuccess('')
-      setTemporaryPassword('')
-      const response = await api.put<{ message: string; temporary_password: string }>(
-        `/employees/${employee.id}/password-reset`,
-      )
-      setTemporaryPassword(response.data.temporary_password)
-      setResetSuccess(response.data.message)
-    } catch (error) {
-      setResetError(
-        axios.isAxiosError(error)
-          ? error.response?.data?.message ?? 'パスワードのリセットに失敗しました。'
-          : 'パスワードのリセットに失敗しました。',
-      )
-    } finally {
-      setResettingPassword(false)
-    }
+    setResetError(''); setResetSuccess(''); setTemporaryPassword('')
+    if (!requiresMfa) { setResetError('この操作にはMFA登録と認証済みセッションが必要です。'); return }
+    setResettingPassword(true); setResetStepUp(true)
   }
 
   const copyTemporaryPassword = async () => {
@@ -1560,10 +1667,29 @@ function EmployeeDetailModal({
     }
   }
 
-  return createPortal(
+  const deleteEmployee = async () => {
+    if (deletingEmployee || !canDeleteEmployee) return
+
+    try {
+      setDeletingEmployee(true)
+      setDeleteError('')
+      await api.delete(`/employees/${employee.id}`)
+      onDeleted()
+    } catch (error) {
+      setDeleteError(
+        axios.isAxiosError(error)
+          ? error.response?.data?.message ?? '社員アカウントを削除できませんでした。'
+          : '社員アカウントを削除できませんでした。',
+      )
+    } finally {
+      setDeletingEmployee(false)
+    }
+  }
+
+  return <>{createPortal(
     <div
       className="organization-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"
-      onClick={onClose}
+      onClick={closeEmployeeDialog}
     >
       <div
         role="dialog"
@@ -1613,7 +1739,7 @@ function EmployeeDetailModal({
             onClick={() => setActiveTab('profile')}
           />
           <TabButton
-            label="権限設定"
+            label={mainRolesEnabled ? 'ロール設定' : '権限設定'}
             isActive={activeTab === 'roles'}
             onClick={() => setActiveTab('roles')}
           />
@@ -1624,7 +1750,7 @@ function EmployeeDetailModal({
               onClick={() => setActiveTab('task')}
             />
           )}
-          {canResetPassword && employee.user_id && (
+          {(canResetPassword || canDeleteEmployee) && (
             <TabButton
               label="アカウント管理"
               isActive={activeTab === 'account'}
@@ -1759,20 +1885,43 @@ function EmployeeDetailModal({
             <div className="space-y-4">
               <div>
                 <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  システムアクセス権限（ロール）
+                  {mainRolesEnabled ? '主ロールの設定' : 'システムアクセス権限（ロール）'}
                 </h3>
                 <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                  社員に割り当てる権限レベルを選択します。職責に応じた最小限の権限を設定してください。
+                  {mainRolesEnabled ? '職責に合う主ロールを1つ選択します。変更には追加認証が必要です。'
+                    : '社員に割り当てる権限レベルを選択します。職責に応じた最小限の権限を設定してください。'}
                 </p>
               </div>
 
-              {!canEditRoles && (
+              {roleTargetBlock && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300">
-                  自分自身の権限は変更できません。
+                  {roleTargetBlock}
                 </div>
               )}
 
-              <div className="space-y-2">
+              {mainRolesEnabled ? (
+                <div className="space-y-3 text-xs text-[var(--tm-text-secondary)]">
+                  <div className="rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] p-3">
+                    <p className="font-semibold">現在の主ロール</p>
+                    <div className="mt-1"><EmployeeRoleBadge employee={employee} mainRolesEnabled /></div>
+                    {!currentMainRole && employee.roles.length > 0 && <p className="mt-2 break-words">
+                      現在の権限 · {employee.roles.map(role => role.display_name).join(' / ')}
+                    </p>}
+                  </div>
+                  {!canManageRoles && !roleTargetBlock && <p>このアカウントではロールを変更できません。</p>}
+                  <label className="block space-y-1.5 font-semibold">
+                    <span className="block">新しいロール</span>
+                    <select className="w-full rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] p-2.5 text-sm text-[var(--tm-text-primary)] disabled:opacity-60"
+                      value={roleIds[0] ?? ''} disabled={!canManageRoles || !canEditRoles || !!roleStepUp}
+                      onChange={event => toggleRole(Number(event.target.value))}>
+                      <option value="" disabled>ロールを選択</option>
+                      {availableRoles.map(role => <option key={role.id} value={role.id} disabled={!role.assignable}>
+                        {role.display_name}{role.name === 'admin' ? '（保護対象）' : ''}
+                      </option>)}
+                    </select>
+                  </label>
+                </div>
+              ) : <div className="space-y-2">
                 {availableRoles.map((role) => {
                   const levelKey = role.name as keyof typeof accessLevelGuide
                   const guide = accessLevelGuide[levelKey]
@@ -1829,21 +1978,21 @@ function EmployeeDetailModal({
                     </div>
                   )
                 })}
-              </div>
+              </div>}
 
-              {rolesError && <p className="text-xs text-rose-600 dark:text-rose-400">{rolesError}</p>}
-              {rolesSuccess && <p className="text-xs text-emerald-600 dark:text-emerald-400">{rolesSuccess}</p>}
+              {rolesError && <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">{rolesError}</p>}
+              {rolesSuccess && <p role="status" className="text-xs text-emerald-600 dark:text-emerald-400">{rolesSuccess}</p>}
 
               {canManageRoles && canEditRoles && (
                 <div className="flex justify-end pt-2">
                   <button
                     type="button"
-                    disabled={savingRoles}
+                    disabled={!canSaveRoles}
                     onClick={() => void saveRoles()}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500"
                   >
                     {savingRoles ? <ButtonSpinner size={14} /> : <Check size={14} />}
-                    <span>{savingRoles ? '保存中…' : '権限設定を保存'}</span>
+                    <span>{savingRoles ? '保存中…' : mainRolesEnabled ? '認証してロールを保存' : '権限設定を保存'}</span>
                   </button>
                 </div>
               )}
@@ -1974,31 +2123,29 @@ function EmployeeDetailModal({
           )}
 
           {/* TAB 4: Account & Security */}
-          {activeTab === 'account' && canResetPassword && employee.user_id && (
+          {activeTab === 'account' && (canResetPassword || canDeleteEmployee) && (
             <div className="space-y-4">
-              <div>
-                <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  ログインアカウントのパスワード再設定
-                </h3>
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                  社員がパスワードを忘れた場合、新しい仮パスワードを発行します。
-                </p>
-              </div>
-
-              <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/30">
-                <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-                  仮パスワードを発行すると現在のセッションは終了し、本人は次回ログイン時に必ずパスワードを変更するよう要求されます。
-                </p>
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    disabled={resettingPassword}
-                    onClick={() => void resetPassword()}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
-                  >
-                    {resettingPassword ? '発行中...' : '仮パスワードを生成'}
-                  </button>
-                </div>
+              {canResetPassword && employee.user_id && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/30">
+                  <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    ログインアカウントのパスワード再設定
+                  </h3>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                    社員がパスワードを忘れた場合、新しい仮パスワードを発行します。
+                  </p>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                    仮パスワードを発行すると現在のセッションは終了し、本人は次回ログイン時に必ずパスワードを変更するよう要求されます。
+                  </p>
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      disabled={resettingPassword}
+                      onClick={() => void resetPassword()}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+                    >
+                      {resettingPassword ? '発行中...' : '仮パスワードを生成'}
+                    </button>
+                  </div>
 
                 {temporaryPassword && (
                   <div className="mt-3 rounded-lg border border-amber-200 bg-white p-3 dark:border-amber-500/20 dark:bg-slate-900">
@@ -2021,9 +2168,31 @@ function EmployeeDetailModal({
                   </div>
                 )}
 
-                {resetError && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{resetError}</p>}
-                {resetSuccess && <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">{resetSuccess}</p>}
-              </div>
+                  {resetError && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{resetError}</p>}
+                  {resetSuccess && <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">{resetSuccess}</p>}
+                </div>
+              )}
+
+              {canDeleteEmployee && (
+                <div className="rounded-lg border border-rose-200 p-3.5 dark:border-rose-500/30">
+                  <h3 className="text-xs font-semibold text-rose-700 dark:text-rose-300">社員アカウントの削除</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                    {employee.user_id && 'ログインを無効化し、'}社員を一覧から削除します。過去の業務履歴は保持されます。
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteError('')
+                      setShowDeleteConfirmation(true)
+                    }}
+                    className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:border-rose-500/40 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-500/10"
+                  >
+                    <Trash2 size={13} />
+                    <span>社員を削除</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -2039,9 +2208,102 @@ function EmployeeDetailModal({
           </button>
         </footer>
       </div>
+
+      {showDeleteConfirmation && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/70 p-4"
+          onClick={closeEmployeeDialog}
+        >
+          <section
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-employee-title"
+            aria-describedby="delete-employee-description"
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-md rounded-xl border border-rose-200 bg-white p-5 shadow-xl dark:border-rose-500/30 dark:bg-slate-900"
+          >
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300">
+              <Trash2 size={19} />
+            </span>
+            <h2 id="delete-employee-title" className="mt-4 text-base font-semibold text-slate-900 dark:text-slate-100">
+              社員を削除しますか？
+            </h2>
+            <p id="delete-employee-description" className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              「{employee.full_name}」を社員一覧から削除します。
+              {employee.user_id && ' ログインアカウントも削除され、現在のセッションはすべて終了します。'}
+              過去の業務履歴は保持されます。
+            </p>
+
+            {deleteError && (
+              <p className="mt-3 rounded-lg bg-rose-50 p-2.5 text-xs text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+                {deleteError}
+              </p>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                autoFocus
+                disabled={deletingEmployee}
+                onClick={() => {
+                  setShowDeleteConfirmation(false)
+                  setDeleteError('')
+                }}
+                className="h-9 rounded-lg border border-slate-200 bg-white px-4 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                disabled={deletingEmployee}
+                onClick={() => void deleteEmployee()}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-rose-600 px-4 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+              >
+                {deletingEmployee ? <ButtonSpinner size={14} /> : <Trash2 size={14} />}
+                <span>{deletingEmployee ? '削除中…' : '削除を確定'}</span>
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>,
     document.body,
-  )
+  )}
+    {resetStepUp && employee.user_id && <StepUpDialog
+      language="ja"
+      operation={{ action: 'employee.reset_password', scope: { user_id: employee.user_id, employee_id: employee.id } }}
+      description="本人へ安全に引き渡す仮パスワードを発行します。有効期間は15分です。既存のセッションは無効になります。"
+      mutate={async () => {
+        const response = await api.put<unknown>(`/employees/${employee.id}/password-reset`, undefined, { timeout: 30_000 })
+        if (response.status !== 200 || !record(response.data) || typeof response.data.temporary_password !== 'string'
+          || typeof response.data.expires_at !== 'string' || typeof response.data.message !== 'string') throw new AuthFailure()
+        return response.data
+      }}
+      onComplete={result => {
+        const handover = result as { temporary_password: string; message: string }
+        setTemporaryPassword(handover.temporary_password); setResetSuccess(handover.message)
+        setResetStepUp(false); setResettingPassword(false)
+      }}
+      onCancel={() => { setResetStepUp(false); setResettingPassword(false) }}
+      onMutationError={message => { setResetStepUp(false); setResettingPassword(false); setResetError(message) }}
+    />}
+    {roleStepUp && <StepUpDialog
+      language="ja"
+      operation={{ action: 'role.assign', scope: { user_id: roleStepUp.userId, role_id: roleStepUp.roleId } }}
+      description={`${employee.full_name} さんのロールを「${availableRoles.find(role => role.id === roleStepUp.roleId)?.display_name ?? '選択したロール'}」に変更します。`}
+      mutate={async () => {
+        const response = await api.put<unknown>(`/employees/${employee.id}/roles`, { role_ids: [roleStepUp.roleId] }, { timeout: 30_000 })
+        if (response.status !== 200 || !record(response.data) || !Array.isArray(response.data.roles)) throw new AuthFailure()
+        return response.data
+      }}
+      onComplete={result => {
+        onRolesUpdated((result as { roles: RoleOption[] }).roles)
+        setRoleStepUp(null); setRolesSuccess('アクセス権限を正常に更新しました。')
+      }}
+      onCancel={() => setRoleStepUp(null)}
+      onMutationError={message => { setRoleStepUp(null); setRolesError(message) }}
+    />}
+  </>
 }
 
 function TabButton({
@@ -2160,7 +2422,7 @@ function CreateEmployeeModal({
               新規社員の登録
             </h2>
             <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-              基本プロフィールを作成します（ログインアカウントは別途作成されます）。
+              基本プロフィールとログインアカウントを同時に作成します。
             </p>
           </div>
           <button
@@ -2182,7 +2444,7 @@ function CreateEmployeeModal({
           )}
 
           <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
-            社員コードは登録時に自動発行されます。
+            社員コードは登録時に自動発行されます。新規アカウントは有効化待ちです。共通の初期パスワードはありません。本人が招待コードでパスワードを設定します。招待の発行・引渡しは承認済み手順が必要です。
           </p>
 
           <label className="block space-y-1">
@@ -2261,10 +2523,11 @@ function CreateEmployeeModal({
 
           <label className="block space-y-1">
             <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-              業務用メールアドレス
+              業務用メールアドレス <span className="text-rose-500">*</span>
             </span>
             <input
               type="email"
+              required
               value={workEmail}
               onChange={(e) => setWorkEmail(e.target.value)}
               placeholder="name@themis.local"

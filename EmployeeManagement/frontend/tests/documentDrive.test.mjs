@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
-import ts from 'typescript'
+import { fileURLToPath } from 'node:url'
+import { loadTypeScript } from './helpers/loadTypeScript.mjs'
 
-const source = readFileSync(new URL('../src/features/document-creation/documentDraftStore.ts', import.meta.url), 'utf8')
 let response, failure, request
-globalThis.__driveTransport = {
+const transport = {
   async get() { return { data: response } },
   async post(...args) { request = args; if (failure) throw failure; return { data: response } },
 }
-const compiled = ts.transpileModule(source.replace("import api from '../../services/api'", 'const api = globalThis.__driveTransport'), { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText
-const { documentDraftStore, saveDocumentToDrive } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`)
+const { documentDraftStore, saveDocumentToDrive } = loadTypeScript(new URL('../src/features/document-creation/documentDraftStore.ts', import.meta.url),
+  new Map([[fileURLToPath(new URL('../src/services/api.ts', import.meta.url)), { __esModule: true, default: transport }]]))
 
 test('backend capability defaults to unavailable, not browser configuration', async () => {
   response = { supported: true, template: null, document: null }

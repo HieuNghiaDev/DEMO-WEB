@@ -1,0 +1,35 @@
+.dc-required-workflow-badge[data-status] {
+  --required-badge-rgb: 99, 102, 241;
+  --required-badge-text: #4f46e5;
+  --required-badge-fill: .10;
+  --required-badge-line: .24;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 25px;
+  padding: 4px 9px;
+  border: 1px solid rgba(var(--required-badge-rgb), var(--required-badge-line));
+  border-radius: 999px;
+  background: rgba(var(--required-badge-rgb), var(--required-badge-fill));
+  color: var(--required-badge-text);
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.dc-required-workflow-dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: currentColor; }
+.dc-required-workflow-badge > svg { flex-shrink: 0; }
+.dc-required-workflow-badge[data-status=unaccepted] { --required-badge-rgb: 245, 158, 11; --required-badge-text: #92400e; --required-badge-line: .25; }
+.dc-required-workflow-badge[data-status=in_progress] { --required-badge-rgb: 14, 165, 233; --required-badge-text: #0369a1; --required-badge-line: .25; }
+.dc-required-workflow-badge[data-status=pending_review] { --required-badge-rgb: 245, 158, 11; --required-badge-text: #92400e; --required-badge-fill: .12; --required-badge-line: .32; }
+.dc-required-workflow-badge[data-status=changes_requested] { --required-badge-rgb: 244, 63, 94; --required-badge-text: #be123c; --required-badge-line: .28; }
+.dc-required-workflow-badge[data-status=completed] { --required-badge-rgb: 16, 185, 129; --required-badge-text: #047857; --required-badge-line: .28; }
+.dc-required-workflow-badge[data-status=cancelled] { --required-badge-rgb: 100, 116, 139; --required-badge-text: #475569; }
+.dark .dc-required-workflow-badge[data-status=selected] { --required-badge-text: #a5b4fc; }
+.dark .dc-required-workflow-badge[data-status=unaccepted], .dark .dc-required-workflow-badge[data-status=pending_review] { --required-badge-text: #fbbf24; }
+.dark .dc-required-workflow-badge[data-status=in_progress] { --required-badge-text: #38bdf8; }
+.dark .dc-required-workflow-badge[data-status=changes_requested] { --required-badge-text: #fb7185; }
+.dark .dc-required-workflow-badge[data-status=completed] { --required-badge-text: #34d399; }
+.dark .dc-required-workflow-badge[data-status=cancelled] { --required-badge-text: #94a3b8; }

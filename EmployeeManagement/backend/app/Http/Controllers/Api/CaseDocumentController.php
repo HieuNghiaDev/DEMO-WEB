@@ -7,6 +7,7 @@ use App\Models\CaseDocument;
 use App\Models\CaseFile;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use App\Services\CaseWorkspaceAuditService;
 
@@ -18,11 +19,16 @@ class CaseDocumentController extends Controller
 
     public function index(CaseFile $caseFile): JsonResponse
     {
+        // Document route permissions do not establish access to their parent case.
+        Gate::authorize('view', $caseFile);
+
         return response()->json(['documents' => $caseFile->documents()->latest()->get()]);
     }
 
     public function store(Request $request, CaseFile $caseFile): JsonResponse
     {
+        Gate::authorize('view', $caseFile);
+
         $data = $this->validated($request);
         $data['version'] = '1';
         $data['created_by_employee_id'] = $request->user()?->employee_id;
@@ -35,6 +41,8 @@ class CaseDocumentController extends Controller
 
     public function update(Request $request, CaseFile $caseFile, CaseDocument $document): JsonResponse
     {
+        Gate::authorize('view', $caseFile);
+
         abort_unless($document->case_file_id === $caseFile->id, 404);
         $data = $this->validated($request, true);
         $data['version'] = (string) ($this->versionNumber($document->version) + 1);
@@ -47,6 +55,8 @@ class CaseDocumentController extends Controller
 
     public function destroy(Request $request, CaseFile $caseFile, CaseDocument $document): JsonResponse
     {
+        Gate::authorize('view', $caseFile);
+
         abort_unless($document->case_file_id === $caseFile->id, 404);
         $document->delete();
         $this->auditService->record($caseFile, $request, '資料を削除', $document->title, ['document_id' => $document->id]);
@@ -72,6 +82,10 @@ class CaseDocumentController extends Controller
     private function applyConfirmation(array &$data, Request $request): void
     {
         if (($data['status'] ?? null) === 'confirmed') {
+            $actor = $request->user();
+            if (\App\Services\Administration\MainRoles::assigned($actor)) {
+                abort_unless($actor->hasPermission('task.review'), 403);
+            }
             $data['confirmed_by_employee_id'] = $request->user()?->employee_id;
             $data['confirmed_at'] = now();
         } elseif (array_key_exists('status', $data)) {
