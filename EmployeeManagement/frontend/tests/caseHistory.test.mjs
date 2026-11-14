@@ -36,10 +36,11 @@ function harness(api = {}, withEffects = false) {
     if (modules.has(path)) return modules.get(path).exports
     const module = { exports: {} }; modules.set(path, module)
     let code = ts.transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2023, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText
-    if (path.endsWith('CaseHistoryPanel.tsx')) code += '\nexports.CommunicationDialog = CommunicationDialog; exports.NextActionTaskDialog = NextActionTaskDialog;'
+    if (path.endsWith('CaseHistoryPanel.tsx')) code += '\nexports.CommunicationDialog = CommunicationDialog; exports.HistoryPeopleField = HistoryPeopleField; exports.NextActionTaskDialog = NextActionTaskDialog;'
     const require = name => {
       if (name === 'react') return hooks
       if (name === './api') return { caseWorkspaceApi: api }
+      if (name === '../../services/api') return { captureAuthSession: () => () => true }
       if (name === '../../components/ui') return { Button: ({ icon, iconPosition: _position, variant: _variant, size: _size, loading: _loading, ...props }) => React.createElement('button', props, props.children, icon), ModalShell: props => React.createElement('section', props) }
       if (name.endsWith('.css')) return {}
       if (!name.startsWith('.')) return external(name)
@@ -199,6 +200,42 @@ test('failed save retains dialog/form data and shows error without success', asy
     assert.ok(nodes(tree).some(n => n.props.role === 'alert'))
     assert.ok(nodes(tree).some(n => n.props.value === communication.subject)); assert.equal(saved, 0)
   } finally { globalThis.window = oldWindow }
+})
+test('editing a communication sends newly selected files only on Save', async () => {
+  const calls = []
+  const h = harness({ saveCommunication: async (...args) => { calls.push(args); return entry } })
+  const props = { caseId: 49, entry, people: [person], canAttach: true, onClose() {}, onSaved() {} }
+  const selected = new File(['synthetic'], 'consultation.mp4', { type: 'video/mp4' })
+  const tree = h.render('CommunicationDialog', props)
+  const drawer = nodes(tree).find(n => n.type === 'aside' && n.props.role === 'dialog')
+  assert.equal(drawer.props['aria-modal'], 'true')
+  const drawerNodes = nodes(drawer)
+  assert.equal(drawerNodes.find(n => n.props.type === 'submit').props.form, drawerNodes.find(n => n.type === 'form').props.id)
+  const picker = nodes(tree).find(n => n.type?.name === 'HistoryAttachmentPicker')
+  picker.props.onChange([selected])
+  assert.equal(calls.length, 0)
+  const form = nodes(h.render('CommunicationDialog', props)).find(n => n.type === 'form')
+  form.props.onSubmit({ preventDefault() {} })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0][0], 49)
+  assert.equal(calls[0][2], entry.record_id)
+  assert.deepEqual(calls[0][3], [selected])
+})
+test('collapsed person picker keeps selected people, filters choices and forwards the selected reference', () => {
+  const h = harness()
+  const employee = { type: 'employee', id: 3, name: '佐藤' }
+  const external = { type: 'external', id: null, name: '外部参加者' }
+  const picks = []
+  const props = { id: 'people', label: '参加者', people: [person, employee], selected: [external], onPick: (...args) => picks.push(args) }
+  const render = () => nodes(h.render('HistoryPeopleField', props))
+  assert.equal(render().find(n => n.type === 'details').props.open, undefined)
+  assert.equal(render().filter(n => n.props.type === 'checkbox' && n.props.checked).length, 1)
+  render().find(n => n.props.type === 'search').props.onChange({ target: { value: '佐藤' } })
+  const filtered = render().filter(n => n.props.type === 'checkbox')
+  assert.equal(filtered.length, 1)
+  filtered[0].props.onChange({ target: { checked: true } })
+  assert.deepEqual(picks, [[employee, true]])
 })
 test('next-action task is explicit, prefilled, assignee-required and single-flight', async () => {
   let calls = 0; let payload; let finish

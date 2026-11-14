@@ -67,3 +67,4 @@ export function classificationError(value: string): string {
   if (value === 'confidential') return '機密案件のアクセスメンバー設定は現在準備中です。'
   return value === 'normal' ? '' : '案件区分を選択してください。'
 }
+

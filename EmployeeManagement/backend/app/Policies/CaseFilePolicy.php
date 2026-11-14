@@ -18,4 +18,9 @@ class CaseFilePolicy
     {
         return CaseAccessService::contentAllows($user, $case->id, 'write');
     }
+
+    public function decideDocumentNecessity(User $user, CaseFile $case): bool
+    {
+        return $user->hasRole('lawyer') && $user->hasPermission('case.update') && $this->operate($user, $case);
+    }
 }

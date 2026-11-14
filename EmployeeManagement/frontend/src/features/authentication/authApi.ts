@@ -10,10 +10,14 @@ export const authTransport: AuthTransport = async (path, body, preAuth) => {
     return { status: response.status, data: response.data }
   } catch (error) {
     // Never propagate Axios config/request/body to an error boundary or telemetry.
-    if (!preAuth && axios.isAxiosError(error) && [401, 419].includes(error.response?.status ?? 0)) {
+    const status = axios.isAxiosError(error) ? error.response?.status ?? 0 : 0
+    if (!preAuth && [401, 419].includes(status)) {
       window.dispatchEvent(new Event('themis-auth-expired'))
     }
-    throw new AuthFailure(axios.isAxiosError(error) ? error.response?.status : 0)
+    if (path === '/login' && status === 422) {
+      throw new AuthFailure(status, 'メールアドレスまたはパスワードが正しくありません。')
+    }
+    throw new AuthFailure(status)
   }
 }
 export function withStepUp<T>(operation: StepUpOperation, password: string, otp: string, mutation: () => Promise<T>) {

@@ -1,10 +1,11 @@
 // Development-only harness: real route/form/workspace components, isolated transport and fictional records.
-// No AuthProvider, tokens, database, or external requests. Never a production entry point.
+// No real credentials, database, or external requests. Never a production entry point.
 import { createRoot } from 'react-dom/client'
 import { useEffect, useState } from 'react'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { AxiosError } from 'axios'
 import api from '../../src/services/api'
+import { AuthProvider } from '../../src/contexts/AuthContext'
 import { CaseManagement } from '../../src/pages/BusinessQuest'
 import type { CaseWorkspace } from '../../src/features/case-workspace/types'
 import type { CaseClient, CaseEmployee, CaseTypeOption } from '../../src/features/case-management/types'
@@ -90,4 +91,4 @@ export function Harness() {
     <details><summary>試験通信履歴</summary><pre data-testid="case-transport-log" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{log}</pre></details>
   </>
 }
-createRoot(document.getElementById('root')!).render(<MemoryRouter initialEntries={['/quests']}><Harness/></MemoryRouter>)
+createRoot(document.getElementById('root')!).render(<MemoryRouter initialEntries={['/quests']}><AuthProvider><Harness/></AuthProvider></MemoryRouter>)

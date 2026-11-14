@@ -1,5 +1,5 @@
 import api from '../../services/api'
-import type { ChatActionName, ChatDraftMention, ChatMentionMember, ChatMessageAction, ChatMessagesResponse, InternalChatMessage } from './types'
+import type { ChatActionName, ChatDraftMention, ChatMentionMember, ChatMessageAction, ChatMessagesResponse, ChatTranslationPair, ChatTranslations, ChatUnread, InternalChatMessage } from './types'
 
 const chatSyncTimeout = 12_000
 export const CHAT_PAGE_SIZE = 20
@@ -67,13 +67,18 @@ export const fetchChatMessage = async (id: number, signal: AbortSignal) => {
   return response.data.message
 }
 
+export const requestChatTranslation = async (id: number, pair: ChatTranslationPair, signal: AbortSignal) => {
+  const response = await api.post<{ translations: ChatTranslations }>(`/internal-chat/messages/${id}/translations`, { pair }, { signal, timeout: chatSyncTimeout })
+  return response.data.translations
+}
+
 export const fetchChatUnreadCount = async () => {
   const response = await api.get<{ unread_count: number }>('/internal-chat/unread')
   return response.data.unread_count
 }
 
 export const markChatRead = async (messageId: number, visibleIds: number[], signal?: AbortSignal) => {
-  const response = await api.patch<{ unread_count: number; read_cursor: number; acknowledged_ids?: number[] }>('/internal-chat/read', {
+  const response = await api.patch<ChatUnread & { read_cursor: number; acknowledged_ids?: number[] }>('/internal-chat/read', {
     message_id: messageId, visible_ids: visibleIds,
   }, { signal, timeout: chatSyncTimeout })
   return response.data

@@ -3,9 +3,10 @@ import { UserAvatar } from '../../components/ui/UserAvatar'
 import { getEmployeeAvatarImageUrl } from '../../utils/employeeAvatar'
 import type { ChatReceipt } from './types'
 
-export default function MessageReceipt({ receipt, readerMarkers: readers = [] }: {
+export default function MessageReceipt({ receipt, readerMarkers: readers = [], showDelivery = true }: {
   receipt?: ChatReceipt
   readerMarkers?: ChatReceipt['readers']
+  showDelivery?: boolean
 }) {
   const readCount = receipt?.read_count ?? 0
   const overflowCount = readers.length - 3
@@ -14,11 +15,11 @@ export default function MessageReceipt({ receipt, readerMarkers: readers = [] }:
   const Icon = hasDelivery ? CheckCheck : Check
   const label = hasDelivery ? '受信済み' : '送信済み'
 
-  if (hasRead && readers.length === 0) return null
+  if (!readers.length && (hasRead || !showDelivery)) return null
 
   return (
     <div className="internal-chat-read-receipt">
-      {!hasRead && <>
+      {showDelivery && !hasRead && <>
         <Icon size={13} className="internal-chat-read-check" aria-hidden="true" />
         <span className="internal-chat-read-text">{label}</span>
       </>}
@@ -40,3 +41,4 @@ export default function MessageReceipt({ receipt, readerMarkers: readers = [] }:
     </div>
   )
 }
+

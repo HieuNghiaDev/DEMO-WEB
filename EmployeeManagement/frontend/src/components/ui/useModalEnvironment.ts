@@ -17,7 +17,6 @@ function syncBackground() {
 function lockPage() {
   const body = document.body
   const html = document.documentElement
-  const overflow = body.style.overflow
   const padding = body.style.paddingRight
   const htmlOverflow = html.style.overflow
   const overscroll = html.style.overscrollBehavior
@@ -26,11 +25,10 @@ function lockPage() {
   if (scrollbar && !getComputedStyle(html).scrollbarGutter.includes('stable')) {
     body.style.paddingRight = `${parseFloat(getComputedStyle(body).paddingRight) + scrollbar}px`
   }
-  body.style.overflow = 'hidden'
+  // Keep body out of the scroll chain so the desktop sidebar stays sticky to the viewport.
   html.style.overflow = 'hidden'
   html.style.overscrollBehavior = 'none'
   return () => {
-    body.style.overflow = overflow
     body.style.paddingRight = padding
     html.style.overflow = htmlOverflow
     html.style.overscrollBehavior = overscroll

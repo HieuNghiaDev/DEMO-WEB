@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use App\Services\Administration\AccountActivationService;
 use App\Services\Administration\AdminCapabilities;
 use App\Services\Administration\AdminContinuityGuard;
 use App\Services\Administration\AdministrativeRoleService;
@@ -26,6 +27,16 @@ use Illuminate\Support\Facades\Schema;
 
 class OrganizationController extends Controller
 {
+    public function issueActivationInvite(Request $request, Employee $employee, AccountActivationService $activation): JsonResponse
+    {
+        $invitation = $activation->issueForAdmin($request->user(), $employee);
+
+        return response()->json([
+            'activation_code' => $invitation->tokenForDelivery(),
+            'expires_at' => $invitation->expiresAt->toIso8601String(),
+        ], 201)->header('Cache-Control', 'no-store, private');
+    }
+
     public function resetPassword(Request $request, Employee $employee): JsonResponse
     {
         $handover = app(\App\Services\Administration\EmployeePasswordReset::class)->reset($request->user(), $employee);
@@ -172,6 +183,7 @@ class OrganizationController extends Controller
         // once, then apply the shared subject boundary to every row (default: self only).
         $privateGate = Gate::forUser($user);
         $canViewPrivate = $privateGate->allows('viewPrivateDirectory', Employee::class);
+        $canIssueActivationInvites = AdminCapabilities::isCanonicalAdmin($user);
         $onlineUserIds = \App\Services\EmployeeOnlinePresence::userIds();
 
         $employees = Employee::query()
@@ -243,7 +255,7 @@ class OrganizationController extends Controller
         $visibleSessionTasks = $sessionTaskIds->isEmpty() ? collect() : EmployeeTask::query()
             ->visibleTo($user)->whereKey($sessionTaskIds)->pluck('id')->flip();
 
-        $employees = $employees->map(function (Employee $employee) use ($canViewPrivate, $privateGate, $onlineUserIds, $visibleAssignees, $visibleSessionTasks) {
+        $employees = $employees->map(function (Employee $employee) use ($canViewPrivate, $canIssueActivationInvites, $privateGate, $onlineUserIds, $visibleAssignees, $visibleSessionTasks) {
                 $canViewEmployeePrivate = $canViewPrivate && $privateGate->allows('viewPrivateSubject', $employee);
                 $attendance = $employee->attendances->first();
                 $quest = $employee->tasks->first();
@@ -281,6 +293,8 @@ class OrganizationController extends Controller
                     'hire_date' => $employee->hire_date?->toDateString(),
 
                     'user_id' => $employee->user?->id,
+                    'can_issue_activation_invite' => $canIssueActivationInvites && $employee->user?->activation_required
+                        && $privateGate->allows('issueInviteAsAdmin', $employee),
 
                     'roles' => $employee->user?->roles
                         ->map(fn (Role $role) => [

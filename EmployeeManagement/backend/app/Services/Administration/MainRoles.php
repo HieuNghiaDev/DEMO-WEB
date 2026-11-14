@@ -37,7 +37,7 @@ final class MainRoles
             'lawyer' => [...self::PERSONAL, ...self::CASE_WORK, ...self::PROFESSIONAL, 'case.assign', 'case.delete',
                 'document.delete', 'task.view_all', 'interpretation.view_costs'],
             'legal_assistant' => [...self::PERSONAL, ...self::CASE_WORK, ...self::PROFESSIONAL, 'employee.manage_roles'],
-            'staff' => [...self::PERSONAL, ...self::CASE_WORK, 'employee.manage_roles'],
+            'staff' => [...self::PERSONAL, ...self::CASE_WORK, 'employee.create', 'employee.manage_roles'],
             'part_time' => [...self::PERSONAL, 'case.view', 'document.view'],
         };
     }

@@ -179,6 +179,7 @@ export default function CaseWorkspacePage(props: Props) {
   if (!data) return <WorkspaceFailure error={error} onBack={onBack} onRetry={() => void reload()}/>
 
   const caseFile = data.case_file
+  const canDecideNecessity = data.can_decide_document_necessity === true
   const openRelatedTask = (taskId: number) => {
     if (!caseFile.case_tasks.some(task => task.id === taskId)) return
     setTaskToOpen(taskId)
@@ -190,14 +191,9 @@ export default function CaseWorkspacePage(props: Props) {
   }
 
   return <main className="dc-preview cm-page cm-case-detail">
-    <div className="cm-ws-backbar">
-      <button type="button" onClick={onBack} className="cm-ws-backlink" aria-label="戻る">
-        <ArrowLeft size={17} className="cm-ws-backlink-icon" />
-        <span>戻る</span>
-      </button>
-      <span className="cm-ws-breadcrumb-sep">&gt;</span>
-      <span className="cm-ws-breadcrumb-current">案件詳細</span>
-    </div>
+    <nav className="cm-ws-backbar" aria-label="案件ナビゲーション">
+      <Button type="button" size="sm" variant="secondary" onClick={onBack} className="cm-ws-backlink" icon={<ArrowLeft size={16} aria-hidden/>}>戻る</Button>
+    </nav>
 
     {error && <div className="cm-alert-banner is-error">{error}</div>}
     {notice && <SuccessToast key={notice} message={notice} onDismiss={clearNotice} />}
@@ -239,7 +235,7 @@ export default function CaseWorkspacePage(props: Props) {
       </section>
 
       <div className={`cm-tab-content cm-ws-section cm-ws-content-surface ${tab === 'documents' ? 'cm-ws-required-content' : ''}`}>
-        {tab === 'collection' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingCollection')}</p>}><DocumentCollectionPanel key={caseId} caseId={caseId} initialSelectedId={initialCollectionItemId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onHistory={() => setTab('timeline')} onBack={onBack} onChanged={() => void reload(true)} /></Suspense>}
+        {tab === 'collection' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingCollection')}</p>}><DocumentCollectionPanel key={caseId} caseId={caseId} initialSelectedId={initialCollectionItemId} canUpdate={canUpdate} canDecideNecessity={canDecideNecessity} canReviewDocuments={canReviewDocuments} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onHistory={() => setTab('timeline')} onBack={onBack} onChanged={() => void reload(true)} /></Suspense>}
         {tab === 'overview' && (
           <OverviewPanel
             caseFile={caseFile}
@@ -251,7 +247,7 @@ export default function CaseWorkspacePage(props: Props) {
             onEditIncident={() => setIsIncidentDrawerOpen(true)}
           />
         )}
-        {tab === 'documents' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingDocuments')}</p>}><RequiredDocumentsPanel key={caseId} caseId={caseId} initialSelectedId={documentToOpen} onDocumentClose={() => setDocumentToOpen(undefined)} canUpdate={canUpdate} canManageTasks={canManageTasks} canReviewDocuments={canReviewDocuments} currentEmployeeId={user?.employee?.id} activities={caseFile.activities ?? []} tasks={caseFile.case_tasks} onCandidates={() => setTab('collection')} onHistory={() => setTab('timeline')} onChanged={() => reload(true)} onCreateTasks={openTaskDrawer} onManageTasks={() => setTab('tasks')} onOpenTask={openRelatedTask}/></Suspense>}
+        {tab === 'documents' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingDocuments')}</p>}><RequiredDocumentsPanel key={caseId} caseId={caseId} initialSelectedId={documentToOpen} onDocumentClose={() => setDocumentToOpen(undefined)} canUpdate={canUpdate} canDecideNecessity={canDecideNecessity} canManageTasks={canManageTasks} canReviewDocuments={canReviewDocuments} currentEmployeeId={user?.employee?.id} activities={caseFile.activities ?? []} tasks={caseFile.case_tasks} onCandidates={() => setTab('collection')} onHistory={() => setTab('timeline')} onChanged={() => reload(true)} onCreateTasks={openTaskDrawer} onManageTasks={() => setTab('tasks')} onOpenTask={openRelatedTask}/></Suspense>}
         {tab === 'tasks' && <TasksPanel
           key={workspaceScope}
           caseId={caseId}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { AlertCircle, ArrowDown, RefreshCw, X } from 'lucide-react'
+import { AlertCircle, ArrowDown, ArrowUp, RefreshCw, X } from 'lucide-react'
 import { useInternalChat } from './useInternalChat'
 import ChatHeader from './ChatHeader'
 import MessageList from './MessageList'
@@ -22,6 +22,8 @@ export default function InternalChatPanel({
   const olderAnchor = useRef<{ id: number; top: number } | null>(null)
   const [readingAt, setReadingAt] = useState<number | null>(null)
   const [jumpId, setJumpId] = useState<number | null>(null)
+  const [loadingUnread, setLoadingUnread] = useState(false)
+  const unreadRow = useRef<number | null>(null)
   const [jumpResult, setJumpResult] = useState<{ id: number; revision: number; message: InternalChatMessage | null }>()
   const oldest = chat.messages[0]?.id
   const latest = chat.messages.at(-1)?.id
@@ -109,9 +111,36 @@ export default function InternalChatPanel({
     })
   }
 
+  const scrollToUnreadRow = useCallback((id: number) => {
+    const list = scrollRef.current
+    const message = list?.querySelector<HTMLElement>(`[data-chat-readable-id="${id}"]`)
+    const row = message?.closest<HTMLElement>('[data-chat-row-id]')
+    if (!list || !row) return false
+    // Jump directly so messages passed over are not observed as read.
+    list.scrollTop += row.getBoundingClientRect().top - list.getBoundingClientRect().top
+    row.focus({ preventScroll: true })
+    return true
+  }, [])
+
+  const jumpToUnread = async () => {
+    const id = chat.firstUnreadId
+    if (!id || loadingUnread) return
+    nearBottom.current = false
+    olderAnchor.current = null
+    if (scrollToUnreadRow(id)) return
+    setLoadingUnread(true)
+    if (await chat.loadOlder(id)) unreadRow.current = id
+    else void chat.retry()
+    setLoadingUnread(false)
+  }
+
+  useLayoutEffect(() => {
+    if (unreadRow.current !== null && scrollToUnreadRow(unreadRow.current)) unreadRow.current = null
+  }, [loadingUnread, oldest, scrollToUnreadRow])
+
   useEffect(() => {
     const list = scrollRef.current
-    if (!list || jumpId !== null || typeof IntersectionObserver === 'undefined') return
+    if (!list || jumpId !== null || loadingUnread || typeof IntersectionObserver === 'undefined') return
 
     let observing = true
     const queuedIds = new Set<number>()
@@ -154,7 +183,7 @@ export default function InternalChatPanel({
       observer.disconnect()
       document.removeEventListener('visibilitychange', observeVisibleTab)
     }
-  }, [chat.messages, markVisibleRead, jumpId])
+  }, [chat.messages, markVisibleRead, jumpId, loadingUnread])
 
   return (
     <section
@@ -189,9 +218,18 @@ export default function InternalChatPanel({
         </div>
       )}
 
+      {jumpId === null && Boolean(chat.firstUnreadId || loadingUnread) && (
+        <div className="internal-chat-new-messages internal-chat-unread-jump">
+          <button type="button" onClick={() => void jumpToUnread()} disabled={loadingUnread || chat.isLoadingOlder}>
+            <ArrowUp size={14} aria-hidden="true" />
+            {loadingUnread ? '未読メッセージを読み込み中…' : `未読メッセージへ（${chat.unreadCount}件）`}
+          </button>
+        </div>
+      )}
       <div className="internal-chat-history">
       <MessageList messages={chat.messages} receipts={chat.receipts} scrollRef={scrollRef} error={chat.error}
         actionsEnabled={chat.actionsEnabled} hideEnabled={chat.hideEnabled} canPin={chat.canPin} onAction={chat.messageAction}
+        translationPair={chat.translationPair} onTranslate={chat.translateMessage}
         onReply={onReply} onJump={jumpToMessage}
         isInitialLoading={chat.isInitialLoading} hasOlder={chat.hasOlder} isLoadingOlder={chat.isLoadingOlder}
         onLoadOlder={() => void loadOlder()} onScroll={(event) => {
@@ -203,7 +241,7 @@ export default function InternalChatPanel({
             const row = list.querySelector(`[data-chat-row-id="${anchor.id}"]`)
             if (row) anchor.top = row.getBoundingClientRect().top - list.getBoundingClientRect().top
           }
-          if (list.scrollTop <= 96 && !nearBottom.current && !chat.error) void loadOlder()
+          if (list.scrollTop <= 96 && !nearBottom.current && !chat.error && !loadingUnread) void loadOlder()
         }} />
       {jumpId === null && readingAt !== null && latest !== undefined && (
         <div className="internal-chat-new-messages">
@@ -222,11 +260,12 @@ export default function InternalChatPanel({
         </header>
         {!focusedMessage && <p role="status">読み込み中...</p>}
         {focusedMessage?.message === null && <p role="status">メッセージを表示できません。</p>}
-        {focusedMessage?.message && <MessageBubble message={focusedMessage.message} preview />}
+        {focusedMessage?.message && <MessageBubble message={focusedMessage.message} translationPair={chat.translationPair} preview />}
       </section>}
       </div>
 
       <ChatComposer variant={variant} draft={chat.draft} isSending={chat.isSending}
+        translationPair={chat.translationPair} onTranslationPair={chat.setTranslationPair}
         mentions={chat.draftMentions} onMentionDraft={chat.setMentionDraft}
         files={chat.files} onFiles={chat.setFiles} sendError={chat.sendError}
         inputRef={composerRef} reply={chat.reply} onCancelReply={() => chat.setReply(null)}

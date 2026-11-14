@@ -1,0 +1,367 @@
+{
+  "purpose": "THEMIS_G6_SYNTHETIC_ONLY",
+  "engine": "MariaDB",
+  "version": "10.4.32",
+  "driver": "mysql",
+  "migration_ledger": "NONE: actual steps recorded in private journal",
+  "steps": [
+    {
+      "path": "database/migrations/0001_01_01_000000_create_users_table.php",
+      "sha256": "10d79883bc08ce46510f9ad8b1830b4d06d586dc56ae2c8bac3b3e491f69a90f"
+    },
+    {
+      "path": "database/migrations/0001_01_01_000001_create_cache_table.php",
+      "sha256": "2ca8398390ecef8eaf72aeac7fefce67f7de631b6f2ec7b7081c8db8953215dc"
+    },
+    {
+      "path": "database/migrations/0001_01_01_000002_create_jobs_table.php",
+      "sha256": "7c9c712adf4091c87bf2612f4d0dccdfa1df4501553e4ac068b83d7bd5462fa5"
+    },
+    {
+      "path": "database/migrations/2026_08_07_083031_create_attendances_table.php",
+      "sha256": "301cd80134927fc4dff7ca28857021890a9ce231e3ea95f19ccd8f820469042d"
+    },
+    {
+      "path": "database/migrations/2026_08_07_174007_create_personal_access_tokens_table.php",
+      "sha256": "c81ecde85ea5072188c468dcaf79776728b6eb8f684d63fc0d88a4908484ca75"
+    },
+    {
+      "path": "database/migrations/2026_08_10_100210_create_offices_table.php",
+      "sha256": "31319eccd8fc2514bfadbc6c845f8d0f43b7f4ab24623815c3cc45d8a5eb717e"
+    },
+    {
+      "path": "database/migrations/2026_08_10_101034_create_departments_table.php",
+      "sha256": "9f8443ad295c0c32331d170f459a8bb9d637a6cfb57e8093f0ef0244dd7557ab"
+    },
+    {
+      "path": "database/migrations/2026_08_10_101236_create_employees_table.php",
+      "sha256": "e1b92b792b9545a004448a632433c8ba04d4080d112455d13a1f12025e0b5a63"
+    },
+    {
+      "path": "database/migrations/2026_08_10_101539_add_employee_auth_fields_to_users_table.php",
+      "sha256": "87ce7f711b049728b5780acb935d6b0e661e590cae028cd1b8276eb07d005d09"
+    },
+    {
+      "path": "database/migrations/2026_08_10_102033_add_employee_id_to_attendances_table.php",
+      "sha256": "f6be90e80f386932f16c9138f176d25daaa527ada807c794d87e7717210b3ef3"
+    },
+    {
+      "path": "database/migrations/2026_08_12_120000_add_outside_times_to_attendances_table.php",
+      "sha256": "bc24f97c009e661070db6bedce5aa9385c97c4d85431e5b6a367669ec64f935d"
+    },
+    {
+      "path": "database/migrations/2026_08_13_120000_create_security_audit_logs_table.php",
+      "sha256": "32e9bccc353dc37caaefca8abf336e22f6945f178de17ec6080830d20db92b45"
+    },
+    {
+      "path": "database/migrations/2026_08_13_130000_add_outside_destination_to_attendances_table.php",
+      "sha256": "983ac8bc64dce851affab4e65635c5fc17161c295f0256611dc6c77a96420962"
+    },
+    {
+      "path": "database/migrations/2026_08_13_140000_create_work_sessions_table.php",
+      "sha256": "365a669dd4d6e241078a954f7a5e1d73f36942d88bbc96b4597bd2b3fdcd11bf"
+    },
+    {
+      "path": "database/migrations/2026_08_18_101655_create_employee_tasks_table.php",
+      "sha256": "df207f05fd9511bb4cb004a129cf7e694bc0d6e2e235e7bd31658cfa463b83eb"
+    },
+    {
+      "path": "database/migrations/2026_08_18_120000_add_duration_minutes_to_employee_tasks_table.php",
+      "sha256": "4a6884e5196b47f349e3abb07c1909b9c0bd49e2ae34771e692b2d70c41407e5"
+    },
+    {
+      "path": "database/migrations/2026_08_18_130000_add_work_session_to_employee_tasks_table.php",
+      "sha256": "79e10e044a7a801418556dc6ef72827b47e916f31606e493140b469e645958b9"
+    },
+    {
+      "path": "database/migrations/2026_08_18_150000_create_clients_table.php",
+      "sha256": "14c1383adc63e837713a7c134d1a502f911d80ae0d8b1223db9c11251dadf39f"
+    },
+    {
+      "path": "database/migrations/2026_08_18_150003_create_secretary_logs_table.php",
+      "sha256": "411f2c7ff12926a621b4d0043ff958a2de43c15409655cf53180969531906a11"
+    },
+    {
+      "path": "database/migrations/2026_08_18_150004_create_personas_table.php",
+      "sha256": "bf80da6be6e7ee331ca9cfdfaaac77e8a7e43ecf19d0b73550db21ac03d1d3a6"
+    },
+    {
+      "path": "database/migrations/2026_08_18_150005_create_skill_proposals_table.php",
+      "sha256": "37efc6d1e141248f5324dc1d7fdaf8117ee0b537f0e729023c7bfac19fa3f65a"
+    },
+    {
+      "path": "database/migrations/2026_08_18_150006_create_approval_requests_table.php",
+      "sha256": "65c210d048dd6009dd34102a4fe19cb99edbc23d310400eb26b3be6a71413f51"
+    },
+    {
+      "path": "database/migrations/2026_08_19_090000_add_case_management_fields_to_clients_table.php",
+      "sha256": "6480430186c165e23bdbfb431a655f48ddcb223c948ea0c85fa49f1469b3539d"
+    },
+    {
+      "path": "database/migrations/2026_08_19_090001_create_case_files_table.php",
+      "sha256": "fe526c1c5431d65988c6b5a3b312d4c8a88b240eed04976732b7bf00f65ac762"
+    },
+    {
+      "path": "database/migrations/2026_08_19_090002_create_case_documents_table.php",
+      "sha256": "6d2afdffdb30baff143b6822e10709517febe1571b12646feae57a61e222f061"
+    },
+    {
+      "path": "database/migrations/2026_08_19_090003_create_case_precedents_table.php",
+      "sha256": "12d3f26d9745d259aa85b7edb0493b458bc79391a90990c2ed2be17e6de005bd"
+    },
+    {
+      "path": "database/migrations/2026_08_19_090004_create_case_meeting_logs_table.php",
+      "sha256": "03edcd63a4ffc12e728be556b7957885e4467bf8944877c6f6aa886b1a9908f0"
+    },
+    {
+      "path": "database/migrations/2026_08_19_110000_add_case_type_and_workflow_statuses_to_case_files_table.php",
+      "sha256": "f3605243ec86ceb3319e8fe57530dc36f28377e00dc4153f165fddf0fe67a881"
+    },
+    {
+      "path": "database/staging/structural/2026_08_20_010000_create_attendance_periods_table.php",
+      "sha256": "10e825b3f2ea0f89057953df0b1c01a393dd9bcbd2359675df0eb036b46b584c",
+      "derived_from": "database/migrations/2026_08_20_010000_create_attendance_periods_table.php",
+      "source_sha256": "3c911a6b378617ff9a96d02ac4055851891a787837551b02a69b13c165d3f926"
+    },
+    {
+      "path": "database/migrations/2026_08_20_070000_create_rbac_tables.php",
+      "sha256": "7a92ecf5b1c26146c77e0ba93c16fb10323405fb19cb2b400e426d502697e325"
+    },
+    {
+      "path": "database/migrations/2026_08_20_080000_create_employee_notifications_table.php",
+      "sha256": "e39dcb83dfd96b886d9b525a041cf6ff224d22e80ca9b8009a3c77b403bd9e4f"
+    },
+    {
+      "path": "database/migrations/2026_08_21_120000_add_interaction_fields_to_case_meeting_logs_table.php",
+      "sha256": "0cde9e0f01bf9760b32c486b312f4f3bffb429b33fce5fa3647ab3e5541574cd"
+    },
+    {
+      "path": "database/migrations/2026_08_21_130000_add_created_by_employee_to_case_files_table.php",
+      "sha256": "64c26e612daa67f8d776fa7263f8d978b775857a98e7e130642ed78bb4431f1b"
+    },
+    {
+      "path": "database/migrations/2026_08_21_140000_create_case_types_table.php",
+      "sha256": "44e36849b0de44a1bb2651c6431174d109c3bbf1d0a6d8e355d16cdc06f0637f"
+    },
+    {
+      "path": "database/staging/structural/2026_08_21_150000_link_case_files_to_case_types.php",
+      "sha256": "7aacb434ce74a931ab0270a1dc16e840d20888ed357a8fdc687b818b44fda460",
+      "derived_from": "database/migrations/2026_08_21_150000_link_case_files_to_case_types.php",
+      "source_sha256": "1a1f4f2fadc0ac11e6caeaecc25e7aaffc362a27b82ed99251c5e7cc2e400b22"
+    },
+    {
+      "path": "database/migrations/2026_08_24_120000_add_execution_fields_to_approval_requests_table.php",
+      "sha256": "628164ef1c21e57a2bc4a23e5e0a9c9051e0c1dcc7c5da91b11aa614857a11a1"
+    },
+    {
+      "path": "database/migrations/2026_08_27_090000_create_case_custom_sections_table.php",
+      "sha256": "f61468ade653c9848721edbd8d373cf29b2d521bbf0c98c33ae0440abcec012c"
+    },
+    {
+      "path": "database/staging/structural/2026_08_27_100000_create_document_name_catalog_table.php",
+      "sha256": "44ff523f32db15ece31bcdbff327c7e7a7d3a4a25fe64150ccd669167196d2b6",
+      "derived_from": "database/migrations/2026_08_27_100000_create_document_name_catalog_table.php",
+      "source_sha256": "020591aff69604766203a4622764938aff5327ccea8f98711d346f7f38d3b718"
+    },
+    {
+      "path": "database/migrations/2026_08_28_140000_expand_case_workspace.php",
+      "sha256": "50a867c7f2795de0a2be2dd7a120a0c4f3c2c652a806d8d81737ef6ace232b6b"
+    },
+    {
+      "path": "database/migrations/2026_08_31_100000_create_document_types_table.php",
+      "sha256": "b62b24c76318fe94bcfda16f52d25a45ae7e398d5051b1f659c95aade29b8537"
+    },
+    {
+      "path": "database/migrations/2026_08_31_100100_create_case_type_document_rules_table.php",
+      "sha256": "3d9812d577d9e577418f74a7312ae35419e78e8000d4b8e693daccf073059037"
+    },
+    {
+      "path": "database/migrations/2026_08_31_100200_add_collection_foundation_to_case_documents_table.php",
+      "sha256": "b14fa0b657e73f41495ff5fe6f9b6f30fb4155fde85b0b56f02e145c137750d4"
+    },
+    {
+      "path": "database/migrations/2026_08_31_100300_create_received_documents_table.php",
+      "sha256": "23d53943ed95550d7ca9ea71e191241132d0a19a11dd489714f1cab35b476568"
+    },
+    {
+      "path": "database/migrations/2026_08_31_100400_create_case_document_received_documents_table.php",
+      "sha256": "b71b4ccca12e0b8dad98124afb90fadb1800944effc540ef6abe00ea3ec41cb7"
+    },
+    {
+      "path": "database/migrations/2026_08_31_110000_create_document_purposes_table.php",
+      "sha256": "ee794a77e96803614cc23cde034d1572385142d5ff6e4f7ba4abc6e888a9fbdd"
+    },
+    {
+      "path": "database/migrations/2026_08_31_110100_create_case_type_document_rule_purposes_table.php",
+      "sha256": "ce450b3af7f83cb514f902c87e1e83a27f1f41207df13ebaccccd76c35da1d05"
+    },
+    {
+      "path": "database/migrations/2026_08_31_110200_create_case_document_purposes_table.php",
+      "sha256": "e60cf65cd773111a4a99ef5bc3fbfaa0db2bc88472216230397710eb40c74ed9"
+    },
+    {
+      "path": "database/migrations/2026_08_31_130000_identify_official_document_rules.php",
+      "sha256": "4459a242cf3b4bc776180ba789f1c6b0011ee3c5a4292a1b0ec1bd6a3b2f2769"
+    },
+    {
+      "path": "database/migrations/2026_08_31_140000_add_rule_snapshots_to_case_documents.php",
+      "sha256": "e75c0cb496a2bd622a10245a06d7144633237beb36171743aa3130674c8c19f9"
+    },
+    {
+      "path": "database/migrations/2026_08_31_150000_add_collection_workflow_fields_to_case_documents.php",
+      "sha256": "0a2d24fbcc52dbea5d119023d4fcdba72f5236a45898d342c3a582c8aa8b537b"
+    },
+    {
+      "path": "database/migrations/2026_09_02_120000_create_employee_code_sequences_table.php",
+      "sha256": "d62246954b81018b1ceb237d9b490081fafb63e77953e3589cf5a362dc22e323"
+    },
+    {
+      "path": "database/migrations/2026_09_03_150000_link_employee_tasks_to_case_documents.php",
+      "sha256": "ad34db78a87529303756ab32204dd3bf69d74488caceb347f22701430277597b"
+    },
+    {
+      "path": "database/migrations/2026_09_04_120000_create_document_generation_tables.php",
+      "sha256": "abb0b2a6daf52ffc6669f0a324281eb16f2090ee7128240e7976fe15dfe6f8d7"
+    },
+    {
+      "path": "database/migrations/2026_09_06_100000_create_generated_document_artifacts_table.php",
+      "sha256": "3bdb66a7343199d788d70dbe27ca3fdd6cc2f9d18ab452ff8ff2768260d8ee67"
+    },
+    {
+      "path": "database/migrations/2026_09_07_100000_create_external_storage_locations_table.php",
+      "sha256": "deb59f0372e456948c113b4ac28932f0616d3303d139c7112cbf624482019412"
+    },
+    {
+      "path": "database/migrations/2026_09_08_100000_add_versioning_to_case_generated_documents.php",
+      "sha256": "155e6b6bdd6f0ecbfb9cb3cb3a563ebdcad48e2f8662dd9227170c3b172f9ffc"
+    },
+    {
+      "path": "database/staging/structural/2026_09_08_110000_create_document_source_registry.php",
+      "sha256": "5b2cd5a7f08430d92361f6de4a1136d9335dba5de9dbb01a39760d1101bde17e",
+      "derived_from": "database/migrations/2026_09_08_110000_create_document_source_registry.php",
+      "source_sha256": "90feb0f1ceb97d86e7b1531a508fa01c440a2971cb2600c13ace5607dabfb281"
+    },
+    {
+      "path": "database/migrations/2026_09_15_100000_add_success_fee_percentage_to_case_generated_documents.php",
+      "sha256": "76722628315cd1b61f11ed7011c913b058ea83a83d6e12c5b3a310fc2cb77d68"
+    },
+    {
+      "path": "database/migrations/2026_09_16_100000_create_client_employments_table.php",
+      "sha256": "a0fd94da238ca08fec3dfe998d566d519d2ea589122f0ddf1758c9a764bcc89c"
+    },
+    {
+      "path": "database/migrations/2026_09_17_100000_add_case_intake_and_workspace_fields.php",
+      "sha256": "11729f3c1772a2f1e48d3bc19cc9cdc70e5870dc338c51339b7cce60442753c9"
+    },
+    {
+      "path": "database/staging/structural/2026_09_28_100000_create_app_releases_table.php",
+      "sha256": "d801ca490c31d0d91dd275a80f1f3fa60e3ce2942c156fe18e196122877e8597",
+      "derived_from": "database/migrations/2026_09_28_100000_create_app_releases_table.php",
+      "source_sha256": "6c31507363cb35f87ce8cadd338ec9f7b401b698b17116a205b61d30decefb14"
+    },
+    {
+      "path": "database/migrations/2026_09_28_120000_store_employee_avatars_in_database.php",
+      "sha256": "f3ba5cdb91b80dba3875d28b52fc6de57c2d777f3344713240b8889736c21332"
+    },
+    {
+      "path": "database/migrations/2026_09_28_120100_add_employee_avatar_tokens.php",
+      "sha256": "fe1e58fc9c868bfab24bd5c7fb8f0e703a856b92a018ca138d96f8772c66dbaa"
+    },
+    {
+      "path": "database/migrations/2026_09_28_140000_link_case_tasks_to_required_documents.php",
+      "sha256": "67cc2ce902239dc9bb056a4ded6737e33149ff64203638916d2c66dceb01ad84"
+    },
+    {
+      "path": "database/staging/structural/2026_10_07_090000_add_required_document_task_workflow.php",
+      "sha256": "6b6d0cc0cb44d31c31acebd4da3f1ed961f1e83bfa5cbc28b346825947eab45e",
+      "derived_from": "database/migrations/2026_10_07_090000_add_required_document_task_workflow.php",
+      "source_sha256": "4f4317808c5f3c4b25be1cfc11f972f068e494cf7977c8701615fbc92fb7f1b0"
+    },
+    {
+      "path": "database/migrations/2026_10_09_100000_add_collected_file_review.php",
+      "sha256": "20a11d31502a1a028b81db5d3e88b7a9e37856feba087bd570ba967784d81e82"
+    },
+    {
+      "path": "database/migrations/2026_10_20_000000_create_security_administration_state.php",
+      "sha256": "ce1661cb8365751cd9790f543657b74145547a85d7c5c0e88ee727f213511b3a"
+    },
+    {
+      "path": "database/proposals/review_c001_activation_prerequisites.php",
+      "sha256": "280290b3fbf8ba9529fbb4e73f1382436078aa221ab32b770d9084840acb409f"
+    },
+    {
+      "path": "database/proposals/review_c001_mfa_prerequisites.php",
+      "sha256": "d395a570f9aee32a67469290264fcb3ce456890ca77d691dab38ea4919853842"
+    },
+    {
+      "path": "database/staging/structural/case_access.php",
+      "sha256": "4b87bc7ae2dcf354f75fa0faeb77a3e38909810eaf4d27e5d246b805dbc9dfd7"
+    },
+    {
+      "path": "database/proposals/create_c001_legal_decisions.php",
+      "sha256": "b64b658de3df12d4ef760c8c0108aa67f5233cb39a670d6236c002f286c8fa49"
+    }
+  ],
+  "excluded": [
+    {
+      "path": "database/migrations/2026_08_18_150001_create_matters_table.php",
+      "sha256": "3dca2b09bc6408928b0d6e7c18d11420690a5a1cf15f7272b0ff648750093173",
+      "reason": "Retired matters table"
+    },
+    {
+      "path": "database/migrations/2026_08_18_150002_create_tasks_table.php",
+      "sha256": "6a5b84b2c5ee0535fb900f4c5a5e45afcb6c3a3355b33090ac82b6a9fc3960aa",
+      "reason": "Retired generic tasks table"
+    },
+    {
+      "path": "database/migrations/2026_08_21_090000_convert_roles_to_access_levels.php",
+      "sha256": "d3998fad601d94446722239a3a5d55d69325e973a71943cd9efb751ac39a6f0a",
+      "reason": "Historical role conversion"
+    },
+    {
+      "path": "database/migrations/2026_08_24_130000_restrict_case_assignment_to_level_four.php",
+      "sha256": "b6fb543944a3fb7502daeac9172e50df88cebd245a317265317337b373ec80cc",
+      "reason": "Historical permission mutation"
+    },
+    {
+      "path": "database/migrations/2026_08_26_120000_disable_predictable_seeded_credentials.php",
+      "sha256": "c23dd919d7295a0c80d5277159583cb4ff5cb41ea2a75dbc5cf5e619248d791d",
+      "reason": "Historical credential mutation"
+    },
+    {
+      "path": "database/migrations/2026_08_26_130000_restore_seeded_accounts_for_required_password_change.php",
+      "sha256": "bbe1473a0127b71b97ef92cc0f5a5f2d58fec5e8d13422f553227c2c4045299b",
+      "reason": "Historical credential restoration"
+    },
+    {
+      "path": "database/migrations/2026_08_31_120000_remove_legacy_matter_tasks.php",
+      "sha256": "947383099a9a84f7307a61abf175a1db024cfc45e74da4ce09e5ebcad0bd8579",
+      "reason": "Empty historical marker, not structural"
+    },
+    {
+      "path": "database/migrations/2026_09_02_130000_backfill_existing_employee_codes.php",
+      "sha256": "799f794b03bde38675b1a33428c025beee361837440da89cd0d16d0e6d043ae3",
+      "reason": "Historical identity backfill"
+    },
+    {
+      "path": "database/migrations/2026_10_20_010000_add_secure_account_activation.php",
+      "sha256": "4e3a0b9b8a3f4890ef6fdecdea50b06ca81d628108b51864d653bb08a85d419a",
+      "reason": "Use reviewed lifecycle structure"
+    },
+    {
+      "path": "database/migrations/2026_10_20_020000_add_administrative_mfa.php",
+      "sha256": "e0d640762dcdebc753f1077f25f5615628c8133fbc442571551ab187ac8dac81",
+      "reason": "Use reviewed MariaDB MFA structure"
+    },
+    {
+      "path": "database/migrations/2026_10_22_000000_create_rehearsal_case_access.php",
+      "sha256": "5481f74de786b650358a6f9cc3bfdb024b2198ab73e4c6f8df26e8c1d264a3a0",
+      "reason": "Rehearsal-only access schema"
+    },
+    {
+      "path": "database/migrations/2026_10_23_000000_create_rehearsal_review_authorities.php",
+      "sha256": "8c2988ac07815abfdbe813421213dfb5d19a0aedfc81ae3999c2b09b778c8437",
+      "reason": "Enterprise/rehearsal admission schema"
+    }
+  ]
+}

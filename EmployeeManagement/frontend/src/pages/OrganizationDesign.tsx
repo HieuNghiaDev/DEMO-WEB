@@ -35,9 +35,10 @@ import { useAuth } from '../contexts/AuthContext'
 import { ButtonSpinner, KpiSkeletonValue, LoadingOverlay, MobileCardSkeleton, Skeleton, TableSkeleton } from '../components/loading'
 import { CasePageHeader } from '../features/case-management/CasePrimitives'
 import '../features/case-management/caseManagement.css'
-import { UserAvatar } from '../components/ui'
+import { ModalShell, UserAvatar } from '../components/ui'
 import { getEmployeeAvatarImageUrl } from '../utils/employeeAvatar'
 import StepUpDialog from '../features/authentication/StepUpDialog'
+import EmployeeActivationInvite from '../features/authentication/EmployeeActivationInvite'
 import { AuthFailure, record } from '../features/authentication/authFlow'
 
 type WorkStatus = 'online' | 'working' | 'break' | 'outside' | 'offline'
@@ -77,6 +78,7 @@ type OrganizationEmployee = {
   employee_status: string
   hire_date: string | null
   user_id: number | null
+  can_issue_activation_invite?: boolean
   roles: RoleOption[]
 
   office: {
@@ -1510,6 +1512,8 @@ function EmployeeDetailModal({
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>(initialTab)
   const [showEmail, setShowEmail] = useState(false)
+  const canIssueActivationInvite = employee.can_issue_activation_invite === true
+  const hasAccountActions = canIssueActivationInvite || canResetPassword || canDeleteEmployee
 
   // Roles state
   const currentMainRole = employee.roles.find(role => mainRoleNames.includes(role.name))
@@ -1560,8 +1564,6 @@ function EmployeeDetailModal({
 
     if (!deletingEmployee) onClose()
   }, [deletingEmployee, onClose, resetStepUp, roleStepUp, showDeleteConfirmation])
-
-  useOrganizationDialog(closeEmployeeDialog)
 
   const status = statusConfig[employee.work_status]
   const isEmployeeOnline = employee.work_status !== 'offline' && employee.attendance !== null
@@ -1686,16 +1688,18 @@ function EmployeeDetailModal({
     }
   }
 
-  return <>{createPortal(
-    <div
-      className="organization-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"
-      onClick={closeEmployeeDialog}
+  return <>
+    <ModalShell
+      isOpen
+      onClose={closeEmployeeDialog}
+      title={employee.full_name}
+      customContent
+      overlayClassName="organization-modal-backdrop flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="organization-employee-dialog-title"
-        onClick={(e) => e.stopPropagation()}
         className="organization-modal-panel flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900 sm:max-h-[calc(100dvh-3rem)]"
       >
         {/* Header */}
@@ -1724,7 +1728,7 @@ function EmployeeDetailModal({
             type="button"
             onClick={onClose}
             aria-label="閉じる"
-            autoFocus
+            data-modal-autofocus="true"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
           >
             <X size={18} />
@@ -1750,7 +1754,7 @@ function EmployeeDetailModal({
               onClick={() => setActiveTab('task')}
             />
           )}
-          {(canResetPassword || canDeleteEmployee) && (
+          {hasAccountActions && (
             <TabButton
               label="アカウント管理"
               isActive={activeTab === 'account'}
@@ -2123,8 +2127,11 @@ function EmployeeDetailModal({
           )}
 
           {/* TAB 4: Account & Security */}
-          {activeTab === 'account' && (canResetPassword || canDeleteEmployee) && (
+          {activeTab === 'account' && hasAccountActions && (
             <div className="space-y-4">
+              {canIssueActivationInvite && employee.user_id && (
+                <EmployeeActivationInvite employeeId={employee.id} userId={employee.user_id} />
+              )}
               {canResetPassword && employee.user_id && (
                 <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/30">
                   <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200">
@@ -2266,9 +2273,7 @@ function EmployeeDetailModal({
           </section>
         </div>
       )}
-    </div>,
-    document.body,
-  )}
+    </ModalShell>
     {resetStepUp && employee.user_id && <StepUpDialog
       language="ja"
       operation={{ action: 'employee.reset_password', scope: { user_id: employee.user_id, employee_id: employee.id } }}

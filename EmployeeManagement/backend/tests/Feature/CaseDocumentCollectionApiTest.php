@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\CaseActivity;
 use App\Models\CaseDocument;
 use App\Models\CaseFile;
+use App\Models\CaseMembership;
 use App\Models\CaseTask;
 use App\Models\CaseTaskSubmission;
 use App\Models\CaseType;
@@ -17,6 +18,7 @@ use App\Models\EmployeeTask;
 use App\Models\Office;
 use App\Models\ReceivedDocument;
 use App\Models\User;
+use App\Services\Administration\MainRoles;
 use App\Services\CaseDocumentChecklistGenerator;
 use App\Services\CaseWorkspaceAuditService;
 use Database\Seeders\CaseTypeDocumentRuleMasterSeeder;
@@ -414,6 +416,7 @@ class CaseDocumentCollectionApiTest extends TestCase
 
     public function test_necessity_decisions_stamp_actor_and_time_and_reset_clears_current_reason_only(): void
     {
+        $this->asLawyer();
         $item = $this->document();
         $this->patchJson($this->url($item), ['necessity_status' => 'not_required'])->assertUnprocessable()->assertJsonValidationErrors('necessity_reason');
         $this->patchJson($this->url($item), ['necessity_status' => 'not_required', 'necessity_reason' => '　 '])->assertUnprocessable();
@@ -441,6 +444,7 @@ class CaseDocumentCollectionApiTest extends TestCase
 
     public function test_bulk_necessity_updates_only_documents_in_the_case_with_existing_audit_and_no_received_documents(): void
     {
+        $this->asLawyer();
         $first = $this->document();
         $second = $this->document(['title' => 'Second candidate']);
 
@@ -468,6 +472,7 @@ class CaseDocumentCollectionApiTest extends TestCase
 
     public function test_bulk_not_required_requires_a_reason_and_reset_clears_the_existing_reason(): void
     {
+        $this->asLawyer();
         $first = $this->document();
         $second = $this->document(['title' => 'Second candidate']);
         $payload = ['case_document_ids' => [$first->id, $second->id], 'necessity_status' => 'not_required'];
@@ -487,6 +492,7 @@ class CaseDocumentCollectionApiTest extends TestCase
 
     public function test_bulk_necessity_rejects_cross_case_documents_without_a_partial_update(): void
     {
+        $this->asLawyer();
         $local = $this->document();
         $foreign = $this->document(['title' => 'Foreign candidate'], $this->newCase());
 
@@ -502,6 +508,7 @@ class CaseDocumentCollectionApiTest extends TestCase
 
     public function test_bulk_necessity_rejects_an_unknown_document_id_without_a_partial_update(): void
     {
+        $this->asLawyer();
         $local = $this->document();
 
         $this->patchJson($this->bulkUrl(), [
@@ -523,6 +530,67 @@ class CaseDocumentCollectionApiTest extends TestCase
             'necessity_status' => 'required',
         ])->assertForbidden();
         $this->assertSame('undetermined', $document->refresh()->necessity_status);
+    }
+
+    public function test_document_necessity_requires_the_explicit_lawyer_role_even_with_case_update(): void
+    {
+        MainRoles::install();
+        $document = $this->document()->refresh();
+        $before = $document->getRawOriginal();
+        $workspace = "/api/case-files/{$this->case->id}/workspace";
+        $bulk = ['case_document_ids' => [$document->id], 'necessity_status' => 'required'];
+
+        foreach (['staff', 'legal_assistant', 'level_5'] as $role) {
+            $this->editor->roles()->sync([\App\Models\Role::where('name', $role)->sole()->id]);
+            $this->assertTrue($this->editor->hasPermission('case.update'));
+            $this->getJson($workspace)->assertOk()->assertJsonPath('can_decide_document_necessity', false);
+            $this->getJson($this->url($document))->assertOk();
+            $this->patchJson($this->bulkUrl(), $bulk)->assertForbidden();
+            $this->patchJson($this->url($document), ['necessity_status' => 'required', 'collection_source' => 'Must not persist'])->assertForbidden();
+            $this->patchJson($this->url($document), ['necessity_reason' => null])->assertForbidden();
+        }
+
+        $admin = User::factory()->create();
+        // Synthetic pivot only; exercise the policy independently of the Admin bootstrap and MFA protocols.
+        DB::table('user_roles')->insert(['user_id' => $admin->id, 'role_id' => \App\Models\Role::where('name', 'admin')->sole()->id]);
+        $this->assertTrue($admin->hasPermission('case.update'));
+        $this->assertFalse($admin->can('decideDocumentNecessity', $this->case));
+        $this->assertSame($before, $document->refresh()->getRawOriginal());
+        $this->assertDatabaseCount('case_activities', 0);
+
+        $this->editor->roles()->sync([\App\Models\Role::where('name', 'legal_assistant')->sole()->id]);
+        $this->patchJson($this->url($document), ['collection_source' => 'Allowed operational edit'])->assertOk();
+        $legacy = "/api/case-files/{$this->case->id}/documents";
+        $this->patchJson("$legacy/{$document->id}", ['requirement_level' => 'required'])->assertForbidden();
+        $this->patchJson("$legacy/{$document->id}", ['status' => 'not_required'])->assertForbidden();
+        $this->postJson($legacy, ['title' => 'Must not create', 'category' => 'Checklist', 'requirement_level' => 'required'])->assertForbidden();
+        $this->assertDatabaseCount('case_documents', 1);
+        $this->assertSame('undetermined', $document->refresh()->necessity_status);
+
+        $this->asLawyer();
+        $this->getJson($workspace)->assertOk()->assertJsonPath('can_decide_document_necessity', true);
+        $this->patchJson($this->bulkUrl(), $bulk)->assertOk();
+        $this->assertSame('required', $document->refresh()->necessity_status);
+    }
+
+    public function test_lawyer_with_read_only_case_membership_cannot_decide_necessity(): void
+    {
+        $this->asLawyer();
+        $this->case->forceFill(['is_confidential' => true])->save();
+        CaseMembership::forceCreate([
+            'case_file_id' => $this->case->id, 'user_id' => $this->editor->id, 'employee_id' => $this->employee->id,
+            'can_read' => true, 'can_write' => false, 'can_read_confidential' => true, 'expires_at' => now()->addHour(), 'revision' => 1,
+        ]);
+        $document = $this->document();
+
+        $this->getJson("/api/case-files/{$this->case->id}/workspace")->assertOk()
+            ->assertJsonPath('can_decide_document_necessity', false);
+        $this->patchJson($this->bulkUrl(), [
+            'case_document_ids' => [$document->id], 'necessity_status' => 'required',
+        ])->assertForbidden();
+        $this->patchJson($this->url($document), ['necessity_status' => 'required'])->assertForbidden();
+        $this->assertSame('undetermined', $document->refresh()->necessity_status);
+        $this->assertDatabaseCount('case_activities', 0);
     }
 
     public static function independentChanges(): array
@@ -650,6 +718,9 @@ class CaseDocumentCollectionApiTest extends TestCase
     public function test_invalid_patch_is_rejected_atomically(string $field, mixed $value): void
     {
         $this->asManager();
+        if (in_array($field, ['necessity_status', 'necessity_reason'], true)) {
+            $this->asLawyer();
+        }
         $item = $this->document();
         $before = $item->refresh()->getRawOriginal();
         $this->patchJson($this->url($item), [$field => $value, 'collection_method' => $field === 'collection_method' ? $value : 'Must not persist'])
@@ -698,6 +769,7 @@ class CaseDocumentCollectionApiTest extends TestCase
 
     public function test_activity_failure_rolls_back_document_and_decision_metadata(): void
     {
+        $this->asLawyer();
         $item = $this->document();
         $before = $item->refresh()->getRawOriginal();
         $this->mock(CaseWorkspaceAuditService::class)->shouldReceive('record')->once()->andReturnUsing(function () {
@@ -750,7 +822,8 @@ class CaseDocumentCollectionApiTest extends TestCase
     public function test_decision_requires_real_employee_and_temporary_password_restriction_still_applies(): void
     {
         $item = $this->document();
-        Sanctum::actingAs(User::factory()->withRole('level_3')->create());
+        MainRoles::install();
+        Sanctum::actingAs(User::factory()->withRole('lawyer')->create());
         $this->patchJson($this->url($item), ['necessity_status' => 'required'])->assertForbidden();
         $this->assertNull($item->refresh()->necessity_decided_at);
         Sanctum::actingAs(User::factory()->withRole('level_3')->create(['must_change_password' => true]));
@@ -797,6 +870,13 @@ class CaseDocumentCollectionApiTest extends TestCase
     private function asManager(): void
     {
         $this->editor->roles()->sync([\App\Models\Role::where('name', 'level_4')->value('id')]);
+        Sanctum::actingAs($this->editor);
+    }
+
+    private function asLawyer(): void
+    {
+        MainRoles::install();
+        $this->editor->roles()->sync([\App\Models\Role::where('name', 'lawyer')->sole()->id]);
         Sanctum::actingAs($this->editor);
     }
 

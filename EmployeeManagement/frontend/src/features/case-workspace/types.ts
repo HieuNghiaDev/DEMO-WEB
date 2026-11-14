@@ -169,7 +169,7 @@ export type WorkspaceSummary = {
   open_tasks: number
 }
 
-export type WorkspaceResponse = { case_file: CaseWorkspace; summary: WorkspaceSummary }
+export type WorkspaceResponse = { case_file: CaseWorkspace; summary: WorkspaceSummary; can_decide_document_necessity?: boolean }
 export type WorkspaceTab = 'overview' | 'collection' | 'documents' | 'tasks' | 'interpretation' | 'deadlines' | 'parties' | 'timeline'
 
 export type EntityKind = 'company' | 'organization' | 'person' | 'insurer' | 'police' | 'other'

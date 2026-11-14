@@ -61,7 +61,7 @@ final class InternalChatService
         ];
         if (! $room) {
             return ['messages' => [], 'pagination' => ['has_more' => false, 'next_before_id' => null, 'latest_id' => null],
-                'unread_count' => 0, 'member_summary' => $summary, 'receipts' => (object) [], 'delivery_enabled' => $deliveryEnabled,
+                'unread_count' => 0, 'first_unread_id' => null, 'member_summary' => $summary, 'receipts' => (object) [], 'delivery_enabled' => $deliveryEnabled,
                 'translation_updates' => [], 'actions_enabled' => $actionsEnabled, 'can_pin' => $actionsEnabled,
                 'action_cursor' => 0, 'message_actions' => [], 'hide_enabled' => $phaseTwo];
         }
@@ -70,7 +70,7 @@ final class InternalChatService
         $actionCursor = 0;
         if ($actionsEnabled && $beforeId === null) {
             $actionQuery = DB::table('chat_message_actions')->where('chat_room_id', $room->id)
-                ->where(fn ($query) => $query->where('action', '!=', 'hide')->orWhere('actor_user_id', $actor->id));
+                ->where(fn ($query) => $query->whereNotIn('action', ['hide', 'retry'])->orWhere('actor_user_id', $actor->id));
             if ($afterActionId === null) {
                 // Capture the cursor before reading messages so concurrent changes are replayed.
                 $actionCursor = (int) $actionQuery->max('id');
@@ -93,28 +93,31 @@ final class InternalChatService
             $items = $items->take($limit)->reverse()->values();
         }
 
-        $ownIds = $items->where('user_id', $actor->id)->pluck('id');
-        $remainingReceiptIds = array_diff($receiptIds, $ownIds->all());
+        $receiptSenders = $items->whereNull('recalled_at')->pluck('user_id', 'id');
+        $remainingReceiptIds = array_diff($receiptIds, $items->pluck('id')->all());
         if ($remainingReceiptIds !== []) {
-            $ownIds = $ownIds->merge($this->withoutHidden(ChatMessage::query(), $actor, $phaseTwo)
-                ->where('chat_room_id', $room->id)->where('user_id', $actor->id)
-                ->whereIn('id', $remainingReceiptIds)->pluck('id'));
+            $receiptSenders = $receiptSenders->union($this->withoutHidden(ChatMessage::query(), $actor, $phaseTwo)
+                ->where('chat_room_id', $room->id)
+                ->when($actionsEnabled, fn ($query) => $query->whereNull('recalled_at'))
+                ->whereIn('id', $remainingReceiptIds)->pluck('user_id', 'id'));
         }
-        $recipients = $members->reject(fn ($member) => (int) $member->user_id === (int) $actor->id);
-        $hiddenUnread = $phaseTwo && $ownIds->isNotEmpty() ? DB::table('chat_message_user_states')
-            ->whereIn('chat_message_id', $ownIds)->where('read_before_hide', false)
+        $messageIds = $receiptSenders->keys();
+        $hiddenUnread = $phaseTwo && $messageIds->isNotEmpty() ? DB::table('chat_message_user_states')
+            ->whereIn('chat_message_id', $messageIds)->where('read_before_hide', false)
             ->get(['chat_message_id', 'user_id'])->groupBy('chat_message_id')
             ->map(fn ($states) => $states->keyBy('user_id')) : collect();
-        $views = $ownIds->isNotEmpty() && Schema::hasTable('chat_message_views') ? DB::table('chat_message_views')
-            ->whereIn('chat_message_id', $ownIds)->get()->groupBy('chat_message_id')
+        $views = $messageIds->isNotEmpty() && Schema::hasTable('chat_message_views') ? DB::table('chat_message_views')
+            ->whereIn('chat_message_id', $messageIds)->get()->groupBy('chat_message_id')
             ->map(fn ($rows) => $rows->keyBy('user_id')) : collect();
-        $receipts = $ownIds->mapWithKeys(function ($id) use ($recipients, $hiddenUnread, $views) {
+        $receipts = $receiptSenders->map(function ($senderId, $id) use ($actor, $members, $hiddenUnread, $views) {
+            $recipients = $members->reject(fn ($member) => (int) $member->user_id === (int) $senderId);
             $readers = $recipients->filter(fn ($member) => ($member->last_visible_read_message_id >= $id
                 || isset($views[$id][$member->user_id]))
                 && ! isset($hiddenUnread[$id][$member->user_id]));
 
-            return [$id => [
-                'delivered_count' => $recipients->filter(fn ($member) => $member->last_delivered_message_id >= $id)->count(),
+            return [
+                'delivered_count' => (int) $senderId === (int) $actor->id
+                    ? $recipients->filter(fn ($member) => $member->last_delivered_message_id >= $id)->count() : 0,
                 'read_count' => $readers->count(),
                 'eligible_recipient_count' => $recipients->count(),
                 'readers' => $readers->map(fn ($member) => [
@@ -123,7 +126,7 @@ final class InternalChatService
                     'display_name' => $member->full_name,
                     'avatar_url' => $member->avatar_path,
                 ])->values()->all(),
-            ]];
+            ];
         });
 
         // An initial page already includes the newest message. A full delta can have more pages.
@@ -141,7 +144,7 @@ final class InternalChatService
                 'next_before_id' => $items->first()?->id,
                 'latest_id' => $latestId,
             ],
-            'unread_count' => $this->unreadCountForRoom($actor, $room, $actionsEnabled, $phaseTwo),
+            ...$this->unreadSummaryForRoom($actor, $room, $actionsEnabled, $phaseTwo),
             'member_summary' => $summary,
             'receipts' => (object) $receipts->all(),
             'delivery_enabled' => $deliveryEnabled,
@@ -153,9 +156,12 @@ final class InternalChatService
             'translation_updates' => $translationIds === [] ? [] : $this->withoutHidden(ChatMessage::query(), $actor, $phaseTwo)
                 ->where('chat_room_id', $room->id)->whereIn('id', $translationIds)
                 ->when($actionsEnabled, fn ($query) => $query->whereNull('recalled_at'))
-                ->whereIn('translation_status', $phaseTwo ? ['pending', 'completed', 'failed'] : ['completed', 'failed'])
-                ->get(['id', 'translation_status', 'japanese_content', 'vietnamese_content',
-                    ...($phaseTwo ? ['translation_attempt', 'translation_provider'] : [])])->all(),
+                ->get(['id', 'source_language', 'translation_status', 'translation_error_category', 'japanese_content', 'vietnamese_content',
+                    'translation_provider_metadata', 'translation_provider', ...($phaseTwo ? ['translation_attempt'] : [])])
+                ->filter(fn (ChatMessage $message) => $message->translationRequestedBy($actor->id, 'ja-vi')
+                    || $message->translationRequestedBy($actor->id, 'ja-zh'))
+                ->map(fn (ChatMessage $message) => ['id' => $message->id, ...$this->translationPayload($message, $actor)])
+                ->values()->all(),
         ];
     }
 
@@ -276,7 +282,6 @@ final class InternalChatService
             $hasVietnamese = preg_match('/[ăâđêôơưàáảãạèéẻẽẹìíỉĩịòóỏõọùúủũụỳýỷỹỵ\x{1EA0}-\x{1EF9}]/iu', $text);
             $sourceLanguage = ! $hasVietnamese && preg_match('/[\p{Hiragana}\p{Katakana}\p{Han}]/u', $text) ? 'ja' : 'vi';
             $neutral = $text === '' || preg_match('/^ok[.!！。]?$/iu', $text) === 1;
-            $shouldTranslate = ! $neutral && $this->translationConfigured();
             $message = ChatMessage::query()->createOrFirst([
                 'chat_room_id' => $room->id,
                 'user_id' => $actor->id,
@@ -288,7 +293,7 @@ final class InternalChatService
                 'japanese_content' => $sourceLanguage === 'ja' || $neutral ? $text : null,
                 'vietnamese_content' => $sourceLanguage === 'vi' || $neutral ? $text : null,
                 'translation_status' => $neutral ? 'completed' : 'pending',
-                'translation_provider' => $neutral ? 'identity' : ($shouldTranslate ? 'gemini' : 'pending'),
+                'translation_provider' => $neutral ? 'identity' : 'pending',
                 ...($replyId === null ? [] : ['reply_to_message_id' => $replyId]),
                 ...($resolvedMentions === [] ? [] : ['mentions' => $resolvedMentions]),
             ]);
@@ -313,15 +318,6 @@ final class InternalChatService
                         'message' => '社内チャットであなた宛てのメッセージがあります。',
                         'data' => ['chat_message_id' => $message->id],
                     ]);
-                }
-            }
-            if ($shouldTranslate && $message->wasRecentlyCreated) {
-                try {
-                    // The database queue shares the message transaction. A savepoint
-                    // keeps a queue insertion failure from rolling back the message.
-                    DB::transaction(fn () => $this->enqueueTranslation($message->id));
-                } catch (\Throwable) {
-                    $message->update(['translation_status' => 'failed', 'translation_error_category' => 'queue_unavailable']);
                 }
             }
             return $this->serialize($query->findOrFail($message->id), $actor, $canRetryTranslation);
@@ -361,14 +357,44 @@ final class InternalChatService
             && trim((string) config('chat_translation.gemini_key')) !== '';
     }
 
-    private function enqueueTranslation(int $id, int $attempt = 0): void
+    private function enqueueTranslation(int $id, int $attempt, ?string $pair = null): void
     {
         $queueConnection = config('queue.connections.database.connection');
         if ($queueConnection !== null && $queueConnection !== config('database.default')) {
             throw new \RuntimeException('Chat translation queue must share the message database.');
         }
-        Bus::dispatch((new TranslateChatMessage($id, $attempt))
+        Bus::dispatch((new TranslateChatMessage($id, $attempt, $pair))
             ->onConnection('database')->onQueue(TranslateChatMessage::QUEUE)->beforeCommit());
+    }
+
+    public function requestTranslation(User $actor, int $id, string $pair): object
+    {
+        $room = $this->room($actor);
+        abort_unless($room && in_array($pair, ChatMessage::TRANSLATION_PAIRS, true), 404);
+
+        return DB::transaction(function () use ($actor, $id, $pair, $room): object {
+            $message = $this->withoutHidden(ChatMessage::query()->where('chat_room_id', $room->id), $actor,
+                Schema::hasTable('chat_message_user_states'))->lockForUpdate()->findOrFail($id);
+            abort_if($message->recalled_at !== null || $message->original_text === '', 404);
+            $previous = $message->translation($pair);
+            $reusable = in_array($previous['status'] ?? null, ['pending', 'completed'], true);
+            $now = now()->timestamp;
+            if (! $reusable) {
+                abort_unless($this->translationConfigured(), 503, '翻訳は現在利用できません。');
+                abort_if(($previous['requested_at'] ?? 0) > $now - 30, 429);
+            }
+
+            $message->markTranslationRequested($actor->id, $pair);
+            if (! $reusable) {
+                $revision = ($previous['revision'] ?? 0) + 1;
+                $message->storeTranslation($pair, ['status' => 'pending', 'revision' => $revision, 'requested_at' => $now]);
+                $this->enqueueTranslation($id, $revision, $pair);
+            } elseif ($message->isDirty('translation_provider_metadata')) {
+                $message->save();
+            }
+
+            return $message->translationsFor($actor->id);
+        }, 3);
     }
 
     private function hidden(User $actor, int $id): bool
@@ -466,6 +492,7 @@ final class InternalChatService
                 abort_if($message->translation_attempt > 0 && DB::table('chat_message_actions')
                     ->where('id', $message->translation_attempt)->where('created_at', '>', $time->copy()->subSeconds(30))->exists(), 429);
                 $event = $this->recordMessageAction($room, $actor, $id, $action, $time);
+                $message->markTranslationRequested($actor->id, 'ja-vi');
                 $message->forceFill(['translation_status' => 'pending', 'translation_provider' => 'gemini',
                     'translation_error_category' => null, 'translation_attempt' => $event['id']])->save();
                 $this->enqueueTranslation($id, $event['id']);
@@ -506,8 +533,13 @@ final class InternalChatService
 
     public function unreadCount(User $actor): int
     {
+        return $this->unreadSummary($actor)['unread_count'];
+    }
+
+    public function unreadSummary(User $actor): array
+    {
         $room = $this->room($actor);
-        return $room ? $this->unreadCountForRoom($actor, $room) : 0;
+        return $room ? $this->unreadSummaryForRoom($actor, $room) : ['unread_count' => 0, 'first_unread_id' => null];
     }
 
     /** @return array{read_cursor: int, acknowledged_ids: list<int>} */
@@ -596,17 +628,42 @@ final class InternalChatService
         }, 3);
     }
 
-    private function unreadCountForRoom(User $actor, ChatRoom $room, ?bool $actionsEnabled = null, ?bool $phaseTwo = null): int
+    private function unreadSummaryForRoom(User $actor, ChatRoom $room, ?bool $actionsEnabled = null, ?bool $phaseTwo = null): array
     {
         $lastRead = ChatReadState::query()->where('chat_room_id', $room->id)
             ->where('user_id', $actor->id)->selectRaw('COALESCE(MAX(last_read_message_id), 0)');
-        return $this->withoutHidden(ChatMessage::query(), $actor, $phaseTwo ?? Schema::hasTable('chat_message_user_states'))
+        $summary = $this->withoutHidden(ChatMessage::query(), $actor, $phaseTwo ?? Schema::hasTable('chat_message_user_states'))
             ->where('chat_room_id', $room->id)->where('id', '>', $lastRead)
             ->when($actionsEnabled ?? Schema::hasTable('chat_message_actions'), fn ($query) => $query->whereNull('recalled_at'))
             ->when(Schema::hasTable('chat_message_views'), fn ($query) => $query->whereNotExists(fn ($view) => $view
                 ->selectRaw('1')->from('chat_message_views')->where('user_id', $actor->id)
                 ->whereColumn('chat_message_id', 'chat_messages.id')))
-            ->where('user_id', '!=', $actor->id)->count();
+            ->where('user_id', '!=', $actor->id)
+            ->toBase()->selectRaw('COUNT(*) AS unread_count, MIN(id) AS first_unread_id')->first();
+
+        return [
+            'unread_count' => (int) $summary->unread_count,
+            'first_unread_id' => $summary->first_unread_id === null ? null : (int) $summary->first_unread_id,
+        ];
+    }
+
+    private function translationPayload(ChatMessage $message, User $actor): array
+    {
+        $showLegacy = $message->recalled_at === null && $message->translationRequestedBy($actor->id, 'ja-vi');
+        $identity = $message->translation_provider === 'identity';
+        $showOriginal = $message->recalled_at === null;
+
+        return [
+            'japanese_content' => $showOriginal && ($showLegacy || $identity || $message->source_language === 'ja')
+                ? $message->japanese_content : null,
+            'vietnamese_content' => $showOriginal && ($showLegacy || $identity || $message->source_language === 'vi')
+                ? $message->vietnamese_content : null,
+            'translation_status' => $showLegacy || $identity ? $message->translation_status : 'pending',
+            'translation_error_category' => $showLegacy ? $message->translation_error_category : null,
+            'translation_provider' => $showLegacy || $identity ? $message->translation_provider : 'pending',
+            'translation_attempt' => $showLegacy ? ($message->translation_attempt ?? 0) : 0,
+            'translations' => $message->translationsFor($actor->id),
+        ];
     }
 
     /** @return array<string,mixed> */
@@ -633,12 +690,7 @@ final class InternalChatService
                 $message->attachments ?? [], array_keys($message->attachments ?? []),
             ),
             'source_language' => $message->source_language,
-            'japanese_content' => $recalled ? null : $message->japanese_content,
-            'vietnamese_content' => $recalled ? null : $message->vietnamese_content,
-            'translation_status' => $message->translation_status,
-            'translation_error_category' => $message->translation_error_category,
-            'translation_provider' => $message->translation_provider,
-            'translation_attempt' => $message->translation_attempt ?? 0,
+            ...$this->translationPayload($message, $actor),
             'created_at' => $message->created_at?->toISOString(),
             'recalled_at' => $message->recalled_at?->toISOString(),
             'pinned_at' => $message->pinned_at?->toISOString(),

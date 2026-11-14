@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\GeneratedDocumentDriveException;
 use App\Models\CaseFile;
 use App\Models\Client;
 use App\Models\ExternalStorageLocation;
@@ -90,8 +91,31 @@ class GoogleDriveProvisioningService
     {
         $caseFolder = $this->provisionCase($caseFile);
         $this->provisionGeneratedDocuments($caseFile);
+        if (CaseHistoryAttachments::supports($caseFile) && $this->drive->canWriteHistoryAttachments()) {
+            $this->provisionHistoryAttachments($caseFile);
+        }
 
         return $caseFolder;
+    }
+
+    public function provisionHistoryAttachments(CaseFile $caseFile): ExternalStorageLocation
+    {
+        if (! $this->drive->canWriteHistoryAttachments()) {
+            throw new GeneratedDocumentDriveException('添付ファイルの保存先が設定されていません。');
+        }
+        $existing = $this->location('case_file', $caseFile->id, 'history_attachments_folder');
+        if ($existing) {
+            return $existing;
+        }
+
+        $name = '写真・連絡面談記録';
+        $folder = $this->drive->ensureFolder(
+            $this->provisionCase($caseFile)->external_folder_id,
+            $name,
+            'case_file:'.$caseFile->id.':history_attachments'
+        );
+
+        return $this->persist('case_file', $caseFile->id, 'history_attachments_folder', $folder, $name);
     }
 
     private function clientRoot(): ExternalStorageLocation

@@ -163,6 +163,7 @@ export class AuthFlow {
 
 export type StepUpOperation = { action: 'role.assign'; scope: { user_id: number; role_id: number } }
   | { action: 'employee.reset_password'; scope: { user_id: number; employee_id: number } }
+  | { action: 'employee.issue_activation_invite'; scope: { user_id: number; employee_id: number } }
   | { action: 'account.password' | 'mfa.recovery_codes' | 'mfa.device_change' | 'mfa.disable'; scope: Record<string, never> }
 export class MutationUncertain extends AuthFailure {
   constructor(status = 0) {

@@ -393,7 +393,7 @@ function panelHarness(extra = {}) {
     './components/DocumentCollectionInspector': stub('Inspector'), './components/BulkNecessityDialog': stub('BulkDialog'),
     './components/InitializationDialog': stub('InitializeDialog'), '../../components/loading': { InlineLoader: () => null, SectionSkeleton: () => null },
   })(resolve('src/features/document-collection/DocumentCollectionPanel.tsx')).default
-  const props = { caseId: 49, canUpdate: true, canReviewDocuments: true, canReadEmployees: false, activities: [], onChanged() { calls.push(['changed']) }, ...extra }
+  const props = { caseId: 49, canUpdate: true, canDecideNecessity: true, canReviewDocuments: true, canReadEmployees: false, activities: [], onChanged() { calls.push(['changed']) }, ...extra }
   let tree
   const render = () => {
     const oldWindow = globalThis.window
@@ -461,7 +461,7 @@ test('search/filter changes clear selection, fresh tab/case instances start clea
   }
   const source = readFileSync(resolve('src/features/case-workspace/CaseWorkspacePage.tsx'), 'utf8')
   assert.match(source, /tab === 'collection'[^]*?<DocumentCollectionPanel key=\{caseId\}/)
-  const readOnly = panelHarness({ canUpdate: false }); readOnly.render()
+  const readOnly = panelHarness({ canUpdate: false, canDecideNecessity: false }); readOnly.render()
   readOnly.find('List').props.onSelectionModeChange(true); readOnly.render()
   assert.equal(readOnly.find('List').props.selectionMode, false)
   assert.equal(readOnly.find('List').props.canSelect, false)
@@ -470,6 +470,19 @@ test('search/filter changes clear selection, fresh tab/case instances start clea
   saving.find('List').props.onSelectionModeChange(true); saving.render()
   assert.equal(saving.find('List').props.selectionMode, false)
   assert.ok(saving.find('Inspector'))
+})
+
+test('a case editor without necessity authority can open the inspector but cannot select documents for bulk decisions', () => {
+  const staff = panelHarness({ canUpdate: true, canDecideNecessity: false })
+  staff.render()
+  assert.equal(staff.find('List').props.canSelect, false)
+  staff.find('List').props.onSelectionModeChange(true)
+  staff.find('List').props.onSelect('201')
+  staff.render()
+  assert.equal(staff.find('List').props.selectionMode, false)
+  assert.equal(staff.find('Inspector').props.canUpdate, true)
+  assert.equal(staff.find('Inspector').props.canDecideNecessity, false)
+  assert.ok(!staff.calls.some(([kind]) => kind === 'bulk'))
 })
 
 test('existing necessity bulk actions retain exact IDs and not-required reason, with no new API operation', async () => {

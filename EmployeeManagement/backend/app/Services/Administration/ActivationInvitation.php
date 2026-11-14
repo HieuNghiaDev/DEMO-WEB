@@ -7,7 +7,7 @@ use JsonSerializable;
 use LogicException;
 use SensitiveParameter;
 
-/** One-time handover value, never a controller response, model attribute or audit payload. */
+/** One-time handover value. Only the dedicated delivery endpoint may extract the secret. */
 final class ActivationInvitation implements JsonSerializable
 {
     public function __construct(#[SensitiveParameter] private readonly string $secret, public readonly CarbonInterface $expiresAt) {}

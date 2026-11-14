@@ -672,6 +672,14 @@ Prefer common modal foundation.
 
 Feature-specific modal content can remain separate.
 
+`ModalShell` mounts its single layer under `document.body` at `--tm-layer-modal`
+(above existing drawers, previews, feedback and the floating assistant). It locks
+viewport scrolling on the document root with scrollbar compensation, preserving sticky navigation. It makes background body roots
+inert, traps focus, and restores prior styles/focus on final close. Nested
+`ModalShell` instances share the lock. `dismissible={false}` blocks ESC/backdrop
+dismissal during an operation. Existing feature dialog markup can use
+`customContent`; it must supply its own dialog semantics and close controls.
+
 Example:
 
 ```text

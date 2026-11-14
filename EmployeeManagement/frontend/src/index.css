@@ -206,19 +206,13 @@ body,
 }
 
 @keyframes themisPageEnter {
-  0% {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .themis-page-transition {
-  animation: themisPageEnter 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  will-change: opacity, transform;
+  /* A transform here would pin descendant fixed overlays to the page column. */
+  animation: themisPageEnter 160ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -892,7 +886,7 @@ html.theme-revealing::view-transition-new(themis-theme-icon) {
   .themis-loading-mark__core,
   .themis-app-loader__content,
   .themis-app-loader__track > span,
-  .themis-route-progress > span,
+  .themis-loading-overlay,
   .themis-skeleton::after,
   .themis-ai-thinking i {
     animation: none !important;
@@ -901,7 +895,7 @@ html.theme-revealing::view-transition-new(themis-theme-icon) {
   .themis-loading-mark__frame,
   .themis-loading-mark__scan,
   .themis-loading-mark__core { opacity: 0.82; }
-  .themis-route-progress > span { opacity: 0.72; transform: scaleX(1); }
+  .themis-route-progress { display: none; }
   .themis-skeleton::after { display: none; }
 }
 
@@ -1609,20 +1603,15 @@ html.theme-revealing::view-transition-new(themis-theme-icon) {
 }
 
 .workspace-modal-backdrop {
-  animation: workspace-backdrop-in 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: workspace-backdrop-in 150ms ease-out;
 }
 
 .workspace-modal-panel {
-  transform-origin: center bottom;
-  animation: workspace-modal-in 640ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: workspace-modal-in 180ms ease-out;
 }
 
-.workspace-modal-backdrop.is-closing {
-  animation: workspace-backdrop-out 360ms ease-in both;
-}
-
-.workspace-modal-panel.is-closing {
-  animation: workspace-modal-out 360ms cubic-bezier(0.4, 0, 1, 1) both;
+.dark .workspace-modal-panel.themis-app {
+  background: var(--tm-surface) !important;
 }
 
 @keyframes workspace-backdrop-in {
@@ -1695,36 +1684,8 @@ html.theme-revealing::view-transition-new(themis-theme-icon) {
 }
 
 @keyframes workspace-modal-in {
-  from {
-    opacity: 0;
-    filter: blur(10px);
-    transform: translateY(38px) scale(0.94);
-  }
-
-  to {
-    opacity: 1;
-    filter: blur(0);
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes workspace-backdrop-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
-}
-
-@keyframes workspace-modal-out {
-  from {
-    opacity: 1;
-    filter: blur(0);
-    transform: translateY(0) scale(1);
-  }
-
-  to {
-    opacity: 0;
-    filter: blur(5px);
-    transform: translateY(20px) scale(0.97);
-  }
+  from { transform: translateY(6px); }
+  to { transform: translateY(0); }
 }
 
 @keyframes organization-backdrop-in {

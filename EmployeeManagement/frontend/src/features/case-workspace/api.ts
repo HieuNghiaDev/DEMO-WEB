@@ -1,7 +1,9 @@
-import api from '../../services/api'
+import api, { captureAuthSession } from '../../services/api'
 import type { Communication, HistoryEntry, HistoryOptions, HistoryResponse } from './historyTypes'
 import { assertTaskUploadFile } from './taskUpload'
 import type { CaseActivity, CaseDeadline, CaseParty, CaseTask, CaseTaskOptionsResponse, CaseTaskSubmission, CreateCaseTaskBatchItem, WorkspaceDocument, WorkspaceResponse } from './types'
+
+export type CommunicationUploadProgress = { phase: 'uploading'; percent: number } | { phase: 'saving' }
 
 export const caseWorkspaceApi = {
   async history(caseId: number, params: Record<string, string | number>, signal?: AbortSignal) {
@@ -10,9 +12,57 @@ export const caseWorkspaceApi = {
   async historyOptions(caseId: number, signal?: AbortSignal) {
     return (await api.get<HistoryOptions>(`/case-files/${caseId}/history/options`, { signal })).data
   },
-  async saveCommunication(caseId: number, payload: Communication, id?: number) {
+  async saveCommunication(caseId: number, payload: Communication, id?: number, files: File[] = [], onProgress?: (progress: CommunicationUploadProgress) => void) {
     const path = `/case-files/${caseId}/communications`
-    return (id ? await api.patch<{ entry: HistoryEntry }>(`${path}/${id}`, payload) : await api.post<{ entry: HistoryEntry }>(path, payload)).data.entry
+    const stagedIds: string[] = []
+    const uploadPath = `/case-files/${caseId}/history/uploads`
+    const sameSession = files.length > 0 ? captureAuthSession() : undefined
+    const ensureSession = () => {
+      if (sameSession && !sameSession()) throw new Error('Session changed during attachment upload.')
+    }
+    try {
+      if (files.length) {
+        const chunkSize = 4 * 1024 * 1024
+        const total = files.reduce((bytes, file) => bytes + file.size, 0)
+        let sent = 0
+        onProgress?.({ phase: 'uploading', percent: 0 })
+        for (const file of files) {
+          ensureSession()
+          const start = await api.post<{ upload_id: string }>(uploadPath, { name: file.name, size: file.size, communication_id: id })
+          const uploadId = encodeURIComponent(start.data.upload_id)
+          stagedIds.push(start.data.upload_id)
+          for (let offset = 0; offset < file.size; offset += chunkSize) {
+            ensureSession()
+            const chunk = file.slice(offset, offset + chunkSize)
+            const body = new FormData()
+            body.append('offset', String(offset))
+            body.append('chunk', chunk, 'chunk.bin')
+            const response = await api.post<{ next_offset: number }>(`${uploadPath}/${uploadId}`, body, {
+              headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60_000,
+            })
+            if (response.data.next_offset !== offset + chunk.size) throw new Error('Attachment upload offset mismatch.')
+            sent += chunk.size
+            onProgress?.({ phase: 'uploading', percent: Math.round(100 * sent / total) })
+          }
+        }
+        onProgress?.({ phase: 'saving' })
+      }
+      ensureSession()
+      const data = stagedIds.length ? { ...payload, staged_attachment_ids: stagedIds } : payload
+      const config = stagedIds.length ? { timeout: 600_000 } : undefined
+      return (id ? await api.patch<{ entry: HistoryEntry }>(`${path}/${id}`, data, config) : await api.post<{ entry: HistoryEntry }>(path, data, config)).data.entry
+    } catch (error) {
+      if (stagedIds.length && sameSession?.()) {
+        // Failed scratch cleanup is retried by the backend's expiry sweep.
+        void Promise.allSettled(stagedIds.map(uploadId => api.delete(`${uploadPath}/${encodeURIComponent(uploadId)}`, { timeout: 5_000 })))
+      }
+      throw error
+    }
+  },
+  async downloadCommunicationAttachment(caseId: number, communicationId: number, attachmentId: string) {
+    return (await api.get<Blob>(`/case-files/${caseId}/communications/${communicationId}/attachments/${encodeURIComponent(attachmentId)}`, {
+      responseType: 'blob', timeout: 300_000,
+    })).data
   },
   async communicationTask(caseId: number, communicationId: number, payload: Record<string, unknown>) {
     return (await api.post<{ task: CaseTask | null }>(`/case-files/${caseId}/communications/${communicationId}/task`, payload)).data.task

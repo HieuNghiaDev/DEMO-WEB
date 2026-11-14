@@ -37,6 +37,7 @@ type Props = {
   initialSelectedId?: number
   onDocumentClose?: () => void
   canUpdate: boolean
+  canDecideNecessity: boolean
   canManageTasks: boolean
   canReviewDocuments: boolean
   currentEmployeeId?: number
@@ -55,6 +56,7 @@ export default function RequiredDocumentsPanel({
   initialSelectedId,
   onDocumentClose,
   canUpdate,
+  canDecideNecessity,
   canManageTasks,
   canReviewDocuments,
   currentEmployeeId,
@@ -181,7 +183,7 @@ export default function RequiredDocumentsPanel({
       <label>表示件数<select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPageNumber(1) }}>{REQUIRED_DOCUMENT_PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}</select></label>
     </footer>}
 
-    {selectedId !== null && <RequiredDocumentInspector key={selectedId} caseId={caseId} itemId={selectedId} refreshKey={JSON.stringify([selectedItem?.updated_at, selectedItem?.workflow_state, selectedItem?.file_review, selectedItem?.active_task])} canUpdate={canUpdate} canManageTasks={canManageTasks} canReviewDocuments={canReviewDocuments} activities={activities} tasks={tasks} onCandidates={onCandidates} onHistory={onHistory} onClose={closeDocument} onSaved={() => { void refresh() }} onReviewed={refreshAfterReview} onCreateTask={() => onCreateTasks([selectedId])} onManageTask={onManageTasks} onOpenTask={onOpenTask}/>}
+    {selectedId !== null && <RequiredDocumentInspector key={selectedId} caseId={caseId} itemId={selectedId} refreshKey={JSON.stringify([selectedItem?.updated_at, selectedItem?.workflow_state, selectedItem?.file_review, selectedItem?.active_task])} canUpdate={canUpdate} canDecideNecessity={canDecideNecessity} canManageTasks={canManageTasks} canReviewDocuments={canReviewDocuments} activities={activities} tasks={tasks} onCandidates={onCandidates} onHistory={onHistory} onClose={closeDocument} onSaved={() => { void refresh() }} onReviewed={refreshAfterReview} onCreateTask={() => onCreateTasks([selectedId])} onManageTask={onManageTasks} onOpenTask={onOpenTask}/>}
   </div>
 }
 

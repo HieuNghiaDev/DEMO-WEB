@@ -33,15 +33,16 @@ import api from '../../services/api'
 import { getEmployeeAvatarImageUrl } from '../../utils/employeeAvatar'
 import { maskEmail } from '../../utils/sensitiveMasking'
 import { Button, PageHeader, StatusBadge, UserAvatar } from '../../components/ui'
+import { canShowChatSystemNotifications, chatNotificationEnabled, enableChatSystemNotifications, setChatNotificationEnabled } from '../../features/internal-chat/chatNotifications'
 
-const activeCategories = ['account', 'security', 'appearance'] as const
+const activeCategories = ['account', 'security', 'appearance', 'notifications'] as const
 type ActiveCategory = (typeof activeCategories)[number]
 
 const categories = [
   { id: 'account', label: 'アカウント', icon: UserRound, enabled: true },
   { id: 'security', label: 'セキュリティ', icon: ShieldCheck, enabled: true },
   { id: 'appearance', label: '外観', icon: Palette, enabled: true },
-  { id: 'notifications', label: '通知', icon: Bell, enabled: false },
+  { id: 'notifications', label: '通知', icon: Bell, enabled: true },
   { id: 'privacy', label: 'プライバシー', icon: Shield, enabled: false },
 ] as const
 
@@ -181,6 +182,7 @@ export default function SystemSettings() {
           {section === 'appearance' && (
             <AppearancePanel theme={theme} setTheme={setTheme} language={language} t={t} />
           )}
+          {section === 'notifications' && user && <ChatNotificationsPanel key={user.id} userId={user.id} />}
 
           <section aria-label="アカウント操作" className="mt-4 rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface)] p-2 lg:hidden">
             <SettingsLogoutAction onClick={() => setIsLogoutConfirmationOpen(true)} disabled={isLoggingOut} />
@@ -247,6 +249,64 @@ function AccountPanel({ user, employeeName, employeeCode, officeName, role, isUp
         navigate('/login', { replace: true, state: { message: 'メールアドレスを変更しました。新しいメールアドレスでログインしてください。' } })
         void logout().catch(() => undefined)
       }} />}
+    </SettingsSection>
+  )
+}
+
+function ChatNotificationsPanel({ userId }: { userId: number }) {
+  const supported = canShowChatSystemNotifications()
+  const [sound, setSound] = useState(() => chatNotificationEnabled(userId, 'sound'))
+  const [system, setSystem] = useState(() => supported && Notification.permission === 'granted' && chatNotificationEnabled(userId, 'system'))
+  const [requesting, setRequesting] = useState(false)
+  const [error, setError] = useState('')
+
+  const toggleSystem = async () => {
+    setError('')
+    if (system) {
+      setChatNotificationEnabled(userId, 'system', false)
+      setSystem(false)
+      return
+    }
+    setRequesting(true)
+    try {
+      if (await enableChatSystemNotifications()) {
+        setChatNotificationEnabled(userId, 'system', true)
+        setSystem(true)
+      } else {
+        setError('端末またはブラウザーの設定で通知を許可してください。')
+      }
+    } catch {
+      setError('端末への通知を設定できませんでした。もう一度お試しください。')
+    } finally {
+      setRequesting(false)
+    }
+  }
+
+  return (
+    <SettingsSection title="社内チャットの通知" description="このブラウザーでの通知方法を設定します。">
+      <div className="divide-y divide-[var(--tm-border)] px-4 sm:px-6">
+        <label className="flex min-h-16 cursor-pointer items-center gap-4 py-3">
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-[var(--tm-text-primary)]">新着メッセージの通知音</span>
+            <span className="mt-1 block text-xs leading-5 text-[var(--tm-text-secondary)]">オフにしても、あなた宛てのメンションには通知音が鳴ります。</span>
+          </span>
+          <input type="checkbox" className="size-5 shrink-0 accent-[var(--tm-primary)]" checked={sound} onChange={event => {
+            setSound(event.currentTarget.checked)
+            setChatNotificationEnabled(userId, 'sound', event.currentTarget.checked)
+          }} />
+        </label>
+        <div className="flex flex-wrap items-center gap-3 py-3">
+          <div className="min-w-0 flex-1 basis-48">
+            <p className="text-sm font-semibold text-[var(--tm-text-primary)]">端末への通知</p>
+            <p className="mt-1 text-xs leading-5 text-[var(--tm-text-secondary)]">THEMISを開いている間、チャットを表示していないときも端末に新着を通知します。</p>
+          </div>
+          <Button variant="outline" size="sm" loading={requesting} disabled={!supported} onClick={() => void toggleSystem()}>
+            {system ? '端末への通知をオフにする' : '端末への通知をオンにする'}
+          </Button>
+          {!supported && <p className="basis-full text-xs text-[var(--tm-text-secondary)]">このブラウザーでは端末への通知を設定できません。</p>}
+          {error && <p role="alert" className="basis-full text-xs text-[var(--tm-danger)]">{error}</p>}
+        </div>
+      </div>
     </SettingsSection>
   )
 }

@@ -8,6 +8,8 @@ use App\Models\CaseFile;
 use App\Models\CaseMeetingLog;
 use App\Models\CaseTask;
 use App\Models\Employee;
+use App\Services\CaseHistoryAttachments;
+use App\Services\CaseHistoryUploadStaging;
 use App\Services\CaseTaskService;
 use App\Services\CaseWorkspaceAuditService;
 use Illuminate\Database\Eloquent\Builder;
@@ -17,6 +19,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CaseHistoryController extends Controller
 {
@@ -144,21 +147,27 @@ class CaseHistoryController extends Controller
             $people[] = ['type' => 'employee', 'id' => $employee->id, 'name' => $employee->full_name];
         }
 
-        return response()->json(['people' => $people, 'permissions' => $this->permissions($request)]);
+        $permissions = $this->permissions($request);
+        $permissions['can_upload_attachments'] = $permissions['can_edit_communication'] && CaseHistoryAttachments::supports($caseFile);
+
+        return response()->json(['people' => $people, 'permissions' => $permissions]);
     }
 
-    public function store(Request $request, CaseFile $caseFile): JsonResponse
+    public function store(Request $request, CaseFile $caseFile, CaseHistoryAttachments $files): JsonResponse
     {
         $communication = $this->validated($request, $caseFile);
-        $activity = DB::transaction(function () use ($request, $caseFile, $communication) {
+        $activity = $files->save($request, $caseFile, function (array $attachments) use ($request, $caseFile, $communication) {
             $activity = $caseFile->activities()->create([
                 'activity_type' => 'communication', 'channel' => $this->channel($communication['communication_type']),
                 'title' => $communication['subject'], 'content' => $communication['summary'], 'occurred_at' => $communication['started_at'],
                 'created_by_employee_id' => $request->user()->employee_id,
                 'metadata' => ['history_kind' => 'communication', 'communication' => $communication,
+                    'history_attachments' => $attachments,
                     'created_by_user_id' => $request->user()->id, 'updated_by_user_id' => $request->user()->id],
             ]);
-            $this->audit->record($caseFile, $request, '連絡・面談履歴を追加', $activity->title, ['event' => 'communication.created', 'communication_id' => $activity->id]);
+            $this->audit->record($caseFile, $request, '連絡・面談履歴を追加', $activity->title, [
+                'event' => 'communication.created', 'communication_id' => $activity->id, 'attachment_count' => count($attachments),
+            ]);
 
             return $activity;
         });
@@ -173,13 +182,15 @@ class CaseHistoryController extends Controller
         return response()->json(['entry' => $this->entry($communication->load('createdByEmployee'), $request, 'communication')]);
     }
 
-    public function update(Request $request, CaseFile $caseFile, CaseActivity $communication): JsonResponse
+    public function update(Request $request, CaseFile $caseFile, CaseActivity $communication, CaseHistoryAttachments $files): JsonResponse
     {
         $this->ensureCommunication($caseFile, $communication);
         $data = $this->validated($request, $caseFile);
-        DB::transaction(function () use ($request, $caseFile, $communication, $data) {
+        $files->save($request, $caseFile, function (array $attachments) use ($request, $caseFile, $communication, $data) {
             $activity = $caseFile->activities()->whereKey($communication->id)->lockForUpdate()->firstOrFail();
+            $this->ensureCommunication($caseFile, $activity);
             $before = $activity->metadata['communication'];
+            $existing = $activity->metadata['history_attachments'] ?? [];
             $data['linked_task_id'] = $before['linked_task_id'] ?? null;
             $changes = [];
             foreach ($data as $key => $value) {
@@ -187,16 +198,66 @@ class CaseHistoryController extends Controller
                     $changes[$key] = ['before' => $before[$key] ?? null, 'after' => $value];
                 }
             }
-            if (! $changes) {
+            if (! $changes && ! $attachments) {
                 return;
+            }
+            if ($attachments) {
+                $afterCount = count($existing) + count($attachments);
+                if ($afterCount > 10) {
+                    throw ValidationException::withMessages(['attachments' => '1件の履歴に添付できるファイルは10件までです。']);
+                }
+                $changes['attachment_count'] = ['before' => count($existing), 'after' => $afterCount];
             }
             $activity->update(['title' => $data['subject'], 'content' => $data['summary'], 'occurred_at' => $data['started_at'],
                 'channel' => $this->channel($data['communication_type']),
-                'metadata' => [...$activity->metadata, 'communication' => $data, 'updated_by_user_id' => $request->user()->id]]);
+                'metadata' => [...$activity->metadata, 'communication' => $data, 'history_attachments' => [...$existing, ...$attachments],
+                    'updated_by_user_id' => $request->user()->id]]);
             $this->audit->record($caseFile, $request, '連絡・面談履歴を更新', $activity->title, ['event' => 'communication.updated', 'communication_id' => $activity->id, 'changes' => $changes]);
-        });
+        }, $communication->id);
 
         return response()->json(['entry' => $this->entry($communication->fresh()->load('createdByEmployee'), $request, 'communication')]);
+    }
+
+    public function startAttachmentUpload(Request $request, CaseFile $caseFile, CaseHistoryUploadStaging $staging): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'], 'size' => ['required', 'integer', 'min:1', 'max:262144000'],
+            'communication_id' => ['nullable', 'integer', 'min:1'],
+        ]);
+        $communicationId = isset($data['communication_id']) ? (int) $data['communication_id'] : null;
+        if ($communicationId !== null) {
+            $this->ensureCommunication($caseFile, $caseFile->activities()->findOrFail($communicationId));
+        }
+        $id = $staging->start($caseFile, $request->user(), $communicationId, $data['name'], (int) $data['size']);
+
+        return response()->json(['upload_id' => $id], 201);
+    }
+
+    public function appendAttachmentChunk(Request $request, CaseFile $caseFile, string $upload, CaseHistoryUploadStaging $staging): JsonResponse
+    {
+        $data = $request->validate([
+            'offset' => ['required', 'integer', 'min:0', 'max:262144000'],
+            'chunk' => ['required', 'file', 'max:'.CaseHistoryUploadStaging::CHUNK_KIB],
+        ]);
+        $next = $staging->append($caseFile, $request->user(), $upload, (int) $data['offset'], $data['chunk']);
+
+        return response()->json(['next_offset' => $next]);
+    }
+
+    public function discardAttachmentUpload(Request $request, CaseFile $caseFile, string $upload, CaseHistoryUploadStaging $staging): JsonResponse
+    {
+        $staging->discard($caseFile, $request->user(), $upload);
+
+        return response()->json(null, 204);
+    }
+
+    public function attachment(CaseFile $caseFile, CaseActivity $communication, string $attachment, CaseHistoryAttachments $files): StreamedResponse
+    {
+        $this->ensureCommunication($caseFile, $communication);
+        $item = collect($communication->metadata['history_attachments'] ?? [])->firstWhere('id', $attachment);
+        abort_unless($item, 404);
+
+        return $files->download($item);
     }
 
     /** Explicit opt-in delegates creation to the existing standalone CaseTask flow. */
@@ -228,6 +289,14 @@ class CaseHistoryController extends Controller
 
     private function validated(Request $request, CaseFile $caseFile): array
     {
+        if ($request->has('communication_data')) {
+            $encoded = $request->input('communication_data');
+            $payload = is_string($encoded) ? json_decode($encoded, true) : null;
+            if (! is_array($payload) || array_is_list($payload) || array_key_exists('attachments', $payload)) {
+                throw ValidationException::withMessages(['communication_data' => '連絡・面談の入力情報が不正です。']);
+            }
+            $request->merge($payload);
+        }
         $data = $request->validate([
             'metadata' => ['prohibited'], 'activity_type' => ['prohibited'], 'created_by' => ['prohibited'],
             'communication_type' => ['required', Rule::in(self::TYPES)],
@@ -309,6 +378,9 @@ class CaseHistoryController extends Controller
             'type' => $communication['communication_type'] ?? ($kind === 'system' ? 'system' : $this->legacyType($activity->channel)),
             'action_type' => $kind === 'system' ? ($meta['event'] ?? null) : null,
             'communication' => $communication, 'changes' => $this->displayChanges($meta['changes'] ?? $this->changes($meta)),
+            'attachments' => $kind === 'communication' && $communication !== null
+                ? array_map(fn ($item) => array_intersect_key($item, array_flip(['id', 'name', 'mime_type', 'size'])), $meta['history_attachments'] ?? [])
+                : [],
             'linked_task' => $task?->only(['id', 'title']),
             'permissions' => ['can_edit' => $write && $kind === 'communication' && $communication !== null && $request->user()->hasPermission('case.update'),
                 'can_create_task' => $write && $communication !== null && empty($communication['has_linked_task']) && $request->user()->hasPermission('task.manage')

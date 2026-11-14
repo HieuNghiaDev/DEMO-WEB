@@ -1,9 +1,10 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import axios from 'axios'
-import { CalendarClock, CheckCheck, ChevronLeft, ChevronRight, ClipboardCheck, FileText, FolderOpen, Mail, MapPin, MessageSquareText, Package, Pencil, Phone, Plus, RotateCcw, Search, Upload, UserRound, Users, Video } from 'lucide-react'
+import { CalendarClock, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, FileText, FolderOpen, Mail, MapPin, MessageSquareText, Package, Paperclip, Pencil, Phone, Plus, RotateCcw, Save, Search, Upload, UserRound, Users, Video, X } from 'lucide-react'
 import { Button, ModalShell } from '../../components/ui'
 import { UserAvatar } from '../../components/ui/UserAvatar'
-import { caseWorkspaceApi } from './api'
+import { caseWorkspaceApi, type CommunicationUploadProgress } from './api'
+import { HistoryAttachmentList, HistoryAttachmentPicker } from './HistoryAttachments'
 import { communicationLabels, type Communication, type CommunicationType, type HistoryEntry, type HistoryOptions, type HistoryPerson, type HistoryResponse } from './historyTypes'
 import { changeHistoryFilter, changeLabel, compactHistoryChange, durationLabel, groupHistoryDays, HISTORY_PAGE_SIZES, historyCategory, historyDate, historyOperationIcon, historyPageNumbers, historyRange, historyTime, historyTypeLabel, historyValue, initialHistoryFilters, localDateInput, type HistoryFilters } from './historyPresentation'
 import './caseHistory.css'
@@ -68,7 +69,7 @@ export default function CaseHistoryPanel({ caseId, onChanged, onOpenTask }: { ca
     {result && <div className="cm-history-result-summary"><span aria-live="polite">{pending ? '履歴を読み込み中…' : historyRange(result.pagination)}</span><button type="button" onClick={clearFilters}>条件をクリア</button></div>}
     <div className="cm-history-results" aria-busy={pending}>
       {pending ? <div role="status" aria-label="履歴を読み込み中" className="cm-history-skeleton">{loadingGroups.map((group, groupIndex) => <section key={groupIndex} aria-hidden><div className="cm-history-skeleton-date"/>{group.map((entry, index) => <div key={entry?.id ?? index} className={`cm-history-skeleton-row${entry?.kind === 'communication' ? ' is-communication' : ''}`}><span/><span/><span/></div>)}</section>)}</div> : !error && result?.entries.length === 0 ? <div className="cm-history-empty"><p>該当する履歴はありません。</p><Button size="sm" onClick={clearFilters}>条件をクリア</Button></div> : !error &&
-        <div className="cm-history-list">{visibleGroups.map(group => <section key={group.date} aria-label={`${group.date}の履歴`}><h3 className="cm-history-date"><span>{group.date}</span><span aria-label={`このページの${group.date}の履歴 ${group.entries.length}件`}>{group.entries.length}件</span></h3>{group.entries.map(entry => <TimelineEntry key={entry.id} entry={entry} onEdit={() => setEditing(entry)} onTask={() => setTaskEntry(entry)} onOpenTask={onOpenTask}/>)}</section>)}</div>}
+        <div className="cm-history-list">{visibleGroups.map(group => <section key={group.date} aria-label={`${group.date}の履歴`}><h3 className="cm-history-date"><span>{group.date}</span><span aria-label={`このページの${group.date}の履歴 ${group.entries.length}件`}>{group.entries.length}件</span></h3>{group.entries.map(entry => <TimelineEntry key={entry.id} entry={entry} caseId={caseId} onEdit={() => setEditing(entry)} onTask={() => setTaskEntry(entry)} onOpenTask={onOpenTask}/>)}</section>)}</div>}
     </div>
     {result && !error && <footer className="cm-history-pagination">
       <span>{historyRange(result.pagination)}</span>
@@ -77,12 +78,12 @@ export default function CaseHistoryPanel({ caseId, onChanged, onOpenTask }: { ca
         <Button size="sm" aria-label="次のページ" disabled={pending || result.pagination.current_page >= result.pagination.last_page} onClick={() => setFilters(f => ({ ...f, page: result.pagination.current_page + 1 }))}><ChevronRight size={15} aria-hidden/></Button></nav>
       <label>表示件数<select value={filters.per_page} onChange={e => filter('per_page', Number(e.target.value))}>{HISTORY_PAGE_SIZES.map(size => <option key={size} value={size}>{size}件</option>)}</select></label>
     </footer>}
-    {editing && options && <CommunicationDialog caseId={caseId} entry={editing === 'new' ? null : editing} people={options.people} onClose={() => setEditing(null)} onSaved={changed}/>}
+    {editing && options && <CommunicationDialog caseId={caseId} entry={editing === 'new' ? null : editing} people={options.people} canAttach={options.permissions.can_upload_attachments === true} onClose={() => setEditing(null)} onSaved={changed}/>}
     {taskEntry && options && <NextActionTaskDialog caseId={caseId} entry={taskEntry} people={options.people} onClose={() => setTaskEntry(null)} onSaved={() => { setSaved(null); changed() }}/ >}
   </section>
 }
 
-export function TimelineEntry({ entry, onEdit, onTask, onOpenTask }: { entry: HistoryEntry; onEdit: () => void; onTask: () => void; onOpenTask: (id: number) => void }) {
+export function TimelineEntry({ entry, caseId, onEdit, onTask, onOpenTask }: { entry: HistoryEntry; caseId?: number; onEdit: () => void; onTask: () => void; onOpenTask: (id: number) => void }) {
   const operation = historyOperationIcon(entry)
   const Icon = entry.kind === 'system' ? operationIcons[operation] : icons[entry.type as keyof typeof icons] ?? MessageSquareText
   const communication = entry.communication
@@ -114,6 +115,7 @@ export function TimelineEntry({ entry, onEdit, onTask, onOpenTask }: { entry: Hi
         ].filter(([, value]) => value).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
         {entry.summary && !communication && <p className="cm-history-fulltext">{entry.summary}</p>}
         {Object.entries(entry.legacy_detail ?? {}).filter(([, value]) => value).map(([label, value]) => <p key={label}>{label}：{value}</p>)}
+        {caseId != null && !!entry.attachments?.length && <HistoryAttachmentList attachments={entry.attachments} caseId={caseId} communicationId={entry.record_id}/>}
         {Object.keys(entry.changes).length > 0 && <dl>{Object.entries(entry.changes).map(([field, change]) => <div key={field}><dt>{changeLabel(field)}</dt><dd><span>{historyValue(change.before)}</span><span aria-label="変更後"> → </span><strong>{historyValue(change.after)}</strong></dd></div>)}</dl>}
         {entry.linked_task && <Button variant="ghost" size="sm" onClick={() => onOpenTask(entry.linked_task!.id)}>関連タスク：{entry.linked_task.title} ›</Button>}
         <div className="cm-history-detail-actions">{entry.permissions.can_edit && <Button size="sm" onClick={onEdit}>編集</Button>}{entry.permissions.can_create_task && <Button size="sm" onClick={onTask}>次回対応からタスクを作成</Button>}</div>
@@ -121,13 +123,82 @@ export function TimelineEntry({ entry, onEdit, onTask, onOpenTask }: { entry: Hi
   </article>
 }
 
-function CommunicationDialog({ caseId, entry, people, onClose, onSaved }: { caseId: number; entry: HistoryEntry | null; people: HistoryPerson[]; onClose: () => void; onSaved: (entry: HistoryEntry) => void }) {
+const personKey = (person: HistoryPerson) => `${person.type}:${person.id ?? person.name}`
+const personTypeLabels = { client: '依頼者', party: '関係者', employee: '社員', external: '外部' } as const
+
+function HistoryPeopleField({ id, label, required, people, selected, error, onPick }: {
+  id: string; label: string; required?: boolean; people: HistoryPerson[]; selected: HistoryPerson[]; error: string;
+  onPick: (person: HistoryPerson, checked: boolean) => void;
+}) {
+  const [query, setQuery] = useState('')
+  const pickerRef = useRef<HTMLDetailsElement>(null)
+  const optionsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const closeOutside = (event: PointerEvent) => {
+      const picker = pickerRef.current
+      if (picker?.open && event.target instanceof Node && !picker.contains(event.target)) picker.open = false
+    }
+    document.addEventListener('pointerdown', closeOutside)
+    return () => document.removeEventListener('pointerdown', closeOutside)
+  }, [])
+  const selectedKeys = new Set(selected.map(personKey))
+  const choices = new Map(people.map(person => [personKey(person), person]))
+  for (const person of selected) {
+    if (!choices.has(personKey(person))) choices.set(personKey(person), person)
+  }
+  const normalize = (value: string) => value.normalize('NFKC').toLowerCase()
+  const keyword = normalize(query.trim())
+  const visible = [...choices.values()].filter(person => normalize(person.name).includes(keyword))
+
+  return <fieldset className="cm-history-people" id={id} tabIndex={-1} aria-describedby={error ? `${id}-error` : undefined}>
+    <legend>{label}{required && <span className="cm-history-required"> *</span>}</legend>
+    <details ref={pickerRef} className="cm-history-people-picker" onToggle={event => {
+      const picker = event.currentTarget
+      const options = optionsRef.current
+      if (!picker.open || !options) return
+
+      const body = picker.closest('.cm-history-drawer-body')
+      if (!body) return
+      const trigger = picker.getBoundingClientRect()
+      const bounds = body.getBoundingClientRect()
+      const below = bounds.bottom - trigger.bottom
+      const above = trigger.top - bounds.top
+      picker.classList.toggle('opens-up', below < options.offsetHeight + 6 && above > below)
+      const menu = options.getBoundingClientRect()
+      if (menu.top < bounds.top) body.scrollTop += menu.top - bounds.top
+      else if (menu.bottom > bounds.bottom) body.scrollTop += menu.bottom - bounds.bottom
+    }}>
+      <summary>
+        <span className="cm-history-people-preview" title={selected.map(person => person.name).join('、')}>
+          {selected[0]?.name ?? `${label}を選択`}
+        </span>
+        {selected.length > 1 && <span className="cm-history-people-count">+{selected.length - 1}</span>}
+        <ChevronDown size={15} aria-hidden/>
+      </summary>
+      <div ref={optionsRef} className="cm-history-people-options">
+        <label className="cm-history-people-search"><Search size={14} aria-hidden/><input type="search" value={query} aria-label={`${label}を検索`} placeholder="名前で検索" onChange={event => setQuery(event.target.value)}/></label>
+        <div className="cm-history-people-results">
+          {visible.map(person => <label key={personKey(person)}>
+            <input type="checkbox" checked={selectedKeys.has(personKey(person))} onChange={event => onPick(person, event.target.checked)}/>
+            <span>{person.name}</span><small>{personTypeLabels[person.type]}</small>
+          </label>)}
+          {visible.length === 0 && <p>該当する候補はありません。</p>}
+        </div>
+      </div>
+    </details>
+    {error && <small id={`${id}-error`} className="cm-history-field-error">{error}</small>}
+  </fieldset>
+}
+
+function CommunicationDialog({ caseId, entry, people, canAttach, onClose, onSaved }: { caseId: number; entry: HistoryEntry | null; people: HistoryPerson[]; canAttach: boolean; onClose: () => void; onSaved: (entry: HistoryEntry) => void }) {
   const formId = useId()
   const titleId = useId()
   const [form, setForm] = useState<Communication>(() => entry?.communication ?? { communication_type: 'phone', direction: 'outbound', started_at: new Date().toISOString(), ended_at: null,
     subject: '', summary: '', details: null, outcome: null, next_action: null, next_action_due_at: null,
     counterparties: people.filter(p => p.type === 'client'), participants: [] })
   const [external, setExternal] = useState('')
+  const [files, setFiles] = useState<File[]>([])
+  const [progress, setProgress] = useState<CommunicationUploadProgress | null>(null)
   const [error, setError] = useState('')
   const [validation, setValidation] = useState<Record<string, string[]>>({})
   const [busy, setBusy] = useState(false)
@@ -143,37 +214,99 @@ function CommunicationDialog({ caseId, entry, people, onClose, onSaved }: { case
       // Whitelist input fields: API-computed duration/task flags are never writable.
       const { duration_minutes: _duration, has_linked_task: _linked, ...payload } = form
       void _duration; void _linked
-      const result = await caseWorkspaceApi.saveCommunication(caseId, payload, entry?.record_id)
+      const result = await caseWorkspaceApi.saveCommunication(caseId, payload, entry?.record_id, files, setProgress)
       onSaved(result)
     } catch (e) {
       setError(errorText(e)); setValidation(axios.isAxiosError(e) ? e.response?.data?.errors ?? {} : {})
       window.setTimeout(() => errorRef.current?.focus(), 0)
-    } finally { flight.current = false; setBusy(false) }
+    } finally { flight.current = false; setBusy(false); setProgress(null) }
   }
   const timed = !['email', 'chat', 'postal_mail'].includes(form.communication_type)
   const minutes = timed && form.ended_at ? Math.floor((Date.parse(form.ended_at) - Date.parse(form.started_at)) / 60000) : null
-  const personKey = (p: HistoryPerson) => `${p.type}:${p.id ?? p.name}`
-  const pick = (field: 'counterparties' | 'participants', person: HistoryPerson, checked: boolean) => update(field, checked ? [...form[field], person] : form[field].filter(p => personKey(p) !== personKey(person)))
-  return <ModalShell isOpen onClose={() => { if (!flight.current) onClose() }} dismissible={!busy} title={entry ? '連絡・面談を編集' : '連絡・面談を追加'} titleId={titleId} size="lg" className="cm-history-modal"
-    footer={<><Button disabled={busy} onClick={onClose}>キャンセル</Button><Button form={formId} type="submit" variant="primary" loading={busy}>保存する</Button></>}>
-    <form id={formId} className="cm-history-form" onSubmit={e => void save(e)}>
-      {error && <div ref={errorRef} tabIndex={-1} role="alert" className="cm-history-error">{error}{Object.entries(validation).map(([field, errors]) => <a href={`#${formId}-${field.split('.')[0]}`} key={field}>{errors.join(' ')}</a>)}</div>}
-      <fieldset disabled={busy}><div className="cm-history-form-grid">
-        <label>種類 *<select value={form.communication_type} onChange={e => {
-          const type = e.target.value as CommunicationType
-          setForm(f => ({ ...f, communication_type: type, ended_at: ['email', 'chat', 'postal_mail'].includes(type) ? null : f.ended_at,
-            direction: ['phone', 'email', 'chat', 'postal_mail'].includes(type) ? f.direction : null }))
-        }}>{Object.entries(communicationLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        {['phone', 'email', 'chat', 'postal_mail'].includes(form.communication_type) && <label>方向<select value={form.direction ?? ''} onChange={e => update('direction', (e.target.value || null) as Communication['direction'])}><option value="">該当なし</option><option value="outbound">{form.communication_type === 'phone' ? '発信' : '送信'}</option><option value="inbound">受信</option></select></label>}
-        <label>開始日時 *<input id={`${formId}-started_at`} type="datetime-local" required aria-invalid={Boolean(fieldErrors('started_at'))} value={localDateInput(form.started_at)} onChange={e => update('started_at', e.target.value ? new Date(e.target.value).toISOString() : '')}/>{fieldErrors('started_at') && <small className="cm-history-field-error">{fieldErrors('started_at')}</small>}</label>
-        {timed && <label>終了日時<input id={`${formId}-ended_at`} type="datetime-local" aria-invalid={Boolean(fieldErrors('ended_at'))} min={localDateInput(form.started_at)} value={form.ended_at ? localDateInput(form.ended_at) : ''} onChange={e => update('ended_at', e.target.value ? new Date(e.target.value).toISOString() : null)}/>{minutes != null && minutes >= 0 && <small>所要時間：{durationLabel(minutes)}</small>}{fieldErrors('ended_at') && <small className="cm-history-field-error">{fieldErrors('ended_at')}</small>}</label>}
+  const pick = (field: 'counterparties' | 'participants', person: HistoryPerson, checked: boolean) => setForm(current => ({
+    ...current, [field]: checked ? [...current[field], person] : current[field].filter(p => personKey(p) !== personKey(person)),
+  }))
+  const title = entry ? '連絡・面談を編集' : '連絡・面談を追加'
+  const dismiss = () => { if (!flight.current) onClose() }
+  const showAttachments = canAttach || Boolean(entry?.attachments?.length)
+  const TypeIcon = icons[form.communication_type]
+  const sections = [
+    ['basic', '基本情報', CalendarClock], ['people', '参加者', Users], ['record', '記録内容', FileText],
+    ...(showAttachments ? [['files', '添付', Paperclip] as const] : []), ['follow-up', '次回対応', ClipboardCheck],
+  ] as const
+  return <ModalShell isOpen customContent onClose={dismiss} dismissible={!busy} title={title} overlayClassName="cm-history-drawer-layer">
+    <aside className="cm-history-drawer" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <header className="cm-history-drawer-header">
+        <div className="cm-history-drawer-title">
+          <span className="cm-history-drawer-icon"><MessageSquareText size={21} aria-hidden/></span>
+          <div><p>案件履歴</p><h2 id={titleId}>{title}</h2></div>
+          <Button type="button" size="sm" variant="ghost" disabled={busy} aria-label="閉じる" onClick={dismiss}><X size={19} aria-hidden/></Button>
+        </div>
+        <nav className="cm-history-drawer-nav" aria-label="入力項目">
+          {sections.map(([id, label, Icon]) => <a key={id} href={`#${formId}-section-${id}`} onClick={event => {
+            event.preventDefault()
+            const section = document.getElementById(`${formId}-section-${id}`)
+            const body = section?.closest('.cm-history-drawer-body')
+            if (section && body) {
+              body.scrollTop += section.getBoundingClientRect().top - body.getBoundingClientRect().top - 12
+              section.focus({ preventScroll: true })
+            }
+          }}><Icon size={14} aria-hidden/>{label}</a>)}
+        </nav>
+      </header>
+      <div className="cm-history-drawer-body" aria-busy={busy}>
+        <form id={formId} className="cm-history-form" onSubmit={e => void save(e)}>
+          {error && <div ref={errorRef} tabIndex={-1} role="alert" className="cm-history-error">{error}{Object.entries(validation).map(([field, errors]) => <a href={`#${formId}-${field.split('.')[0]}`} key={field}>{errors.join(' ')}</a>)}</div>}
+          <fieldset disabled={busy}>
+          <section className="cm-history-form-section" id={`${formId}-section-basic`} tabIndex={-1} aria-label="基本情報">
+          <h3>基本情報</h3>
+          <div className="cm-history-form-grid">
+            <label><span>種類 <span className="cm-history-required">*</span></span><span className="cm-history-type-select"><TypeIcon size={15} aria-hidden/><select id={`${formId}-communication_type`} value={form.communication_type} onChange={e => {
+              const type = e.target.value as CommunicationType
+              setForm(f => ({ ...f, communication_type: type, ended_at: ['email', 'chat', 'postal_mail'].includes(type) ? null : f.ended_at,
+                direction: ['phone', 'email', 'chat', 'postal_mail'].includes(type) ? f.direction : null }))
+            }}>{Object.entries(communicationLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></span></label>
+            {['phone', 'email', 'chat', 'postal_mail'].includes(form.communication_type) && <label>方向<select value={form.direction ?? ''} onChange={e => update('direction', (e.target.value || null) as Communication['direction'])}><option value="">該当なし</option><option value="outbound">{form.communication_type === 'phone' ? '発信' : '送信'}</option><option value="inbound">受信</option></select></label>}
+            <label className="cm-history-form-date"><span>開始日時 <span className="cm-history-required">*</span></span><input id={`${formId}-started_at`} type="datetime-local" required aria-invalid={Boolean(fieldErrors('started_at'))} value={localDateInput(form.started_at)} onChange={e => update('started_at', e.target.value ? new Date(e.target.value).toISOString() : '')}/>{fieldErrors('started_at') && <small className="cm-history-field-error">{fieldErrors('started_at')}</small>}</label>
+            {timed && <label className="cm-history-form-date">終了日時<input id={`${formId}-ended_at`} type="datetime-local" aria-invalid={Boolean(fieldErrors('ended_at'))} min={localDateInput(form.started_at)} value={form.ended_at ? localDateInput(form.ended_at) : ''} onChange={e => update('ended_at', e.target.value ? new Date(e.target.value).toISOString() : null)}/>{minutes != null && minutes >= 0 && <small>所要時間：{durationLabel(minutes)}</small>}{fieldErrors('ended_at') && <small className="cm-history-field-error">{fieldErrors('ended_at')}</small>}</label>}
+          </div>
+          </section>
+          <section className="cm-history-form-section" id={`${formId}-section-people`} tabIndex={-1} aria-label="相手・参加者">
+          <h3>相手・参加者</h3>
+          <div className="cm-history-people-grid">
+            <HistoryPeopleField id={`${formId}-counterparties`} label="相手" required people={people.filter(p => p.type !== 'employee')} selected={form.counterparties} error={fieldErrors('counterparties')} onPick={(person, checked) => pick('counterparties', person, checked)}/>
+            <HistoryPeopleField id={`${formId}-participants`} label="参加者" people={people} selected={form.participants} error={fieldErrors('participants')} onPick={(person, checked) => pick('participants', person, checked)}/>
+          </div>
+          <div className="cm-history-external"><label>未登録の外部参加者<input maxLength={255} placeholder="氏名・組織名を入力" value={external} onChange={e => setExternal(e.target.value)}/></label><Button type="button" variant="outline" icon={<Plus size={14} aria-hidden/>} disabled={!external.trim()} onClick={() => { const p: HistoryPerson = { type: 'external', id: null, name: external.trim() }; if (!form.counterparties.some(v => personKey(v) === personKey(p))) pick('counterparties', p, true); if (!form.participants.some(v => personKey(v) === personKey(p))) pick('participants', p, true); setExternal('') }}>追加</Button></div>
+          </section>
+          <section className="cm-history-form-section" id={`${formId}-section-record`} tabIndex={-1} aria-label="連絡・面談内容">
+          <h3>連絡・面談内容</h3>
+          {(['subject', 'summary', 'details', 'outcome'] as const).map(field => <label key={field}>{changeLabel(field)}{['subject', 'summary'].includes(field) && ' *'}{field === 'subject' ? <input id={`${formId}-${field}`} aria-invalid={Boolean(fieldErrors(field))} required maxLength={255} value={form[field] ?? ''} onChange={e => update(field, e.target.value)}/> : <textarea id={`${formId}-${field}`} aria-invalid={Boolean(fieldErrors(field))} required={field === 'summary'} rows={field === 'summary' ? 3 : 2} maxLength={field === 'details' ? 10000 : 5000} value={form[field] ?? ''} onChange={e => update(field, e.target.value)}/>}{fieldErrors(field) && <small className="cm-history-field-error">{fieldErrors(field)}</small>}</label>)}
+          </section>
+          {showAttachments && <section className="cm-history-form-section cm-history-form-files" id={`${formId}-section-files`} tabIndex={-1} aria-label="添付ファイル">
+          <h3>添付ファイル</h3>
+          {entry && !!entry.attachments?.length && <HistoryAttachmentList attachments={entry.attachments} caseId={caseId} communicationId={entry.record_id}/>}
+          {canAttach && <HistoryAttachmentPicker id={`${formId}-attachments`} files={files} onChange={setFiles} existingCount={entry?.attachments?.length ?? 0} serverError={fieldErrors('attachments')}/>}
+          </section>}
+          <section className="cm-history-form-section" id={`${formId}-section-follow-up`} tabIndex={-1} aria-label="次回対応">
+          <h3>次回対応</h3>
+          <label>対応内容<input id={`${formId}-next_action`} maxLength={255} value={form.next_action ?? ''} onChange={e => update('next_action', e.target.value)}/></label>
+          <label>次回対応期限<input type="datetime-local" id={`${formId}-next_action_due_at`} value={form.next_action_due_at ? localDateInput(form.next_action_due_at) : ''} onChange={e => update('next_action_due_at', e.target.value ? new Date(e.target.value).toISOString() : null)}/></label>
+          </section>
+          </fieldset>
+        </form>
       </div>
-      {(['counterparties', 'participants'] as const).map(field => <fieldset tabIndex={-1} aria-invalid={Boolean(fieldErrors(field))} id={`${formId}-${field}`} key={field} className="cm-history-people"><legend>{field === 'counterparties' ? '相手 *' : '参加者'}</legend><div>{people.filter(p => field === 'participants' || p.type !== 'employee').map(p => <label key={personKey(p)}><input type="checkbox" checked={form[field].some(v => personKey(v) === personKey(p))} onChange={e => pick(field, p, e.target.checked)}/>{p.name}</label>)}{form[field].filter(p => p.type === 'external').map(p => <label key={personKey(p)}><input type="checkbox" checked onChange={() => pick(field, p, false)}/>{p.name}（外部）</label>)}</div>{fieldErrors(field) && <small className="cm-history-field-error">{fieldErrors(field)}</small>}</fieldset>)}
-      <div className="cm-history-external"><label>未登録の外部参加者<input maxLength={255} value={external} onChange={e => setExternal(e.target.value)}/></label><Button type="button" size="sm" disabled={!external.trim()} onClick={() => { const p: HistoryPerson = { type: 'external', id: null, name: external.trim() }; if (!form.counterparties.some(v => personKey(v) === personKey(p))) pick('counterparties', p, true); if (!form.participants.some(v => personKey(v) === personKey(p))) pick('participants', p, true); setExternal('') }}>追加</Button></div>
-      {(['subject', 'summary', 'details', 'outcome', 'next_action'] as const).map(field => <label key={field}>{changeLabel(field)}{['subject', 'summary'].includes(field) && ' *'}{field === 'subject' || field === 'next_action' ? <input id={`${formId}-${field}`} aria-invalid={Boolean(fieldErrors(field))} required={field === 'subject'} maxLength={255} value={form[field] ?? ''} onChange={e => update(field, e.target.value)}/> : <textarea id={`${formId}-${field}`} aria-invalid={Boolean(fieldErrors(field))} required={field === 'summary'} rows={field === 'summary' ? 3 : 2} maxLength={field === 'details' ? 10000 : 5000} value={form[field] ?? ''} onChange={e => update(field, e.target.value)}/ >}{fieldErrors(field) && <small className="cm-history-field-error">{fieldErrors(field)}</small>}</label>)}
-      <label>次回対応期限<input type="datetime-local" id={`${formId}-next_action_due_at`} value={form.next_action_due_at ? localDateInput(form.next_action_due_at) : ''} onChange={e => update('next_action_due_at', e.target.value ? new Date(e.target.value).toISOString() : null)}/></label>
-      </fieldset>
-    </form>
+      <footer className="cm-history-drawer-footer">
+        {progress && <div className="cm-history-upload-progress" role="status">
+          {progress.phase === 'uploading' ? <><span>添付ファイルを送信中… {progress.percent}%</span><progress aria-label="添付ファイルの送信状況" max={100} value={progress.percent}/></> : <span>Google Drive に保存中…</span>}
+        </div>}
+        <div className="cm-history-drawer-actions">
+          <span><span className="cm-history-required">*</span> 必須項目</span>
+          <Button type="button" variant="outline" disabled={busy} onClick={dismiss}>キャンセル</Button>
+          <Button form={formId} type="submit" variant="primary" icon={<Save size={15} aria-hidden/>} loading={busy}>{busy ? '保存中' : '保存する'}</Button>
+        </div>
+      </footer>
+    </aside>
   </ModalShell>
 }
 
