@@ -3,6 +3,8 @@
 namespace Tests\Feature\C001;
 
 use App\Models\CaseTask;
+use App\Models\Role;
+use App\Services\Administration\MainRoles;
 use App\Services\LegalFinalizationGate;
 use Illuminate\Support\Facades\Schema;
 use Tests\Support\B21\B21TestCase;
@@ -22,8 +24,12 @@ class C001OperationalBoundariesTest extends B21TestCase
         $id = $this->postJson($base.'/documents', ['title' => 'Synthetic ordinary required document', 'category' => 'required', 'status' => 'not_requested'])
             ->assertCreated()->json('document.id');
         $this->patchJson($base.'/documents/'.$id, ['status' => 'requested'])->assertOk()->assertJsonPath('document.status', 'requested');
-        $this->patchJson($base.'/document-collection/'.$id, ['necessity_status' => 'required'])->assertOk();
-        $this->postJson($base.'/case-tasks', ['title' => 'Synthetic assigned operational task', 'assigned_employee_id' => $staff->employee_id])
+        $this->patchJson($base.'/document-collection/'.$id, ['necessity_status' => 'required'])->assertForbidden();
+        MainRoles::install();
+        $lawyer = $this->fixtureUser('operational-lawyer', []);
+        $lawyer->roles()->attach(Role::where('name', 'lawyer')->sole()->id);
+        $this->actingAs($lawyer)->patchJson($base.'/document-collection/'.$id, ['necessity_status' => 'required'])->assertOk();
+        $this->actingAs($manager)->postJson($base.'/case-tasks', ['title' => 'Synthetic assigned operational task', 'assigned_employee_id' => $staff->employee_id])
             ->assertCreated();
         $task = CaseTask::where('case_file_id', $case->id)->where('assigned_employee_id', $staff->employee_id)->sole();
         $this->assertFalse($manager->fresh()->hasPermission('document.approve_legal'));

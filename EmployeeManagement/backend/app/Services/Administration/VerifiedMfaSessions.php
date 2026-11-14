@@ -12,7 +12,8 @@ use Laravel\Sanctum\PersonalAccessToken;
 final class VerifiedMfaSessions
 {
     public const ACTIONS = ['role.assign', 'role.create', 'role.clone', 'role.rename', 'role.permissions', 'role.delete',
-        'mfa.device_change', 'mfa.recovery_codes', 'mfa.disable', 'bootstrap.finish', 'account.password', 'account.email', 'employee.reset_password'];
+        'mfa.device_change', 'mfa.recovery_codes', 'mfa.disable', 'bootstrap.finish', 'account.password', 'account.email',
+        'employee.reset_password', AccountActivationService::ISSUE_ACTION];
 
     public static function identityHash(User $user): string
     {
@@ -34,7 +35,6 @@ final class VerifiedMfaSessions
     public function policyRequiresMfa(User $user): bool
     {
         return AdminCapabilities::isCanonicalAdmin($user)
-            || $user->hasAnyRole(['legal_assistant', 'staff'])
             || (Schema::hasColumn('security_administration_state', 'bootstrap_user_id')
                 && DB::table('security_administration_state')->where('id', 1)->where('bootstrap_user_id', $user->id)->exists());
     }

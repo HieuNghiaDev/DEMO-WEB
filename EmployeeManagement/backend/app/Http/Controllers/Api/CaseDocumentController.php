@@ -30,6 +30,10 @@ class CaseDocumentController extends Controller
         Gate::authorize('view', $caseFile);
 
         $data = $this->validated($request);
+        if (in_array($data['requirement_level'] ?? null, ['required', 'conditional'], true)
+            || ($data['status'] ?? null) === 'not_required') {
+            Gate::authorize('decideDocumentNecessity', $caseFile);
+        }
         $data['version'] = '1';
         $data['created_by_employee_id'] = $request->user()?->employee_id;
         $this->applyConfirmation($data, $request);
@@ -45,12 +49,20 @@ class CaseDocumentController extends Controller
 
         abort_unless($document->case_file_id === $caseFile->id, 404);
         $data = $this->validated($request, true);
-        $data['version'] = (string) ($this->versionNumber($document->version) + 1);
-        $this->applyConfirmation($data, $request);
-        $document->update($data);
-        $this->auditService->record($caseFile, $request, '資料を更新', $document->title, ['document_id' => $document->id, 'status' => $document->status]);
 
-        return response()->json(['document' => $document]);
+        return $caseFile->getConnection()->transaction(function () use ($caseFile, $document, $data, $request) {
+            $document = $caseFile->documents()->whereKey($document->id)->lockForUpdate()->firstOrFail();
+            if ((array_key_exists('requirement_level', $data) && $data['requirement_level'] !== $document->requirement_level)
+                || (array_key_exists('status', $data) && ($data['status'] === 'not_required') !== ($document->status === 'not_required'))) {
+                Gate::authorize('decideDocumentNecessity', $caseFile);
+            }
+            $data['version'] = (string) ($this->versionNumber($document->version) + 1);
+            $this->applyConfirmation($data, $request);
+            $document->update($data);
+            $this->auditService->record($caseFile, $request, '資料を更新', $document->title, ['document_id' => $document->id, 'status' => $document->status]);
+
+            return response()->json(['document' => $document]);
+        });
     }
 
     public function destroy(Request $request, CaseFile $caseFile, CaseDocument $document): JsonResponse

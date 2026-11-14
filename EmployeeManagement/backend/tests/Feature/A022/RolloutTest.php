@@ -26,20 +26,33 @@ class RolloutTest extends B21TestCase
         // Isolated fixture removes only the older rehearsal shape, never project data.
         Schema::drop('case_memberships');
         Schema::table('case_files', fn ($table) => $table->dropColumn('is_confidential'));
-        $this->manifest = json_decode(file_get_contents(database_path('rollouts/a02_2_v1.json')), true);
-        $this->manifest['target'] = self::TARGET;
+        // Build the rollout contract from synthetic SQLite records.
+        $this->manifest = [
+            'version' => CaseAccessRollout::VERSION,
+            'approval_ref' => 'owner-a02.2-20261026-1311cffa',
+            'approved_at' => '2026-10-26',
+            'target' => self::TARGET,
+            'memberships' => [],
+            'role_grants' => [],
+            'register_permissions' => ['case.manage_access'],
+        ];
         foreach (CaseAccessRollout::CASE_IDS as $id) {
             $case = $this->matter();
             $case->forceFill(['id' => $id])->save();
         }
         $rows = DB::table('case_files')->orderBy('id')->get(['id', 'client_id', 'case_type_id', 'assigned_employee_id', 'status', 'deleted_at']);
         $this->manifest['cases'] = $rows->map(fn ($row) => ['case_id' => $row->id, 'classification' => 'NORMAL', 'baseline' => (array) $row])->all();
-        $this->file = storage_path('a022-synthetic-manifest.json');
+        $file = tempnam(storage_path(), 'a022-');
+        $this->assertNotFalse($file);
+        $this->file = $file;
         $this->writeManifest();
     }
 
     protected function tearDown(): void
     {
+        if (isset($this->file)) {
+            unlink($this->file);
+        }
         if (isset($this->app)) $this->app->maintenanceMode()->deactivate();
         parent::tearDown();
     }

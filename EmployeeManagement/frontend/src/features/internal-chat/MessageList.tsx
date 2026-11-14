@@ -1,7 +1,7 @@
 import { memo, useMemo, type RefObject, type UIEventHandler } from 'react'
 import { ArrowDown, CalendarDays, LoaderCircle, MessageSquareText } from 'lucide-react'
 import MessageBubble from './MessageBubble'
-import type { ChatActionName, ChatReceipt, ChatReply, InternalChatMessage } from './types'
+import type { ChatActionName, ChatReceipt, ChatReply, ChatTranslationPair, InternalChatMessage } from './types'
 
 type MessageActions = {
   actionsEnabled?: boolean
@@ -10,6 +10,8 @@ type MessageActions = {
   onReply?: (reply: ChatReply) => void
   onAction?: (id: number, action: ChatActionName) => Promise<boolean>
   onJump?: (id: number) => void
+  translationPair?: ChatTranslationPair
+  onTranslate?: (id: number, pair: ChatTranslationPair) => Promise<boolean>
 }
 
 const jaDayNames = ['日', '月', '火', '水', '木', '金', '土']
@@ -51,7 +53,7 @@ function formatChatDateSeparator(dateString: string): string {
 }
 
 const ChatMessageRow = memo(function ChatMessageRow({
-  message, receipt, readerMarkers, showDate, actionsEnabled, hideEnabled, canPin, onReply, onAction, onJump,
+  message, receipt, readerMarkers, showDate, actionsEnabled, hideEnabled, canPin, onReply, onAction, onJump, translationPair, onTranslate,
 }: {
   message: InternalChatMessage
   receipt?: ChatReceipt
@@ -67,14 +69,14 @@ const ChatMessageRow = memo(function ChatMessageRow({
         </div>
       )}
       <MessageBubble message={message} receipt={receipt} readerMarkers={readerMarkers} actionsEnabled={actionsEnabled} hideEnabled={hideEnabled}
-        canPin={canPin} onReply={onReply} onAction={onAction} onJump={onJump} />
+        canPin={canPin} onReply={onReply} onAction={onAction} onJump={onJump} translationPair={translationPair} onTranslate={onTranslate} />
     </div>
   )
 })
 
 export default function MessageList({
   messages, receipts, scrollRef, onScroll, error, isInitialLoading, hasOlder, isLoadingOlder, onLoadOlder,
-  actionsEnabled, hideEnabled, canPin, onReply, onAction, onJump,
+  actionsEnabled, hideEnabled, canPin, onReply, onAction, onJump, translationPair, onTranslate,
 }: {
   messages: InternalChatMessage[]
   receipts?: Record<number, ChatReceipt>
@@ -93,7 +95,7 @@ export default function MessageList({
     for (let index = messages.length - 1; index >= 0; index--) {
       const message = messages[index]
       const readers = receipts?.[message.id]?.readers
-      if (!message.is_mine || !readers?.length) continue
+      if (message.recalled_at || !readers?.length) continue
       const markers = readers.filter((reader) => {
         if (markedReaders.has(reader.user_id)) return false
         markedReaders.add(reader.user_id)
@@ -109,10 +111,11 @@ export default function MessageList({
       const showDate = day !== previousDay
       previousDay = day
       rows.push(<ChatMessageRow key={message.id} message={message} receipt={receipts?.[message.id]} readerMarkers={markersByMessage.get(message.id)} showDate={showDate}
-        actionsEnabled={actionsEnabled} hideEnabled={hideEnabled} canPin={canPin} onReply={onReply} onAction={onAction} onJump={onJump} />)
+        actionsEnabled={actionsEnabled} hideEnabled={hideEnabled} canPin={canPin} onReply={onReply} onAction={onAction} onJump={onJump}
+        translationPair={translationPair} onTranslate={onTranslate} />)
     }
     return rows
-  }, [messages, receipts, actionsEnabled, hideEnabled, canPin, onReply, onAction, onJump])
+  }, [messages, receipts, actionsEnabled, hideEnabled, canPin, onReply, onAction, onJump, translationPair, onTranslate])
   return (
     <div
       className="internal-chat-scroll-area"

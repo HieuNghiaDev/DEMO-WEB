@@ -121,6 +121,15 @@ const rule = selector => {
 }
 const value = (rule, property) => rule.nodes.find(node => node.prop === property)?.value
 
+test('case Back is the only control in the sticky navigation', () => {
+  const backbar = find(tree, node => ts.isJsxElement(node) && className(node) === 'cm-ws-backbar')
+  const controls = backbar.children.filter(node => ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node))
+  assert.equal(controls.length, 1)
+  assert.match(controls[0].getText(tree), /onClick=\{onBack\}.*戻る/)
+  assert.doesNotMatch(backbar.getText(tree), /案件詳細/)
+  assert.equal(value(rule('.cm-ws-backbar'), 'position'), 'sticky')
+})
+
 test('shared section geometry uses theme surfaces; no continuous shell border remains', () => {
   const shell = rule('.cm-case-detail .cm-workspace-shell')
   assert.equal(value(shell, 'gap'), '20px')

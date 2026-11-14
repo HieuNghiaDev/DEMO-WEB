@@ -13,3 +13,161 @@
 .auth-security-form .auth-security-ack { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; }
 .auth-security-ack input { flex-shrink: 0; margin-top: 4px; accent-color: var(--tm-primary); }
 @media (max-width: 480px) { .auth-security-panel { padding: 20px 16px; } }
+
+.auth-challenge-panel {
+  position: relative;
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  padding: clamp(20px, 4vw, 32px);
+  border: 1px solid var(--tm-border);
+  border-radius: 20px;
+  background: var(--tm-surface);
+  color: var(--tm-text-primary);
+  box-shadow: var(--tm-shadow-lg);
+}
+
+.themis-auth-card > .auth-challenge-panel {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dark .themis-auth-card--compact {
+  border-color: var(--tm-border-strong);
+  background: color-mix(in srgb, var(--tm-surface) 90%, transparent);
+}
+
+.themis-auth-card .themis-auth-primary {
+  min-height: 48px;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  border-radius: 16px;
+  background: linear-gradient(90deg, var(--color-indigo-600) 50%, var(--color-violet-600));
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 14px 30px rgb(79 70 229 / 0.28);
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+.themis-auth-card .themis-auth-primary:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3), 0 20px 38px rgb(79 70 229 / 0.38);
+}
+.themis-auth-card .themis-auth-primary:not(:disabled):active {
+  transform: translateY(0);
+  box-shadow: inset 0 2px 5px rgb(30 27 75 / 0.18), 0 8px 18px rgb(79 70 229 / 0.24);
+}
+.themis-auth-card .themis-auth-primary:focus-visible {
+  outline: 2px solid var(--tm-focus-ring);
+  outline-offset: 2px;
+}
+.themis-auth-card .themis-auth-primary:disabled {
+  cursor: not-allowed;
+  background: var(--tm-surface-elevated);
+  color: var(--tm-text-secondary);
+  box-shadow: none;
+}
+
+.auth-challenge-heading { display: flex; align-items: center; gap: 12px; }
+.auth-challenge-heading p { color: var(--tm-text-secondary); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; }
+.auth-challenge-heading h2 { margin-top: 3px; font-size: clamp(20px, 3vw, 24px); font-weight: 700; line-height: 1.35; }
+.auth-challenge-icon {
+  display: grid;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--tm-primary-muted);
+  color: var(--tm-primary);
+}
+.themis-auth-card .auth-challenge-icon:not(.auth-activation-complete) {
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--color-indigo-600), var(--color-violet-600));
+  color: white;
+  box-shadow: 0 10px 24px rgb(79 70 229 / 0.28);
+}
+
+.themis-auth-card :is(.auth-activation-form input, .auth-challenge-backup-input, .auth-challenge-otp-slots > span) {
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tm-surface) 72%, transparent);
+  box-shadow: inset 0 1px 0 var(--tm-surface), var(--tm-shadow-sm);
+  transition: background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+.themis-auth-card :is(.auth-activation-form input, .auth-challenge-backup-input):not(:disabled):hover,
+.themis-auth-card :is(.auth-activation-form input, .auth-challenge-backup-input):focus,
+.themis-auth-card .auth-challenge-otp:focus-within [data-active='true'] {
+  background: var(--tm-surface);
+  box-shadow: var(--tm-shadow-md);
+  transform: translateY(-1px);
+}
+
+.auth-challenge-otp { position: relative; display: block; }
+.auth-challenge-otp-slots {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(4px, 1.5vw, 10px);
+}
+.auth-challenge-otp-slots > span {
+  display: grid;
+  min-height: 48px;
+  place-items: center;
+  border: 1px solid var(--tm-border);
+  border-radius: var(--tm-radius-control);
+  background: var(--tm-surface-elevated);
+  color: var(--tm-text-primary);
+  font: 600 22px / 1.2 ui-monospace, monospace;
+}
+.auth-challenge-otp-slots > span[data-filled='true'] { border-color: var(--tm-border-strong); }
+.auth-challenge-otp:focus-within [data-active='true'] {
+  border-color: var(--tm-border-focus);
+  outline: 2px solid var(--tm-focus-ring);
+  outline-offset: 1px;
+}
+.auth-challenge-panel .auth-challenge-otp > input {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  opacity: 0;
+  cursor: text;
+  font-size: 16px;
+}
+.auth-challenge-panel .auth-challenge-backup-input { min-height: 48px; }
+
+.auth-challenge-footer { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid var(--tm-border); }
+.auth-challenge-footer p { font-size: 12px; }
+.auth-challenge-back { justify-self: start; margin-inline-start: -8px; }
+
+.auth-activation-form input:not([type=checkbox]) { min-height: 44px; }
+.auth-activation-form .auth-security-help { margin-top: 4px; font-size: 12px; }
+.auth-activation-form .auth-security-error { color: var(--tm-danger); }
+.auth-activation-complete { background: color-mix(in srgb, var(--tm-success) 12%, var(--tm-surface)); color: var(--tm-success); }
+.auth-activation-back {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 32px;
+  padding-inline: 8px;
+  margin-inline-start: -8px;
+  border-radius: var(--tm-radius-control);
+  color: var(--tm-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+.auth-activation-back:hover { background: var(--tm-surface-hover); color: var(--tm-text-primary); }
+.auth-activation-back:focus-visible { outline: 2px solid var(--tm-focus-ring); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .themis-auth-card .themis-auth-primary,
+  .themis-auth-card :is(.auth-activation-form input, .auth-challenge-backup-input, .auth-challenge-otp-slots > span) {
+    transition: none;
+  }
+  .themis-auth-card .themis-auth-primary:not(:disabled):is(:hover, :active),
+  .themis-auth-card :is(.auth-activation-form input, .auth-challenge-backup-input):is(:hover, :focus),
+  .themis-auth-card .auth-challenge-otp:focus-within [data-active='true'] {
+    transform: none;
+    scale: none;
+  }
+}

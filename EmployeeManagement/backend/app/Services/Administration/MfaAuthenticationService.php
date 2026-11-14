@@ -148,7 +148,8 @@ final class MfaAuthenticationService
         $rules = match ($action) {
             AccountEmailChange::ACTION => ['email_hash' => ['required', 'string', 'regex:/^[a-f0-9]{64}$/D']],
             'role.assign' => ['user_id' => ['required', 'integer', 'min:1'], 'role_id' => ['required', 'integer', 'min:1']],
-            EmployeePasswordReset::ACTION => ['user_id' => ['required', 'integer', 'min:1'], 'employee_id' => ['required', 'integer', 'min:1']],
+            EmployeePasswordReset::ACTION, AccountActivationService::ISSUE_ACTION =>
+                ['user_id' => ['required', 'integer', 'min:1'], 'employee_id' => ['required', 'integer', 'min:1']],
             'role.create' => ['name' => ['required', 'string', 'max:64'], 'permissions' => ['present', 'array', 'max:100']],
             'role.clone', 'role.rename' => ['role_id' => ['required', 'integer', 'min:1'], 'name' => ['required', 'string', 'max:64']],
             'role.permissions' => ['role_id' => ['required', 'integer', 'min:1'], 'permissions' => ['present', 'array', 'max:100']],
@@ -164,6 +165,12 @@ final class MfaAuthenticationService
             }
         }
         if ($action === EmployeePasswordReset::ACTION) abort_unless(AdminCapabilities::explicit($user, EmployeePasswordReset::ACTION), 403);
+        if ($action === AccountActivationService::ISSUE_ACTION) {
+            abort_unless(AdminCapabilities::isCanonicalAdmin($user), 403);
+            $employee = \App\Models\Employee::query()->with('user')->find($scope['employee_id']);
+            abort_unless($employee && $employee->user?->id === $scope['user_id'], 403);
+            \Illuminate\Support\Facades\Gate::forUser($user)->authorize('issueInviteAsAdmin', $employee);
+        }
         if ($action === 'bootstrap.finish') {
             $state = DB::table('security_administration_state')->where('id', 1)->first();
             abort_unless($state && (int) $state->bootstrap_user_id === $user->id && ! $state->bootstrap_completed_at && ! $state->admin_seen, 403);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -7,7 +7,7 @@ import { useAuth } from "../contexts/AuthContext";
 import OfficeSwitcher from "../components/employee-room/OfficeSwitcher";
 import NotificationBell from "../components/employee-room/NotificationBell";
 import { getEmployeeAvatarImageUrl } from "../utils/employeeAvatar";
-import { UserAvatar } from "../components/ui";
+import { ModalShell, UserAvatar } from "../components/ui";
 import { ButtonSpinner } from "../components/loading";
 import InternalChatPanel from "../features/internal-chat/InternalChatPanel";
 import {
@@ -37,6 +37,25 @@ type WorkStatus = "working" | "break" | "outside" | "offline";
 type OfficeId = "themis" | "law";
 type TaskModalMode = "start" | "change";
 type TaskDurationPreset = 30 | 60 | 120 | "custom";
+
+function AttendanceDialog({ titleId, busy, onClose, children, bottomSheet = false, className = "" }: {
+  titleId: string;
+  busy: boolean;
+  onClose: () => void;
+  children: ReactNode;
+  bottomSheet?: boolean;
+  className?: string;
+}) {
+  return (
+    <ModalShell isOpen customContent title={null} onClose={onClose} dismissible={!busy}
+      overlayClassName={`workspace-modal-backdrop flex justify-center bg-slate-950/50 backdrop-blur-[2px] ${bottomSheet ? "items-end sm:items-center sm:p-4" : "items-center p-4"}`}>
+      <div role="dialog" aria-modal="true" aria-labelledby={titleId} aria-busy={busy}
+        className={`themis-app workspace-modal-panel max-h-[calc(100dvh-2rem)] w-full overflow-y-auto overscroll-contain border border-[var(--tm-border)] bg-[var(--tm-surface)] shadow-[var(--tm-shadow-lg)] ${className}`}>
+        {children}
+      </div>
+    </ModalShell>
+  );
+}
 
 type Office = {
   id: OfficeId;
@@ -626,8 +645,6 @@ export default function EmployeeRoom() {
   const [workStatus, setWorkStatus] = useState<WorkStatus>("working");
   const [isStartConfirmationOpen, setIsStartConfirmationOpen] =
     useState(false);
-  const [isStartConfirmationClosing, setIsStartConfirmationClosing] =
-    useState(false);
   const [isAttendanceReportPromptOpen, setIsAttendanceReportPromptOpen] =
     useState(false);
   const [isDownloadingAttendanceReport, setIsDownloadingAttendanceReport] =
@@ -669,7 +686,6 @@ export default function EmployeeRoom() {
   const [, setNotifications] = useState<UserNotification[]>(() =>
     loadStoredNotifications(notificationStorageKey),
   );
-  const [isStatusModalClosing, setIsStatusModalClosing] = useState(false);
   const [toastNotification, setToastNotification] =
     useState<UserNotification | null>(null);
   const [assignedTasks, setAssignedTasks] = useState<AssignedTask[]>([]);
@@ -1309,6 +1325,7 @@ export default function EmployeeRoom() {
   const openTaskModal = (mode: TaskModalMode) => {
     const startTime = getJapanTimeInput();
 
+    setErrorMessage("");
     setTaskDescription("");
     setTaskStartTime(startTime);
     setTaskExpectedEndTime(getJapanTimeInput(60));
@@ -1328,26 +1345,7 @@ export default function EmployeeRoom() {
     if (!employeeName || isWorkStarted || isSubmitting) return;
 
     setErrorMessage("");
-    setIsStartConfirmationClosing(false);
     setIsStartConfirmationOpen(true);
-  };
-
-  const closeStartConfirmation = (force = false) => {
-    if ((!force && isSubmitting) || isStartConfirmationClosing) return;
-    setIsStartConfirmationClosing(true);
-    window.setTimeout(() => {
-      setIsStartConfirmationOpen(false);
-      setIsStartConfirmationClosing(false);
-    }, 360);
-  };
-
-  const closeStatusModal = (force = false) => {
-    if ((!force && isSubmitting) || isStatusModalClosing) return;
-    setIsStatusModalClosing(true);
-    window.setTimeout(() => {
-      setPendingStatus(null);
-      setIsStatusModalClosing(false);
-    }, 360);
   };
 
   const handleConfirmStartWork = async () => {
@@ -1367,7 +1365,7 @@ export default function EmployeeRoom() {
       setWorkStatus(newAttendance.status);
       setIsWorkStarted(true);
       setActiveWorkSession(newAttendance.active_work_session ?? null);
-      closeStartConfirmation(true);
+      setIsStartConfirmationOpen(false);
       setSelectedOffice("themis");
       setActiveAttendances((current) => [
         ...current.filter((item) => item.id !== newAttendance.id),
@@ -1563,7 +1561,7 @@ export default function EmployeeRoom() {
       setOutsideExpectedEndTime(getJapanTimeInput(60));
     }
 
-    setIsStatusModalClosing(false);
+    setErrorMessage("");
     setPendingStatus(status);
   };
 
@@ -1609,7 +1607,7 @@ export default function EmployeeRoom() {
 
       setWorkStatus(updatedAttendance.status);
       setActiveWorkSession(updatedAttendance.active_work_session ?? null);
-      closeStatusModal(true);
+      setPendingStatus(null);
       void loadTimeline();
 
       setActiveAttendances((current) => {
@@ -1690,8 +1688,9 @@ export default function EmployeeRoom() {
     }
   };
 
-  const handleCancelStatus = () => {
-    closeStatusModal();
+  const closeAttendanceReport = () => {
+    setIsAttendanceReportPromptOpen(false);
+    setAttendanceReportError("");
   };
 
   const memberStatusLabel = (status: WorkStatus) => statusLabels[status];
@@ -1956,8 +1955,8 @@ export default function EmployeeRoom() {
                 disabled={!employeeName || isWorkStarted || isSubmitting}
                 className="flex h-11 items-center justify-center gap-2 self-end rounded-xl bg-[#635BFF] px-5 text-sm font-bold text-white shadow-md shadow-indigo-500/20 transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none"
               >
-                {isSubmitting ? <ButtonSpinner size={17} /> : <Play size={17} />}
-                {isSubmitting ? "処理中…" : "勤務開始"}
+                <Play size={17} />
+                勤務開始
               </button>
             </div>
 
@@ -2531,20 +2530,9 @@ export default function EmployeeRoom() {
       )}
 
       {/* Attendance Start Confirmation Modal */}
-      {(isStartConfirmationOpen || isStartConfirmationClosing) && (
-        <div
-          className={`workspace-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isStartConfirmationClosing ? "is-closing" : ""}`}
-          onClick={() => {
-            closeStartConfirmation();
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="attendance-start-confirmation-title"
-            onClick={(event) => event.stopPropagation()}
-            className={`workspace-modal-panel w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl ${isStartConfirmationClosing ? "is-closing" : ""}`}
-          >
+      {isStartConfirmationOpen && (
+        <AttendanceDialog titleId="attendance-start-confirmation-title" busy={isSubmitting}
+          onClose={() => setIsStartConfirmationOpen(false)} className="max-w-sm rounded-xl p-6">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600">
               <Play size={27} />
             </div>
@@ -2569,10 +2557,11 @@ export default function EmployeeRoom() {
               </div>
             </div>
 
+            {errorMessage && <p role="alert" className="mt-3 text-sm text-[var(--tm-danger)]">{errorMessage}</p>}
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
-                onClick={() => closeStartConfirmation()}
+                onClick={() => setIsStartConfirmationOpen(false)}
                 disabled={isSubmitting}
                 className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -2588,28 +2577,13 @@ export default function EmployeeRoom() {
                 {isSubmitting ? "処理中…" : "勤務を開始"}
               </button>
             </div>
-          </div>
-        </div>
+        </AttendanceDialog>
       )}
 
       {/* Personal Attendance Report Prompt */}
       {isAttendanceReportPromptOpen && (
-        <div
-          className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
-          onClick={() => {
-            if (!isDownloadingAttendanceReport) {
-              setIsAttendanceReportPromptOpen(false);
-              setAttendanceReportError("");
-            }
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="attendance-report-prompt-title"
-            onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-md overflow-hidden rounded-t-[2rem] border border-white/70 bg-white shadow-2xl shadow-slate-950/30 dark:border-slate-700/80 dark:bg-slate-900 sm:rounded-3xl"
-          >
+        <AttendanceDialog titleId="attendance-report-prompt-title" busy={isDownloadingAttendanceReport}
+          onClose={closeAttendanceReport} bottomSheet className="max-w-md rounded-t-xl pb-[env(safe-area-inset-bottom)] sm:rounded-xl">
             <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-200 dark:bg-slate-700 sm:hidden" />
 
             <div className="p-5 sm:p-6">
@@ -2645,7 +2619,7 @@ export default function EmployeeRoom() {
               </div>
 
               {attendanceReportError && (
-                <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-600">
+                <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-semibold text-[var(--tm-danger)]">
                   {attendanceReportError}
                 </p>
               )}
@@ -2653,10 +2627,7 @@ export default function EmployeeRoom() {
               <div className="mt-5 grid grid-cols-[0.85fr_1.15fr] gap-3">
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsAttendanceReportPromptOpen(false);
-                    setAttendanceReportError("");
-                  }}
+                  onClick={closeAttendanceReport}
                   disabled={isDownloadingAttendanceReport}
                   className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                 >
@@ -2675,23 +2646,13 @@ export default function EmployeeRoom() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+        </AttendanceDialog>
       )}
 
       {/* Work Session Modal */}
       {taskModalMode && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
-          onClick={() => setTaskModalMode(null)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="work-session-modal-title"
-            onClick={(event) => event.stopPropagation()}
-            className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl sm:p-6"
-          >
+        <AttendanceDialog titleId="work-session-modal-title" busy={isSubmitting}
+          onClose={() => setTaskModalMode(null)} className="max-w-md rounded-xl p-5 sm:p-6">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600">
               {taskModalMode === "start" ? (
                 <Play size={25} />
@@ -2792,6 +2753,7 @@ export default function EmployeeRoom() {
               </div>
             </div>
 
+            {errorMessage && <p role="alert" className="mt-3 text-sm text-[var(--tm-danger)]">{errorMessage}</p>}
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
@@ -2820,26 +2782,13 @@ export default function EmployeeRoom() {
                     : "次の作業を開始"}
               </button>
             </div>
-          </div>
-        </div>
+        </AttendanceDialog>
       )}
 
       {/* Status Confirmation Modal */}
-      {(pendingStatus || isStatusModalClosing) &&
-        createPortal(
-          <div
-          className={`workspace-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isStatusModalClosing ? "is-closing" : ""}`}
-          onClick={handleCancelStatus}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="status-confirmation-title"
-            onClick={(event) => event.stopPropagation()}
-            className={`workspace-modal-panel max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ${isStatusModalClosing ? "is-closing" : ""} ${
-              pendingStatus === "outside" ? "max-w-md" : "max-w-sm"
-            }`}
-          >
+      {pendingStatus && (
+        <AttendanceDialog titleId="status-confirmation-title" busy={isSubmitting}
+          onClose={() => setPendingStatus(null)} className={`rounded-xl p-6 ${pendingStatus === "outside" ? "max-w-md" : "max-w-sm"}`}>
             <div
               className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ${
                 pendingStatus === "offline"
@@ -2930,10 +2879,11 @@ export default function EmployeeRoom() {
               </div>
             )}
 
+            {errorMessage && <p role="alert" className="mt-3 text-sm text-[var(--tm-danger)]">{errorMessage}</p>}
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
-                onClick={handleCancelStatus}
+                onClick={() => setPendingStatus(null)}
                 disabled={isSubmitting}
                 className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -2950,7 +2900,7 @@ export default function EmployeeRoom() {
                       !outsideStartTime ||
                       !outsideExpectedEndTime))
                 }
-                className={`flex-1 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition ${
+                className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition ${
                   pendingStatus === "offline"
                     ? "bg-red-500 shadow-red-500/20 hover:bg-red-600"
                     : pendingStatus === "outside"
@@ -2962,10 +2912,8 @@ export default function EmployeeRoom() {
                 {isSubmitting ? "処理中…" : "変更する"}
               </button>
             </div>
-          </div>
-          </div>,
-          document.body,
-        )}
+        </AttendanceDialog>
+      )}
       </main>
     </div>
   );

@@ -17,6 +17,18 @@
 
 Yêu cầu: PHP 8.2+, Composer, Node.js 20+ và một cơ sở dữ liệu được Laravel hỗ trợ.
 
+### Mở THEMIS local trên Windows
+
+Bật MySQL trong XAMPP, rồi chạy lệnh sau từ thư mục gốc dự án:
+
+```powershell
+.\Start-ThemisLocal.ps1
+```
+
+Launcher dùng cấu hình local `employee_management` tại `127.0.0.1:3306`, mở Laravel và Vite, đồng thời khởi động worker `chat-translations` nếu Gemini đã được cấu hình. Chạy lại launcher sẽ dùng lại các tiến trình đang chạy. Mở [THEMIS](http://localhost:5173) sau khi launcher báo sẵn sàng. Log của tiến trình do launcher mở nằm trong `EmployeeManagement/backend/storage/logs`.
+
+### Thiết lập lần đầu với cơ sở dữ liệu mới
+
 1. Thiết lập backend:
 
    ```powershell
@@ -25,18 +37,16 @@ Yêu cầu: PHP 8.2+, Composer, Node.js 20+ và một cơ sở dữ liệu đư�
    Copy-Item .env.example .env
    php artisan key:generate
    php artisan migrate --seed
-   php artisan serve
    ```
 
-2. Trong một terminal khác, chạy frontend:
+2. Cài phụ thuộc frontend:
 
    ```powershell
    Set-Location EmployeeManagement/frontend
    npm ci
-   npm run dev
    ```
 
-3. Mở địa chỉ Vite (mặc định `http://localhost:5173`). Backend mặc định ở `http://localhost:8000`.
+3. Quay lại thư mục gốc và chạy launcher ở trên. Backend mặc định ở `http://localhost:8000`.
 
 Các tài khoản mẫu chỉ được seed ở môi trường `local/testing`; production không tạo tài khoản có mật khẩu mặc định. Nếu migration bảo mật vô hiệu hóa tài khoản seed cũ, đặt lại mật khẩu qua terminal backend bằng `php artisan themis:user-password <login_id> --activate`. Mật khẩu được nhập ẩn.
 

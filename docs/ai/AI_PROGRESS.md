@@ -976,3 +976,36 @@ Understand before modifying.
 Modify only what is needed.
 
 Verify before completing.
+
+---
+
+## Case task query tool (2026-09-28)
+
+- `query_case_tasks` đọc task theo phạm vi `my`, `case`, `upcoming` hoặc `overdue`.
+- Tool chỉ trả dữ liệu task an toàn và yêu cầu `case.view`.
+- Nhân viên thường chỉ xem task của chính mình; chỉ `task.view_all` cho phép truy vấn task nhân viên khác. `task.assign` không mở rộng visibility. Tool dùng `CaseTask::visibleTo` giống REST, yêu cầu `case.view`; scope `my` luôn là của chính mình, `case`/`upcoming`/`overdue` cho view-all chỉ lấy task trong phạm vi case hiện được cho phép. Filters và limit áp dụng sau scope; không thông báo số task bị che.
+- AI không tự tạo, cập nhật hoặc xóa case task. Việc tạo batch vẫn đi qua API workspace có `task.manage` và audit.
+- Tool hiểu các status workflow mới (`unaccepted`, `in_progress`, `pending_review`, `changes_requested`, `completed`, `cancelled`) và filter theo status. Kết quả visible có version/review status mới nhất và chỉ trả lý do差戻し của task được phép xem; overdue tiếp tục là derived state.
+- Khi tool từ chối quyền, orchestrator chỉ đưa thông báo từ chối cố định vào tool-result để AI trả lời đúng lý do; không đưa task body, số lượng hay raw exception cho model. Lỗi tool khác giữ phản hồi an toàn chung như trước.
+
+## Structured AI task responses (2026-10-08)
+
+- Hai UI chat hiện có (mascot assistant và AI workspace) dùng chung `AssistantMessageContent`: Markdown an toàn cho câu trả lời thường, `TaskResultList`/`TaskResultCard` cho metadata task thật từ `query_case_tasks` trong `data.tool_executions`. Không parse bảng/lời văn model thành task và không đổi provider/fake-mode pipeline.
+- Phản hồi task thay bảng model bằng lời dẫn ngắn, tổng authorized và card: mã/tên tài liệu, task ID, status Nhật theo mapping chung, deadline, assignee, next action từ `allowed_actions`. Chat không thực hiện approval hay thay đổi workflow.
+- `今日のタスク` vẫn qua task-management tool: current active work của người dùng, bao gồm overdue và chưa đặt deadline, không phải chỉ task có deadline hôm nay. Filter completed được tôn trọng. Overdue được ưu tiên trước khi limit.
+- Tool phân trang 100 task/lần với `offset`, `total_count`, `has_more`, `next_offset`. UI hiển thị 5 card đầu, mở thêm 5 mỗi lần; số overdue chưa hiển thị được thông báo. Nếu có trang tiếp, nút continuation đưa cùng filters/offset vào composer để người dùng gửi qua AI pipeline hiện có. Status counts của trang không bị trình bày thành counts toàn bộ.
+- `タスクを開く` dùng case/task ID thật và route state `workspaceTab: tasks, taskId` để mở Task Detail Drawer hiện có; cả khi đang ở cùng case. Workspace vẫn tải dữ liệu và kiểm tra quyền hiện có, không tạo drawer/route mới.
+- Renderer dùng `react-markdown` + `remark-gfm`, bỏ raw HTML và ảnh, chỉ cho link HTTP(S)/mailto; bảng của câu trả lời không phải task được containment riêng. CSS scoped dùng THEMIS tokens, width 100%/min-width 0, wrap tiêu đề và hỗ trợ hai theme. Không đổi mascot hay theme toàn cục.
+- Thẻ lỗi/empty tách biệt; loading indicator giữ nguyên. State chat riêng tư được reset khi account hoặc permissions đổi. TaskVisibility và RBAC không thay đổi.
+- Kiểm tra bằng frontend SSR/unit, TypeScript/ESLint/build và Laravel AI/tool tests. Không chạy browser automation/screenshot scripts; chưa xác nhận pixel-level trên trình duyệt thực.
+
+### Approved task-response mockup polish (2026-10-08)
+
+- Floating panel dùng chung desktop width `min(580px, calc(100vw - 48px))`, height `min(900px, calc(100dvh - 48px))`, neo bottom/right hiện có. Mobile giữ bottom-sheet full width, height `min(94dvh, 800px)` và max-height `100dvh - 24px`. Kích thước không phụ thuộc lời chào/history/task/loading/error. Status/composer không shrink; chỉ conversation scroll. Trạng thái tải/lỗi persona và lỗi gửi nằm trong conversation, không thay chrome.
+- Header navy/indigo/violet, robot hiện có 52px, ONLINE nằm cùng hàng identity không wrap. Lời chào ban đầu đầy đủ dùng tên thật từ auth, bubble có max-width tự nhiên; task greeting dùng employee name từ auth context, escape Markdown và render bold; không hardcode tên trong ảnh.
+- `TaskResultList` có summary icon/title/count, ngày từ `generated_at` hiện có với timezone Asia/Tokyo, chip status có `aria-pressed`/count và lọc thật trên tập đã được backend cho phép. Không fetch task khác để lọc. Chỉ các trạng thái phụ có kết quả mới thêm chip; nếu paged, counts ghi rõ thuộc phần đã tải.
+- Card có document icon, metadata deadline/assignee, badge chung, next-action strip màu semantic và outlined open button. Không có avatar trong payload tool nên dùng person icon, không dựng ảnh giả hay gọi API employee riêng.
+- Hiển thị 5 task đầu và mở thêm từng nhóm 5; đổi filter reset số card về 5. Overdue bị ẩn bởi giới hạn hoặc filter vẫn có cảnh báo. Nội dung `補足` chỉ ở response task thành công đầu tiên trong history, không lặp mỗi câu trả lời.
+- Quick actions giữ 4 hành vi hiện có, desktop 4 cột và mobile 2 cột không drag-scroll. Composer auto-grow tối đa 120px, send 46px. Auto-scroll chỉ theo tin mới khi người dùng ở gần cuối; không kéo xuống khi đang đọc history cũ.
+- Shared message body được memoize với callbacks ổn định để không render lại các card cũ mỗi lần gõ composer. Error/empty/loading và normal Markdown giữ nguyên pipeline; không thay backend, TaskVisibility, workflow, Drive hoặc full AI page layout.
+- Verification bằng unit/SSR và checks build/static, không browser automation hoặc screenshot scripts; chưa xác nhận browser pixel-level.

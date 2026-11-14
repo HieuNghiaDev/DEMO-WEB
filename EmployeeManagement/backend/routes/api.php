@@ -138,6 +138,11 @@ Route::middleware([
         'resetPassword',
     ])->middleware('permission:employee.reset_password', 'throttle:password-reset');
 
+    Route::post('/employees/{employee}/activation-invite', [
+        OrganizationController::class,
+        'issueActivationInvite',
+    ])->middleware('throttle:5,1,activation-invite:');
+
     Route::get('/notifications', [
         EmployeeNotificationController::class,
         'index',
@@ -158,6 +163,8 @@ Route::middleware([
         Route::post('/messages', [InternalChatController::class, 'store'])->middleware('throttle:internal-chat-send');
         Route::get('/pins', [InternalChatController::class, 'pins']);
         Route::get('/messages/{message}', [InternalChatController::class, 'show'])->whereNumber('message');
+        Route::post('/messages/{message}/translations', [InternalChatController::class, 'translate'])
+            ->whereNumber('message')->middleware('throttle:internal-chat-send');
         Route::get('/messages/{message}/attachments/{attachment}', [InternalChatController::class, 'downloadAttachment'])
             ->whereNumber(['message', 'attachment']);
         Route::patch('/messages/{message}/{action}', [InternalChatController::class, 'messageAction'])
@@ -332,8 +339,18 @@ Route::middleware([
         Route::post('activities', [CaseWorkspaceItemController::class, 'storeActivity'])->middleware('permission:case.update');
         Route::get('history', [\App\Http\Controllers\Api\CaseHistoryController::class, 'index'])->middleware('permission:case.view');
         Route::get('history/options', [\App\Http\Controllers\Api\CaseHistoryController::class, 'options'])->middleware('permission:case.view');
+        Route::prefix('history/uploads')
+            ->withoutMiddleware('throttle:60,1')
+            ->middleware(['permission:case.view', 'permission:case.update', 'throttle:180,1,case-history-uploads:'])
+            ->group(function () {
+                Route::post('/', [\App\Http\Controllers\Api\CaseHistoryController::class, 'startAttachmentUpload']);
+                Route::post('{upload}', [\App\Http\Controllers\Api\CaseHistoryController::class, 'appendAttachmentChunk'])->whereUuid('upload');
+                Route::delete('{upload}', [\App\Http\Controllers\Api\CaseHistoryController::class, 'discardAttachmentUpload'])->whereUuid('upload');
+            });
         Route::post('communications', [\App\Http\Controllers\Api\CaseHistoryController::class, 'store'])->middleware(['permission:case.view', 'permission:case.update']);
         Route::get('communications/{communication}', [\App\Http\Controllers\Api\CaseHistoryController::class, 'show'])->middleware('permission:case.view');
+        Route::get('communications/{communication}/attachments/{attachment}', [\App\Http\Controllers\Api\CaseHistoryController::class, 'attachment'])
+            ->whereUuid('attachment')->middleware('permission:case.view');
         Route::patch('communications/{communication}', [\App\Http\Controllers\Api\CaseHistoryController::class, 'update'])->middleware(['permission:case.view', 'permission:case.update']);
         Route::post('communications/{communication}/task', [\App\Http\Controllers\Api\CaseHistoryController::class, 'task'])->middleware(['permission:case.view', 'permission:case.update', 'permission:task.manage']);
         Route::post('custom-sections', [CaseCustomSectionController::class, 'store'])

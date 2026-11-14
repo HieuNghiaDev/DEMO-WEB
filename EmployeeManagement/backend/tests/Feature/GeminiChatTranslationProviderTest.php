@@ -57,4 +57,21 @@ class GeminiChatTranslationProviderTest extends TestCase
         $this->expectException(RuntimeException::class);
         (new GeminiChatTranslationProvider)->translate('請求金額は110,000円です。', 'ja');
     }
+
+    public function test_chinese_pair_uses_the_reported_target_and_preserves_reference(): void
+    {
+        config(['chat_translation.gemini_key' => 'synthetic-only']);
+        Http::preventStrayRequests();
+        Http::fake(['https://generativelanguage.googleapis.com/*' => function (Request $request) {
+            preg_match('/THEMISKEEP[a-f0-9]+X\d+END/', $request['contents'][0]['parts'][0]['text'], $tokens);
+
+            return Http::response(['candidates' => [['finishReason' => 'STOP',
+                'content' => ['parts' => [['text' => "ja\n{$tokens[0]}をご確認ください。"]]]]]]);
+        }]);
+
+        $result = (new GeminiChatTranslationProvider)->translate('请确认CASE-00050。', 'ja', 'ja-zh');
+        $this->assertSame('ja', $result['translation_language']);
+        $this->assertSame('CASE-00050をご確認ください。', $result['translation_text']);
+        Http::assertSentCount(1);
+    }
 }

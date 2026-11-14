@@ -19,6 +19,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -115,6 +116,9 @@ class CaseDocumentCollectionController extends Controller
     public function update(Request $request, CaseFile $caseFile, CaseDocument $caseDocument, CaseWorkspaceAuditService $audit, DocumentCollectionTaskService $documentCollectionTasks): JsonResponse
     {
         abort_unless($caseDocument->case_file_id === $caseFile->id, 404);
+        if ($request->hasAny(['necessity_status', 'necessity_reason'])) {
+            Gate::authorize('decideDocumentNecessity', $caseFile);
+        }
 
         return $caseFile->getConnection()->transaction(function () use ($request, $caseFile, $caseDocument, $audit, $documentCollectionTasks) {
             // Same lock order as checklist generation; validate against the latest stored state.
@@ -177,6 +181,8 @@ class CaseDocumentCollectionController extends Controller
 
     public function bulkUpdateNecessity(Request $request, CaseFile $caseFile, CaseWorkspaceAuditService $audit): JsonResponse
     {
+        Gate::authorize('decideDocumentNecessity', $caseFile);
+
         $rules = [
             'case_document_ids' => ['required', 'array', 'min:1', 'max:100'],
             'case_document_ids.*' => ['required', 'integer', 'min:1', 'distinct'],

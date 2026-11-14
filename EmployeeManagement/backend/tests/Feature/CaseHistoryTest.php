@@ -2,18 +2,25 @@
 
 namespace Tests\Feature;
 
+use App\Exceptions\GeneratedDocumentDriveException;
 use App\Models\CaseActivity;
 use App\Models\CaseFile;
 use App\Models\CaseMeetingLog;
 use App\Models\CaseParty;
 use App\Models\Client;
 use App\Models\Employee;
+use App\Models\ExternalStorageLocation;
 use App\Models\Office;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\CaseWorkspaceAuditService;
+use App\Services\GoogleDriveProvisioningService;
+use App\Services\GoogleDriveService;
+use GuzzleHttp\Psr7\Utils;
 use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class CaseHistoryTest extends TestCase
@@ -256,6 +263,134 @@ class CaseHistoryTest extends TestCase
         $this->assertSame('LE HIEU NGHIA', $entry['changes']['assigned_employee_id']['after']);
         $this->assertSame('LE HIEU NGHIA', $entry['actor']['full_name']);
         $this->assertNotEmpty($entry['occurred_at']);
+    }
+
+    public function test_multipart_history_adds_media_and_download_checks_case_and_record_scope(): void
+    {
+        [$user, $case] = $this->fixture();
+        $this->actingAs($user, 'sanctum');
+        $this->historyFolder($case);
+        $drive = $this->mock(GoogleDriveService::class);
+        $drive->shouldReceive('assertHistoryAttachmentFolder')->twice()->with('history-folder');
+        $drive->shouldReceive('storeHistoryAttachment')->once()->withArgs(
+            fn ($stream, $name, $mime, $size, $folder) => is_resource($stream) && $name === '面談.pdf'
+                && $mime === 'application/pdf' && $size > 0 && $folder === 'history-folder'
+        )->andReturn('private-drive-id');
+        $drive->shouldReceive('storeHistoryAttachment')->once()->withArgs(
+            fn ($stream, $name, $mime, $size, $folder) => is_resource($stream) && $name === '録音.wav'
+                && in_array($mime, ['audio/wav', 'audio/x-wav', 'audio/vnd.wave'], true) && $size > 0 && $folder === 'history-folder'
+        )->andReturn('private-audio-drive-id');
+        $drive->shouldReceive('historyAttachmentStream')->once()->with('private-drive-id')->andReturn(Utils::streamFor('synthetic PDF bytes'));
+        $form = ['communication_data' => json_encode($this->payload($case), JSON_THROW_ON_ERROR)];
+        $entry = $this->post($this->path($case), [...$form, 'attachments' => [
+            UploadedFile::fake()->createWithContent('面談.pdf', "%PDF-1.4\nsynthetic"),
+        ]], ['Accept' => 'application/json'])->assertCreated()->assertJsonCount(1, 'entry.attachments')->json('entry');
+        $this->assertArrayNotHasKey('drive_id', $entry['attachments'][0]);
+        $this->assertStringNotContainsString('private-drive-id', CaseActivity::find($entry['record_id'])->toJson());
+        $attachment = $entry['attachments'][0]['id'];
+        $path = $this->path($case, $entry['record_id']);
+        $wave = 'RIFF'.pack('V', 38).'WAVEfmt '.pack('VvvVVvv', 16, 1, 1, 8000, 16000, 2, 16).'data'.pack('Vv', 2, 0);
+        $this->post($path, [...$form, '_method' => 'PATCH', 'attachments' => [
+            UploadedFile::fake()->createWithContent('録音.wav', $wave),
+        ]], ['Accept' => 'application/json'])->assertOk()->assertJsonCount(2, 'entry.attachments');
+        $this->getJson($path)->assertOk()->assertJsonPath('entry.attachments.0.id', $attachment);
+        $audit = CaseActivity::latest('id')->first();
+        $this->assertSame(['before' => 1, 'after' => 2], $audit->metadata['changes']['attachment_count']);
+
+        $other = CaseFile::create(['title' => '別案件', 'client_id' => $case->client_id, 'status' => 'active']);
+        $this->getJson($this->path($other, $entry['record_id']).'/attachments/'.$attachment)->assertNotFound();
+        $this->getJson($path.'/attachments/00000000-0000-0000-0000-000000000000')->assertNotFound();
+        $download = $this->get($path.'/attachments/'.$attachment)->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringContainsString('attachment;', $download->headers->get('Content-Disposition'));
+        $this->assertSame('synthetic PDF bytes', $download->streamedContent());
+    }
+
+    public function test_invalid_attachment_is_rejected_before_any_drive_request(): void
+    {
+        [$user, $case] = $this->fixture();
+        $this->actingAs($user, 'sanctum');
+        $this->mock(GoogleDriveProvisioningService::class)->shouldNotReceive('provisionHistoryAttachments');
+        $this->post($this->path($case), [
+            'communication_data' => json_encode($this->payload($case), JSON_THROW_ON_ERROR),
+            'attachments' => [UploadedFile::fake()->createWithContent('偽の画像.png', '<svg><script>alert(1)</script></svg>')],
+        ], ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors('attachments.0');
+        $this->assertDatabaseCount('case_activities', 0);
+    }
+
+    public function test_drive_failure_cleans_up_prior_upload_and_does_not_publish_history(): void
+    {
+        [$user, $case] = $this->fixture();
+        $this->actingAs($user, 'sanctum');
+        $this->historyFolder($case);
+        $drive = $this->mock(GoogleDriveService::class);
+        $drive->shouldReceive('assertHistoryAttachmentFolder')->once()->with('history-folder');
+        $drive->shouldReceive('storeHistoryAttachment')->once()->withArgs(fn ($stream, $name) => $name === 'first.pdf')->andReturn('first-drive-id');
+        $drive->shouldReceive('storeHistoryAttachment')->once()->withArgs(fn ($stream, $name) => $name === 'second.pdf')->andThrow(new GeneratedDocumentDriveException());
+        $drive->shouldReceive('deleteFile')->once()->with('first-drive-id')->andReturnTrue();
+        $this->post($this->path($case), [
+            'communication_data' => json_encode($this->payload($case), JSON_THROW_ON_ERROR),
+            'attachments' => [
+                UploadedFile::fake()->createWithContent('first.pdf', "%PDF-1.4\nfirst"),
+                UploadedFile::fake()->createWithContent('second.pdf', "%PDF-1.4\nsecond"),
+            ],
+        ], ['Accept' => 'application/json'])->assertStatus(503);
+        $this->assertDatabaseCount('case_activities', 0);
+    }
+
+    public function test_maximum_size_video_is_staged_and_saved_in_one_rate_limit_window(): void
+    {
+        $this->freezeTime();
+        Storage::fake('local');
+        [$user, $case] = $this->fixture();
+        $this->actingAs($user, 'sanctum');
+        $this->historyFolder($case);
+        $drive = $this->mock(GoogleDriveService::class);
+        $drive->shouldReceive('canWriteHistoryAttachments')->once()->andReturnTrue();
+        $drive->shouldReceive('assertHistoryAttachmentFolder')->once()->with('history-folder');
+        $chunkSize = 4 * 1024 * 1024;
+        $size = 250 * 1024 * 1024;
+        $header = pack('N', 24).'ftypisom'.pack('N', 512).'isomiso2';
+        $drive->shouldReceive('storeHistoryAttachment')->once()->withArgs(
+            fn ($stream, $name, $mime, $length, $folder) => is_resource($stream)
+                && fstat($stream)['size'] === $size && $length === $size
+                && $name === 'meeting.mp4' && $mime === 'video/mp4' && $folder === 'history-folder'
+        )->andReturn('large-video-id');
+
+        $uploadUrl = "/api/case-files/{$case->id}/history/uploads";
+        $this->postJson($uploadUrl, ['name' => 'large.jpg', 'size' => $size])->assertUnprocessable();
+        $this->postJson($uploadUrl, ['name' => 'large.wav', 'size' => 101 * 1024 * 1024])->assertUnprocessable();
+        $id = $this->postJson($uploadUrl, ['name' => 'meeting.mp4', 'size' => $size])
+            ->assertCreated()->assertHeader('X-RateLimit-Limit', '180')->json('upload_id');
+        $payload = [...$this->payload($case), 'staged_attachment_ids' => [$id]];
+        $this->postJson($this->path($case), $payload)->assertUnprocessable();
+        $this->post("$uploadUrl/$id", ['offset' => 1, 'chunk' => UploadedFile::fake()->createWithContent('chunk.bin', 'bytes')],
+            ['Accept' => 'application/json'])->assertConflict();
+        $other = CaseFile::create(['title' => '別案件', 'client_id' => $case->client_id, 'status' => 'active']);
+        $this->deleteJson("/api/case-files/{$other->id}/history/uploads/$id")->assertNotFound();
+
+        for ($offset = 0; $offset < $size; $offset += $chunkSize) {
+            $length = min($chunkSize, $size - $offset);
+            $chunk = str_pad($offset === 0 ? $header : '', $length, "\0");
+            $file = UploadedFile::fake()->createWithContent('chunk.bin', $chunk);
+            $this->post("$uploadUrl/$id", [
+                'offset' => $offset, 'chunk' => $file,
+            ], ['Accept' => 'application/json'])->assertOk()->assertJsonPath('next_offset', $offset + $length);
+            fclose($file->tempFile);
+        }
+        $this->assertDatabaseCount('case_activities', 0);
+        $saved = $this->postJson($this->path($case), $payload);
+        $this->assertSame(201, $saved->status(), (string) $saved->json('message'));
+        $saved->assertHeader('X-RateLimit-Limit', '60')->assertHeader('X-RateLimit-Remaining', '58')
+            ->assertJsonPath('entry.attachments.0.name', 'meeting.mp4')->assertJsonPath('entry.attachments.0.size', $size);
+        $this->postJson($this->path($case), $payload)->assertNotFound();
+        $this->assertDatabaseCount('case_activities', 2);
+        Storage::disk('local')->assertMissing("case-history-uploads/{$user->id}/$id");
+    }
+
+    private function historyFolder(CaseFile $case): void
+    {
+        $this->mock(GoogleDriveProvisioningService::class)->shouldReceive('provisionHistoryAttachments')
+            ->withArgs(fn ($target) => $target->is($case))->andReturn(new ExternalStorageLocation(['external_folder_id' => 'history-folder']));
     }
 
     private function fixture(): array

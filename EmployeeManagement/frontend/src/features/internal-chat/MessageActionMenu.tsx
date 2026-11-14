@@ -2,9 +2,10 @@ import { useId, useRef, useState } from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import type { ChatActionName, ChatReply, InternalChatMessage } from './types'
 
-export default function MessageActionMenu({ message, translated, actionsEnabled, hideEnabled, canPin, onReply, onAction }: {
+export default function MessageActionMenu({ message, translated, translationAction, actionsEnabled, hideEnabled, canPin, onReply, onAction }: {
   message: InternalChatMessage
   translated: string | null
+  translationAction?: { label: string; run: () => Promise<void> }
   actionsEnabled?: boolean
   hideEnabled?: boolean
   canPin?: boolean
@@ -62,6 +63,10 @@ export default function MessageActionMenu({ message, translated, actionsEnabled,
         </button>
       </> : <>
       {!message.recalled_at && message.original_text && <button type="button" onClick={() => void copy()}>コピー</button>}
+      {translationAction && <button type="button" disabled={working} onClick={() => {
+        close()
+        void translationAction.run()
+      }}>{translationAction.label}</button>}
       {actionsEnabled && !message.recalled_at && <button type="button" disabled={working} onClick={() => {
         const excerpt = message.original_text.replace(/\s+/g, ' ').trim() || '添付ファイル'
         const characters = Array.from(excerpt)

@@ -41,6 +41,8 @@ test('chat API uses authenticated shared transport and cursor endpoints without 
   await api.fetchChatAttachment(9, 1, signal)
   assert.equal(calls[5][1], '/internal-chat/messages/9/attachments/1')
   assert.equal(calls[5][2].responseType, 'blob')
+  await api.requestChatTranslation(9, 'ja-zh', signal)
+  assert.deepEqual(calls[6].slice(1), ['/internal-chat/messages/9/translations', { pair: 'ja-zh' }, { signal, timeout: 12_000 }])
 })
 
 test('message merge deduplicates polling and preserves server ordering', () => {
@@ -94,16 +96,18 @@ test('panel retains accessible message history, error and composer behavior', ()
   const panel = source('InternalChatPanel.tsx')
   const composer = source('ChatComposer.tsx')
   const surface = [panel, composer, source('ChatHeader.tsx'), source('MessageList.tsx')].join('\n')
-  assert.doesNotMatch(surface, /日本語|TIẾNG VIỆT|JAPANESE|VIETNAMESE/)
+  assert.doesNotMatch([panel, source('ChatHeader.tsx'), source('MessageList.tsx')].join('\n'), /日本語|TIẾNG VIỆT|JAPANESE|VIETNAMESE/)
   assert.match(composer, /placeholder="メッセージを入力\.\.\."/)
   for (const text of ['role="alert"', 'role="log"', 'aria-live="polite"', 'Shift+Enter', '全社員と共有']) {
     assert.ok(surface.includes(text), text)
   }
   assert.match(composer, /event\.key === 'Enter' && !event\.shiftKey/)
-  assert.doesNotMatch(surface, /<select|room_id|office_id/)
+  assert.doesNotMatch(surface, /room_id|office_id/)
   const Composer = loadTypeScript(feature('ChatComposer.tsx'), new Map([mockChatTransport])).default
   const render = (files, isSending = false) => renderToStaticMarkup(React.createElement(Composer, { draft: '', files, isSending }))
   assert.match(render([]), /disabled="" class="internal-chat-send-btn"/)
+  assert.match(render([]), /<select aria-label="翻訳する言語の組み合わせ"[^]*日本語 ↔ ベトナム語[^]*日本語 ↔ 中国語/)
+  assert.doesNotMatch(render([]), /翻訳プレビュー/)
   const attachment = new File(['synthetic'], 'receipt.pdf')
   assert.doesNotMatch(render([attachment]), /disabled="" class="internal-chat-send-btn"/)
   assert.match(render([attachment]), /receipt\.pdf を外す/)
@@ -147,7 +151,8 @@ test('poll failure preserves the last cursor and history until a delta recovers'
     messagesRef: { get current() { return state.messages } }, pollCursor: cursor,
     beforeCursor: { current: null }, actionCursor: { current: undefined }, messageActions: { current: new Map() },
     CHAT_PAGE_SIZE: 20, recordActions() {}, setActionsEnabled() {}, setHideEnabled() {}, setCanPin() {},
-    readCursor: { current: 0 }, seenIncoming: { current: new Set() }, deliveryEnabled: {},
+    unreadRevision: { current: 0 }, seenIncoming: { current: new Set() }, deliveryEnabled: {},
+    userId: 1, viewingChat: { current: false }, notifyIncomingChat() {},
     fetchChatMessages: async params => {
       requests.push(params)
       const response = responses.shift()
@@ -155,7 +160,7 @@ test('poll failure preserves the last cursor and history until a delta recovers'
       return response
     },
     acknowledgeDelivery: async () => { assert.equal(state.loading, false) },
-    mergeMessages, applyTranslationUpdates, applyMessageActions, applyMetadata() {}, setHasOlder() {}, setUnreadCount() {},
+    mergeMessages, applyTranslationUpdates, applyMessageActions, applyMetadata() {}, setHasOlder() {}, setUnread() {},
     setMessages: update => { state.messages = update(state.messages) },
     setIsInitialLoading: value => { state.loading = value },
     setError: value => { state.error = value },
@@ -228,6 +233,29 @@ test('older history uses a locked 20-row cursor and stops when the final page ar
   assert.equal(hasOlder, false)
   assert.deepEqual(history.map(message => message.id), [1, 20, 21, 22])
   assert.deepEqual(calls, [{ beforeId: 21, limit: 20 }])
+})
+
+test('jump to unread automatically loads older pages until the requested row is present', async () => {
+  const { mergeMessages, applyMessageActions } = loadTypeScript(feature('internalChatState.ts'))
+  const context = source('InternalChatContext.tsx').replace(
+    /const loadOlder = useCallback\(([^]*?^  }), \[[^\n]*\]\)/m, 'const loadOlder = $1',
+  )
+  const calls = []
+  let history = [{ id: 110 }]
+  const loadOlder = productionArrow(context, 'loadOlder', {
+    sessionSignal: { current: new AbortController().signal }, beforeCursor: { current: 110 }, loadingOlder: { current: false },
+    messageActions: { current: new Map() }, CHAT_PAGE_SIZE: 20, mergeMessages, applyMessageActions,
+    setMessages: update => { history = update(history) }, setHasOlder() {},
+    fetchChatMessages: async params => {
+      calls.push(params)
+      const ids = params.beforeId === 110 ? [60, 109] : [10, 15, 59]
+      return { messages: ids.map(id => ({ id })), pagination: { has_more: true, next_before_id: ids[0] } }
+    },
+    applyMetadata() {}, setIsLoadingOlder() {}, setError() {}, chatErrorMessage: () => 'Error',
+  })
+  assert.equal(await loadOlder(15), true)
+  assert.deepEqual(calls, [{ beforeId: 110, limit: 50 }, { beforeId: 60, limit: 50 }])
+  assert.deepEqual(history.map(message => message.id), [10, 15, 59, 60, 109, 110])
 })
 
 test('polling adapts to visibility, backs off after errors and stops while a request is in flight', async () => {
@@ -303,6 +331,33 @@ test('unchanged receipts retain row identity and a changed reader refreshes only
   assert.equal(merged[7], current[7])
 })
 
+test('on-demand translation leaves new messages idle and isolates the selected pair from stale polling', () => {
+  const { applyTranslationUpdates } = loadTypeScript(feature('internalChatState.ts'))
+  const Bubble = loadTypeScript(feature('MessageBubble.tsx'), new Map([
+    mockChatTransport,
+    [resolve('src/utils/employeeAvatar.ts'), { getEmployeeAvatarImageUrl: path => path }],
+  ])).default
+  const original = { id: 6, is_mine: true, sender: { id: 1, name: 'Sender' }, source_language: 'ja',
+    original_text: '会議です。', translation_status: 'pending', translations: {}, created_at: '2026-11-03T12:00:00Z' }
+  const render = (message, pair) => renderToStaticMarkup(React.createElement(Bubble, { message, translationPair: pair, onTranslate: async () => true }))
+  const [bubble, menu] = render(original, 'ja-zh').split('popover="auto"')
+  assert.match(bubble, /会議です。/)
+  assert.doesNotMatch(bubble, /翻訳/)
+  assert.match(menu, /<button[^>]*>翻訳<\/button>/)
+  assert.doesNotMatch(render(original, 'ja-zh'), /翻訳待機中|有会议/)
+  const update = translations => ({ id: original.id, translation_status: 'pending', translations })
+  const pending = { status: 'pending', revision: 1 }
+  const waiting = applyTranslationUpdates([original], [update({ 'ja-zh': pending })])
+  assert.match(render(waiting[0], 'ja-zh'), /翻訳待機中/)
+  assert.doesNotMatch(render(waiting[0], 'ja-zh'), />翻訳<\/button>/)
+  const failed = applyTranslationUpdates(waiting, [update({ 'ja-zh': { status: 'failed', revision: 1 } })])
+  assert.match(render(failed[0], 'ja-zh').split('popover="auto"')[1], /<button[^>]*>翻訳を再試行<\/button>/)
+  const done = applyTranslationUpdates(waiting, [update({ 'ja-zh': { status: 'completed', revision: 1, language: 'zh-Hans', text: '有会议。' } })])
+  assert.match(render(done[0], 'ja-zh'), /lang="zh-Hans"[^>]*>有会议。/)
+  assert.doesNotMatch(render(done[0], 'ja-vi'), /有会议/)
+  assert.equal(applyTranslationUpdates(done, [update({ 'ja-zh': pending })])[0], done[0])
+})
+
 test('translation updates the existing bubble in JP–VI order without changing receipt identity', () => {
   const { applyTranslationUpdates, mergeMessages } = loadTypeScript(feature('internalChatState.ts'))
   const original = {
@@ -328,7 +383,7 @@ test('translation updates the existing bubble in JP–VI order without changing 
     const html = render(variant)
     assert.ok(html.indexOf(original.original_text) >= 0 && html.indexOf(original.original_text) < html.indexOf(translated))
     assert.match(html, /lang="vi" class="internal-chat-text-original"[^]*lang="ja" class="internal-chat-text-translation"/)
-    assert.doesNotMatch(html, /日本語|TIẾNG VIỆT|翻訳待機中/)
+    assert.doesNotMatch(html.match(/<article[^]*?<\/article>/)[0], /日本語|TIẾNG VIỆT|翻訳待機中/)
   }
   messages = [{
     ...original, source_language: 'ja', original_text: translated,
@@ -440,7 +495,11 @@ test('embedded and floating panels render actual counts, status, named avatars a
       receipts: { 2: { delivered_count: 1, read_count: 0, readers: [] },
         3: { delivered_count: 5, read_count: 5, eligible_recipient_count: 7, readers: [...readers, earlierReader] },
         4: { delivered_count: 5, read_count: 5, eligible_recipient_count: 7, readers: [...readers, earlierReader] },
-        5: { delivered_count: 4, read_count: 4, eligible_recipient_count: 7, readers } },
+        5: { delivered_count: 4, read_count: 4, eligible_recipient_count: 7, readers },
+        6: { delivered_count: 0, read_count: 1, eligible_recipient_count: 7, readers: [
+          { user_id: 9, employee_id: 19, display_name: 'Reader of incoming', avatar_url: null },
+        ] } },
+      firstUnreadId: 6,
       markVisibleRead() {},
     }) }],
     [resolve('src/utils/employeeAvatar.ts'), { getEmployeeAvatarImageUrl: (path) => path }],
@@ -450,13 +509,16 @@ test('embedded and floating panels render actual counts, status, named avatars a
     for (const label of ['オンライン 2', '送信済み', '受信済み', 'Reader 4', '翻訳待機中...', '1件の未読']) assert.ok(html.includes(label), label)
     assert.doesNotMatch(html, /既読 \d+\/\d+/)
     assert.match(html, /internal-chat-read-avatar-more">\+1/)
-    assert.equal((html.match(/class="[^"]*internal-chat-read-avatar-img/g) ?? []).length, 4)
+    assert.equal((html.match(/class="[^"]*internal-chat-read-avatar-img/g) ?? []).length, 5)
+    assert.match(html, /未読メッセージへ（1件）/)
     const rows = html.split(/data-chat-row-id="\d+"/)
     assert.doesNotMatch(rows[3], /internal-chat-read-receipt/)
     assert.match(rows[4], /title="Earlier reader"/)
     assert.doesNotMatch(rows[4], /internal-chat-read-text|internal-chat-read-check/)
     assert.doesNotMatch(rows[4], /Reader 1|internal-chat-read-avatar-more/)
     assert.match(rows[5], /title="Reader 1、Reader 2、Reader 3、Reader 4"/)
+    assert.match(rows[6], /title="Reader of incoming"/)
+    assert.doesNotMatch(rows[6], /送信済み|受信済み/)
     assert.doesNotMatch(rows[5], /internal-chat-read-text|internal-chat-read-check/)
     assert.match(html, /internal-chat-message--other/)
     assert.match(html, /internal-chat-message--mine/)

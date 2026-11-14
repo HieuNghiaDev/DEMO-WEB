@@ -43,6 +43,7 @@ class CaseWorkspaceController extends Controller
 
         return response()->json([
             'case_file' => $caseFile,
+            'can_decide_document_necessity' => $request->user()->can('decideDocumentNecessity', $caseFile),
             'summary' => [
                 'progress_percent' => $required->count() === 0 ? 0 : (int) round(($completedRequired / $required->count()) * 100),
                 'missing_documents' => $required->whereNotIn('status', $completeStatuses)->count(),

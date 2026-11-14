@@ -206,131 +206,24 @@
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
 }
 
-/* --- Top Backbar & Breadcrumbs --- */
+/* Keep the back action below the fixed mobile app header. */
 .cm-ws-backbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
-  font-size: 13px;
+  position: sticky;
+  inset-block-start: calc(64px + env(safe-area-inset-top));
+  z-index: 20;
+  width: fit-content;
+  margin-bottom: 8px;
 }
 
-.cm-ws-backlink {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 38px;
+@media (min-width: 80rem) {
+  .cm-ws-backbar { inset-block-start: 8px; }
+}
+
+.cm-ws-backbar .cm-ws-backlink {
   min-height: 36px;
-  padding: 0 16px;
-  font-size: 13.5px;
-  font-weight: 600;
-  font-family: inherit;
-  line-height: 1;
-  text-decoration: none;
-  cursor: pointer;
-  border-radius: 999px;
-  user-select: none;
-  background: linear-gradient(
-    135deg,
-    rgba(238, 242, 255, 0.96) 0%,
-    rgba(237, 233, 254, 0.94) 50%,
-    rgba(250, 232, 255, 0.90) 100%
-  ) !important;
-  border: 1px solid rgba(129, 140, 248, 0.22) !important;
-  color: #4338CA !important;
-  box-shadow:
-    0 2px 6px rgba(79, 70, 229, 0.08),
-    0 6px 18px rgba(99, 102, 241, 0.08) !important;
-  transition:
-    background 160ms ease,
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    transform 160ms ease,
-    color 160ms ease;
-  outline: none;
-}
-
-.cm-ws-backlink:focus-visible {
-  outline: 2px solid rgba(99, 102, 241, 0.45);
-  outline-offset: 2px;
-}
-
-.cm-ws-backlink-icon {
-  width: 17px;
-  height: 17px;
-  flex-shrink: 0;
-  color: #4F46E5;
-  transition: transform 160ms ease;
-}
-
-.cm-ws-backlink:hover {
-  background: linear-gradient(
-    135deg,
-    rgba(238, 242, 255, 1) 0%,
-    rgba(237, 233, 254, 0.98) 50%,
-    rgba(250, 232, 255, 0.95) 100%
-  ) !important;
-  border-color: rgba(129, 140, 248, 0.38) !important;
-  box-shadow:
-    0 3px 8px rgba(79, 70, 229, 0.12),
-    0 8px 20px rgba(99, 102, 241, 0.10) !important;
-  transform: translateX(-1px);
-  color: #4338CA !important;
-}
-
-.cm-ws-backlink:hover .cm-ws-backlink-icon {
-  transform: translateX(-1px);
-}
-
-.cm-ws-backlink:active {
-  transform: translateX(-1px) scale(0.98) !important;
-  box-shadow: 0 1px 4px rgba(79, 70, 229, 0.08) !important;
-}
-
-/* Dark Mode */
-.dark .cm-ws-backlink {
-  background: linear-gradient(
-    135deg,
-    rgba(30, 41, 59, 0.96) 0%,
-    rgba(49, 46, 129, 0.72) 55%,
-    rgba(88, 28, 135, 0.55) 100%
-  ) !important;
-  border: 1px solid rgba(129, 140, 248, 0.25) !important;
-  color: #E0E7FF !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.20) !important;
-}
-
-.dark .cm-ws-backlink .cm-ws-backlink-icon {
-  color: #A5B4FC;
-}
-
-.dark .cm-ws-backlink:hover {
-  background: linear-gradient(
-    135deg,
-    rgba(30, 41, 59, 1) 0%,
-    rgba(49, 46, 129, 0.85) 55%,
-    rgba(88, 28, 135, 0.68) 100%
-  ) !important;
-  border-color: rgba(129, 140, 248, 0.40) !important;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.30) !important;
-  color: #FFFFFF !important;
-  transform: translateX(-1px);
-}
-
-.dark .cm-ws-backlink:active {
-  transform: translateX(-1px) scale(0.98) !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25) !important;
-}
-
-.cm-ws-breadcrumb-sep {
-  color: var(--tm-ws-text-muted);
-  font-size: 12px;
-}
-
-.cm-ws-breadcrumb-current {
-  color: var(--tm-ws-text-secondary);
-  font-weight: 500;
+  padding-inline: 12px;
+  gap: 6px;
+  font-size: 13px;
 }
 
 /* --- Dossier Header Top Meta Row --- */

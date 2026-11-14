@@ -1,9 +1,10 @@
 import { createContext, useContext } from 'react'
-import type { ChatActionName, ChatDraftMention, ChatMemberSummary, ChatReceipt, ChatReply, InternalChatMessage } from './types'
+import type { ChatActionName, ChatDraftMention, ChatMemberSummary, ChatReceipt, ChatReply, ChatTranslationPair, InternalChatMessage } from './types'
 
 export type InternalChatContextValue = {
   messages: InternalChatMessage[]
   unreadCount: number
+  firstUnreadId: number | null
   memberSummary: ChatMemberSummary | null
   receipts: Record<number, ChatReceipt>
   draft: string
@@ -25,6 +26,9 @@ export type InternalChatContextValue = {
   loadPins: (signal: AbortSignal) => Promise<InternalChatMessage[]>
   loadMessage: (id: number, signal: AbortSignal) => Promise<InternalChatMessage>
   messageAction: (id: number, action: ChatActionName) => Promise<boolean>
+  translationPair: ChatTranslationPair
+  setTranslationPair: (pair: ChatTranslationPair) => void
+  translateMessage: (id: number, pair: ChatTranslationPair) => Promise<boolean>
   isInitialLoading: boolean
   isLoadingOlder: boolean
   isSending: boolean
@@ -33,7 +37,7 @@ export type InternalChatContextValue = {
   isReconnecting: boolean
   drawerOpen: boolean
   setDrawerOpen: (open: boolean) => void
-  loadOlder: () => Promise<boolean>
+  loadOlder: (throughId?: number) => Promise<boolean>
   send: () => Promise<void>
   retry: () => Promise<void>
   markVisibleRead: (ids: number[]) => Promise<void>

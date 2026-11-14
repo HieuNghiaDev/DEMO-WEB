@@ -1,6 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, useState, type ChangeEvent, type KeyboardEvent, type Ref } from 'react'
-import { ChevronDown, Image as ImageIcon, Languages, LoaderCircle, Paperclip, Send, X } from 'lucide-react'
-import type { ChatDraftMention, ChatMentionMember, ChatReply } from './types'
+import { Image as ImageIcon, Languages, LoaderCircle, Paperclip, Send, X } from 'lucide-react'
+import type { ChatDraftMention, ChatMentionMember, ChatReply, ChatTranslationPair } from './types'
 import { editMentions, mentionQuery } from './chatMentions'
 import { fetchChatMentionMembers } from './api'
 
@@ -28,7 +28,7 @@ function DraftAttachment({ file, disabled, onRemove }: { file: File; disabled: b
   </li>
 }
 
-export default function ChatComposer({ variant, draft, files, onFiles, sendError, isSending, onDraft, onSend, inputRef, reply, onCancelReply, mentions = [], onMentionDraft }: {
+export default function ChatComposer({ variant, draft, files, onFiles, sendError, isSending, onDraft, onSend, inputRef, reply, onCancelReply, mentions = [], onMentionDraft, translationPair = 'ja-vi', onTranslationPair }: {
   variant: 'embedded' | 'drawer'
   draft: string
   files: File[]
@@ -42,6 +42,8 @@ export default function ChatComposer({ variant, draft, files, onFiles, sendError
   onCancelReply?: () => void
   mentions?: ChatDraftMention[]
   onMentionDraft?: (text: string, mentions: ChatDraftMention[]) => void
+  translationPair?: ChatTranslationPair
+  onTranslationPair?: (pair: ChatTranslationPair) => void
 }) {
   const fileInput = useRef<HTMLInputElement>(null)
   const imageInput = useRef<HTMLInputElement>(null)
@@ -205,14 +207,14 @@ export default function ChatComposer({ variant, draft, files, onFiles, sendError
               <ImageIcon size={18} />
             </button>
 
-            <details className="internal-chat-preview">
-              <summary className="internal-chat-preview-pill" aria-label="翻訳プレビュー">
-                <Languages size={13} aria-hidden="true" />
-                <span>翻訳プレビュー</span>
-                <ChevronDown size={13} aria-hidden="true" />
-              </summary>
-              <p className="internal-chat-preview-note">送信後に翻訳結果を表示します</p>
-            </details>
+            <label className="internal-chat-preview-pill">
+              <Languages size={13} aria-hidden="true" />
+              <select aria-label="翻訳する言語の組み合わせ" value={translationPair}
+                onChange={event => onTranslationPair?.(event.target.value as ChatTranslationPair)}>
+                <option value="ja-vi">日本語 ↔ ベトナム語</option>
+                <option value="ja-zh">日本語 ↔ 中国語</option>
+              </select>
+            </label>
           </div>
 
           <div className="internal-chat-toolbar-right">

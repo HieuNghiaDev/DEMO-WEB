@@ -15,6 +15,15 @@ class CaseActivity extends Model
         return ['occurred_at' => 'datetime', 'metadata' => 'array'];
     }
 
+    public function attributesToArray()
+    {
+        $attributes = parent::attributesToArray();
+        // The history API exposes only the safe file descriptor and its scoped download action.
+        unset($attributes['metadata']['history_attachments']);
+
+        return $attributes;
+    }
+
     /** Keep audit records stored; restrict only their exposure in case responses. */
     public function scopeVisibleTaskData(Builder $query, ?User $user): Builder
     {
