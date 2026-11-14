@@ -10,8 +10,8 @@ use PDO;
 final class Installer
 {
     // Updated only alongside the reviewed source manifest, never derived from operator input.
-    public const SCHEMA_HASH = 'ef7821f3aab5e68aeef05e8363a4c27f031980207a7d3f27fefd408b1991776e';
-    public const FIXTURE_HASH = '557888f609eb6c3e819ebe0f36361c1174f9bd03f57f8768bf132ab8e51302e4';
+    public const SCHEMA_HASH = 'a4758127866767e1d4b87f9333af48ea4772867e351333a3763ea04a1a5b1f12';
+    public const FIXTURE_HASH = 'bf3e72ce44b3048c806e22f9b1d28c96babf6043fd4497e92e8e54925f38ebc2';
 
     public static function manifest(string $file, string $expected, string $base): array
     {

@@ -287,11 +287,11 @@
     },
     {
       "path": "database/proposals/review_c001_activation_prerequisites.php",
-      "sha256": "280290b3fbf8ba9529fbb4e73f1382436078aa221ab32b770d9084840acb409f"
+      "sha256": "93403d2644e48937afa3df1f733a199f2bf3e066d1aebed22bd8366816ebadf1"
     },
     {
       "path": "database/proposals/review_c001_mfa_prerequisites.php",
-      "sha256": "d395a570f9aee32a67469290264fcb3ce456890ca77d691dab38ea4919853842"
+      "sha256": "f8c098eb1a41d5b7453c3c6c8335fe3dd5591eab02d1e2fa32f0f3f0e6160bc5"
     },
     {
       "path": "database/staging/structural/case_access.php",
@@ -299,7 +299,7 @@
     },
     {
       "path": "database/proposals/create_c001_legal_decisions.php",
-      "sha256": "b64b658de3df12d4ef760c8c0108aa67f5233cb39a670d6236c002f286c8fa49"
+      "sha256": "756edfc37d752d39744b4dec6e85411166bb059da2e214baae3ae3b2cb967651"
     }
   ],
   "excluded": [

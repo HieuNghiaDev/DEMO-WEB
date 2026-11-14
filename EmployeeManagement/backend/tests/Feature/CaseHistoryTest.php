@@ -337,8 +337,9 @@ class CaseHistoryTest extends TestCase
         $this->assertDatabaseCount('case_activities', 0);
     }
 
-    public function test_large_video_is_staged_in_small_requests_then_saved_and_cannot_be_replayed(): void
+    public function test_maximum_size_video_is_staged_and_saved_in_one_rate_limit_window(): void
     {
+        $this->freezeTime();
         Storage::fake('local');
         [$user, $case] = $this->fixture();
         $this->actingAs($user, 'sanctum');
@@ -347,7 +348,7 @@ class CaseHistoryTest extends TestCase
         $drive->shouldReceive('canWriteHistoryAttachments')->once()->andReturnTrue();
         $drive->shouldReceive('assertHistoryAttachmentFolder')->once()->with('history-folder');
         $chunkSize = 4 * 1024 * 1024;
-        $size = 11 * $chunkSize;
+        $size = 250 * 1024 * 1024;
         $header = pack('N', 24).'ftypisom'.pack('N', 512).'isomiso2';
         $drive->shouldReceive('storeHistoryAttachment')->once()->withArgs(
             fn ($stream, $name, $mime, $length, $folder) => is_resource($stream)
@@ -358,7 +359,8 @@ class CaseHistoryTest extends TestCase
         $uploadUrl = "/api/case-files/{$case->id}/history/uploads";
         $this->postJson($uploadUrl, ['name' => 'large.jpg', 'size' => $size])->assertUnprocessable();
         $this->postJson($uploadUrl, ['name' => 'large.wav', 'size' => 101 * 1024 * 1024])->assertUnprocessable();
-        $id = $this->postJson($uploadUrl, ['name' => 'meeting.mp4', 'size' => $size])->assertCreated()->json('upload_id');
+        $id = $this->postJson($uploadUrl, ['name' => 'meeting.mp4', 'size' => $size])
+            ->assertCreated()->assertHeader('X-RateLimit-Limit', '180')->json('upload_id');
         $payload = [...$this->payload($case), 'staged_attachment_ids' => [$id]];
         $this->postJson($this->path($case), $payload)->assertUnprocessable();
         $this->post("$uploadUrl/$id", ['offset' => 1, 'chunk' => UploadedFile::fake()->createWithContent('chunk.bin', 'bytes')],
@@ -367,15 +369,19 @@ class CaseHistoryTest extends TestCase
         $this->deleteJson("/api/case-files/{$other->id}/history/uploads/$id")->assertNotFound();
 
         for ($offset = 0; $offset < $size; $offset += $chunkSize) {
-            $chunk = str_pad($offset === 0 ? $header : '', $chunkSize, "\0");
+            $length = min($chunkSize, $size - $offset);
+            $chunk = str_pad($offset === 0 ? $header : '', $length, "\0");
+            $file = UploadedFile::fake()->createWithContent('chunk.bin', $chunk);
             $this->post("$uploadUrl/$id", [
-                'offset' => $offset, 'chunk' => UploadedFile::fake()->createWithContent('chunk.bin', $chunk),
-            ], ['Accept' => 'application/json'])->assertOk()->assertJsonPath('next_offset', $offset + $chunkSize);
+                'offset' => $offset, 'chunk' => $file,
+            ], ['Accept' => 'application/json'])->assertOk()->assertJsonPath('next_offset', $offset + $length);
+            fclose($file->tempFile);
         }
         $this->assertDatabaseCount('case_activities', 0);
         $saved = $this->postJson($this->path($case), $payload);
         $this->assertSame(201, $saved->status(), (string) $saved->json('message'));
-        $saved->assertJsonPath('entry.attachments.0.name', 'meeting.mp4')->assertJsonPath('entry.attachments.0.size', $size);
+        $saved->assertHeader('X-RateLimit-Limit', '60')->assertHeader('X-RateLimit-Remaining', '58')
+            ->assertJsonPath('entry.attachments.0.name', 'meeting.mp4')->assertJsonPath('entry.attachments.0.size', $size);
         $this->postJson($this->path($case), $payload)->assertNotFound();
         $this->assertDatabaseCount('case_activities', 2);
         Storage::disk('local')->assertMissing("case-history-uploads/{$user->id}/$id");

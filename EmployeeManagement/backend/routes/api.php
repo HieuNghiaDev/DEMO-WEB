@@ -339,11 +339,14 @@ Route::middleware([
         Route::post('activities', [CaseWorkspaceItemController::class, 'storeActivity'])->middleware('permission:case.update');
         Route::get('history', [\App\Http\Controllers\Api\CaseHistoryController::class, 'index'])->middleware('permission:case.view');
         Route::get('history/options', [\App\Http\Controllers\Api\CaseHistoryController::class, 'options'])->middleware('permission:case.view');
-        Route::prefix('history/uploads')->middleware(['permission:case.view', 'permission:case.update', 'throttle:180,1'])->group(function () {
-            Route::post('/', [\App\Http\Controllers\Api\CaseHistoryController::class, 'startAttachmentUpload']);
-            Route::post('{upload}', [\App\Http\Controllers\Api\CaseHistoryController::class, 'appendAttachmentChunk'])->whereUuid('upload');
-            Route::delete('{upload}', [\App\Http\Controllers\Api\CaseHistoryController::class, 'discardAttachmentUpload'])->whereUuid('upload');
-        });
+        Route::prefix('history/uploads')
+            ->withoutMiddleware('throttle:60,1')
+            ->middleware(['permission:case.view', 'permission:case.update', 'throttle:180,1,case-history-uploads:'])
+            ->group(function () {
+                Route::post('/', [\App\Http\Controllers\Api\CaseHistoryController::class, 'startAttachmentUpload']);
+                Route::post('{upload}', [\App\Http\Controllers\Api\CaseHistoryController::class, 'appendAttachmentChunk'])->whereUuid('upload');
+                Route::delete('{upload}', [\App\Http\Controllers\Api\CaseHistoryController::class, 'discardAttachmentUpload'])->whereUuid('upload');
+            });
         Route::post('communications', [\App\Http\Controllers\Api\CaseHistoryController::class, 'store'])->middleware(['permission:case.view', 'permission:case.update']);
         Route::get('communications/{communication}', [\App\Http\Controllers\Api\CaseHistoryController::class, 'show'])->middleware('permission:case.view');
         Route::get('communications/{communication}/attachments/{attachment}', [\App\Http\Controllers\Api\CaseHistoryController::class, 'attachment'])

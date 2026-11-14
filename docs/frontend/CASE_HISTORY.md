@@ -70,7 +70,9 @@ The same form accepts optional attachments for all eight types. Select files
 before saving and download saved files from the entry details. The limits per
 file are 20 MiB for images/PDF, 100 MiB for audio and 250 MiB for video, with a
 combined 300 MiB per save. The browser stages files in 4 MiB chunks and shows
-transfer progress followed by the Drive save state. Normal case
+transfer progress followed by the Drive save state. Staging requests have a
+separate 180-request-per-minute budget per user. The final save uses the
+standard API limit. Normal case
 provisioning creates `写真・連絡面談記録` alongside `作成書類`; an existing
 normal case provisions the history folder on first upload. Folder identity uses
 `external_storage_locations`. Uploads to publicly shared history folders are
