@@ -7,13 +7,13 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
-        "laravel/framework": "12.69.0",
+        "laravel/framework": "12.71.0",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
         "league/commonmark": "2.10.2",
         "mpdf/mpdf": "~8.2.0",
         "phpoffice/phpspreadsheet": "5.10.0",
-        "symfony/http-foundation": "7.4.21"
+        "symfony/http-foundation": "7.4.23"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
@@ -23,7 +23,7 @@
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.6",
         "phpunit/phpunit": "^11.5.50",
-        "symfony/yaml": "7.4.18"
+        "symfony/yaml": "7.4.23"
     },
     "autoload": {
         "psr-4": {
