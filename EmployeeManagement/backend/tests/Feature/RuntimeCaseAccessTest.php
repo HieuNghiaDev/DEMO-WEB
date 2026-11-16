@@ -301,11 +301,27 @@ class RuntimeCaseAccessTest extends B21TestCase
 
     public function test_task_without_persisted_parent_cannot_advertise_write_actions(): void
     {
-        $reader = $this->reader('missing-parent', ['task.update', 'task.manage']);
-        $task = new \App\Models\CaseTask(['status' => 'unaccepted', 'assigned_employee_id' => $reader->employee_id]);
-        $actions = $task->allowedActionsFor($reader);
-        $this->assertFalse($actions['can_accept']);
-        $this->assertFalse($actions['can_reassign']);
+        $reader = $this->reader('missing-parent', ['task.update', 'task.manage', 'task.review']);
+        $deletedCase = $this->matter();
+        $deletedCase->delete();
+
+        foreach ([null, 0, PHP_INT_MAX, $deletedCase->id] as $caseId) {
+            $task = new \App\Models\CaseTask([
+                'case_file_id' => $caseId,
+                'status' => 'unaccepted',
+                'assigned_employee_id' => $reader->employee_id,
+            ]);
+
+            $this->assertSame([
+                'can_accept' => false,
+                'can_submit' => false,
+                'can_reassign' => false,
+                'can_change_deadline' => false,
+                'can_approve' => false,
+                'can_reject' => false,
+                'can_cancel' => false,
+            ], $task->allowedActionsFor($reader));
+        }
     }
 
     public function test_shared_client_delete_cannot_bypass_read_only_confidential_grant(): void

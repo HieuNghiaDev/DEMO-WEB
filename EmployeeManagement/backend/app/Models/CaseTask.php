@@ -117,13 +117,14 @@ class CaseTask extends Model
     {
         $has = fn (string $permission) => $grants !== null ? ($grants[$permission] ?? false) : ($user?->hasPermission($permission) ?? false);
         $access = \App\Services\CaseAccessService::rehearsal();
-        $write = \App\Services\CaseAccessService::presentationWrite($user, $this->case_file_id);
+        $caseId = $this->case_file_id;
+        $write = \App\Services\CaseAccessService::presentationWrite($user, $caseId);
         $isAssignee = $user?->employee_id !== null && (int) $user->employee_id === (int) $this->assigned_employee_id;
         $canWork = $write && $isAssignee && $has('task.update');
-        $caseOperations = CaseOperationalAccess::capabilities($user, $this->case_file_id, true);
-        $canManage = $caseOperations['manage_tasks'];
-        $canReview = $caseOperations['review_tasks'];
-        if (CaseOperationalAccess::enforced() && $this->relationLoaded('latestSubmission')
+        $caseOperations = $write ? CaseOperationalAccess::capabilities($user, $caseId, true) : [];
+        $canManage = $caseOperations['manage_tasks'] ?? false;
+        $canReview = $caseOperations['review_tasks'] ?? false;
+        if ($canReview && CaseOperationalAccess::enforced() && $this->relationLoaded('latestSubmission')
             && ($this->latestSubmission?->source_type === 'auto_generated' || $this->latestSubmission?->case_generated_document_id !== null)) {
             $canReview = $canReview && $has('task.review') && $user?->hasAnyRole(['lawyer', 'admin']);
         }
@@ -135,8 +136,8 @@ class CaseTask extends Model
         if ($access) $canReview = $canReview && $this->relationLoaded('latestSubmission')
             && $this->latestSubmission?->source_type === 'manual_upload'
             && $this->latestSubmission->case_generated_document_id === null;
-        if ($authority = \App\Services\RehearsalDocumentAuthority::current()) {
-            $canReview = $canReview && $authority->canInternal($user, $this->case_file_id, $this->case_document_id,
+        if ($canReview && ($authority = \App\Services\RehearsalDocumentAuthority::current())) {
+            $canReview = $authority->canInternal($user, $caseId, $this->case_document_id,
                 'task_submission', $this->latestSubmission->id);
         }
 
