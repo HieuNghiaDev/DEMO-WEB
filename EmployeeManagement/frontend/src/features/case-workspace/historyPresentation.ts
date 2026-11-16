@@ -89,6 +89,7 @@ const fieldLabels: Record<string, string> = {
   subject: '件名', summary: '概要', details: '詳細', outcome: '対応結果', next_action: '次回対応',
   next_action_due_at: '次回対応期限', started_at: '開始日時', ended_at: '終了日時', duration_minutes: '所要時間',
   communication_type: '種類', direction: '方向', counterparties: '相手', participants: '参加者',
+  attachment_count: '添付ファイル件数',
   assigned_employee_id: '担当者', response_deadline: '回答期限', due_at: '期限', priority: '優先度',
   description: '説明', necessity_status: '必要性', collection_status: '取得状況', review_status: '確認状況',
   fulfillment_status: '充足状況', status: '状態', version: 'バージョン',

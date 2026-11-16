@@ -208,6 +208,83 @@ class GoogleDriveService
         }
     }
 
+    public function canWriteHistoryAttachments(): bool
+    {
+        return $this->writeConfigured();
+    }
+
+    public function assertHistoryAttachmentFolder(string $folderId): void
+    {
+        $this->assertWritableFolder($folderId);
+        $response = $this->writeRequest()->get($this->fileUrl($this->validFileId($folderId)).'/permissions', [
+            'supportsAllDrives' => 'true', 'fields' => 'nextPageToken,permissions(type)', 'pageSize' => 100,
+        ]);
+        $permissions = $response->json('permissions');
+        if (! $response->successful() || ! is_array($permissions) || $response->json('nextPageToken')
+            || collect($permissions)->contains(fn ($permission) => ($permission['type'] ?? null) === 'anyone')) {
+            throw new GeneratedDocumentDriveException('添付ファイルの共有設定を確認してください。');
+        }
+    }
+
+    /** @param resource $stream */
+    public function storeHistoryAttachment($stream, string $filename, string $mime, int $size, string $folderId): string
+    {
+        $id = null;
+        try {
+            if (! $this->writeConfigured()) {
+                throw new GeneratedDocumentDriveException();
+            }
+            $generated = $this->writeRequest()->get('https://www.googleapis.com/drive/v3/files/generateIds', [
+                'count' => 1, 'space' => 'drive',
+            ]);
+            if (! $generated->successful()) {
+                throw new GeneratedDocumentDriveException();
+            }
+            $id = $this->validFileId($generated->json('ids.0'));
+            $request = $this->writeRequest()->withOptions(['allow_redirects' => false]);
+            $session = $request->withHeaders(['X-Upload-Content-Type' => $mime, 'X-Upload-Content-Length' => (string) $size])
+                ->post('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id', [
+                    'id' => $id, 'name' => $filename, 'mimeType' => $mime, 'parents' => [$this->validFileId($folderId)],
+                ]);
+            $url = $session->header('Location');
+            $target = parse_url($url);
+            if (! $session->successful() || ($target['scheme'] ?? null) !== 'https'
+                || ($target['host'] ?? null) !== 'www.googleapis.com'
+                || ($target['path'] ?? null) !== '/upload/drive/v3/files'
+                || isset($target['port']) || isset($target['user']) || isset($target['pass'])) {
+                throw new GeneratedDocumentDriveException();
+            }
+            $uploaded = $this->writeRequest()->withOptions(['allow_redirects' => false])->timeout($size > 20 * 1024 * 1024 ? 300 : 90)
+                ->withHeaders(['Content-Length' => (string) $size])->withBody($stream, $mime)->put($url);
+            if (! $uploaded->successful() || $uploaded->json('id') !== $id) {
+                throw new GeneratedDocumentDriveException();
+            }
+
+            return $id;
+        } catch (Throwable) {
+            if ($id !== null) {
+                $this->deleteFile($id);
+            }
+            throw new GeneratedDocumentDriveException('添付ファイルをGoogle Driveに保存できませんでした。');
+        }
+    }
+
+    public function historyAttachmentStream(string $id): \Psr\Http\Message\StreamInterface
+    {
+        try {
+            $response = $this->authenticatedRequest()->connectTimeout(5)->timeout(60)
+                ->withOptions(['stream' => true, 'allow_redirects' => false])
+                ->get($this->fileUrl($this->validFileId($id)), ['alt' => 'media', 'supportsAllDrives' => 'true']);
+            if ($response->successful()) {
+                return $response->toPsrResponse()->getBody();
+            }
+            $response->toPsrResponse()->getBody()->close();
+        } catch (Throwable) {
+            // Provider errors can contain signed request details.
+        }
+        throw new GeneratedDocumentDriveException('添付ファイルをGoogle Driveから取得できませんでした。');
+    }
+
     public function deleteFile(string $fileId): bool
     {
         try {

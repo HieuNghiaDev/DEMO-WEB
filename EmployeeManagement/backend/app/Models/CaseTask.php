@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Services\TaskVisibility;
+use App\Services\CaseOperationalAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -48,7 +48,7 @@ class CaseTask extends Model
                     ->whereColumn('case_documents.case_file_id', $query->qualifyColumn('case_file_id'))));
         }
 
-        return TaskVisibility::scopeAssignment($query, $user, 'assigned_employee_id');
+        return CaseOperationalAccess::scopeTasks($query, $user);
     }
 
     public function isVisibleTo(?User $user): bool
@@ -120,8 +120,13 @@ class CaseTask extends Model
         $write = \App\Services\CaseAccessService::presentationWrite($user, $this->case_file_id);
         $isAssignee = $user?->employee_id !== null && (int) $user->employee_id === (int) $this->assigned_employee_id;
         $canWork = $write && $isAssignee && $has('task.update');
-        $canManage = $write && $has('task.manage');
-        $canReview = $write && $has('case.view') && $has('task.review');
+        $caseOperations = CaseOperationalAccess::capabilities($user, $this->case_file_id, true);
+        $canManage = $caseOperations['manage_tasks'];
+        $canReview = $caseOperations['review_tasks'];
+        if (CaseOperationalAccess::enforced() && $this->relationLoaded('latestSubmission')
+            && ($this->latestSubmission?->source_type === 'auto_generated' || $this->latestSubmission?->case_generated_document_id !== null)) {
+            $canReview = $canReview && $has('task.review') && $user?->hasAnyRole(['lawyer', 'admin']);
+        }
         if (\App\Services\LegalFinalizationGate::policyPending()) {
             $canReview = $canReview && $this->relationLoaded('latestSubmission')
                 && $this->latestSubmission?->source_type === 'manual_upload'

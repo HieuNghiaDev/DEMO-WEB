@@ -1,14 +1,16 @@
 // Development-only harness: real route/form/workspace components, isolated transport and fictional records.
-// No AuthProvider, tokens, database, or external requests. Never a production entry point.
+// No real credentials, database, or external requests. Never a production entry point.
 import { createRoot } from 'react-dom/client'
 import { useEffect, useState } from 'react'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { AxiosError } from 'axios'
 import api from '../../src/services/api'
+import { AuthProvider } from '../../src/contexts/AuthContext'
 import { CaseManagement } from '../../src/pages/BusinessQuest'
 import type { CaseWorkspace } from '../../src/features/case-workspace/types'
 import type { CaseClient, CaseEmployee, CaseTypeOption } from '../../src/features/case-management/types'
 import { caseTypeOptions } from '../../src/features/case-management/helpers'
+import type { CaseTaskDelegation } from '../../src/features/case-management/api'
 import '../../src/index.css'
 
 if (!import.meta.env.DEV) throw new Error('Development fixture only')
@@ -17,6 +19,8 @@ const types: CaseTypeOption[] = [{ id: 10, name: '労災', children: [{ id: 11, 
 const employees: CaseEmployee[] = [{ id: 1, full_name: '試験担当者 佐藤', full_name_kana: null, position_title: '担当', employee_status: 'active', department: { id: 1, name: '法律業務部' } }, { id: 2, full_name: '非在籍の試験担当者', full_name_kana: null, position_title: null, employee_status: 'inactive', department: null }]
 const makeCase = (id: number): CaseWorkspace => ({ id, title: `事故相談 ${id}`, case_type: id % 2 ? '労災' : '交通事故', case_type_id: id % 2 ? 10 : 20, case_type_option: { id: id % 2 ? 10 : 20, name: id % 2 ? '労災' : '交通事故' }, status: id % 2 ? 'active' : 'waiting_documents', priority: 'normal', summary: '相談内容と現在の状況を確認するためのテスト案件。', opened_at: '2026-08-31T00:00:00.000000Z', target_completion_at: '2026-09-30T00:00:00.000000Z', created_at: '2026-08-31T01:00:00Z', updated_at: '2026-08-31T01:00:00Z', client: clients[(id - 1) % 2], assigned_employee: employees[0], documents_count: 0, confirmed_documents_count: 0, documents: [], precedents: [], meeting_logs: [], custom_sections: [], parties: [], deadlines: [], case_tasks: [], activities: [] })
 let cases = Array.from({ length: 12 }, (_, index) => makeCase(index + 1))
+const delegationCandidates = [{ user_id: 21, name: '試験社員 鈴木' }, { user_id: 22, name: '試験社員 高橋' }]
+const caseDelegations = new Map<number, CaseTaskDelegation[]>()
 let failure = ''
 let delay = 25
 const logs: { method: string; url: string; payload?: Record<string, unknown> }[] = []
@@ -45,16 +49,22 @@ api.defaults.adapter = async config => {
   else if (url === '/clients') data = { clients }
   else if (url === '/case-types') data = { case_types: types }
   else if (url === '/organization') data = { employees }
+  else if (url === '/case-task-delegation-candidates') data = { candidates: delegationCandidates }
   else if (url === '/case-files' && method === 'get') data = { case_files: cases }
   else if (url === '/case-files' && method === 'post') {
     const type = caseTypeOptions(types).find(type => type.id === payload.case_type_id)
     const item = Object.assign(makeCase(99), payload, { case_type: type?.name, case_type_option: type, client: clients.find(client => client.id === payload.client_id), assigned_employee: employees.find(employee => employee.id === payload.assigned_employee_id) ?? null })
+    if (Array.isArray(payload.task_delegations)) caseDelegations.set(item.id, payload.task_delegations)
     cases.unshift(item); data = { case_file: item }
   } else {
     const id = Number(url.split('/')[2])
     const item = cases.find(item => item.id === id)
     if (!item) throw new AxiosError('Not found', undefined, config, undefined, { status: 404, statusText: 'Not Found', config, headers: {}, data: {} })
-    if (url.endsWith('/workspace')) data = { case_file: item, summary: { progress_percent: 0, missing_documents: 0, documents_total: 0, next_deadline: null, open_tasks: 0 } }
+    if (url.endsWith('/workspace')) data = { case_file: item, operations: { create_tasks: false, manage_tasks: false, review_tasks: false, edit_overview: true, edit_client: true, delegate: true }, summary: { progress_percent: 0, missing_documents: 0, documents_total: 0, next_deadline: null, open_tasks: 0 } }
+    else if (url.endsWith('/task-delegations')) {
+      if (method === 'put') caseDelegations.set(id, payload.task_delegations)
+      data = { task_delegations: caseDelegations.get(id) ?? [], candidates: delegationCandidates, revision: 'fixture-revision' }
+    }
     else if (url.endsWith('/initialization-preview')) data = { case: { id, case_type: { id: item.case_type_id, name: item.case_type } }, initialization: { available: true, candidate_count: 3, existing_generated_count: 0, missing_candidate_count: 3, skipped_candidate_count: 0, manual_item_count: 0, total_existing_collection_items: 0, legacy_item_count: 0, soft_deleted_generated_count: 0 }, purposes: [], warnings: [] }
     else if (/^\/case-files\/\d+$/.test(url)) {
       if (method === 'put') { const type = caseTypeOptions(types).find(type => type.id === payload.case_type_id); Object.assign(item, payload, { case_type: type?.name, case_type_option: type, client: clients.find(client => client.id === payload.client_id) ?? item.client }) }
@@ -82,7 +92,7 @@ export function Harness() {
   }, [])
   useEffect(() => { notify = () => setLog(JSON.stringify(logs)); return () => { notify = () => {} } }, [])
   return <><style>{'body{margin:0}.qa-tools{padding:10px;display:flex;flex-wrap:wrap;gap:12px;background:#e2e8f0;color:#0f172a;font-size:12px}.qa-content{min-width:0}@media(min-width:768px){.qa-content{margin-left:288px}}'}</style>
-    <div className="qa-tools"><strong>隔離テスト · 実DBには接続しません</strong><button onClick={() => setDark(value => !value)}>テーマ切替</button><label><input type="checkbox" checked={readonly} onChange={event => setReadonly(event.target.checked)}/>閲覧のみ</label><label>試験ロール<select value={role} onChange={event => setRole(event.target.value)}><option>level_4</option><option>level_3</option></select></label>
+    <div className="qa-tools"><strong>隔離テスト · 実DBには接続しません</strong><button onClick={() => setDark(value => !value)}>テーマ切替</button><label><input type="checkbox" checked={readonly} onChange={event => setReadonly(event.target.checked)}/>閲覧のみ</label><label>試験ロール<select value={role} onChange={event => setRole(event.target.value)}><option>lawyer</option><option>level_4</option><option>level_3</option></select></label>
       <label>試験エラー<select onChange={event => { failure = event.target.value }}><option value="">なし</option><option value="422">422</option><option value="case422afterclient">依頼者後に案件422</option><option value="403">403</option><option value="network">network</option></select></label><label>応答時間<select onChange={event => { delay = Number(event.target.value) }}><option value="25">通常</option><option value="1500">遅延</option></select></label>
       <button onClick={() => { cases = []; navigate('/quests'); setVersion(value => value + 1) }}>空の一覧</button><button onClick={() => { cases = Array.from({ length: 12 }, (_, index) => makeCase(index + 1)); navigate('/quests'); setVersion(value => value + 1) }}>一覧を復元</button><output data-testid="route">{location.pathname}</output>
     </div><div className="qa-content"><Routes><Route path="/quests/*" element={<CaseManagement key={version} user={{ role_names: [role], permission_names: readonly ? ['case.view', 'employee.view'] : ['case.view', 'case.create', 'case.update', 'case.assign', 'employee.view', 'document.create'] }}/>}/></Routes></div>
@@ -90,4 +100,4 @@ export function Harness() {
     <details><summary>試験通信履歴</summary><pre data-testid="case-transport-log" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{log}</pre></details>
   </>
 }
-createRoot(document.getElementById('root')!).render(<MemoryRouter initialEntries={['/quests']}><Harness/></MemoryRouter>)
+createRoot(document.getElementById('root')!).render(<MemoryRouter initialEntries={['/quests']}><AuthProvider><Harness/></AuthProvider></MemoryRouter>)

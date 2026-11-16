@@ -1,19 +1,24 @@
 import { createRoot } from 'react-dom/client'
-import { useState } from 'react'
-import { MemoryRouter } from 'react-router-dom'
+import { StrictMode, useState } from 'react'
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AxiosError, AxiosHeaders } from 'axios'
 import { AuthProvider, useAuth } from '../../src/contexts/AuthContext'
 import api from '../../src/services/api'
 import AuthChallengePage from '../../src/features/authentication/AuthChallengePage'
 import MfaSecurityPage from '../../src/features/authentication/MfaSecurityPage'
+import MfaBackupCodesPage from '../../src/features/authentication/MfaBackupCodesPage'
 import ActivationPage from '../../src/features/authentication/ActivationPage'
 import { Button } from '../../src/components/ui'
+import Login from '../../src/pages/Login'
+import ProtectedRoute from '../../src/components/auth/ProtectedRoute'
+import { MFA_BACKUP_CODES_PATH } from '../../src/utils/authNavigation'
 import '../../src/index.css'
 
 // Dedicated-origin QA fixture. EVERY request is intercepted; no API/network fallback.
 const challenge = 'a'.repeat(64)
 const secret = 'A'.repeat(32)
 const codes = Array.from({ length: 10 }, (_, index) => index.toString(16).padStart(32, '0'))
+const settingsHandoff = new URLSearchParams(window.location.search).get('flow') === 'settings-handoff'
 let enrolled = false
 let currentMfa = true
 const user = { id: 1, employee_id: 1, login_id: 'SYNTHETIC', email: 'synthetic@example.test', name: 'Synthetic', role: 'employee', is_active: true, must_change_password: false, roles: [], role_names: [], permission_names: [], employee: null }
@@ -24,10 +29,11 @@ api.defaults.adapter = async config => {
   const next = { challenge, purpose: 'recovery_enroll', expires_in: 300 }
   const session = () => ({ user, token: '1|synthetic-only-fixture', authentication: { requires_mfa: currentMfa } })
   if (path === '/login') {
-    currentMfa = data.email !== 'ordinary@example.test'
+    currentMfa = data.email !== 'ordinary@example.test' || (settingsHandoff && enrolled)
     if (currentMfa) { status = 202; result = { mfa_required: true, purpose: enrolled ? 'login_mfa' : 'login_enroll', challenge, expires_in: 300 } }
     else result = session()
   } else if (path === '/mfa/enrollment/start') result = { secret, otpauth_uri: `otpauth://totp/THEMIS:synthetic?secret=${secret}&issuer=THEMIS` }
+  else if (path === '/mfa/enrollment/opt-in') result = { ...next, purpose: 'opt_in_enroll' }
   else if (path === '/mfa/login' && data.recovery_code) result = next
   else if (['/mfa/login', '/mfa/enrollment/confirm', '/mfa/step-up'].includes(path ?? '')) {
     if (data.otp !== '123456') throw new AxiosError('Synthetic rejected OTP', 'ERR_BAD_REQUEST', config, undefined,
@@ -61,6 +67,21 @@ export function Fixture() {
     <Button onClick={() => { authFlow.reset(); setActivation(true) }}>Kích hoạt giả</Button>
   </section></main>
 }
-createRoot(document.getElementById('root')!).render(<MemoryRouter><AuthProvider>
-  <Button onClick={() => document.documentElement.classList.toggle('dark')}>Đổi sáng/tối (fixture)</Button><Fixture />
-</AuthProvider></MemoryRouter>)
+createRoot(document.getElementById('root')!).render(<StrictMode>
+  <MemoryRouter initialEntries={[settingsHandoff ? '/login' : '/']}>
+    <AuthProvider>
+      {settingsHandoff ? <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path={MFA_BACKUP_CODES_PATH} element={<MfaBackupCodesPage />} />
+        <Route element={<ProtectedRoute />}>
+          <Route path="/" element={<MfaSecurityPage />} />
+          <Route path="/system" element={<Link to="/system/mfa">二段階認証を開く</Link>} />
+          <Route path="/system/mfa" element={<MfaSecurityPage />} />
+        </Route>
+      </Routes> : <>
+        <Button onClick={() => document.documentElement.classList.toggle('dark')}>Đổi sáng/tối (fixture)</Button>
+        <Fixture />
+      </>}
+    </AuthProvider>
+  </MemoryRouter>
+</StrictMode>)

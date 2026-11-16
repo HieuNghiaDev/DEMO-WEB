@@ -9,7 +9,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import ts from 'typescript'
 
 const requireExternal = createRequire(import.meta.url)
-await requireExternal('i18next').use(requireExternal('react-i18next').initReactI18next).init({ lng: 'ja', initImmediate: false, resources: { ja: { translation: { documentCollection: { editor: { closeDetail: '閉じる' } } } } } })
+const resources = Object.fromEntries(['ja', 'vi'].map(locale => [
+  locale, { translation: JSON.parse(readFileSync(resolve(`src/i18n/locales/${locale}.json`), 'utf8')) },
+]))
+await requireExternal('i18next').use(requireExternal('react-i18next').initReactI18next).init({ lng: 'ja', initImmediate: false, resources })
 const modules = new Map()
 function loadModule(path) {
   if (modules.has(path)) return modules.get(path).exports
@@ -63,8 +66,9 @@ test('task rows are compact read-only table cells with real identity and no edit
 
 test('an unaccepted employee task offers acceptance without management or review actions', () => {
   const html = drawer(task({ status: 'unaccepted', allowed_actions: { ...flags, can_accept: true } }))
-  assert.match(html, /対応を開始/)
-  assert.match(html, /この資料の対応を開始し、担当者として処理を行います。/)
+  assert.match(html, />受け取る</)
+  assert.match(html, /受け取ると「対応中」になり、受け取り日時が履歴に記録されます。/)
+  assert.match(html, /lucide-inbox/)
   assert.match(html, /aria-describedby="task-start-help-1"/)
   assert.doesNotMatch(html, /受領する|>作業<|チームに通知/)
   assert.doesNotMatch(html, /担当者を変更|期限を変更|承認する|差し戻す/)
@@ -73,10 +77,10 @@ test('an unaccepted employee task offers acceptance without management or review
 })
 
 test('start handling respects task state, permissions and busy state without duplicating actions', () => {
-  assert.doesNotMatch(drawer(task({ status: 'unaccepted' })), /対応を開始/)
+  assert.doesNotMatch(drawer(task({ status: 'unaccepted' })), />受け取る</)
   for (const status of ['in_progress', 'pending_review', 'changes_requested', 'completed', 'cancelled']) {
     const html = drawer(task({ status, accepted_at: '2026-10-09T02:20:00Z', allowed_actions: { ...flags, can_accept: true } }))
-    assert.doesNotMatch(html, /対応を開始/)
+    assert.doesNotMatch(html, />受け取る</)
     assert.match(html, /対応開始日時/)
     assert.match(html, /Real employee/)
     assert.doesNotMatch(html, />作業</)
@@ -84,7 +88,7 @@ test('start handling respects task state, permissions and busy state without dup
   const busy = drawer(task({ status: 'unaccepted', allowed_actions: { ...flags, can_accept: true } }), { working: true })
   assert.match(busy, /aria-busy="true" aria-describedby="task-start-help-1"/)
   assert.match(busy, /disabled=""/)
-  assert.equal((busy.match(/>対応を開始</g) ?? []).length, 1)
+  assert.equal((busy.match(/>受け取る</g) ?? []).length, 1)
 })
 
 test('task file rows reuse compact file identities, version pills and semantic review statuses', () => {

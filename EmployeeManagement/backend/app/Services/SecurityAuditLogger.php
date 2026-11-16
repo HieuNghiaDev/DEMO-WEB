@@ -77,6 +77,18 @@ class SecurityAuditLogger
                 'after' => array_intersect_key($membership->getAttributes(), array_flip($keys))]]);
     }
 
+    public function recordCaseOperationalGrants(User $actor, int $caseId, array $before, array $after): void
+    {
+        if (DB::transactionLevel() < 1) throw new LogicException('Case operational audit requires a transaction.');
+
+        SecurityAuditLog::create([
+            'event' => 'case.operations.delegation.updated', 'outcome' => 'success',
+            'user_id' => $actor->id, 'employee_id' => $actor->employee_id,
+            'request_method' => request()->method(), 'request_path' => 'case-operational-grants',
+            'metadata' => ['actor_user_id' => $actor->id, 'case_id' => $caseId, 'before' => $before, 'after' => $after],
+        ]);
+    }
+
     /** Privileged path only: caller's mutation and audit must use the same transaction. */
     public function recordRequired(?User $actor, string $action, array $target, array $before, array $after, array $scope): void
     {

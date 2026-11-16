@@ -6,6 +6,7 @@ use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rules\Password;
 use Symfony\Component\Console\Command\Command;
@@ -13,6 +14,9 @@ use Symfony\Component\Console\Command\Command;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Schedule::call(fn () => app(\App\Services\CaseHistoryUploadStaging::class)->purgeExpired())
+    ->name('case-history-upload-cleanup')->hourly()->withoutOverlapping();
 
 Artisan::command('themis:user-password {login_id} {--activate : Reactivate the account after resetting its password}', function () {
     $denied = 'Generic account recovery is unavailable. Use the approved recovery procedure.';

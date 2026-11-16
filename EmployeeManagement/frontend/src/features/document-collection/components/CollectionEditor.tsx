@@ -8,9 +8,9 @@ import { formatDate, fromLocalDateTime, toLocalDateTime } from '../utils'
 
 export type InspectorEditSection = 'necessity' | 'conditions' | 'preparation' | 'receipt' | 'review' | 'exception'
 
-export default function CollectionEditor({ detail, draft, onChange, errors, employees, employeeError, disabled, canReviewDocuments, editing, onStartEdit, receivedDocuments, documentCreationSection }: {
+export default function CollectionEditor({ detail, draft, onChange, errors, employees, employeeError, disabled, canDecideNecessity, canReviewDocuments, editing, onStartEdit, receivedDocuments, documentCreationSection }: {
   detail: CollectionDetail; draft: CollectionDraft; onChange: (draft: CollectionDraft) => void
-  errors: Record<string, string>; employees: EmployeeOption[]; employeeError: string | null; disabled: boolean; canReviewDocuments: boolean
+  errors: Record<string, string>; employees: EmployeeOption[]; employeeError: string | null; disabled: boolean; canDecideNecessity: boolean; canReviewDocuments: boolean
   editing: InspectorEditSection | null; onStartEdit: (section: InspectorEditSection) => void; receivedDocuments: ReactNode; documentCreationSection?: ReactNode
 }) {
   const { t } = useTranslation()
@@ -30,8 +30,8 @@ export default function CollectionEditor({ detail, draft, onChange, errors, empl
 
   return <fieldset ref={editor} className="dc-editor dc-inspector-editor" disabled={disabled}>
     <section className="dc-detail-section dc-inspector-section">
-      <SectionHeading label="A" title={t('documentCollection.editor.necessity')} action={action('necessity', t('documentCollection.editor.changeNecessity'), 'necessity')}/>
-      {editing === 'necessity' ? <>
+      <SectionHeading label="A" title={t('documentCollection.editor.necessity')} action={canDecideNecessity ? action('necessity', t('documentCollection.editor.changeNecessity'), 'necessity') : undefined}/>
+      {canDecideNecessity && editing === 'necessity' ? <>
         <div className="dc-necessity" aria-label={t('documentCollection.editor.necessityAria')}>
           {Object.keys(necessityLabels).map(value => (
             <button

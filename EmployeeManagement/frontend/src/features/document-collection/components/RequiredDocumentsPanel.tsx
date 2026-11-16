@@ -14,6 +14,7 @@ import {
   UserRound,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { SectionSkeleton } from '../../../components/loading'
 import { IconButton } from '../../../components/ui/IconButton'
 import { UserAvatar } from '../../../components/ui/UserAvatar'
@@ -37,6 +38,7 @@ type Props = {
   initialSelectedId?: number
   onDocumentClose?: () => void
   canUpdate: boolean
+  canDecideNecessity: boolean
   canManageTasks: boolean
   canReviewDocuments: boolean
   currentEmployeeId?: number
@@ -55,6 +57,7 @@ export default function RequiredDocumentsPanel({
   initialSelectedId,
   onDocumentClose,
   canUpdate,
+  canDecideNecessity,
   canManageTasks,
   canReviewDocuments,
   currentEmployeeId,
@@ -131,57 +134,64 @@ export default function RequiredDocumentsPanel({
   ]
 
   return <div className="dc-preview dc-production dc-required" aria-label="必要資料ワークスペース">
-    <header className="dc-required-page-head">
-      <span className="dc-required-heading-icon" aria-hidden="true"><Folder size={20}/></span>
-      <div><h2>必要資料</h2><p>この案件で「必要」と判断された資料を管理します。</p></div>
-      {!canUpdate && <span className="dc-meta">閲覧のみ</span>}
-    </header>
+    <div className="dc-required-section">
+      <header className="dc-required-page-head">
+        <span className="dc-required-heading-icon" aria-hidden="true"><Folder size={20}/></span>
+        <div><h2>必要資料</h2><p>この案件で「必要」と判断された資料を管理します。</p></div>
+        {!canUpdate && <span className="dc-meta">閲覧のみ</span>}
+      </header>
 
-    <div className="dc-required-metrics" aria-label="必要資料サマリー">
-      <SummaryCard icon={<FileStack size={16}/>} label="必要資料" value={required.length} tone="indigo" />
-      <SummaryCard icon={<CircleDashed size={16}/>} label="未受領" value={counts.unaccepted} tone="slate" />
-      <SummaryCard icon={<CalendarClock size={16}/>} label="対応・確認中" value={counts.in_progress + counts.pending_review + counts.changes_requested} tone="blue" />
-      <SummaryCard icon={<CheckCircle2 size={16}/>} label="完了" value={counts.completed} tone="emerald" />
-      <SummaryCard icon={<AlertTriangle size={16}/>} label="期限超過" value={counts.overdue} tone="rose" />
+      <div className="dc-required-metrics" aria-label="必要資料サマリー">
+        <SummaryCard icon={<FileStack size={16}/>} label="必要資料" value={required.length} tone="indigo" />
+        <SummaryCard icon={<CircleDashed size={16}/>} label="未受領" value={counts.unaccepted} tone="slate" />
+        <SummaryCard icon={<CalendarClock size={16}/>} label="対応・確認中" value={counts.in_progress + counts.pending_review + counts.changes_requested} tone="blue" />
+        <SummaryCard icon={<CheckCircle2 size={16}/>} label="完了" value={counts.completed} tone="emerald" />
+        <SummaryCard icon={<AlertTriangle size={16}/>} label="期限超過" value={counts.overdue} tone="rose" />
+      </div>
     </div>
 
-    <div className="dc-required-controls">
-      <label className="dc-workflow-search"><Search className="dc-search-icon" size={16} aria-hidden="true"/><input aria-label="必要資料を検索" value={query} onChange={event => { setQuery(event.target.value); setPageNumber(1) }} placeholder="資料名・コードで検索..."/></label>
-      <label className="dc-required-method-filter"><span>取得方法</span><select value={methodFilter} onChange={event => { setMethodFilter(event.target.value); setPageNumber(1) }}><option value="all">すべて</option>{acquisitionOptions.map(method => <option key={method} value={method}>{method}</option>)}</select></label>
-      <div className="dc-view-switch" aria-label="表示形式"><button type="button" className={view === 'list' ? 'is-active' : ''} aria-pressed={view === 'list'} onClick={() => changeView('list')}><List size={15}/>リスト</button><button type="button" className={view === 'card' ? 'is-active' : ''} aria-pressed={view === 'card'} onClick={() => changeView('card')}><Grid2X2 size={14}/>カード</button></div>
+    <div className="dc-required-section">
+      <h3 className="dc-required-filter-heading">絞り込み</h3>
+      <div className="dc-required-controls">
+        <label className="dc-workflow-search"><Search className="dc-search-icon" size={16} aria-hidden="true"/><input aria-label="必要資料を検索" value={query} onChange={event => { setQuery(event.target.value); setPageNumber(1) }} placeholder="資料名・コードで検索..."/></label>
+        <label className="dc-required-method-filter"><span>取得方法</span><select value={methodFilter} onChange={event => { setMethodFilter(event.target.value); setPageNumber(1) }}><option value="all">すべて</option>{acquisitionOptions.map(method => <option key={method} value={method}>{method}</option>)}</select></label>
+        <div className="dc-view-switch" aria-label="表示形式"><button type="button" className={view === 'list' ? 'is-active' : ''} aria-pressed={view === 'list'} onClick={() => changeView('list')}><List size={15}/>リスト</button><button type="button" className={view === 'card' ? 'is-active' : ''} aria-pressed={view === 'card'} onClick={() => changeView('card')}><Grid2X2 size={14}/>カード</button></div>
+      </div>
+
+      <div className="dc-required-filters" aria-label="作業状態で絞り込み">
+        {filters.map(item => <button key={item.value} type="button" className={filter === item.value ? 'is-active' : ''} aria-pressed={filter === item.value} onClick={() => { setFilter(item.value); setPageNumber(1) }}>{item.label}<span>{item.count}</span></button>)}
+        {currentEmployeeId && <button type="button" className={filter === 'mine' ? 'is-active' : ''} aria-pressed={filter === 'mine'} onClick={() => { setFilter('mine'); setPageNumber(1) }}><UserRound size={13}/>自分の担当</button>}
+      </div>
     </div>
 
-    <div className="dc-required-filters" aria-label="作業状態で絞り込み">
-      {filters.map(item => <button key={item.value} type="button" className={filter === item.value ? 'is-active' : ''} aria-pressed={filter === item.value} onClick={() => { setFilter(item.value); setPageNumber(1) }}>{item.label}<span>{item.count}</span></button>)}
-      {currentEmployeeId && <button type="button" className={filter === 'mine' ? 'is-active' : ''} aria-pressed={filter === 'mine'} onClick={() => { setFilter('mine'); setPageNumber(1) }}><UserRound size={13}/>自分の担当</button>}
+    <div className="dc-required-section">
+      {resultsReady && <div className="dc-required-result-toolbar">
+        <div><FileStack size={15} aria-hidden="true"/><strong>資料一覧</strong><span className="dc-required-result-count">{filtered.length}件</span></div>
+        <span role="status" aria-live="polite" aria-atomic="true">{resultRange}</span>
+      </div>}
+      {collection.error ? <CollectionFeedback error={collection.error} onRetry={collection.retry}/>
+        : collection.loading ? <SectionSkeleton className="border-0" label="必要資料を読み込み中…" rows={5} showHeader={false}/>
+          : filtered.length ? view === 'list'
+            ? <RequiredList items={page.rows} selectedId={selectedId} referenceTime={referenceTime} onOpen={openDocument}/>
+            : <RequiredCards items={filtered} selectedId={selectedId} referenceTime={referenceTime} onOpen={openDocument}/>
+            : required.length ? <div className="dc-empty-results"><Search size={22}/><h3>該当する必要資料がありません</h3><p>検索または絞り込み条件を変更してください。</p></div>
+              : <div className="dc-required-empty"><p><strong>必要資料はまだありません。</strong><span>資料収集で「必要」と判断された資料がここに表示されます。</span></p><button type="button" className="dc-button dc-primary" onClick={onCandidates}>資料収集を開く</button></div>}
+
+      {resultsReady && view === 'list' && <footer className="dc-required-pagination">
+        <span>{page.range}</span>
+        <nav aria-label="必要資料一覧のページ切替">
+          <IconButton type="button" variant="secondary" size="md" aria-label="前のページ" disabled={page.page === 1 || !page.total} onClick={() => setPageNumber(page.page - 1)}><ChevronLeft size={16} aria-hidden="true"/></IconButton>
+          {page.total > 0 && page.numbers.map((number, index) => <span key={number}>
+            {index > 0 && number > page.numbers[index - 1] + 1 && <span className="dc-required-page-ellipsis" aria-hidden="true">…</span>}
+            <button type="button" className={page.page === number ? 'is-current' : ''} aria-label={`${number}ページ`} aria-current={page.page === number ? 'page' : undefined} onClick={() => setPageNumber(number)}>{number}</button>
+          </span>)}
+          <IconButton type="button" variant="secondary" size="md" aria-label="次のページ" disabled={page.page === page.pages || !page.total} onClick={() => setPageNumber(page.page + 1)}><ChevronRight size={16} aria-hidden="true"/></IconButton>
+        </nav>
+        <label>表示件数<select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPageNumber(1) }}>{REQUIRED_DOCUMENT_PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}</select></label>
+      </footer>}
     </div>
 
-    {resultsReady && <div className="dc-required-result-toolbar">
-      <div><FileStack size={15} aria-hidden="true"/><strong>資料一覧</strong><span className="dc-required-result-count">{filtered.length}件</span></div>
-      <span role="status" aria-live="polite" aria-atomic="true">{resultRange}</span>
-    </div>}
-    {collection.error ? <CollectionFeedback error={collection.error} onRetry={collection.retry}/>
-      : collection.loading ? <SectionSkeleton className="border-0" label="必要資料を読み込み中…" rows={5} showHeader={false}/>
-        : filtered.length ? view === 'list'
-          ? <RequiredList items={page.rows} selectedId={selectedId} referenceTime={referenceTime} onOpen={openDocument}/>
-          : <RequiredCards items={filtered} selectedId={selectedId} referenceTime={referenceTime} onOpen={openDocument}/>
-          : required.length ? <div className="dc-empty-results"><Search size={22}/><h3>該当する必要資料がありません</h3><p>検索または絞り込み条件を変更してください。</p></div>
-            : <div className="dc-required-empty"><p><strong>必要資料はまだありません。</strong><span>資料収集で「必要」と判断された資料がここに表示されます。</span></p><button type="button" className="dc-button dc-primary" onClick={onCandidates}>資料収集を開く</button></div>}
-
-    {resultsReady && view === 'list' && <footer className="dc-required-pagination">
-      <span>{page.range}</span>
-      <nav aria-label="必要資料一覧のページ切替">
-        <IconButton type="button" variant="secondary" size="md" aria-label="前のページ" disabled={page.page === 1 || !page.total} onClick={() => setPageNumber(page.page - 1)}><ChevronLeft size={16} aria-hidden="true"/></IconButton>
-        {page.total > 0 && page.numbers.map((number, index) => <span key={number}>
-          {index > 0 && number > page.numbers[index - 1] + 1 && <span className="dc-required-page-ellipsis" aria-hidden="true">…</span>}
-          <button type="button" className={page.page === number ? 'is-current' : ''} aria-label={`${number}ページ`} aria-current={page.page === number ? 'page' : undefined} onClick={() => setPageNumber(number)}>{number}</button>
-        </span>)}
-        <IconButton type="button" variant="secondary" size="md" aria-label="次のページ" disabled={page.page === page.pages || !page.total} onClick={() => setPageNumber(page.page + 1)}><ChevronRight size={16} aria-hidden="true"/></IconButton>
-      </nav>
-      <label>表示件数<select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPageNumber(1) }}>{REQUIRED_DOCUMENT_PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}</select></label>
-    </footer>}
-
-    {selectedId !== null && <RequiredDocumentInspector key={selectedId} caseId={caseId} itemId={selectedId} refreshKey={JSON.stringify([selectedItem?.updated_at, selectedItem?.workflow_state, selectedItem?.file_review, selectedItem?.active_task])} canUpdate={canUpdate} canManageTasks={canManageTasks} canReviewDocuments={canReviewDocuments} activities={activities} tasks={tasks} onCandidates={onCandidates} onHistory={onHistory} onClose={closeDocument} onSaved={() => { void refresh() }} onReviewed={refreshAfterReview} onCreateTask={() => onCreateTasks([selectedId])} onManageTask={onManageTasks} onOpenTask={onOpenTask}/>}
+    {selectedId !== null && <RequiredDocumentInspector key={selectedId} caseId={caseId} itemId={selectedId} refreshKey={JSON.stringify([selectedItem?.updated_at, selectedItem?.workflow_state, selectedItem?.file_review, selectedItem?.active_task])} canUpdate={canUpdate} canDecideNecessity={canDecideNecessity} canManageTasks={canManageTasks} canReviewDocuments={canReviewDocuments} activities={activities} tasks={tasks} onCandidates={onCandidates} onHistory={onHistory} onClose={closeDocument} onSaved={() => { void refresh() }} onReviewed={refreshAfterReview} onCreateTask={() => onCreateTasks([selectedId])} onManageTask={onManageTasks} onOpenTask={onOpenTask}/>}
   </div>
 }
 
@@ -190,8 +200,9 @@ function SummaryCard({ icon, label, value, tone }: { icon: React.ReactNode; labe
 }
 
 function RequiredList({ items, selectedId, referenceTime, onOpen }: { items: CollectionItem[]; selectedId: number | null; referenceTime: number; onOpen: (id: number) => void }) {
+  const { t } = useTranslation()
   return <div className="dc-required-list dc-required-work-list">
-    <div className="dc-required-head"><span>資料</span><span>状態</span><span>担当者</span><span>期限</span><span>ファイル</span><span>更新日時</span><span/></div>
+    <div className="dc-required-head"><span>資料</span><span>{t('cases.workspace.statusLabel')}</span><span>担当者</span><span>期限</span><span>ファイル</span><span>更新日時</span><span/></div>
     {items.map(item => <RequiredRow key={item.id} item={item} active={selectedId === item.id} referenceTime={referenceTime} onOpen={() => onOpen(item.id)}/>)}
   </div>
 }

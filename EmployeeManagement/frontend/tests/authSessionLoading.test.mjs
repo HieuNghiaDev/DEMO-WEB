@@ -6,6 +6,7 @@ import { compileFunction } from 'node:vm'
 import { resolve } from 'node:path'
 import ts from 'typescript'
 import { AuthFlow } from '../src/features/authentication/authFlow.ts'
+import { MFA_BACKUP_CODES_PATH } from '../src/utils/authNavigation.ts'
 
 const credentials = { email: 'synthetic@example.test', password: 'Synthetic-only!Password', remember: false }
 const user = id => ({ id, email: credentials.email, is_active: true, roles: [], role_names: [], permission_names: [], must_change_password: false })
@@ -20,7 +21,7 @@ function providerHarness(responses = [session()]) {
   const slots = [], effects = [], timers = new Map(), requests = []
   const events = new EventTarget()
   const pendingMe = deferred()
-  let cursor = 0, token = 'synthetic-old', timerId = 0, value
+  let cursor = 0, token = 'synthetic-old', timerId = 0, value, pathname = '/'
   const same = (left, right) => left && right && left.length === right.length && left.every((item, i) => Object.is(item, right[i]))
   const react = {
     createContext: () => ({ Provider: 'synthetic-provider' }),
@@ -43,6 +44,8 @@ function providerHarness(responses = [session()]) {
   const module = { exports: {} }
   compileFunction(compiled, ['require', 'module', 'exports', 'window', 'document'])(specifier => {
     if (specifier === 'react') return react
+    if (specifier === 'react-router-dom') return { ...localRequire(specifier), useLocation: () => ({ pathname }) }
+    if (specifier === '../utils/authNavigation') return { MFA_BACKUP_CODES_PATH }
     if (specifier === '../services/api') return { __esModule: true, default: api, hasAuthToken: () => token !== null, clearAuthToken: () => { token = null }, storeAuthToken: next => { token = next }, logoutCurrentSession: async () => { token = null } }
     if (specifier.endsWith('/authentication/authFlow')) return { AuthFlow }
     if (specifier.endsWith('/authentication/authApi')) return { authTransport: async () => { assert.ok(responses.length, 'Unexpected auth request'); return responses.shift() } }
@@ -51,6 +54,7 @@ function providerHarness(responses = [session()]) {
   const render = () => { cursor = 0; value = module.exports.AuthProvider({ children: null }).props.value }
   const flush = async () => { for (let i = 0; i < 8; i++) { render(); while (effects.length) effects.shift()(); await Promise.resolve() } return value }
   return { flush, pendingMe, requests, token: () => token,
+    navigate: next => { pathname = next },
     runBootstrapDelay() { for (const [id, timer] of timers) if (timer.delay === 600) { timers.delete(id); timer.callback() } },
     expire() { events.dispatchEvent(new Event('themis-auth-expired')) } }
 }
@@ -107,6 +111,38 @@ test('HTTP202 remains pre-auth; only OTP200 retires loading and commits an MFA s
   assert.equal(auth.isLoading, false)
   assert.equal(auth.user.id, 1)
   assert.equal(auth.requiresMfa, true)
+})
+
+test('confirmed settings enrollment retires the session and keeps codes only until leaving their Settings screen', async () => {
+  const codes = Array.from({ length: 10 }, (_, index) => index.toString(16).padStart(32, '0'))
+  const f = providerHarness()
+  const auth = await f.flush()
+  await auth.login(credentials)
+  const signedIn = await f.flush()
+  assert.equal(f.token(), 'synthetic-1')
+  assert.equal(signedIn.user.id, 1)
+  signedIn.completeMfaAction('codes', { recovery_codes: codes, reauthentication_required: true })
+  f.navigate(MFA_BACKUP_CODES_PATH)
+  const onCodesPage = await f.flush()
+  assert.equal(onCodesPage.user, null)
+  assert.equal(f.token(), null)
+  assert.equal(onCodesPage.authState.phase, 'recovery_codes')
+  assert.deepEqual(onCodesPage.authState.codes, codes)
+  f.navigate('/login')
+  const afterLeaving = await f.flush()
+  assert.deepEqual(afterLeaving.authState, { phase: 'idle', busy: false, error: '' })
+})
+
+test('login enrollment may hand off its one-time codes to Settings before clearing on exit', async () => {
+  const codes = Array.from({ length: 10 }, (_, index) => index.toString(16).padStart(32, '0'))
+  const f = providerHarness()
+  f.navigate('/login')
+  const auth = await f.flush()
+  auth.authFlow.receiveRecoveryCodes({ recovery_codes: codes, reauthentication_required: true })
+  f.navigate(MFA_BACKUP_CODES_PATH)
+  assert.deepEqual((await f.flush()).authState.codes, codes)
+  f.navigate('/activate-account')
+  assert.equal((await f.flush()).authState.codes, undefined)
 })
 
 for (const status of ['timeout', 401]) test(`current bootstrap ${status} preserves the network/authentication distinction`, async () => {

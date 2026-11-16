@@ -12,8 +12,8 @@ if (!import.meta.env.DEV) throw new Error('Development-only task creation verifi
 const task = (id: number, status: 'in_progress' | 'completed' | 'cancelled') => ({ id, status, due_at: '2026-10-10T10:00:00Z', assigned_employee: { id: 7, full_name: 'LE HIEU NGHIA' } })
 const initial: CaseTaskOptionsResponse = {
   employees: [{ id: 7, full_name: 'LE HIEU NGHIA', avatar_path: null, office_id: 1 }],
-  required_documents: ['委任契約書', '委任状（民事）', '本人確認資料', '既存の事件資料一式', 'その他資料'].map((title, index) => ({
-    id: index + 1, title, category: 'チェックリスト', has_existing_task: index > 0,
+  required_documents: ['委任契約書', '委任状（民事）', '本人確認資料', '既存の事件資料一式', 'その他資料', '事故状況報告書', '勤務記録'].map((title, index) => ({
+    id: index + 1, title, category: 'チェックリスト', has_existing_task: index > 0 && index < 5,
     document_type: { id: index + 1, code: `C-00${index + 1}`, name_ja: title },
     case_tasks: index === 1 ? [task(101, 'in_progress')] : index === 2 ? [task(102, 'completed')] : index === 3 ? [task(103, 'cancelled')] : [],
   })),

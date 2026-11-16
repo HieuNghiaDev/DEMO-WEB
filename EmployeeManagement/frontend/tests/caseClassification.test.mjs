@@ -59,7 +59,7 @@ test('review validation and final confirmation block missing/confidential classi
 test('new normal payload is explicit and preserves client/type/summary fields without DB booleans', () => {
   const payload = productionArrow(source, 'createPayload', {
     classification: 'normal', selectedClient: { id: 7 }, title: 'Synthetic case',
-    draft: { case_type_id: '5', summary: ' note ' }, canAssign: false,
+    draft: { case_type_id: '5', summary: ' note ' }, canAssign: false, canLoadDelegations: false,
   })()
   assert.deepEqual(payload, { classification: 'normal', client_id: 7, title: 'Synthetic case', case_type_id: 5, summary: 'note' })
   assert.equal('is_confidential' in payload, false)

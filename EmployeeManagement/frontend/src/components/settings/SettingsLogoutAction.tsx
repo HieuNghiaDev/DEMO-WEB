@@ -1,5 +1,6 @@
 import { LogOut } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { Button } from '../ui'
 
 export default function SettingsLogoutAction({ onClick, disabled = false }: {
   onClick: () => void
@@ -8,10 +9,17 @@ export default function SettingsLogoutAction({ onClick, disabled = false }: {
   const { t } = useTranslation()
 
   return (
-    <button type="button" onClick={onClick} disabled={disabled}
-      className="group flex h-11 w-full items-center gap-2.5 rounded-lg px-3 text-sm font-medium text-slate-600 transition-colors duration-200 hover:bg-rose-500/[0.07] hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none dark:text-slate-400 dark:hover:text-rose-300">
-      <LogOut size={18} className="shrink-0 text-slate-400 transition-colors group-hover:text-rose-600 dark:group-hover:text-rose-300" aria-hidden="true" />
+    <Button
+      type="button"
+      variant="secondary"
+      size="lg"
+      fullWidth
+      onClick={onClick}
+      disabled={disabled}
+      icon={<LogOut size={16} aria-hidden="true" />}
+      className="motion-reduce:transition-none lg:justify-start lg:px-3 lg:text-sm"
+    >
       {t('common.logout')}
-    </button>
+    </Button>
   )
 }

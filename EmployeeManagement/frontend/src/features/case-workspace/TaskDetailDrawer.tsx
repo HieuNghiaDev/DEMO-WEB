@@ -1,5 +1,6 @@
-import { CalendarDays, Check, ClipboardList, ClipboardPenLine, FileText, History, Info, Pencil, Play, Plus, RotateCcw, Upload, UserRound, WandSparkles } from 'lucide-react'
+import { CalendarDays, Check, ClipboardList, FileText, History, Inbox, Pencil, Plus, RotateCcw, Upload, UserRound, WandSparkles } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../../components/ui/Button'
 import { UserAvatar } from '../../components/ui/UserAvatar'
 import InspectorShell from '../document-collection/components/InspectorShell'
@@ -31,6 +32,7 @@ type EditAction = 'assignee' | 'deadline' | 'edit' | 'approve' | 'reject' | 'can
 export default function TaskDetailDrawer({ task, caseId, activities, canManage, canReview, working, error, onClose, onRefresh, ...handlers }: TaskActionHandlers & {
   task: CaseTask; caseId: number; activities: CaseActivity[]; canManage: boolean; canReview: boolean; working: boolean; error?: string | null; onClose: () => void; onRefresh?: () => void
 }) {
+  const { t } = useTranslation()
   const [tab, setTab] = useState<'details' | 'files' | 'history'>('details')
   const [action, setAction] = useState<EditAction | null>(null)
   const [preview, setPreview] = useState<DocumentPreviewTarget | null>(null)
@@ -123,11 +125,14 @@ export default function TaskDetailDrawer({ task, caseId, activities, canManage, 
           {files(2)}
           <section className="cm-task-detail-card is-actions">
             <div className={`cm-task-handling-head ${canStart ? 'can-start' : ''}`}>
-              <span className="cm-task-handling-icon"><ClipboardPenLine size={23} aria-hidden="true"/></span>
-              <div><h3>対応</h3>{canStart && <p>この資料の対応を開始し、担当者として処理を行います。</p>}</div>
-              {canStart && <Button variant="primary" className="cm-task-start-button" icon={<Play size={16} aria-hidden="true"/>} loading={working} aria-busy={working} aria-describedby={`task-start-help-${task.id}`} onClick={() => void handlers.onAccept(task)}>対応を開始</Button>}
+              <span className="cm-task-handling-icon"><ClipboardList size={21} aria-hidden="true"/></span>
+              <div>
+                <h3>{canStart ? t('cases.workspace.taskAcceptance.title') : '対応'}</h3>
+                {canStart && <p id={`task-start-help-${task.id}`}>{t('cases.workspace.taskAcceptance.help')}</p>}
+              </div>
+              {canStart && <Button variant="primary" className="cm-task-start-button" icon={<Inbox size={17} aria-hidden="true"/>} loading={working} aria-busy={working} aria-describedby={`task-start-help-${task.id}`} onClick={() => void handlers.onAccept(task)}>{t('cases.workspace.taskAcceptance.action')}</Button>}
             </div>
-            {canStart ? <p className="cm-task-start-help" id={`task-start-help-${task.id}`}><Info size={16} aria-hidden="true"/><span>対応を開始すると、ステータスが「対応中」に変更され、開始日時が履歴に記録されます。</span></p> : <div className="cm-task-handling-state" aria-live="polite">
+            {!canStart && <div className="cm-task-handling-state" aria-live="polite">
               <TaskStatusBadge status={task.status}/>
               <dl>{task.accepted_at && <><dt>対応開始日時</dt><dd>{formatDate(task.accepted_at, true)}</dd></>}<dt>担当者</dt><dd>{task.assigned_employee?.full_name ?? '未割当'}</dd></dl>
             </div>}

@@ -108,17 +108,15 @@
 .cm-task-handling-head { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-bottom: 12px; }
 .cm-task-handling-icon { display: grid; width: 36px; height: 40px; place-items: center; border: 1px solid color-mix(in srgb, var(--tm-primary) 25%, var(--tm-border)); border-radius: 9px; background: color-mix(in srgb, var(--tm-primary) 10%, var(--tm-surface)); color: var(--tm-primary-hover); }
 .cm-task-handling-head p { margin: 5px 0 0; color: var(--tm-text-secondary); font-size: 11.5px; line-height: 1.65; overflow-wrap: anywhere; }
-.cm-task-start-button { white-space: nowrap; font-size: 12px; padding-inline: 12px; }
+.cm-task-start-button { min-width: 96px; white-space: nowrap; font-weight: 600; }
 /* The existing light hover token gives small white CTA text sufficient contrast. */
 :root:not(.dark) .cm-task-start-button { background: var(--tm-primary-hover); }
 .cm-task-start-button:focus-visible { outline: 2px solid var(--tm-text-primary); outline-offset: 3px; box-shadow: none; }
-.cm-task-start-help { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 10px 12px; border: 1px solid var(--tm-border); border-radius: 8px; background: var(--tm-surface); color: var(--tm-text-secondary); font-size: 11.5px; line-height: 1.65; }
-.cm-task-start-help > svg { flex-shrink: 0; margin-top: 2px; color: var(--tm-primary-hover); }
+.cm-task-handling-head.can-start:has(+ .cm-task-action-grid:empty) { margin-bottom: 0; }
 .cm-task-handling-state { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 12px; }
 .cm-task-handling-state dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; min-width: 0; margin: 0; font-size: 11.5px; }
 .cm-task-handling-state dt { color: var(--tm-text-secondary); }
 .cm-task-handling-state dd { margin: 0; color: var(--tm-text-primary); overflow-wrap: anywhere; }
-.cm-task-handling-head.can-start ~ .cm-task-action-grid:not(:empty) { margin-top: 12px; }
 .cm-task-action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .cm-task-action-grid > button { min-width: 0; padding-inline: 8px; font-size: 12px; }
 .cm-task-action-grid > button:only-child { grid-column: 1 / -1; }

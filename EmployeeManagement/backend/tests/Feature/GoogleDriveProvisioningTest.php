@@ -24,6 +24,7 @@ class GoogleDriveProvisioningTest extends TestCase
         $client = Client::create(['name' => 'DRIVE DEMO TEST']);
         $caseFile = CaseFile::create(['title' => '交通事故', 'client_id' => $client->id]);
         $drive = Mockery::mock(GoogleDriveService::class);
+        $drive->shouldReceive('canWriteHistoryAttachments')->andReturnTrue();
         $drive->shouldReceive('configuredRootFolderId')->once()->andReturn('themis_root');
         $drive->shouldReceive('assertWritableFolder')->once()->with('themis_root');
         $drive->shouldReceive('ensureFolder')->once()->with('themis_root', 'Client', 'system:client_root', true)
@@ -34,6 +35,8 @@ class GoogleDriveProvisioningTest extends TestCase
             ->andReturn($this->folder('case_folder'));
         $drive->shouldReceive('ensureFolder')->once()->with('case_folder', '作成書類', 'case_file:'.$caseFile->id.':generated_documents')
             ->andReturn($this->folder('generated_folder'));
+        $drive->shouldReceive('ensureFolder')->once()->with('case_folder', '写真・連絡面談記録', 'case_file:'.$caseFile->id.':history_attachments')
+            ->andReturn($this->folder('history_folder'));
 
         $service = new GoogleDriveProvisioningService($drive);
         $first = $service->provisionCaseStructure($caseFile);
@@ -41,9 +44,9 @@ class GoogleDriveProvisioningTest extends TestCase
 
         $this->assertSame('case_folder', $first->external_folder_id);
         $this->assertSame($first->id, $again->id);
-        $this->assertDatabaseCount('external_storage_locations', 4);
+        $this->assertDatabaseCount('external_storage_locations', 5);
         $this->assertSame(1, ExternalStorageLocation::where('entity_type', 'client')->where('entity_id', $client->id)->count());
-        $this->assertSame(2, ExternalStorageLocation::where('entity_type', 'case_file')->where('entity_id', $caseFile->id)->count());
+        $this->assertSame(3, ExternalStorageLocation::where('entity_type', 'case_file')->where('entity_id', $caseFile->id)->count());
     }
 
     public function test_drive_failure_keeps_client_and_retry_can_succeed(): void

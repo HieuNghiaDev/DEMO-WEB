@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\CaseFile;
+use App\Services\CaseOperationalAccess;
+use App\Services\CaseWorkspaceAuditService;
 use App\Services\GoogleDriveProvisioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -47,9 +49,34 @@ class ClientController extends Controller
 
     public function update(Request $request, Client $client): JsonResponse
     {
+        if (CaseOperationalAccess::enforced()) {
+            $client = $this->updateAuthorizedClient($request, $client);
+            return response()->json(['client' => $client]);
+        }
         $client->update($this->validated($request, true));
 
         return response()->json(['client' => $client]);
+    }
+
+    public function updateOverview(Request $request, CaseFile $caseFile): JsonResponse
+    {
+        $client = $this->updateAuthorizedClient($request, $caseFile->client, $caseFile);
+        return response()->json(['client' => $client]);
+    }
+
+    private function updateAuthorizedClient(Request $request, Client $client, ?CaseFile $case = null): Client
+    {
+        return DB::transaction(function () use ($request, $client, $case): Client {
+            $client = Client::whereKey($client->id)->lockForUpdate()->firstOrFail();
+            $linkedCases = $client->caseFiles()->withTrashed()->orderBy('id')->lockForUpdate()->get(['id']);
+            abort_if($case && ! $linkedCases->contains('id', $case->id), 404);
+            abort_unless(CaseOperationalAccess::canEditClient($request->user()?->fresh(), $client), 403);
+            $client->update($this->validated($request, true));
+            if ($case && $client->wasChanged()) {
+                app(CaseWorkspaceAuditService::class)->record($case, $request, '依頼者情報を更新', null, ['event' => 'client.overview.updated']);
+            }
+            return $client;
+        });
     }
 
     public function destroy(Client $client): JsonResponse

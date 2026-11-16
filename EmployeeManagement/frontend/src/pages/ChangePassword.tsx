@@ -17,7 +17,7 @@ import {
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { SettingsSection, SettingsSecurityBackLink } from '../components/settings/SettingsSection';
+import { SettingsSection } from '../components/settings/SettingsSection';
 import { Button, IconButton } from '../components/ui';
 import { useAuth } from "../contexts/AuthContext";
 import StepUpDialog from '../features/authentication/StepUpDialog';
@@ -193,8 +193,7 @@ export default function ChangePassword({ inSettings = false }: { inSettings?: bo
     return (
       <>
         {stepUpDialog}
-        <SettingsSecurityBackLink />
-        <SettingsSection title="パスワードを変更" description="現在のパスワードを確認し、新しいパスワードを設定します。">
+        <SettingsSection icon={KeyRound} backToSecurity title="パスワードを変更" description="現在のパスワードを確認し、新しいパスワードを設定します。">
           <form className="space-y-4 px-4 py-4 sm:px-6" onSubmit={handleSubmit} aria-busy={isSubmitting}>
             <div className="max-w-md space-y-4">
               {passwordFields}

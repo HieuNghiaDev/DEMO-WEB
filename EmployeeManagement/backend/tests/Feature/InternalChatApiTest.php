@@ -10,6 +10,8 @@ use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Tests\Support\B21\B21TestCase;
@@ -31,6 +33,11 @@ class InternalChatApiTest extends B21TestCase
             'text' => $text,
             'client_message_id' => $key ?? (string) Str::uuid(),
         ]);
+    }
+
+    private function translate(int $id, string $pair = 'ja-vi')
+    {
+        return $this->postJson("/api/internal-chat/messages/$id/translations", ['pair' => $pair]);
     }
 
     public function test_guest_and_non_employee_are_denied(): void
@@ -345,6 +352,13 @@ class InternalChatApiTest extends B21TestCase
             ->assertJsonPath('message.japanese_content', '再試行成功')->assertJsonPath('message.original_text', 'Tin nhắn thử lại');
         $this->assertDatabaseHas('chat_message_actions', ['id' => $attempt, 'chat_message_id' => $id,
             'actor_user_id' => $this->actor->id, 'action' => 'retry']);
+        $this->actingAs($other);
+        $this->getJson($url)->assertOk()->assertJsonPath('message.japanese_content', null)
+            ->assertJsonCount(0, 'message.translations');
+        $this->getJson("/api/internal-chat/messages?after_id=$id&after_action_id=0")
+            ->assertJsonCount(0, 'message_actions')->assertJsonCount(0, 'translation_updates');
+        $this->translate($id)->assertOk()->assertJsonPath('translations.ja-vi.text', '再試行成功');
+        $this->assertSame(0, $queue->size(TranslateChatMessage::QUEUE));
     }
 
     public function test_receipts_require_recipient_acknowledgements_and_exclude_sender_and_inactive_members(): void
@@ -374,7 +388,8 @@ class InternalChatApiTest extends B21TestCase
         $this->patchJson('/api/internal-chat/delivered', ['message_id' => $id + 100])->assertNotFound();
         $this->patchJson('/api/internal-chat/delivered', ['message_id' => $id])->assertOk();
         $this->getJson('/api/internal-chat/unread')->assertJsonPath('unread_count', 1);
-        $this->getJson($delta)->assertJsonMissingPath("receipts.$id");
+        $this->getJson($delta)->assertJsonPath("receipts.$id.delivered_count", 0)
+            ->assertJsonPath("receipts.$id.readers", []);
 
         $this->actingAs($this->actor);
         $this->getJson($delta)->assertJsonPath("receipts.$id.delivered_count", 1)
@@ -391,6 +406,32 @@ class InternalChatApiTest extends B21TestCase
             ->assertJsonPath("receipts.$id.readers.1.user_id", $second->id)
             ->assertJsonMissingPath("receipts.$id.readers.0.email")
             ->assertJsonMissingPath("receipts.$id.readers.0.roles");
+        $this->actingAs($first);
+        $this->getJson($delta)->assertJsonPath("receipts.$id.delivered_count", 0)
+            ->assertJsonPath("receipts.$id.readers.0.user_id", $first->id)
+            ->assertJsonPath("receipts.$id.readers.1.user_id", $second->id);
+        $this->actingAs($inactive);
+        $this->getJson($delta)->assertUnauthorized();
+    }
+
+    public function test_first_unread_is_incoming_unseen_and_independent_of_the_latest_page(): void
+    {
+        $reader = $this->fixtureUser('unread-anchor', []);
+        $oldest = $this->send('First unread')->assertCreated()->json('message.id');
+        $recalled = $this->send('Recalled')->assertCreated()->json('message.id');
+        $latest = $this->send('Latest unread')->assertCreated()->json('message.id');
+        $this->patchJson("/api/internal-chat/messages/$recalled/recall")->assertOk();
+
+        $this->actingAs($reader);
+        $this->send('Own message')->assertCreated();
+        $this->getJson("/api/internal-chat/messages?limit=1&receipt_ids[]=$recalled")->assertOk()
+            ->assertJsonPath('unread_count', 2)->assertJsonPath('first_unread_id', $oldest)
+            ->assertJsonMissingPath("receipts.$recalled");
+        $this->patchJson('/api/internal-chat/delivered', ['message_id' => $latest])->assertOk();
+        $this->patchJson('/api/internal-chat/read', ['message_id' => $latest, 'visible_ids' => [$latest]])
+            ->assertOk()->assertJsonPath('unread_count', 1)->assertJsonPath('first_unread_id', $oldest);
+        $this->patchJson('/api/internal-chat/read', ['message_id' => $oldest, 'visible_ids' => [$oldest]])
+            ->assertOk()->assertJsonPath('unread_count', 0)->assertJsonPath('first_unread_id', null);
     }
 
     public function test_default_translation_is_pending_without_external_call(): void
@@ -442,53 +483,171 @@ class InternalChatApiTest extends B21TestCase
             ->assertJsonPath("receipts.$newer.read_count", 1);
     }
 
-    public function test_translation_success_is_isolated_behind_provider_contract(): void
+    public function test_on_demand_translation_visibility_is_per_user_and_cached_per_pair(): void
     {
         config(['chat_translation.provider' => 'gemini', 'chat_translation.gemini_key' => 'synthetic-only']);
-        $this->app->bind(ChatTranslationProvider::class, fn () => new class implements ChatTranslationProvider {
-            public function translate(string $originalText, string $sourceLanguage): array
-            {
-                return ['japanese_content' => '会議です。', 'vietnamese_content' => 'Có cuộc họp.', 'status' => 'completed',
-                    'error_category' => null, 'provider' => 'synthetic', 'provider_metadata' => ['request_id' => 'fake-only']];
-            }
-        });
+        Http::preventStrayRequests();
+        $geminiText = fn (string $text) => ['candidates' => [['finishReason' => 'STOP', 'content' => ['parts' => [['text' => $text]]]]]];
+        Http::fake(['https://generativelanguage.googleapis.com/*' => Http::sequence()
+            ->push($geminiText('Có cuộc họp.'))->push($geminiText("zh-Hans\n有会议。"))]);
         $key = (string) Str::uuid();
-        $id = $this->send('Có cuộc họp.', $key)->assertCreated()
-            ->assertJsonPath('message.translation_status', 'pending')->assertJsonPath('message.japanese_content', null)->json('message.id');
-        $this->send('Có cuộc họp.', $key)->assertCreated()->assertJsonPath('message.id', $id);
+        $id = $this->send('会議です。', $key)->assertCreated()
+            ->assertJsonPath('message.translation_provider', 'pending')->assertJsonCount(0, 'message.translations')->json('message.id');
+        $this->send('会議です。', $key)->assertCreated()->assertJsonPath('message.id', $id);
         $this->send('OK')->assertCreated()->assertJsonPath('message.translation_status', 'completed');
-        $queue = \Illuminate\Support\Facades\Queue::connection('database');
-        $this->assertSame(1, $queue->size(\App\Jobs\TranslateChatMessage::QUEUE));
-        $job = $queue->pop(\App\Jobs\TranslateChatMessage::QUEUE);
-        $this->assertStringNotContainsString('Có cuộc họp.', $job->getRawBody());
+        $queue = Queue::connection('database');
+        $this->assertSame(0, $queue->size(TranslateChatMessage::QUEUE));
+        $this->translate($id, 'ja-en')->assertUnprocessable();
+        $this->translate($id)->assertOk()->assertJsonPath('translations.ja-vi.status', 'pending');
+        $this->patchJson("/api/internal-chat/messages/$id/pin")->assertOk();
+        $other = $this->fixtureUser('chat-translation-recipient', []);
+        $this->actingAs($other);
+        $url = "/api/internal-chat/messages/$id";
+        $poll = "/api/internal-chat/messages?after_id=$id&translation_ids%5B%5D=$id";
+        $this->getJson($url)->assertOk()->assertJsonCount(0, 'message.translations');
+        $this->assertSame(1, $queue->size(TranslateChatMessage::QUEUE));
+        Http::assertNothingSent();
+        $job = $queue->pop(TranslateChatMessage::QUEUE);
+        $this->assertStringNotContainsString('会議です。', $job->getRawBody());
         $job->fire();
-        $job->delete();
-        $this->getJson("/api/internal-chat/messages?after_id=$id&translation_ids%5B%5D=$id")->assertOk()
-            ->assertJsonPath('translation_updates.0.id', $id)
-            ->assertJsonPath('translation_updates.0.translation_status', 'completed')
-            ->assertJsonPath('translation_updates.0.japanese_content', '会議です。')
-            ->assertJsonPath('translation_updates.0.vietnamese_content', 'Có cuộc họp.');
-        (new \App\Jobs\TranslateChatMessage($id))->failed(null);
-        $this->assertDatabaseHas('chat_messages', ['id' => $id, 'translation_status' => 'completed', 'original_text' => 'Có cuộc họp.']);
+        $this->getJson($url)->assertOk()->assertJsonPath('message.original_text', '会議です。')
+            ->assertJsonCount(0, 'message.translations');
+        $this->getJson('/api/internal-chat/pins')->assertOk()->assertJsonCount(0, 'messages.0.translations');
+        $this->getJson($poll)->assertOk()->assertJsonCount(0, 'translation_updates');
+        $this->getJson('/api/internal-chat/messages?before_id='.($id + 1))
+            ->assertOk()->assertJsonCount(0, 'messages.0.translations');
+
+        $this->translate($id)->assertOk()->assertJsonPath('translations.ja-vi.text', 'Có cuộc họp.');
+        $this->assertSame(0, $queue->size(TranslateChatMessage::QUEUE));
+        $this->translate($id, 'ja-zh')->assertOk()->assertJsonPath('translations.ja-zh.status', 'pending');
+        $this->assertSame(1, $queue->size(TranslateChatMessage::QUEUE));
+        $queue->pop(TranslateChatMessage::QUEUE)->fire();
+        $this->getJson($poll)->assertOk()
+            ->assertJsonPath('translation_updates.0.translations.ja-vi.text', 'Có cuộc họp.')
+            ->assertJsonPath('translation_updates.0.translations.ja-zh.text', '有会议。')
+            ->assertJsonPath('translation_updates.0.translations.ja-zh.language', 'zh-Hans')
+            ->assertJsonMissingPath('translation_updates.0.translation_provider_metadata');
+        $this->translate($id, 'ja-zh')->assertOk()->assertJsonPath('translations.ja-zh.status', 'completed');
+        $this->assertSame(0, $queue->size(TranslateChatMessage::QUEUE));
+        $this->actingAs($this->actor)->getJson($poll)->assertOk()
+            ->assertJsonPath('translation_updates.0.translations.ja-vi.text', 'Có cuộc họp.')
+            ->assertJsonMissingPath('translation_updates.0.translations.ja-zh');
+        $this->actingAs($other);
+        $this->patchJson("/api/internal-chat/messages/$id/hide")->assertOk();
+        $this->translate($id)->assertNotFound();
+        Http::assertSentCount(2);
+        $this->assertDatabaseHas('chat_messages', ['id' => $id, 'original_text' => '会議です。']);
     }
 
-    public function test_translation_failure_is_isolated_behind_provider_contract(): void
+    public function test_old_automatic_translation_jobs_do_not_call_the_provider(): void
     {
         config(['chat_translation.provider' => 'gemini', 'chat_translation.gemini_key' => 'synthetic-only']);
-        \Illuminate\Support\Facades\Queue::fake();
-        $this->app->bind(ChatTranslationProvider::class, fn () => new class implements ChatTranslationProvider {
-            public function translate(string $originalText, string $sourceLanguage): array
-            {
-                return ['japanese_content' => null, 'vietnamese_content' => $originalText, 'status' => 'failed',
-                    'error_category' => 'synthetic_timeout', 'provider' => 'synthetic', 'provider_metadata' => []];
-            }
-        });
+        Http::preventStrayRequests();
+        Http::fake();
         $id = $this->send('Tin nhắn khác.')->assertCreated()->assertJsonPath('message.translation_status', 'pending')->json('message.id');
-        (new \App\Jobs\TranslateChatMessage($id))->handle(app(ChatTranslationProvider::class));
+        DB::table('chat_messages')->where('id', $id)->update(['translation_provider' => 'gemini']);
+        (new TranslateChatMessage($id))->handle(app(ChatTranslationProvider::class));
+        Http::assertNothingSent();
         $this->getJson('/api/internal-chat/messages')->assertOk()
             ->assertJsonPath('messages.0.original_text', 'Tin nhắn khác.')
-            ->assertJsonPath('messages.0.translation_status', 'failed')
-            ->assertJsonPath('messages.0.translation_error_category', 'translation_unavailable');
+            ->assertJsonCount(0, 'messages.0.translations');
+    }
+
+    public function test_translation_retries_rate_limits_and_connection_timeouts_then_updates_polling(): void
+    {
+        $this->freezeTime();
+        config(['chat_translation.provider' => 'gemini', 'chat_translation.gemini_key' => 'synthetic-only']);
+        Http::preventStrayRequests();
+        Http::fake(['https://generativelanguage.googleapis.com/*' => Http::sequence()
+            ->push(['error' => 'synthetic provider error'], 429, ['Retry-After' => '90'])
+            ->pushFailedConnection('synthetic timeout')
+            ->push([], 504, ['Retry-After' => now()->addSeconds(1210)->utc()->toRfc7231String()])
+            ->push(['candidates' => [['finishReason' => 'STOP', 'content' => ['parts' => [['text' => '会議です。']]]]]])]);
+        $id = $this->send('Có cuộc họp.')->assertCreated()
+            ->assertJsonPath('message.original_text', 'Có cuộc họp.')
+            ->assertJsonPath('message.translation_status', 'pending')->json('message.id');
+        $this->translate($id)->assertOk();
+        $queue = Queue::connection('database');
+        $first = $queue->pop(TranslateChatMessage::QUEUE);
+        $this->assertGreaterThanOrEqual(3, $first->maxTries());
+        $first->fire();
+        $this->assertTrue($first->isReleased());
+        $this->getJson("/api/internal-chat/messages/$id")->assertOk()
+            ->assertJsonPath('message.original_text', 'Có cuộc họp.')
+            ->assertJsonPath('message.translations.ja-vi.status', 'pending');
+        $this->assertSame('provider_rate_limited', ChatMessage::findOrFail($id)->translation('ja-vi')['error_category']);
+        $this->travel(89)->seconds();
+        $this->assertNull($queue->pop(TranslateChatMessage::QUEUE));
+        $this->travel(1)->seconds();
+        $second = $queue->pop(TranslateChatMessage::QUEUE);
+        $this->assertSame(2, $second->attempts());
+        $second->fire();
+        $this->assertTrue($second->isReleased());
+        $this->assertSame('provider_connection_error', ChatMessage::findOrFail($id)->translation('ja-vi')['error_category']);
+        $this->travel(119)->seconds();
+        $this->assertNull($queue->pop(TranslateChatMessage::QUEUE));
+        $this->travel(1)->seconds();
+        $third = $queue->pop(TranslateChatMessage::QUEUE);
+        $this->assertSame(3, $third->attempts());
+        $third->fire();
+        $this->assertTrue($third->isReleased());
+        $this->assertSame('provider_timeout', ChatMessage::findOrFail($id)->translation('ja-vi')['error_category']);
+        $this->travel(999)->seconds();
+        $this->assertNull($queue->pop(TranslateChatMessage::QUEUE));
+        $this->travel(1)->seconds();
+        $queue->pop(TranslateChatMessage::QUEUE)->fire();
+        $this->assertSame(0, $queue->size(TranslateChatMessage::QUEUE));
+        $this->getJson("/api/internal-chat/messages?after_id=$id&translation_ids%5B%5D=$id")->assertOk()
+            ->assertJsonPath('translation_updates.0.translations.ja-vi.status', 'completed')
+            ->assertJsonPath('translation_updates.0.translations.ja-vi.text', '会議です。');
+        $this->assertNull(ChatMessage::findOrFail($id)->translation('ja-vi')['error_category']);
+        $this->assertDatabaseCount('chat_messages', 1);
+    }
+
+    public function test_translation_retry_is_bounded_and_recalled_messages_are_not_sent_again(): void
+    {
+        config(['chat_translation.provider' => 'gemini', 'chat_translation.gemini_key' => 'synthetic-only']);
+        Http::preventStrayRequests();
+        Http::fake(['https://generativelanguage.googleapis.com/*' => Http::response([], 429)]);
+        $queue = Queue::connection('database');
+        $id = $this->send()->assertCreated()->json('message.id');
+        $this->translate($id)->assertOk();
+        foreach ([30, 120, 900, 3600, 14400, 68400] as $delay) {
+            $job = $queue->pop(TranslateChatMessage::QUEUE);
+            $job->fire();
+            $this->assertTrue($job->isReleased());
+            $this->travel($delay)->seconds();
+        }
+        $queue->pop(TranslateChatMessage::QUEUE)->fire();
+        $this->assertSame(0, $queue->size(TranslateChatMessage::QUEUE));
+        $this->assertSame('failed', ChatMessage::findOrFail($id)->translation('ja-vi')['status']);
+        $this->assertSame('provider_rate_limited', ChatMessage::findOrFail($id)->translation('ja-vi')['error_category']);
+        Http::assertSentCount(7);
+
+        $recalledId = $this->send()->assertCreated()->json('message.id');
+        $this->translate($recalledId)->assertOk();
+        $queue->pop(TranslateChatMessage::QUEUE)->fire();
+        $this->patchJson("/api/internal-chat/messages/$recalledId/recall")->assertOk();
+        $this->translate($recalledId)->assertNotFound();
+        $this->travel(30)->seconds();
+        $queue->pop(TranslateChatMessage::QUEUE)->fire();
+        $this->assertSame(0, $queue->size(TranslateChatMessage::QUEUE));
+        Http::assertSentCount(8);
+    }
+
+    public function test_translation_does_not_retry_a_permanent_provider_error(): void
+    {
+        config(['chat_translation.provider' => 'gemini', 'chat_translation.gemini_key' => 'synthetic-only']);
+        Http::preventStrayRequests();
+        Http::fake(['https://generativelanguage.googleapis.com/*' => Http::response([], 403)]);
+        $id = $this->send()->assertCreated()->json('message.id');
+        $this->translate($id)->assertOk();
+        $queue = Queue::connection('database');
+        $queue->pop(TranslateChatMessage::QUEUE)->fire();
+        $this->assertSame(0, $queue->size(TranslateChatMessage::QUEUE));
+        $this->assertSame('failed', ChatMessage::findOrFail($id)->translation('ja-vi')['status']);
+        $this->assertSame('translation_unavailable', ChatMessage::findOrFail($id)->translation('ja-vi')['error_category']);
+        Http::assertSentCount(1);
     }
 
     public function test_invalid_payload_does_not_write(): void

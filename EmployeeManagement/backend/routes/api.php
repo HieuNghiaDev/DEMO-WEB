@@ -138,6 +138,11 @@ Route::middleware([
         'resetPassword',
     ])->middleware('permission:employee.reset_password', 'throttle:password-reset');
 
+    Route::post('/employees/{employee}/activation-invite', [
+        OrganizationController::class,
+        'issueActivationInvite',
+    ])->middleware('throttle:5,1,activation-invite:');
+
     Route::get('/notifications', [
         EmployeeNotificationController::class,
         'index',
@@ -158,6 +163,8 @@ Route::middleware([
         Route::post('/messages', [InternalChatController::class, 'store'])->middleware('throttle:internal-chat-send');
         Route::get('/pins', [InternalChatController::class, 'pins']);
         Route::get('/messages/{message}', [InternalChatController::class, 'show'])->whereNumber('message');
+        Route::post('/messages/{message}/translations', [InternalChatController::class, 'translate'])
+            ->whereNumber('message')->middleware('throttle:internal-chat-send');
         Route::get('/messages/{message}/attachments/{attachment}', [InternalChatController::class, 'downloadAttachment'])
             ->whereNumber(['message', 'attachment']);
         Route::patch('/messages/{message}/{action}', [InternalChatController::class, 'messageAction'])
@@ -226,6 +233,8 @@ Route::middleware([
     Route::apiResource('case-files', CaseFileController::class)
         ->only(['store'])
         ->middleware('permission:case.create');
+    Route::get('/case-task-delegation-candidates', [CaseFileController::class, 'delegationCandidates'])
+        ->middleware('permission:case.create');
     Route::apiResource('case-files', CaseFileController::class)
         ->only(['update'])
         ->middleware('permission:case.update');
@@ -248,6 +257,8 @@ Route::middleware([
         ->middleware('permission:case.view');
 
     Route::prefix('case-files/{caseFile}')->group(function () {
+        Route::get('task-delegations', [CaseFileController::class, 'taskDelegations'])->middleware('permission:case.assign');
+        Route::put('task-delegations', [CaseFileController::class, 'replaceTaskDelegations'])->middleware('permission:case.assign');
         Route::prefix('interpretation-requests')->controller(\App\Http\Controllers\Api\InterpretationRequestController::class)->group(function () {
             Route::get('/', 'index')->middleware('permission:interpretation.view');
             Route::get('options', 'options')->middleware('permission:interpretation.view');
@@ -273,7 +284,7 @@ Route::middleware([
         Route::post('document-collection/{caseDocument}/received-documents', [CaseDocumentCollectionController::class, 'storeReceivedDocument'])
             ->middleware('permission:case.view');
         Route::post('document-collection/{caseDocument}/file-review', [CaseDocumentCollectionController::class, 'reviewFile'])
-            ->middleware(['permission:case.view', 'permission:task.review']);
+            ->middleware('permission:case.view');
         Route::get('document-collection/{caseDocument}/creation', [CaseDocumentCreationController::class, 'show'])
             ->middleware('permission:case.view');
         Route::patch('document-collection/{caseDocument}/creation/draft', [CaseDocumentCreationController::class, 'saveDraft'])
@@ -309,7 +320,8 @@ Route::middleware([
         Route::get('workspace', [CaseWorkspaceController::class, 'show'])
             ->middleware('permission:case.view');
         Route::patch('incident', [CaseWorkspaceController::class, 'updateIncident'])
-            ->middleware('permission:case.update');
+            ->middleware('permission:case.view');
+        Route::patch('client-overview', [ClientController::class, 'updateOverview'])->middleware('permission:case.view');
         Route::post('apply-document-template', [CaseWorkspaceController::class, 'applyTemplate'])
             ->middleware('permission:document.create');
         Route::post('parties', [CaseWorkspaceItemController::class, 'storeParty'])->middleware('permission:case.update');
@@ -318,24 +330,31 @@ Route::middleware([
         Route::post('deadlines', [CaseWorkspaceItemController::class, 'storeDeadline'])->middleware('permission:case.update');
         Route::patch('deadlines/{deadline}', [CaseWorkspaceItemController::class, 'updateDeadline'])->middleware('permission:case.update');
         Route::delete('deadlines/{deadline}', [CaseWorkspaceItemController::class, 'destroyDeadline'])->middleware('permission:case.update');
-        Route::post('case-tasks', [CaseWorkspaceItemController::class, 'storeTask'])->middleware('permission:task.manage,task.create');
+        Route::post('case-tasks', [CaseWorkspaceItemController::class, 'storeTask'])->middleware('permission:case.view');
         Route::get('case-tasks', [CaseWorkspaceItemController::class, 'indexTasks'])->middleware('permission:case.view');
-        Route::get('case-tasks/options', [CaseWorkspaceItemController::class, 'taskOptions'])->middleware('permission:task.manage');
+        Route::get('case-tasks/options', [CaseWorkspaceItemController::class, 'taskOptions'])->middleware('permission:case.view');
         Route::get('case-tasks/{task}', [CaseWorkspaceItemController::class, 'showTask'])->middleware('permission:case.view');
-        Route::post('case-tasks/batch', [CaseWorkspaceItemController::class, 'storeTaskBatch'])->middleware('permission:task.manage');
+        Route::post('case-tasks/batch', [CaseWorkspaceItemController::class, 'storeTaskBatch'])->middleware('permission:case.view');
         Route::post('case-tasks/{task}/accept', [CaseWorkspaceItemController::class, 'acceptTask'])->middleware('permission:task.update');
         Route::post('case-tasks/{task}/submissions', [CaseWorkspaceItemController::class, 'submitTask'])->middleware('permission:task.update');
-        Route::post('case-tasks/{task}/submissions/{submission}/approve', [CaseWorkspaceItemController::class, 'approveTaskSubmission'])->middleware('permission:task.review');
-        Route::post('case-tasks/{task}/submissions/{submission}/reject', [CaseWorkspaceItemController::class, 'rejectTaskSubmission'])->middleware('permission:task.review');
+        Route::post('case-tasks/{task}/submissions/{submission}/approve', [CaseWorkspaceItemController::class, 'approveTaskSubmission'])->middleware('permission:case.view');
+        Route::post('case-tasks/{task}/submissions/{submission}/reject', [CaseWorkspaceItemController::class, 'rejectTaskSubmission'])->middleware('permission:case.view');
         Route::patch('case-tasks/{task}', [CaseWorkspaceItemController::class, 'updateTask'])->middleware('permission:task.manage');
         Route::delete('case-tasks/{task}', [CaseWorkspaceItemController::class, 'destroyTask'])->middleware('permission:task.manage');
         Route::post('activities', [CaseWorkspaceItemController::class, 'storeActivity'])->middleware('permission:case.update');
         Route::get('history', [\App\Http\Controllers\Api\CaseHistoryController::class, 'index'])->middleware('permission:case.view');
         Route::get('history/options', [\App\Http\Controllers\Api\CaseHistoryController::class, 'options'])->middleware('permission:case.view');
+        Route::prefix('history/uploads')->middleware(['permission:case.view', 'permission:case.update', 'throttle:180,1'])->group(function () {
+            Route::post('/', [\App\Http\Controllers\Api\CaseHistoryController::class, 'startAttachmentUpload']);
+            Route::post('{upload}', [\App\Http\Controllers\Api\CaseHistoryController::class, 'appendAttachmentChunk'])->whereUuid('upload');
+            Route::delete('{upload}', [\App\Http\Controllers\Api\CaseHistoryController::class, 'discardAttachmentUpload'])->whereUuid('upload');
+        });
         Route::post('communications', [\App\Http\Controllers\Api\CaseHistoryController::class, 'store'])->middleware(['permission:case.view', 'permission:case.update']);
         Route::get('communications/{communication}', [\App\Http\Controllers\Api\CaseHistoryController::class, 'show'])->middleware('permission:case.view');
+        Route::get('communications/{communication}/attachments/{attachment}', [\App\Http\Controllers\Api\CaseHistoryController::class, 'attachment'])
+            ->whereUuid('attachment')->middleware('permission:case.view');
         Route::patch('communications/{communication}', [\App\Http\Controllers\Api\CaseHistoryController::class, 'update'])->middleware(['permission:case.view', 'permission:case.update']);
-        Route::post('communications/{communication}/task', [\App\Http\Controllers\Api\CaseHistoryController::class, 'task'])->middleware(['permission:case.view', 'permission:case.update', 'permission:task.manage']);
+        Route::post('communications/{communication}/task', [\App\Http\Controllers\Api\CaseHistoryController::class, 'task'])->middleware('permission:case.view');
         Route::post('custom-sections', [CaseCustomSectionController::class, 'store'])
             ->middleware('permission:case.update');
         Route::patch('custom-sections/{customSection}', [CaseCustomSectionController::class, 'update'])

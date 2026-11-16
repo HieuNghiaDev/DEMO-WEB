@@ -1,10 +1,13 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { Briefcase, Calendar, Car, CheckCircle2, ChevronRight, FilePlus, FileText, FolderOpen, Mail, MapPin, NotebookPen, Phone, Search, User, UserRound, Users, X } from 'lucide-react'
-import { caseApi, caseError } from './api'
+import { caseApi, caseError, type CaseDelegationCandidate, type CaseTaskDelegation } from './api'
+import CaseTaskDelegationFields from './CaseTaskDelegationFields'
+import { caseTaskDelegationPermissions, selectedCaseDelegations } from './caseTaskDelegation'
 import { classificationError, caseTypeOptions, generatedCaseTitle, newClientDraft, newDraft, validateClient } from './helpers'
 import type { CaseClassification, CaseClient, CaseDraft, CaseEmployee, CaseFieldErrors, CaseTypeOption, CaseViewer, ClientDraft } from './types'
 import CaseClassificationField from './CaseClassificationField'
 import { ButtonSpinner, SectionSkeleton } from '../../components/loading'
+import './newCaseDialog.css'
 
 type Props = { user: CaseViewer; onClose: () => void; onCreated: (id: number) => void }
 const canonicalNames = new Set(['労災', '交通事故'])
@@ -20,13 +23,17 @@ const normalizeBirthDate = (value: string): string | null => {
 
 // Icon map for case type cards
 const caseTypeIcon = (name: string) =>
-  name === '労災' ? <Briefcase size={22} /> : name === '交通事故' ? <Car size={22} /> : <FileText size={22} />
+  name === '労災' ? <Briefcase size={20} /> : name === '交通事故' ? <Car size={20} /> : <FileText size={20} />
 
 export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
   const dialog = useRef<HTMLDialogElement>(null)
   const form = useRef<HTMLFormElement>(null)
   const submitLock = useRef(false)
   const canAssign = (user?.permission_names.includes('case.assign') ?? false) && (user?.permission_names.includes('employee.view') ?? false)
+  const canLoadDelegations = canAssign && (user?.role_names.some(role => role === 'lawyer' || role === 'admin') ?? false)
+  const [delegationCandidates, setDelegationCandidates] = useState<CaseDelegationCandidate[] | null>(null)
+  const [delegations, setDelegations] = useState<CaseTaskDelegation[]>([])
+  const [delegationError, setDelegationError] = useState('')
   const [clients, setClients] = useState<CaseClient[]>([])
   const [types, setTypes] = useState<CaseTypeOption[]>([])
   const [employees, setEmployees] = useState<CaseEmployee[]>([])
@@ -56,6 +63,16 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [canAssign, retry])
+  useEffect(() => {
+    if (!canLoadDelegations) return
+    let active = true
+    void caseApi.delegationCandidates().then(rows => {
+      if (active) setDelegationCandidates(rows)
+    }).catch(() => {
+      if (active) setDelegationError('委任権限の候補を取得できませんでした。案件の作成後に設定できます。')
+    })
+    return () => { active = false }
+  }, [canLoadDelegations])
 
   const options = useMemo(() => caseTypeOptions(types), [types])
   const quickTypes = useMemo(() => options.filter(option => !option.parent_id && canonicalNames.has(option.name)), [options])
@@ -69,6 +86,7 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
   const selectedEmployee = employees.find(employee => String(employee.id) === draft.assigned_employee_id)
   const clientName = selectedClient?.name ?? clientDraft.name
   const title = generatedCaseTitle(clientName, selectedType?.name ?? '')
+  const activeDelegations = selectedCaseDelegations(delegations)
 
   const changeClient = <K extends keyof ClientDraft>(key: K, value: ClientDraft[K]) => {
     setClientDraft(current => ({ ...current, [key]: value }))
@@ -104,6 +122,7 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
     case_type_id: Number(draft.case_type_id),
     summary: draft.summary.trim() || null,
     ...(canAssign && draft.assigned_employee_id ? { assigned_employee_id: Number(draft.assigned_employee_id) } : {}),
+    ...(canLoadDelegations && activeDelegations.length ? { task_delegations: activeDelegations } : {}),
   })
   const confirmCreate = async () => {
     if (submitLock.current || !validateForReview()) return
@@ -124,28 +143,46 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
     {/* ── Sticky header ── */}
     <header className="cm-ncf-header">
       <div className="cm-ncf-header-intro">
-        <span className="cm-ncf-header-icon" aria-hidden="true"><FilePlus size={28}/></span>
+        <span className="cm-ncf-header-icon" aria-hidden="true"><FilePlus size={20}/></span>
         <div className="cm-ncf-header-text">
-          <h2 id="new-case-title">新規案件</h2>
+          <div className="cm-ncf-header-title-row">
+            <h2 id="new-case-title">新規案件</h2>
+            <span className="cm-ncf-header-badge">NEW CASE</span>
+          </div>
           <p>依頼者と案件の基本情報を登録します。</p>
         </div>
       </div>
-      <button type="button" className="cm-ncf-close-btn" aria-label="閉じる" disabled={saving} onClick={close}><X size={18}/></button>
+      <button type="button" className="cm-ncf-close-btn" aria-label="閉じる" disabled={saving} onClick={close}><X size={17}/></button>
     </header>
 
     {loading ? <SectionSkeleton className="m-5 border-0" label="入力フォームを準備中…" rows={4} /> : loadError ? (
       <div role="alert" className="cm-new-case-state cm-message">{loadError}<button type="button" className="dc-button" onClick={() => { setLoading(true); setLoadError(''); setRetry(value => value + 1) }}>再試行</button></div>
     ) : (
       <form ref={form} noValidate className="cm-ncf-form" onSubmit={event => { event.preventDefault(); if (validateForReview()) setReviewing(true) }}>
-        <fieldset disabled={saving}>
+        <fieldset disabled={saving} className="cm-ncf-fieldset">
           {error && <p role="alert" className="cm-ncf-error-banner">{error}</p>}
 
           {/* ── Section 01: 依頼者 ── */}
           <section className="cm-ncf-section" aria-labelledby="ncf-client-heading">
             <div className="cm-ncf-section-head">
-              <span className="cm-ncf-num-badge">01</span>
-              <span className="cm-ncf-section-icon"><User size={14}/></span>
-              <div><h3 id="ncf-client-heading">依頼者</h3><p>依頼者（お客様）の基本情報を入力してください。</p></div>
+              <div className="cm-ncf-section-title-group">
+                <span className="cm-ncf-num-badge">01</span>
+                <div>
+                  <h3 id="ncf-client-heading">依頼者</h3>
+                  <p>依頼者（お客様）の基本情報を入力してください。</p>
+                </div>
+              </div>
+
+              {!selectedClient && (
+                <div className="cm-ncf-segment" role="group" aria-label="依頼者区分">
+                  <button type="button" className={`cm-ncf-segment-btn${clientDraft.client_type === 'individual' ? ' is-active' : ''}`} aria-pressed={clientDraft.client_type === 'individual'} onClick={() => changeClient('client_type', 'individual')}>
+                    <User size={13}/>個人
+                  </button>
+                  <button type="button" className={`cm-ncf-segment-btn${clientDraft.client_type === 'corporate' ? ' is-active' : ''}`} aria-pressed={clientDraft.client_type === 'corporate'} onClick={() => changeClient('client_type', 'corporate')}>
+                    <Users size={13}/>組織
+                  </button>
+                </div>
+              )}
             </div>
 
             {selectedClient ? (
@@ -159,11 +196,11 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
               </div>
             ) : (
               <div className="cm-ncf-fields">
-                {/* 氏名 / 組織名 — full width, with search */}
+                {/* 氏名 / 組織名 — with live search */}
                 <label className="cm-ncf-field cm-ncf-field--search-wrap">
                   <span className="cm-ncf-label">{clientDraft.client_type === 'corporate' ? '組織名' : '氏名'} <em className="cm-ncf-required">*</em></span>
                   <div className="cm-ncf-input-icon-wrap">
-                    <span className="cm-ncf-input-icon cm-ncf-input-icon--left"><User size={15}/></span>
+                    <span className="cm-ncf-input-icon cm-ncf-input-icon--left"><User size={14}/></span>
                     <input {...common('name')} className="cm-ncf-input cm-ncf-input--icon-l" autoComplete="name" maxLength={255}
                       value={clientDraft.name}
                       placeholder={clientDraft.client_type === 'corporate' ? '例：THEMIS合同事務所' : '例：NGUYEN VAN A'}
@@ -195,23 +232,10 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
                   <span className="cm-ncf-label">生年月日</span>
                   <div className="cm-ncf-input-icon-wrap">
                     <span className="cm-ncf-input-icon cm-ncf-input-icon--left"><Calendar size={14}/></span>
-                    <input type="text" inputMode="numeric" className="cm-ncf-input cm-ncf-input--icon-l" id="ncf-dob" value={dob} onChange={event => { setDob(event.target.value); setFields(current => { const next = { ...current }; delete next['client.birth_date']; return next }) }} placeholder="年 / 月 / 日" autoComplete="bday" aria-invalid={!!fields['client.birth_date']}/>
+                    <input type="text" inputMode="numeric" className="cm-ncf-input cm-ncf-input--icon-l" id="ncf-dob" value={dob} onChange={event => { setDob(event.target.value); setFields(current => { const next = { ...current }; delete next['client.birth_date']; return next }) }} placeholder="例：1995/04/15" autoComplete="bday" aria-invalid={!!fields['client.birth_date']}/>
                   </div>
                   {errorFor('client.birth_date')}
                 </label>
-
-                {/* 依頼者区分 segmented control */}
-                <div className="cm-ncf-field">
-                  <span className="cm-ncf-label">依頼者区分</span>
-                  <div className="cm-ncf-segment" role="group" aria-label="依頼者区分">
-                    <button type="button" className={`cm-ncf-segment-btn${clientDraft.client_type === 'individual' ? ' is-active' : ''}`} aria-pressed={clientDraft.client_type === 'individual'} onClick={() => changeClient('client_type', 'individual')}>
-                      <User size={13}/>個人
-                    </button>
-                    <button type="button" className={`cm-ncf-segment-btn${clientDraft.client_type === 'corporate' ? ' is-active' : ''}`} aria-pressed={clientDraft.client_type === 'corporate'} onClick={() => changeClient('client_type', 'corporate')}>
-                      <Users size={13}/>組織
-                    </button>
-                  </div>
-                </div>
 
                 {/* 電話番号 */}
                 <label className="cm-ncf-field">
@@ -233,8 +257,8 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
                   {errorFor('email')}
                 </label>
 
-                {/* 住所 — full width */}
-                <label className="cm-ncf-field cm-ncf-field--full">
+                {/* 住所 */}
+                <label className="cm-ncf-field">
                   <span className="cm-ncf-label">住所</span>
                   <div className="cm-ncf-input-icon-wrap">
                     <span className="cm-ncf-input-icon cm-ncf-input-icon--left"><MapPin size={14}/></span>
@@ -249,78 +273,106 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
           {/* ── Section 02: 案件 ── */}
           <section className="cm-ncf-section" aria-labelledby="ncf-case-heading">
             <div className="cm-ncf-section-head">
-              <span className="cm-ncf-num-badge">02</span>
-              <span className="cm-ncf-section-icon"><FolderOpen size={16}/></span>
-              <div><h3 id="ncf-case-heading">案件</h3><p>案件の種類を選択してください。</p></div>
-            </div>
-
-            <CaseClassificationField value={classification} error={fields.classification} onChange={value => {
-              setClassification(value)
-              setFields(current => { const next = { ...current }; delete next.classification; return next })
-            }}/>
-
-            {/* Case type cards */}
-            <div className="cm-ncf-type-grid" role="group" aria-label="事件類型">
-              {quickTypes.map(type => (
-                <button type="button" key={type.id}
-                  className={`cm-ncf-type-card${draft.case_type_id === String(type.id) ? ' is-selected' : ''}`}
-                  aria-pressed={draft.case_type_id === String(type.id)}
-                  onClick={() => changeCase('case_type_id', String(type.id))}>
-                  <span className="cm-ncf-type-icon">{caseTypeIcon(type.name)}</span>
-                  <span className="cm-ncf-type-name">{type.name}</span>
-                  <span className="cm-ncf-type-sub">{type.name === '労災' ? '労働・通勤事故' : '交通事故案件'}</span>
-                  {draft.case_type_id === String(type.id) && <span className="cm-ncf-type-check"><CheckCircle2 size={15}/></span>}
-                </button>
-              ))}
-            </div>
-            {quickTypes.length === 0 && <p role="alert" className="cm-field-error">利用できる事件類型を取得できませんでした。</p>}
-            {errorFor('case_type_id')}
-
-            {/* 担当者 selector */}
-            <div className="cm-ncf-assignee-wrap">
-              <span className="cm-ncf-label">担当者</span>
-              <div className="cm-assignee-picker">
-                <button type="button"
-                  className="cm-ncf-assignee-btn"
-                  disabled={!canAssign}
-                  aria-expanded={pickerOpen}
-                  onClick={() => setPickerOpen(open => !open)}>
-                  <span className="cm-ncf-assignee-inner">
-                    <span className="cm-ncf-assignee-icon"><UserRound size={16}/></span>
-                    <span className="cm-ncf-assignee-name">{selectedEmployee?.full_name ?? '担当者を選択'}</span>
-                    {selectedEmployee && <span className="cm-ncf-assignee-dept">{[selectedEmployee.department?.name, selectedEmployee.position_title].filter(Boolean).join(' · ')}</span>}
-                  </span>
-                  <ChevronRight size={16} className={`cm-ncf-assignee-chevron${pickerOpen ? ' is-open' : ''}`}/>
-                </button>
-                {!canAssign && <p className="cm-ncf-assignee-hint">担当者は作成後に権限を持つユーザーが設定できます。</p>}
-                {pickerOpen && (
-                  <div className="cm-assignee-popover">
-                    <div className="cm-search-control"><Search size={15}/><input aria-label="担当者を検索" value={employeeQuery} placeholder="社員を検索" onChange={event => setEmployeeQuery(event.target.value)}/></div>
-                    <button type="button" onClick={() => { changeCase('assigned_employee_id', ''); setPickerOpen(false) }}>未割当</button>
-                    {matchingEmployees.map(employee => (
-                      <button type="button" key={employee.id} onClick={() => { changeCase('assigned_employee_id', String(employee.id)); setPickerOpen(false) }}>
-                        <strong>{employee.full_name}</strong>
-                        <span>{[employee.department?.name, employee.position_title].filter(Boolean).join(' · ')}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+              <div className="cm-ncf-section-title-group">
+                <span className="cm-ncf-num-badge">02</span>
+                <div>
+                  <h3 id="ncf-case-heading">案件</h3>
+                  <p>案件区分・事件類型・担当者を選択してください。</p>
+                </div>
               </div>
+              {title && (
+                <span className="cm-ncf-preview-chip" title={title}>
+                  <FolderOpen size={12} aria-hidden="true" />
+                  <span>{title}</span>
+                </span>
+              )}
+            </div>
+
+            <div className="cm-ncf-case-stack">
+              <CaseClassificationField value={classification} error={fields.classification} onChange={value => {
+                setClassification(value)
+                setFields(current => { const next = { ...current }; delete next.classification; return next })
+              }}/>
+
+              {/* Case type cards */}
+              <div className="cm-ncf-field">
+                <span className="cm-ncf-label">事件類型 <em className="cm-ncf-required">*</em></span>
+                <div className="cm-ncf-type-grid" role="group" aria-label="事件類型">
+                  {quickTypes.map(type => (
+                    <button type="button" key={type.id}
+                      className={`cm-ncf-type-card${draft.case_type_id === String(type.id) ? ' is-selected' : ''}`}
+                      aria-pressed={draft.case_type_id === String(type.id)}
+                      onClick={() => changeCase('case_type_id', String(type.id))}>
+                      <span className="cm-ncf-type-icon">{caseTypeIcon(type.name)}</span>
+                      <span className="cm-ncf-type-name">{type.name}</span>
+                      <span className="cm-ncf-type-sub">{type.name === '労災' ? '労働・通勤事故' : '交通事故案件'}</span>
+                      {draft.case_type_id === String(type.id) && <span className="cm-ncf-type-check"><CheckCircle2 size={15}/></span>}
+                    </button>
+                  ))}
+                </div>
+                {quickTypes.length === 0 && <p role="alert" className="cm-field-error">利用できる事件類型を取得できませんでした。</p>}
+                {errorFor('case_type_id')}
+              </div>
+
+              {/* 担当者 selector */}
+              <div className="cm-ncf-assignee-wrap">
+                <span className="cm-ncf-label">担当者 <small className="cm-ncf-optional">任意</small></span>
+                <div className="cm-assignee-picker">
+                  <button type="button"
+                    className="cm-ncf-assignee-btn"
+                    disabled={!canAssign}
+                    aria-expanded={pickerOpen}
+                    onClick={() => setPickerOpen(open => !open)}>
+                    <span className="cm-ncf-assignee-inner">
+                      <span className="cm-ncf-assignee-icon"><UserRound size={15}/></span>
+                      <span className="cm-ncf-assignee-name">{selectedEmployee?.full_name ?? '担当者を選択（未割当）'}</span>
+                      {selectedEmployee && <span className="cm-ncf-assignee-dept">{[selectedEmployee.department?.name, selectedEmployee.position_title].filter(Boolean).join(' · ')}</span>}
+                    </span>
+                    <ChevronRight size={15} className={`cm-ncf-assignee-chevron${pickerOpen ? ' is-open' : ''}`}/>
+                  </button>
+                  {!canAssign && <p className="cm-ncf-assignee-hint">担当者は作成後に権限を持つユーザーが設定できます。</p>}
+                  {pickerOpen && (
+                    <div className="cm-assignee-popover">
+                      <div className="cm-search-control"><Search size={14}/><input aria-label="担当者を検索" value={employeeQuery} placeholder="社員を検索" onChange={event => setEmployeeQuery(event.target.value)}/></div>
+                      <div className="cm-assignee-list">
+                        <button type="button" className={!draft.assigned_employee_id ? 'is-selected' : ''} onClick={() => { changeCase('assigned_employee_id', ''); setPickerOpen(false) }}>
+                          <strong>未割当</strong>
+                          <span>担当者を指定せずに作成</span>
+                        </button>
+                        {matchingEmployees.map(employee => (
+                          <button type="button" key={employee.id} className={draft.assigned_employee_id === String(employee.id) ? 'is-selected' : ''} onClick={() => { changeCase('assigned_employee_id', String(employee.id)); setPickerOpen(false) }}>
+                            <strong>{employee.full_name}</strong>
+                            <span>{[employee.department?.name, employee.position_title].filter(Boolean).join(' · ')}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {canLoadDelegations && delegationCandidates && <CaseTaskDelegationFields candidates={delegationCandidates} rows={delegations} onChange={setDelegations}/>}
+              {canLoadDelegations && delegationError && <p role="status" className="cm-ncf-assignee-hint">{delegationError}</p>}
+              {errorFor('task_delegations')}
             </div>
           </section>
 
-          {/* ── Section 04: 案件メモ ── */}
+          {/* ── Section 03: 案件メモ ── */}
           <section className="cm-ncf-section" aria-labelledby="ncf-memo-heading">
             <div className="cm-ncf-section-head">
-              <span className="cm-ncf-num-badge">04</span>
-              <span className="cm-ncf-section-icon"><NotebookPen size={16}/></span>
-              <div><h3 id="ncf-memo-heading">案件メモ <small className="cm-ncf-optional">任意</small></h3><p>相談内容・事故の概要などを入力してください。</p></div>
+              <div className="cm-ncf-section-title-group">
+                <span className="cm-ncf-num-badge">03</span>
+                <div>
+                  <h3 id="ncf-memo-heading">案件メモ <small className="cm-ncf-optional">任意</small></h3>
+                  <p>相談内容・事故の概要などを入力してください。</p>
+                </div>
+              </div>
+              <NotebookPen size={16} className="text-[var(--ncf-dim)]" aria-hidden="true" />
             </div>
             <div className="cm-ncf-memo-wrap">
               <textarea {...common('summary')} className="cm-ncf-textarea" aria-label="案件メモ" maxLength={10000}
-                placeholder="相談内容・事故の概要など" value={draft.summary}
+                placeholder="相談の経緯、発生日時、怪我や損害の状況など..." value={draft.summary}
                 onChange={event => changeCase('summary', event.target.value)}/>
-              <span className="cm-ncf-char-count">{Array.from(draft.summary).length} / 1000</span>
+              <span className="cm-ncf-char-count">{Array.from(draft.summary).length.toLocaleString()} / 10,000</span>
             </div>
             {errorFor('summary')}
           </section>
@@ -339,24 +391,39 @@ export default function NewCaseDialog({ user, onClose, onCreated }: Props) {
     )}
 
     {reviewing && (
-      <ReviewDialog client={selectedClient} clientDraft={clientDraft} birthDate={dob.trim() ? normalizeBirthDate(dob) : null} type={selectedType} employee={selectedEmployee} summary={draft.summary} onBack={() => setReviewing(false)} onConfirm={() => void confirmCreate()} saving={saving}/>
+      <ReviewDialog client={selectedClient} clientDraft={clientDraft} birthDate={dob.trim() ? normalizeBirthDate(dob) : null} type={selectedType} employee={selectedEmployee} summary={draft.summary}
+        delegationRows={activeDelegations.map(row => [delegationCandidates?.find(candidate => candidate.user_id === row.user_id)?.name ?? '', caseTaskDelegationPermissions.filter(([key]) => row[key]).map(([, label]) => label).join('、')])}
+        onBack={() => setReviewing(false)} onConfirm={() => void confirmCreate()} saving={saving}/>
     )}
   </dialog>
 }
 
-function ReviewDialog({ client, clientDraft, birthDate, type, employee, summary, onBack, onConfirm, saving }: { client: CaseClient | null; clientDraft: ClientDraft; birthDate: string | null; type?: CaseTypeOption; employee?: CaseEmployee; summary: string; onBack: () => void; onConfirm: () => void; saving: boolean }) {
+function ReviewDialog({ client, clientDraft, birthDate, type, employee, summary, delegationRows, onBack, onConfirm, saving }: { client: CaseClient | null; clientDraft: ClientDraft; birthDate: string | null; type?: CaseTypeOption; employee?: CaseEmployee; summary: string; delegationRows: string[][]; onBack: () => void; onConfirm: () => void; saving: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null)
   useEffect(() => { const element = dialog.current; element?.showModal(); return () => { if (element?.open) element.close() } }, [])
   const source = client ?? clientDraft
   const contact = ([['電話番号', source.phone], ['メールアドレス', source.email], ['住所', source.address]] as [string, string | null | undefined][])
     .filter(([, value]) => Boolean(value)).map(([label, value]) => [label, value ?? ''])
-  return <dialog ref={dialog} className="dc-confirm cm-review-dialog cm-simple-review" aria-labelledby="case-review-title" onCancel={event => { event.preventDefault(); if (!saving) onBack() }}>
-    <header><div><h2 id="case-review-title">登録内容の確認</h2><p className="dc-meta">以下の内容で案件を作成します。内容をご確認ください。</p></div></header>
-    <div className="cm-review-body"><ReviewBlock title="依頼者" rows={[[client ? '依頼者種別' : '登録方法', client ? '既存の依頼者' : '新規依頼者として登録'], ['氏名 / 組織名', source.name], ...(source.name_kana ? [['フリガナ', source.name_kana]] : []), ...(birthDate && !client ? [['生年月日', birthDate]] : []), ['区分', source.client_type === 'corporate' ? '組織' : '個人'], ...contact]}/><ReviewBlock title="案件" rows={[["案件区分", "通常案件"], ["事件類型", type?.name ?? ''], ['担当者', employee?.full_name ?? '未割当'], ...(summary.trim() ? [['案件メモ', summary.trim()]] : [])]}/></div>
-    <footer><button type="button" className="dc-button" disabled={saving} onClick={onBack}>修正する</button><button type="button" className="dc-button dc-primary" disabled={saving} onClick={onConfirm}>{saving && <ButtonSpinner size={14} />}{saving ? '作成中…' : 'この内容で案件を作成'}</button></footer>
+  return <dialog ref={dialog} className="dc-confirm cm-review-dialog cm-simple-review cm-ncf-review-dialog" aria-labelledby="case-review-title" onCancel={event => { event.preventDefault(); if (!saving) onBack() }}>
+    <header className="cm-ncf-header">
+      <div className="cm-ncf-header-intro">
+        <span className="cm-ncf-header-icon" aria-hidden="true"><CheckCircle2 size={20}/></span>
+        <div className="cm-ncf-header-text">
+          <div className="cm-ncf-header-title-row">
+            <h2 id="case-review-title">登録内容の確認</h2>
+            <span className="cm-ncf-header-badge">CONFIRMATION</span>
+          </div>
+          <p className="dc-meta">以下の内容で案件を作成します。内容をご確認ください。</p>
+        </div>
+      </div>
+    </header>
+    <div className="cm-review-body cm-ncf-review-body"><ReviewBlock title="依頼者" rows={[[client ? '依頼者種別' : '登録方法', client ? '既存の依頼者' : '新規依頼者として登録'], ['氏名 / 組織名', source.name], ...(source.name_kana ? [['フリガナ', source.name_kana]] : []), ...(birthDate && !client ? [['生年月日', birthDate]] : []), ['区分', source.client_type === 'corporate' ? '組織' : '個人'], ...contact]}/><ReviewBlock title="案件" rows={[["案件区分", "通常案件"], ["事件類型", type?.name ?? ''], ['担当者', employee?.full_name ?? '未割当'], ...(summary.trim() ? [['案件メモ', summary.trim()]] : [])]}/>
+      {delegationRows.length > 0 && <ReviewBlock title="案件内の委任権限" rows={delegationRows}/>}
+    </div>
+    <footer className="cm-ncf-footer"><button type="button" className="cm-ncf-cancel-btn dc-button" disabled={saving} onClick={onBack}>修正する</button><button type="button" className="cm-ncf-submit-btn dc-button dc-primary" disabled={saving} onClick={onConfirm}>{saving && <ButtonSpinner size={14} />}{saving ? '作成中…' : 'この内容で案件を作成'}</button></footer>
   </dialog>
 }
 
 function ReviewBlock({ title, rows }: { title: string; rows: string[][] }) {
-  return <section className="cm-review-block"><h3>{title}</h3><dl>{rows.map(([term, value]) => <div key={term}><dt>{term}</dt><dd>{value}</dd></div>)}</dl></section>
+  return <section className="cm-review-block cm-ncf-review-block"><h3>{title}</h3><dl>{rows.map(([term, value]) => <div key={term}><dt>{term}</dt><dd>{value}</dd></div>)}</dl></section>
 }

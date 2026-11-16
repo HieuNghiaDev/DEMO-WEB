@@ -15,7 +15,7 @@ export function applyMessageActions(messages: InternalChatMessage[], actions: Re
     if (action?.action === 'recall' && !message.recalled_at) {
       changed = true
       result.push({ ...message, recalled_at: action.created_at, pinned_at: null,
-        original_text: '', attachments: [], mentions: [], japanese_content: null, vietnamese_content: null, reply_to: null })
+        original_text: '', attachments: [], mentions: [], japanese_content: null, vietnamese_content: null, translations: {}, reply_to: null })
       continue
     }
     const pinnedAt = action?.action === 'pin' ? action.created_at : action?.action === 'unpin' ? null : message.pinned_at
@@ -45,7 +45,8 @@ export const mergeMessages = (current: InternalChatMessage[], incoming: Internal
     const previous = byId.get(message.id)
     if (previous?.recalled_at && !message.recalled_at) return
     if (previous && !message.recalled_at && !acceptTranslation(previous, message)) return
-    byId.set(message.id, message)
+    byId.set(message.id, previous && !message.recalled_at
+      ? { ...message, translations: mergeChatTranslations(previous.translations, message.translations) } : message)
   })
   return [...byId.values()].sort((left, right) => left.id - right.id)
 }
@@ -55,10 +56,28 @@ export function applyTranslationUpdates(current: InternalChatMessage[], updates:
   const byId = new Map(updates.map((update) => [update.id, update]))
   return current.map((message) => {
     const update = byId.get(message.id)
-    return !message.recalled_at && update && acceptTranslation(message, update)
-      && (message.translation_status !== update.translation_status || (message.translation_attempt ?? 0) !== (update.translation_attempt ?? 0))
-      ? { ...message, ...update } : message
+    if (message.recalled_at || !update) return message
+    const translations = mergeChatTranslations(message.translations, update.translations)
+    if (acceptTranslation(message, update)
+      && (message.translation_status !== update.translation_status || (message.translation_attempt ?? 0) !== (update.translation_attempt ?? 0))) {
+      return { ...message, ...update, translations }
+    }
+    return translations === message.translations ? message : { ...message, translations }
   })
+}
+
+export function mergeChatTranslations(previous: InternalChatMessage['translations'], incoming: InternalChatMessage['translations']) {
+  if (!previous || !incoming) return incoming ?? previous
+  let result = previous
+  for (const pair of ['ja-vi', 'ja-zh'] as const) {
+    const next = incoming[pair]
+    const current = previous[pair]
+    if (next && (!current || next.revision > current.revision
+      || (next.revision === current.revision && current.status === 'pending' && next.status !== 'pending'))) {
+      result = { ...result, [pair]: next }
+    }
+  }
+  return result
 }
 
 function acceptTranslation(previous: InternalChatMessage, incoming: Pick<InternalChatMessage, 'translation_status' | 'translation_attempt'>) {

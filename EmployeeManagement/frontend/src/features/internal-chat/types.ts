@@ -1,4 +1,11 @@
 export type ChatTranslationStatus = 'pending' | 'completed' | 'failed'
+export type ChatTranslationPair = 'ja-vi' | 'ja-zh'
+export type ChatTranslations = Partial<Record<ChatTranslationPair, {
+  status: ChatTranslationStatus
+  revision: number
+  language?: 'ja' | 'vi' | 'zh-Hans'
+  text?: string
+}>>
 export type ChatDraftMention = { type: 'user'; user_id: number; start: number; end: number }
 export type ChatMention = ChatDraftMention & { name: string }
 export type ChatMentionMember = { user_id: number; employee_id: number; name: string; employee_code: string; avatar_path: string | null }
@@ -41,22 +48,24 @@ export type InternalChatMessage = {
   can_recall?: boolean
   can_retry_translation?: boolean
   translation_attempt?: number
+  translations?: ChatTranslations
   reply_to?: ChatReply | null
 }
 
-export type ChatMessagesResponse = {
+export type ChatUnread = { unread_count: number; first_unread_id?: number | null }
+
+export type ChatMessagesResponse = ChatUnread & {
   messages: InternalChatMessage[]
   pagination: {
     has_more: boolean
     next_before_id: number | null
     latest_id: number | null
   }
-  unread_count: number
   member_summary: ChatMemberSummary
   receipts: Record<number, ChatReceipt>
   delivery_enabled: boolean
   translation_updates?: (Pick<InternalChatMessage, 'id' | 'translation_status' | 'translation_attempt'>
-    & Partial<Pick<InternalChatMessage, 'japanese_content' | 'vietnamese_content' | 'translation_provider'>>)[]
+    & Partial<Pick<InternalChatMessage, 'japanese_content' | 'vietnamese_content' | 'translation_provider' | 'translations'>>)[]
   actions_enabled?: boolean
   hide_enabled?: boolean
   can_pin?: boolean

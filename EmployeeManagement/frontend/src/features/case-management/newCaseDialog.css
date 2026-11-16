@@ -1,0 +1,707 @@
+/* ==========================================================================
+   THEMIS Command — 新規案件 (New Case) & 登録内容の確認 (Review) Dialog
+   ========================================================================== */
+
+.dc-confirm.cm-ncf-dialog,
+.dc-confirm.cm-ncf-review-dialog {
+  --ncf-bg: #ffffff;
+  --ncf-surface: #f8fafc;
+  --ncf-surface-alt: #f1f5f9;
+  --ncf-border: #e2e8f0;
+  --ncf-border-strong: #cbd5e1;
+  --ncf-border-focus: #4f46e5;
+  --ncf-ink: #0f172a;
+  --ncf-muted: #64748b;
+  --ncf-dim: #94a3b8;
+  --ncf-accent: #4f46e5;
+  --ncf-accent-soft: #eef2ff;
+  --ncf-danger: #dc2626;
+  --ncf-input-h: 40px;
+  --ncf-radius: 9px;
+  width: min(740px, calc(100vw - 32px));
+  max-width: 740px;
+  max-height: min(860px, calc(100dvh - 32px));
+  padding: 0;
+  color: var(--ncf-ink);
+  background: var(--ncf-bg);
+  border: 1px solid var(--ncf-border);
+  border-top: 3px solid var(--ncf-accent);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px -12px rgba(15, 23, 42, 0.22), 0 4px 16px -4px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dc-confirm.cm-ncf-review-dialog {
+  width: min(620px, calc(100vw - 32px));
+  max-width: 620px;
+}
+
+.dark .dc-confirm.cm-ncf-dialog,
+.dark .dc-confirm.cm-ncf-review-dialog {
+  --ncf-bg: var(--tm-surface, #11161f);
+  --ncf-surface: var(--tm-surface-elevated, #161c26);
+  --ncf-surface-alt: var(--tm-surface-hover, #1b2330);
+  --ncf-border: var(--tm-border, #283241);
+  --ncf-border-strong: var(--tm-border-strong, #334155);
+  --ncf-border-focus: var(--tm-primary, #5b5bd6);
+  --ncf-ink: var(--tm-text-primary, #f4f7fb);
+  --ncf-muted: var(--tm-text-secondary, #a7b0be);
+  --ncf-dim: var(--tm-text-muted, #707b8d);
+  --ncf-accent: var(--tm-primary, #5b5bd6);
+  --ncf-accent-soft: var(--tm-primary-muted, rgba(91, 91, 214, 0.16));
+  --ncf-danger: #f87171;
+  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.6), 0 4px 16px -4px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+
+.dc-confirm.cm-ncf-dialog::backdrop,
+.dc-confirm.cm-ncf-review-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(2px);
+}
+
+/* ── Sticky Header ── */
+.dc-confirm .cm-ncf-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--ncf-border);
+  background: var(--ncf-bg);
+  flex-shrink: 0;
+}
+
+.dc-confirm .cm-ncf-header-intro {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.dc-confirm .cm-ncf-header-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--ncf-accent) 24%, var(--ncf-border));
+  border-radius: 10px;
+  background: var(--ncf-accent-soft);
+  color: var(--ncf-accent);
+}
+
+.dc-confirm .cm-ncf-header-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.dc-confirm .cm-ncf-header-text h2 {
+  margin: 0;
+  font-size: 16.5px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--ncf-ink);
+  line-height: 1.25;
+}
+
+.dc-confirm .cm-ncf-header-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--ncf-accent) 24%, var(--ncf-border));
+  border-radius: 5px;
+  background: var(--ncf-accent-soft);
+  color: var(--ncf-accent);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+}
+
+.dc-confirm .cm-ncf-header-text p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--ncf-muted);
+  line-height: 1.35;
+}
+
+.dc-confirm .cm-ncf-close-btn {
+  flex-shrink: 0;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--ncf-border);
+  border-radius: 8px;
+  color: var(--ncf-muted);
+  background: var(--ncf-bg);
+  cursor: pointer;
+  transition: background-color 120ms, border-color 120ms, color 120ms;
+}
+
+.dc-confirm .cm-ncf-close-btn:hover:not(:disabled) {
+  background: var(--ncf-surface-alt);
+  color: var(--ncf-ink);
+  border-color: var(--ncf-border-strong);
+}
+
+/* ── Scrollable Form Body ── */
+.dc-confirm .cm-ncf-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0;
+  padding: 0;
+  overflow-y: auto;
+  background: var(--ncf-surface);
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ncf-dim) 45%, transparent) transparent;
+}
+
+.dc-confirm .cm-ncf-form fieldset.cm-ncf-fieldset {
+  min-width: 0;
+  padding: 14px 18px;
+  margin: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dc-confirm .cm-ncf-error-banner {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--ncf-radius);
+  background: color-mix(in srgb, var(--ncf-danger) 8%, var(--ncf-bg));
+  border: 1px solid color-mix(in srgb, var(--ncf-danger) 28%, var(--ncf-border));
+  color: var(--ncf-danger);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* ── Section Cards ── */
+.dc-confirm .cm-ncf-section {
+  padding: 14px 16px;
+  border: 1px solid var(--ncf-border);
+  border-radius: 12px;
+  background: var(--ncf-bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.dark .dc-confirm .cm-ncf-section {
+  box-shadow: none;
+}
+
+.dc-confirm .cm-ncf-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ncf-surface-alt);
+}
+
+.dc-confirm .cm-ncf-section-title-group {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.dc-confirm .cm-ncf-num-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 7px;
+  border: 1px solid color-mix(in srgb, var(--ncf-accent) 24%, var(--ncf-border));
+  background: var(--ncf-accent-soft);
+  color: var(--ncf-accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.dc-confirm .cm-ncf-section-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 750;
+  color: var(--ncf-ink);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  line-height: 1.25;
+}
+
+.dc-confirm .cm-ncf-section-head p {
+  margin: 2px 0 0;
+  color: var(--ncf-muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.dc-confirm .cm-ncf-optional {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--ncf-surface-alt);
+  color: var(--ncf-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.dc-confirm .cm-ncf-preview-chip {
+  display: inline-flex;
+  max-width: 260px;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--ncf-accent) 24%, var(--ncf-border));
+  border-radius: 6px;
+  background: var(--ncf-accent-soft);
+  color: var(--ncf-accent);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.dc-confirm .cm-ncf-preview-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Field Grid & Stack ── */
+.dc-confirm .cm-ncf-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px 14px;
+}
+
+.dc-confirm .cm-ncf-case-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dc-confirm .cm-ncf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  position: relative;
+}
+
+.dc-confirm .cm-ncf-field--full,
+.dc-confirm .cm-ncf-field.cm-wide {
+  grid-column: 1 / -1;
+}
+
+.dc-confirm .cm-ncf-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ncf-ink);
+  line-height: 1.2;
+}
+
+.dc-confirm .cm-ncf-required {
+  color: var(--ncf-accent);
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dc-confirm .cm-ncf-field .dc-meta {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ncf-muted);
+}
+
+/* ── Inputs ── */
+.dc-confirm.cm-ncf-dialog input:not([type=checkbox]),
+.dc-confirm.cm-ncf-dialog select,
+.dc-confirm.cm-ncf-dialog textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: var(--ncf-input-h);
+  border: 1px solid var(--ncf-border-strong);
+  border-radius: var(--ncf-radius);
+  background: var(--ncf-bg);
+  color: var(--ncf-ink);
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 450;
+  transition: border-color 140ms, box-shadow 140ms, background-color 140ms;
+}
+
+.dc-confirm.cm-ncf-dialog textarea {
+  height: auto;
+  padding: 10px 12px;
+}
+
+.dc-confirm.cm-ncf-dialog input:not([type=checkbox]):focus,
+.dc-confirm.cm-ncf-dialog select:focus,
+.dc-confirm.cm-ncf-dialog textarea:focus {
+  outline: none;
+  border-color: var(--ncf-border-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ncf-accent) 14%, transparent);
+}
+
+.dc-confirm .cm-ncf-input-icon--left { left: 11px; }
+.dc-confirm .cm-ncf-input--icon-l { padding-left: 34px !important; }
+
+/* ── Segmented Control (依頼者区分) ── */
+.dc-confirm .cm-ncf-segment {
+  display: inline-flex;
+  width: auto;
+  height: auto;
+  padding: 2px;
+  border: 1px solid var(--ncf-border);
+  border-radius: 8px;
+  background: var(--ncf-surface);
+}
+
+.dc-confirm .cm-ncf-segment-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 68px;
+  height: 28px;
+  padding-inline: 11px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ncf-muted);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color 130ms, color 130ms, box-shadow 130ms;
+}
+
+.dc-confirm .cm-ncf-segment-btn + .cm-ncf-segment-btn {
+  border-left: 0;
+}
+
+.dc-confirm .cm-ncf-segment-btn.is-active {
+  background: var(--ncf-bg);
+  color: var(--ncf-accent);
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), inset 0 0 0 1px color-mix(in srgb, var(--ncf-accent) 28%, transparent);
+}
+
+/* ── Case Type Cards (労災 / 交通事故) ── */
+.dc-confirm .cm-ncf-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 0;
+}
+
+.dc-confirm .cm-ncf-type-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 22px;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 1px 11px;
+  min-width: 0;
+  min-height: 62px;
+  padding: 10px 13px;
+  border: 1px solid var(--ncf-border-strong);
+  border-radius: 10px;
+  background: var(--ncf-surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms, background-color 140ms, box-shadow 140ms;
+}
+
+.dc-confirm .cm-ncf-type-card::after {
+  display: none;
+}
+
+.dc-confirm .cm-ncf-type-card:hover:not(.is-selected) {
+  border-color: color-mix(in srgb, var(--ncf-accent) 45%, var(--ncf-border));
+  background: var(--ncf-bg);
+}
+
+.dc-confirm .cm-ncf-type-card.is-selected {
+  border-color: var(--ncf-accent);
+  background: var(--ncf-accent-soft);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ncf-accent) 14%, transparent);
+}
+
+.dc-confirm .cm-ncf-type-icon {
+  grid-row: 1 / span 2;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin: 0;
+  border-radius: 9px;
+  border: 1px solid var(--ncf-border);
+  background: var(--ncf-bg);
+  color: var(--ncf-muted);
+}
+
+.dc-confirm .cm-ncf-type-card.is-selected .cm-ncf-type-icon {
+  border-color: color-mix(in srgb, var(--ncf-accent) 30%, var(--ncf-border));
+  color: var(--ncf-accent);
+}
+
+.dc-confirm .cm-ncf-type-name {
+  align-self: end;
+  font-size: 13.5px;
+  font-weight: 750;
+  color: var(--ncf-ink);
+  line-height: 1.2;
+}
+
+.dc-confirm .cm-ncf-type-sub {
+  grid-column: 2;
+  align-self: start;
+  font-size: 11px;
+  color: var(--ncf-muted);
+}
+
+.dc-confirm .cm-ncf-type-card.is-selected .cm-ncf-type-check {
+  display: flex;
+  position: static;
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  justify-self: end;
+  color: var(--ncf-accent);
+}
+
+/* ── Assignee Selector & Popover ── */
+.dc-confirm .cm-ncf-assignee-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 0;
+}
+
+.dc-confirm .cm-ncf-assignee-wrap > .cm-ncf-label {
+  margin-bottom: 0;
+}
+
+.dc-confirm .cm-ncf-assignee-btn {
+  min-height: var(--ncf-input-h);
+  padding: 0 12px;
+  border-color: var(--ncf-border-strong);
+}
+
+.dc-confirm .cm-ncf-assignee-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--ncf-accent-soft);
+  color: var(--ncf-accent);
+}
+
+.dc-confirm .cm-assignee-popover {
+  margin-top: 6px;
+  border: 1px solid var(--ncf-border-strong);
+  border-radius: var(--ncf-radius);
+  background: var(--ncf-bg);
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.14);
+  overflow: hidden;
+}
+
+.dc-confirm .cm-assignee-popover .cm-search-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--ncf-border);
+  background: var(--ncf-surface);
+  color: var(--ncf-muted);
+}
+
+.dc-confirm .cm-assignee-popover .cm-search-control input {
+  height: 30px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none !important;
+}
+
+.dc-confirm .cm-assignee-list {
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.dc-confirm .cm-assignee-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--ncf-surface-alt);
+  background: transparent;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--ncf-ink);
+  transition: background-color 100ms;
+}
+
+.dc-confirm .cm-assignee-list button:last-child { border-bottom: 0; }
+.dc-confirm .cm-assignee-list button:hover { background: var(--ncf-surface); }
+.dc-confirm .cm-assignee-list button.is-selected { background: var(--ncf-accent-soft); color: var(--ncf-accent); }
+.dc-confirm .cm-assignee-list button span { font-size: 11px; color: var(--ncf-muted); }
+
+/* ── Memo Textarea ── */
+.dc-confirm .cm-ncf-textarea {
+  min-height: 84px;
+  max-height: 180px;
+  resize: vertical;
+  padding: 10px 12px 24px !important;
+  border-color: var(--ncf-border-strong);
+}
+
+.dc-confirm .cm-ncf-char-count {
+  right: 11px;
+  bottom: 7px;
+  font-size: 10.5px;
+}
+
+/* ── Sticky Footer ── */
+.dc-confirm .cm-ncf-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--ncf-border);
+  background: var(--ncf-bg);
+  flex-shrink: 0;
+}
+
+.dc-confirm .cm-ncf-cancel-btn,
+.dc-confirm .cm-ncf-submit-btn {
+  height: 38px;
+  border-radius: var(--ncf-radius);
+  font-size: 13px;
+}
+
+.dc-confirm .cm-ncf-cancel-btn {
+  padding-inline: 15px;
+  border: 1px solid var(--ncf-border-strong);
+  background: var(--ncf-bg);
+  color: var(--ncf-ink);
+}
+
+.dc-confirm .cm-ncf-submit-btn {
+  padding-inline: 18px;
+  background: var(--ncf-accent);
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
+}
+
+/* ── Review Dialog Body (登録内容の確認) ── */
+.dc-confirm .cm-ncf-review-body {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  padding: 14px 18px;
+  background: var(--ncf-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dc-confirm .cm-ncf-review-block {
+  padding: 13px 16px !important;
+  border: 1px solid var(--ncf-border) !important;
+  border-radius: 11px;
+  background: var(--ncf-bg);
+}
+
+.dc-confirm .cm-ncf-review-block h3 {
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ncf-surface-alt);
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--ncf-accent);
+}
+
+.dc-confirm .cm-ncf-review-block dl {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.dc-confirm .cm-ncf-review-block dl > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12.5px;
+}
+
+.dc-confirm .cm-ncf-review-block dt {
+  color: var(--ncf-muted);
+  font-weight: 600;
+}
+
+.dc-confirm .cm-ncf-review-block dd {
+  margin: 0;
+  color: var(--ncf-ink);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .dc-confirm.cm-ncf-dialog,
+  .dc-confirm.cm-ncf-review-dialog {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 20px);
+  }
+  .dc-confirm .cm-ncf-header { padding: 13px 16px; }
+  .dc-confirm .cm-ncf-form fieldset.cm-ncf-fieldset { padding: 12px 14px; }
+  .dc-confirm .cm-ncf-section { padding: 13px 14px; }
+  .dc-confirm .cm-ncf-type-grid { grid-template-columns: 1fr; }
+  .dc-confirm .cm-ncf-footer { margin: 0; padding: 11px 16px; }
+}
+
+@media (max-width: 480px) {
+  .dc-confirm.cm-ncf-dialog,
+  .dc-confirm.cm-ncf-review-dialog {
+    width: 100vw;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+  }
+  .dc-confirm .cm-ncf-fields { grid-template-columns: minmax(0, 1fr); }
+  .dc-confirm .cm-ncf-field--full { grid-column: 1; }
+  .dc-confirm .cm-ncf-footer { flex-direction: column-reverse; gap: 8px; }
+  .dc-confirm .cm-ncf-cancel-btn,
+  .dc-confirm .cm-ncf-submit-btn { width: 100%; justify-content: center; }
+  .dc-confirm .cm-ncf-review-block dl > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}

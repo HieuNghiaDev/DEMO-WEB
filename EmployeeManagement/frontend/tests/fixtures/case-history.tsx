@@ -6,12 +6,13 @@ import type { HistoryEntry, HistoryOptions, HistoryResponse } from '../../src/fe
 import '../../src/index.css'
 
 // All API methods used by this fixture are memory-only. Never call the real backend.
-const permissions = { can_view_history: true, can_add_communication: true, can_edit_communication: true, can_create_task: true }
+const permissions = { can_view_history: true, can_add_communication: true, can_edit_communication: true, can_create_task: true, can_upload_attachments: true }
 const people: HistoryOptions['people'] = [{ type: 'client', id: 1, name: 'PHAM GIA HUY' }, { type: 'employee', id: 3, name: 'LE HIEU NGHIA' }, { type: 'party', id: 2, name: '通訳担当' }]
 let entries: HistoryEntry[] = [
   { id: 'activity:2', record_id: 2, kind: 'system', type: 'system', occurred_at: '2026-10-09T06:26:18Z', title: '資料を確認済みに変更', summary: 'C-004 既存の事件資料一式', actor: { id: 3, full_name: 'LE HIEU NGHIA' }, communication: null, changes: { review_status: { before: 'pending_review', after: 'approved' } }, permissions: { can_edit: false, can_create_task: false }, legacy: false, linked_task: null },
   { id: 'activity:1', record_id: 1, kind: 'communication', type: 'phone', occurred_at: '2026-10-09T05:00:00Z', title: '事故後の治療状況について', summary: '現在の通院状況と今後必要となる診断書について確認。', actor: { id: 3, full_name: 'LE HIEU NGHIA' }, changes: {}, permissions: { can_edit: true, can_create_task: true }, legacy: false, linked_task: null,
-    communication: { communication_type: 'phone', direction: 'outbound', started_at: '2026-10-09T05:00:00Z', ended_at: '2026-10-09T05:32:00Z', duration_minutes: 32, subject: '事故後の治療状況について', summary: '現在の通院状況と今後必要となる診断書について確認。', details: '週2回通院中\n次回診察10/15', outcome: '診断書を取得後、事務所へ提出予定', next_action: '診断書の提出状況を確認', next_action_due_at: '2026-10-16T00:00:00Z', counterparties: [people[0]], participants: people } },
+    communication: { communication_type: 'phone', direction: 'outbound', started_at: '2026-10-09T05:00:00Z', ended_at: '2026-10-09T05:32:00Z', duration_minutes: 32, subject: '事故後の治療状況について', summary: '現在の通院状況と今後必要となる診断書について確認。', details: '週2回通院中\n次回診察10/15', outcome: '診断書を取得後、事務所へ提出予定', next_action: '診断書の提出状況を確認', next_action_due_at: '2026-10-16T00:00:00Z', counterparties: [people[0]], participants: people },
+    attachments: [{ id: 'test-recording', name: 'Synthetic-consultation-audio-recording-with-a-long-filename.wav', mime_type: 'audio/wav', size: 1_240_000 }] },
 ]
 let nextId = 3
 let saves = 0; let tasks = 0
@@ -29,14 +30,18 @@ caseWorkspaceApi.history = async (_case, filters) => {
   const start = (page - 1) * perPage
   return { entries: rows.slice(start, start + perPage), counts, permissions, pagination: { current_page: page, per_page: perPage, last_page: lastPage, total: rows.length, from: rows.length ? start + 1 : null, to: rows.length ? Math.min(start + perPage, rows.length) : null } } satisfies HistoryResponse
 }
-caseWorkspaceApi.saveCommunication = async (_case, data, id) => {
+caseWorkspaceApi.saveCommunication = async (_case, data, id, files = []) => {
   saves++
   const record = id ?? nextId++
   const entry: HistoryEntry = { id: `activity:${record}`, record_id: record, kind: 'communication', type: data.communication_type, occurred_at: data.started_at, title: data.subject, summary: data.summary,
     actor: { id: 3, full_name: 'LE HIEU NGHIA' }, communication: { ...data, duration_minutes: data.ended_at ? Math.floor((Date.parse(data.ended_at) - Date.parse(data.started_at)) / 60000) : null }, changes: {}, legacy: false, linked_task: null, permissions: { can_edit: true, can_create_task: Boolean(data.next_action || data.next_action_due_at) } }
+  entry.attachments = [...(entries.find(e => e.record_id === record)?.attachments ?? []), ...files.map(file => ({
+    id: crypto.randomUUID(), name: file.name, mime_type: file.type, size: file.size,
+  }))]
   entries = [...entries.filter(e => e.record_id !== record), entry]
   return entry
 }
+caseWorkspaceApi.downloadCommunicationAttachment = async () => new Blob(['fixture'])
 caseWorkspaceApi.communicationTask = async (_case, id, payload) => {
   tasks++
   entries = entries.map(e => e.record_id === id ? { ...e, permissions: { ...e.permissions, can_create_task: false }, linked_task: { id: 100, title: String(payload.title) } } : e)

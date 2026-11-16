@@ -15,10 +15,19 @@ class CaseActivity extends Model
         return ['occurred_at' => 'datetime', 'metadata' => 'array'];
     }
 
+    public function attributesToArray()
+    {
+        $attributes = parent::attributesToArray();
+        // The history API exposes only the safe file descriptor and its scoped download action.
+        unset($attributes['metadata']['history_attachments']);
+
+        return $attributes;
+    }
+
     /** Keep audit records stored; restrict only their exposure in case responses. */
     public function scopeVisibleTaskData(Builder $query, ?User $user): Builder
     {
-        if ($user?->hasPermission('task.view_all') && $user->hasPermission('case.view')) return $query;
+        if (\App\Services\CaseOperationalAccess::hasGlobalTaskView($user) && $user->hasPermission('case.view')) return $query;
 
         $caseTasks = CaseTask::withTrashed()->visibleTo($user)->select('id');
         $employeeTasks = EmployeeTask::query()->visibleTo($user)->select('id');

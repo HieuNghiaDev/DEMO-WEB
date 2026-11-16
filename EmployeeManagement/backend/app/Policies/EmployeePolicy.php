@@ -62,13 +62,23 @@ class EmployeePolicy
 
     public function issueInvite(User $actor, Employee $employee): bool
     {
-        // No implicit legacy/Level/employee.create grant for reissue/revoke. No public
-        // delivery/editor route or catalog grant is enabled by this internal policy.
+        return $this->eligibleInviteTarget($actor, $employee)
+            && AdminCapabilities::active($actor) && AdminCapabilities::explicit($actor, 'employee.activation.manage');
+    }
+
+    public function issueInviteAsAdmin(User $actor, Employee $employee): bool
+    {
+        return $this->eligibleInviteTarget($actor, $employee) && ! $actor->must_change_password
+            && AdminCapabilities::isCanonicalAdmin($actor) && AdminCapabilities::active($actor)
+            && ! AdminCapabilities::isProtectedLegalSubject($employee->user);
+    }
+
+    private function eligibleInviteTarget(User $actor, Employee $employee): bool
+    {
         $target = $employee->user;
         return ! $employee->trashed() && $employee->status === 'active' && $target !== null
             && $target->id !== $actor->id && $target->is_active && $target->activation_required
             && $target->activated_at === null && $target->role !== 'admin'
-            && ! $target->roles()->whereIn('name', AdminCapabilities::PROTECTED_ROLES)->exists()
-            && AdminCapabilities::active($actor) && AdminCapabilities::explicit($actor, 'employee.activation.manage');
+            && ! $target->roles()->whereIn('name', AdminCapabilities::PROTECTED_ROLES)->exists();
     }
 }

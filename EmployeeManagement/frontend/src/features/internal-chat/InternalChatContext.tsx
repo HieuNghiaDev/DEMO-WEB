@@ -1,24 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { isAxiosError } from 'axios'
 import { useAuth } from '../../contexts/AuthContext'
-import { CHAT_PAGE_SIZE, changeChatMessage, fetchChatMessage, fetchChatMessages, fetchChatPins, markChatDelivered, markChatRead, sendChatMessage } from './api'
-import type { ChatActionName, ChatDraftMention, ChatMemberSummary, ChatMessageAction, ChatMessagesResponse, ChatReceipt, ChatReply, InternalChatMessage } from './types'
+import { CHAT_PAGE_SIZE, changeChatMessage, fetchChatMessage, fetchChatMessages, fetchChatPins, markChatDelivered, markChatRead, requestChatTranslation, sendChatMessage } from './api'
+import type { ChatActionName, ChatDraftMention, ChatMemberSummary, ChatMessageAction, ChatMessagesResponse, ChatReceipt, ChatReply, ChatTranslationPair, ChatUnread, InternalChatMessage } from './types'
 import { editMentions, trimmedMentions } from './chatMentions'
-import { applyMessageActions, applyTranslationUpdates, chatErrorMessage, mergeMessages, mergeReceipts, startChatPolling } from './internalChatState'
+import { applyMessageActions, applyTranslationUpdates, chatErrorMessage, mergeChatTranslations, mergeMessages, mergeReceipts, startChatPolling } from './internalChatState'
 import { InternalChatContext, type InternalChatContextValue } from './useInternalChat'
+import { listenForChatAudioGesture, notifyIncomingChat } from './chatNotifications'
 
-function InternalChatSession({ children }: { children: ReactNode }) {
+function InternalChatSession({ children, userId }: { children: ReactNode; userId: number }) {
   const { pathname } = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [messages, setMessages] = useState<InternalChatMessage[]>([])
-  const [unreadCount, setUnreadCount] = useState(0)
+  const [translationPair, setTranslationPair] = useState<ChatTranslationPair>('ja-vi')
+  const [unread, setUnread] = useState<ChatUnread>({ unread_count: 0 })
   const [memberSummary, setMemberSummary] = useState<ChatMemberSummary | null>(null)
   const [receipts, setReceipts] = useState<Record<number, ChatReceipt>>({})
   const [draftState, setDraftState] = useState<{ text: string; mentions: ChatDraftMention[] }>({ text: '', mentions: [] })
   const { text: draft, mentions: draftMentions } = draftState
   const setDraft = useCallback((text: string) => setDraftState(previous => ({ text, mentions: editMentions(previous.text, text, previous.mentions) })), [])
   const setMentionDraft = useCallback((text: string, mentions: ChatDraftMention[]) => setDraftState({ text, mentions }), [])
-  const [focusedMessageId, setFocusedMessageId] = useState<number | null>(null)
+  const [focusedMessageId, setFocusedMessageId] = useState<number | null>(() => {
+    const target = Number(searchParams.get('chatMessage'))
+    return Number.isSafeInteger(target) && target > 0 ? target : null
+  })
   const clearMessageFocus = useCallback(() => setFocusedMessageId(null), [])
   const [files, setFiles] = useState<File[]>([])
   const [sendError, setSendError] = useState('')
@@ -33,12 +39,28 @@ function InternalChatSession({ children }: { children: ReactNode }) {
   const [hasOlder, setHasOlder] = useState(false)
   const [error, setError] = useState('')
   const [isReconnecting, setIsReconnecting] = useState(false)
-  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(() => pathname !== '/' && focusedMessageId !== null)
   const openMessage = useCallback((id: number) => {
     setFocusedMessageId(id)
     if (pathname !== '/') setDrawerOpen(true)
   }, [pathname])
   const chatOpen = pathname === '/' || drawerOpen
+  useEffect(() => {
+    if (!searchParams.has('chatMessage')) return
+    const next = new URLSearchParams(searchParams)
+    next.delete('chatMessage')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+  useEffect(listenForChatAudioGesture, [])
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const onNotificationClick = (event: MessageEvent) => {
+      const { type, messageId } = event.data ?? {}
+      if (type === 'themis-chat-notification' && Number.isSafeInteger(messageId) && messageId > 0) openMessage(messageId)
+    }
+    navigator.serviceWorker.addEventListener('message', onNotificationClick)
+    return () => navigator.serviceWorker.removeEventListener('message', onNotificationClick)
+  }, [openMessage])
   const messagesRef = useRef<InternalChatMessage[]>([])
   const pollingRef = useRef<AbortSignal | null>(null)
   const pollCursor = useRef<number | undefined>(undefined)
@@ -49,6 +71,7 @@ function InternalChatSession({ children }: { children: ReactNode }) {
   const hasLoaded = useRef(false)
   const deliveredCursor = useRef(0)
   const readCursor = useRef(0)
+  const unreadRevision = useRef(0)
   const seenIncoming = useRef(new Set<number>())
   const acknowledgedViews = useRef(new Set<number>())
   const lastReadWithoutProgress = useRef<{ batch: string; retryAt: number } | null>(null)
@@ -90,7 +113,8 @@ function InternalChatSession({ children }: { children: ReactNode }) {
         if (!latest || (stalled?.batch === batch && Date.now() < stalled.retryAt)) break
         const result = await markChatRead(latest, seen, signal)
         if (signal.aborted) return
-        setUnreadCount(result.unread_count)
+        unreadRevision.current++
+        setUnread({ unread_count: result.unread_count, first_unread_id: result.first_unread_id })
         const acknowledged = result.acknowledged_ids ?? []
         for (const id of acknowledged) {
           if (seenIncoming.current.delete(id)) acknowledgedViews.current.add(id)
@@ -147,26 +171,30 @@ function InternalChatSession({ children }: { children: ReactNode }) {
     if (initial) setIsInitialLoading(true)
     try {
       const lastId = pollCursor.current
-      const readAtStart = readCursor.current
-      const receiptIds = messagesRef.current.filter((message) => message.is_mine).slice(-50).map((message) => message.id)
+      const readAtStart = unreadRevision.current
+      const receiptIds = messagesRef.current.filter((message) => !message.recalled_at).slice(-50).map((message) => message.id)
       const translationIds = messagesRef.current
-        .filter((message) => !message.recalled_at && message.translation_status === 'pending' && message.translation_provider === 'gemini')
+        .filter((message) => !message.recalled_at && (Object.values(message.translations ?? {}).some(item => item.status === 'pending')
+          || (message.translation_status === 'pending' && (message.translation_attempt ?? 0) > 0)))
         .slice(0, 50).map((message) => message.id)
       const result = await fetchChatMessages({
-        afterId: lastId, limit: lastId ? 50 : CHAT_PAGE_SIZE, receiptIds, translationIds, afterActionId: actionCursor.current,
+        afterId: lastId, limit: lastId === undefined ? CHAT_PAGE_SIZE : 50, receiptIds, translationIds, afterActionId: actionCursor.current,
       }, signal)
       if (signal.aborted) return
-      pollCursor.current = result.messages.at(-1)?.id ?? lastId
+      pollCursor.current = result.messages.at(-1)?.id ?? lastId ?? 0
       deliveryEnabled.current = result.delivery_enabled
       const translationUpdates = result.translation_updates ?? []
       const events = result.message_actions ?? []
       actionCursor.current = result.action_cursor
       recordActions(events)
       const actions = messageActions.current
+      if (lastId !== undefined && result.messages.length) {
+        void notifyIncomingChat(userId, applyMessageActions(result.messages, actions), viewingChat.current, signal)
+      }
       if (result.messages.length || translationUpdates.length || events.length) {
         setMessages((current) => applyTranslationUpdates(applyMessageActions(mergeMessages(current, result.messages), actions), translationUpdates))
       }
-      if (!lastId) {
+      if (lastId === undefined) {
         beforeCursor.current = result.pagination.has_more ? result.pagination.next_before_id : null
         setHasOlder(result.pagination.has_more)
       }
@@ -174,7 +202,10 @@ function InternalChatSession({ children }: { children: ReactNode }) {
       setHideEnabled(result.hide_enabled ?? false)
       setCanPin(result.can_pin ?? false)
       applyMetadata(result)
-      if (readCursor.current === readAtStart) setUnreadCount(result.unread_count)
+      if (unreadRevision.current === readAtStart) {
+        setUnread(current => current.unread_count === result.unread_count && current.first_unread_id === result.first_unread_id
+          ? current : { unread_count: result.unread_count, first_unread_id: result.first_unread_id })
+      }
       hasLoaded.current = true
       if (initial) setIsInitialLoading(false)
       setError('')
@@ -191,7 +222,7 @@ function InternalChatSession({ children }: { children: ReactNode }) {
       if (pollingRef.current === signal) pollingRef.current = null
       if (initial && !signal.aborted) setIsInitialLoading(false)
     }
-  }, [acknowledgeDelivery, applyMetadata, markVisibleRead, recordActions])
+  }, [acknowledgeDelivery, applyMetadata, markVisibleRead, recordActions, userId])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -210,23 +241,30 @@ function InternalChatSession({ children }: { children: ReactNode }) {
     poller.current?.setOpen(chatOpen)
   }, [chatOpen])
 
-  const loadOlder = useCallback(async () => {
+  const loadOlder = useCallback(async (throughId?: number) => {
     const signal = sessionSignal.current
-    const oldestId = beforeCursor.current
+    let oldestId = beforeCursor.current
     if (!signal || signal.aborted || !oldestId || loadingOlder.current) return false
     loadingOlder.current = true
     setIsLoadingOlder(true)
     try {
-      const result = await fetchChatMessages({ beforeId: oldestId, limit: CHAT_PAGE_SIZE }, signal)
-      if (signal.aborted) return false
-      const next = result.pagination.next_before_id
-      beforeCursor.current = result.pagination.has_more && next && next < oldestId ? next : null
-      const actions = messageActions.current
-      setMessages((current) => applyMessageActions(mergeMessages(current, result.messages), actions))
-      setHasOlder(beforeCursor.current !== null)
-      applyMetadata(result)
-      setError('')
-      return result.messages.length > 0
+      while (oldestId) {
+        const result = await fetchChatMessages({ beforeId: oldestId, limit: throughId ? 50 : CHAT_PAGE_SIZE }, signal)
+        if (signal.aborted) return false
+        const next = result.pagination.next_before_id
+        beforeCursor.current = result.pagination.has_more && next && next < oldestId ? next : null
+        const actions = messageActions.current
+        setMessages((current) => applyMessageActions(mergeMessages(current, result.messages), actions))
+        setHasOlder(beforeCursor.current !== null)
+        applyMetadata(result)
+        setError('')
+        if (!throughId) return result.messages.length > 0
+        if (result.messages.some(message => message.id === throughId && !message.recalled_at)
+          && !['recall', 'hide'].includes(actions.get(throughId)?.action ?? '')) return true
+        if (next !== null && next <= throughId) return false
+        oldestId = beforeCursor.current
+      }
+      return false
     } catch (requestError) {
       if (!signal.aborted) setError(chatErrorMessage(requestError))
       return false
@@ -295,14 +333,30 @@ function InternalChatSession({ children }: { children: ReactNode }) {
     }
   }, [recordActions])
 
+  const translateMessage = useCallback(async (id: number, pair: ChatTranslationPair) => {
+    const signal = sessionSignal.current
+    if (!signal || signal.aborted) return false
+    try {
+      const translations = await requestChatTranslation(id, pair, signal)
+      if (signal.aborted) return false
+      setMessages(current => current.map(message => message.id === id && !message.recalled_at
+        ? { ...message, translations: mergeChatTranslations(message.translations, translations) } : message))
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
   const value = useMemo<InternalChatContextValue>(() => ({
-    messages, unreadCount, memberSummary, receipts, draft, setDraft, draftMentions, setMentionDraft, focusedMessageId, clearMessageFocus, openMessage, files, setFiles, sendError, reply, setReply, actionsEnabled, hideEnabled, canPin, actionRevision, messageAction,
+    firstUnreadId: unread.first_unread_id ?? null,
+    messages, unreadCount: unread.unread_count, memberSummary, receipts, draft, setDraft, draftMentions, setMentionDraft, focusedMessageId, clearMessageFocus, openMessage, files, setFiles, sendError, reply, setReply, actionsEnabled, hideEnabled, canPin, actionRevision, messageAction,
     loadPins: fetchChatPins, loadMessage: fetchChatMessage,
+    translationPair, setTranslationPair, translateMessage,
     isInitialLoading, isLoadingOlder, isSending, hasOlder,
     error, isReconnecting, drawerOpen, setDrawerOpen, loadOlder, send,
     retry: async () => { await poller.current?.retry() }, markVisibleRead,
-  }), [messages, unreadCount, memberSummary, receipts, draft, setDraft, draftMentions, setMentionDraft, focusedMessageId, clearMessageFocus, openMessage, files, sendError, reply, actionsEnabled, hideEnabled, canPin, actionRevision, messageAction,
-    isInitialLoading, isLoadingOlder, isSending, hasOlder, error, isReconnecting, drawerOpen, loadOlder, send, markVisibleRead])
+  }), [messages, unread, memberSummary, receipts, draft, setDraft, draftMentions, setMentionDraft, focusedMessageId, clearMessageFocus, openMessage, files, sendError, reply, actionsEnabled, hideEnabled, canPin, actionRevision, messageAction,
+    isInitialLoading, isLoadingOlder, isSending, hasOlder, error, isReconnecting, drawerOpen, loadOlder, send, markVisibleRead, translationPair, translateMessage])
 
   return <InternalChatContext.Provider value={value}>{children}</InternalChatContext.Provider>
 }
@@ -312,5 +366,5 @@ export function InternalChatProvider({ children }: { children: ReactNode }) {
   if (!user?.id) return children
 
   // Scope messages, drafts and in-flight requests to the authenticated account.
-  return <InternalChatSession key={user.id}>{children}</InternalChatSession>
+  return <InternalChatSession key={user.id} userId={user.id}>{children}</InternalChatSession>
 }

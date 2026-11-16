@@ -16,7 +16,7 @@ class RequiredDocumentAccess
         $assignee = $task?->assigned_employee_id ?? $document->assigned_employee_id;
         $assigned = $user?->employee_id !== null && (int) $user->employee_id === (int) $assignee;
         $view = $has('case.view');
-        $manage = $view && $has('task.manage');
+        $manage = $view && CaseOperationalAccess::capabilities($user, $document->case_file_id, true)['manage_tasks'];
         // Pre-task collection planning retains its existing case.update grant.
         $edit = $view && $has('case.update') && (! $task || $manage || $assigned);
         $upload = $task
@@ -28,7 +28,7 @@ class RequiredDocumentAccess
             $upload = $upload && $has('document.create');
         }
         // task.review is the existing explicit RBAC grant, including self-review for reviewers.
-        $review = $view && $has('task.review')
+        $review = $view && CaseOperationalAccess::canReviewFile($user, $document->case_file_id, 'received', true)
             && $document->review_status === 'reviewing';
 
         $capabilities = [

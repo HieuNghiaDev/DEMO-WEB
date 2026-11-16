@@ -3,6 +3,10 @@ import api from '../../services/api'
 import type { ApiCaseFile } from '../../pages/business-quest/types'
 import type { CaseClient, CaseEmployee, CaseFieldErrors, CaseTypeOption, ClientDraft, ClientEmployment, EditableCase } from './types'
 
+export type CaseDelegationCandidate = { user_id: number; name: string }
+export type CaseTaskDelegation = { user_id: number; create_tasks: boolean; review_tasks: boolean; edit_overview: boolean }
+type CaseDelegationSettings = { candidates: CaseDelegationCandidate[]; task_delegations: CaseTaskDelegation[]; revision: string }
+
 export const caseApi = {
   list: async () => (await api.get<{ case_files: ApiCaseFile[] }>('/case-files')).data.case_files,
   get: async (id: number) => (await api.get<{ case_file: EditableCase }>(`/case-files/${id}`)).data.case_file,
@@ -13,6 +17,9 @@ export const caseApi = {
   create: async (payload: object) => (await api.post<{ case_file: EditableCase }>('/case-files', payload)).data.case_file,
   update: async (id: number, payload: object) => (await api.put<{ case_file: EditableCase }>(`/case-files/${id}`, payload)).data.case_file,
   assign: async (id: number, employeeId: number | null) => (await api.patch<{ case_file: ApiCaseFile }>(`/case-files/${id}/assignee`, { assigned_employee_id: employeeId })).data.case_file,
+  delegationCandidates: async () => (await api.get<{ candidates: CaseDelegationCandidate[] }>('/case-task-delegation-candidates')).data.candidates,
+  taskDelegations: async (id: number) => (await api.get<CaseDelegationSettings>(`/case-files/${id}/task-delegations`)).data,
+  saveTaskDelegations: async (id: number, task_delegations: CaseTaskDelegation[], revision: string) => { await api.put(`/case-files/${id}/task-delegations`, { task_delegations, revision }) },
   createEmployment: async (clientId: number, payload: object) => (await api.post<{ employment: ClientEmployment }>(`/clients/${clientId}/employments`, payload)).data.employment,
   updateEmployment: async (clientId: number, employmentId: number, payload: object) => (await api.patch<{ employment: ClientEmployment }>(`/clients/${clientId}/employments/${employmentId}`, payload)).data.employment,
   deleteEmployment: async (clientId: number, employmentId: number) => { await api.delete(`/clients/${clientId}/employments/${employmentId}`) },
@@ -26,6 +33,7 @@ export function caseError(error: unknown): { message: string; fields: CaseFieldE
     }
     if (error.response?.status === 403) return { message: 'この操作を行う権限がありません。', fields }
     if (error.response?.status === 409 && error.response.data?.code === 'confidential_case_admission_pending') return { message: '機密案件のアクセスメンバー設定は現在準備中です。', fields }
+    if (error.response?.status === 409 && typeof error.response.data?.message === 'string') return { message: error.response.data.message, fields }
     if (error.response?.status === 404) return { message: '案件が見つかりません。一覧へ戻って確認してください。', fields }
     if (error.response?.status === 401) return { message: 'ログイン状態を確認してください。', fields }
   }

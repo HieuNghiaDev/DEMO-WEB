@@ -28,7 +28,7 @@ function flowWith(...responses) {
 
 // Render production error components. Context is injected only for this SSR test;
 // real AuthProvider effects, transport and route transitions are tested in the browser fixture.
-function componentAt(path, context) {
+function loadComponentModule(path, context) {
   const localRequire = createRequire(resolve(path))
   const source = ts.transpileModule(readFileSync(path, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
@@ -41,17 +41,19 @@ function componentAt(path, context) {
     if (specifier.endsWith('/components/ui')) return { Button: ({ children }) => React.createElement('button', null, children) }
     if (specifier === '../loading') return { AppLoadingScreen: () => React.createElement('p', null, 'Loading fixture') }
     if (specifier === './RecoveryCodes') return { RecoveryCodes: () => null }
+    if (specifier === './VerificationCodeInput') return loadComponentModule('src/features/authentication/VerificationCodeInput.tsx', context)
+    if (specifier === './MfaEnrollmentForm') return loadComponentModule('src/features/authentication/MfaEnrollmentForm.tsx', context)
     if (specifier === './authFlow') return { japaneseAuthError }
     return localRequire(specifier)
   }, module, module.exports)
-  return module.exports.default
+  return module.exports
 }
 const renderChallenge = flow => {
-  const Component = componentAt('src/features/authentication/AuthChallengePage.tsx', { authState: flow.getSnapshot(), authFlow: flow })
+  const { default: Component } = loadComponentModule('src/features/authentication/AuthChallengePage.tsx', { authState: flow.getSnapshot(), authFlow: flow })
   return renderToStaticMarkup(React.createElement(Component))
 }
 const renderGuard = overrides => {
-  const Component = componentAt('src/components/auth/ProtectedRoute.tsx', {
+  const { default: Component } = loadComponentModule('src/components/auth/ProtectedRoute.tsx', {
     user: null, isLoading: false, sessionRestoreError: false, refreshUser: async () => {}, ...overrides,
   })
   return renderToStaticMarkup(React.createElement(MemoryRouter, null, React.createElement(Component)))
@@ -77,8 +79,10 @@ test('an ordinary login500 must not be titled two-step verification', async () =
 test('a validated MFA challenge still renders the OTP controls and MFA heading', async () => {
   const f = flowWith(challenge)
   await f.flow.login(credential)
-  assert.match(renderChallenge(f.flow), /二段階認証/)
-  assert.match(renderChallenge(f.flow), /name="factor"/)
+  const html = renderChallenge(f.flow)
+  assert.match(html, /二段階認証/)
+  assert.match(html, /name="factor"/)
+  assert.equal([...html.matchAll(/data-filled="false"/g)].length, 6)
   assert.equal(f.commits(), 0)
 })
 
@@ -90,10 +94,23 @@ test('malformed password202 cannot render MFA controls without a valid challenge
 })
 
 test('validated enrollment preserves Authenticator setup without granting a session', async () => {
-  const f = flowWith({ status: 202, data: { ...challenge.data, purpose: 'login_enroll' } })
+  const secret = 'A'.repeat(32)
+  const uri = `otpauth://totp/THEMIS:synthetic?secret=${secret}&issuer=THEMIS`
+  const f = flowWith(
+    { status: 202, data: { ...challenge.data, purpose: 'login_enroll' } },
+    { status: 200, data: { secret, otpauth_uri: uri } },
+  )
   await f.flow.login(credential)
   assert.match(renderChallenge(f.flow), /認証アプリの設定/)
-  assert.match(renderChallenge(f.flow), /設定キーを表示する/)
+  assert.match(renderChallenge(f.flow), /QRコードを表示する/)
+  assert.doesNotMatch(renderChallenge(f.flow), /コピー/)
+  await f.flow.startEnrollment()
+  const html = renderChallenge(f.flow)
+  assert.match(html, /<svg[^>]* role="img"[^>]*><title[^>]*>THEMIS 認証アプリ登録用QRコード<\/title>/)
+  assert.match(html, /<details[^>]*><summary[^>]*>QRコードを読み取れない場合<\/summary>/)
+  assert.match(html, /<details[^>]*>[\s\S]*<button>コピー<\/button>[\s\S]*<\/details>/)
+  assert.doesNotMatch(html, /otpauth:|<img\s/)
+  assert.equal([...html.matchAll(/data-filled="false"/g)].length, 6)
   assert.equal(f.commits(), 0)
 })
 

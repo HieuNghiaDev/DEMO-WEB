@@ -18,13 +18,15 @@ export type HistoryEntry = {
   action_type?: string | null
   actor: { id: number; full_name: string } | null
   communication: Communication | null
+  attachments?: HistoryAttachment[]
   changes: Record<string, { before: unknown; after: unknown }>
   legacy_detail?: Record<string, string | null>; legacy: boolean
   linked_task: { id: number; title: string } | null
   permissions: { can_edit: boolean; can_create_task: boolean }
   created_at?: string; updated_at?: string
 }
-export type HistoryPermissions = { can_view_history: boolean; can_add_communication: boolean; can_edit_communication: boolean; can_create_task: boolean }
+export type HistoryAttachment = { id: string; name: string; mime_type: string; size: number }
+export type HistoryPermissions = { can_view_history: boolean; can_add_communication: boolean; can_edit_communication: boolean; can_create_task: boolean; can_upload_attachments?: boolean }
 export type HistoryResponse = {
   entries: HistoryEntry[]; permissions: HistoryPermissions
   counts: { all: number; system: number; communication: number }

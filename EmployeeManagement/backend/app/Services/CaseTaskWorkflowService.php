@@ -50,10 +50,9 @@ class CaseTaskWorkflowService
     /** @param array{assigned_employee_id?: int, due_at?: mixed, priority?: string, description?: ?string} $data */
     public function manage(CaseFile $caseFile, CaseTask $task, Request $request, array $data): CaseTask
     {
-        $this->assertPermission($request->user(), 'task.manage');
-
         return DB::transaction(function () use ($caseFile, $task, $request, $data): CaseTask {
             $task = $this->lockedTask($caseFile, $task, $request->user());
+            CaseOperationalAccess::authorize($request->user(), $caseFile->id, 'manage_tasks');
             $this->assertNotFinal($task);
             $before = $task->only(['assigned_employee_id', 'due_at', 'priority', 'description']);
             if (array_key_exists('assigned_employee_id', $data)) {
@@ -85,10 +84,9 @@ class CaseTaskWorkflowService
 
     public function cancel(CaseFile $caseFile, CaseTask $task, Request $request): CaseTask
     {
-        $this->assertPermission($request->user(), 'task.manage');
-
         return DB::transaction(function () use ($caseFile, $task, $request): CaseTask {
             $task = $this->lockedTask($caseFile, $task, $request->user());
+            CaseOperationalAccess::authorize($request->user(), $caseFile->id, 'manage_tasks');
             $this->assertNotFinal($task);
             $task->update(['status' => 'cancelled', 'completed_at' => null]);
             $this->audit->record($caseFile, $request, 'タスクをキャンセル', $task->title, [
@@ -186,15 +184,11 @@ class CaseTaskWorkflowService
 
     public function approve(CaseFile $caseFile, CaseTask $task, CaseTaskSubmission $submission, Request $request): CaseTask
     {
-        $this->assertPermission($request->user(), 'task.review');
-
         return $this->review($caseFile, $task, $submission, $request, true, null);
     }
 
     public function reject(CaseFile $caseFile, CaseTask $task, CaseTaskSubmission $submission, Request $request, string $reason, ?string $detail = null): CaseTask
     {
-        $this->assertPermission($request->user(), 'task.review');
-
         return $this->review($caseFile, $task, $submission, $request, false, trim($reason), $detail);
     }
 
@@ -237,8 +231,8 @@ class CaseTaskWorkflowService
     ): CaseTask {
         return DB::transaction(function () use ($caseFile, $task, $submission, $request, $approve, $reason, $detail): CaseTask {
             abort_unless($caseFile->isVisibleTo($request->user()), 403);
-            $this->assertPermission($request->user(), 'task.review');
             $task = $this->lockedTask($caseFile, $task, $request->user());
+            CaseOperationalAccess::authorize($request->user(), $caseFile->id, 'review_tasks');
             if ($task->status !== 'pending_review') {
                 throw ValidationException::withMessages(['status' => 'このタスクはすでに確認済みです。']);
             }
@@ -249,6 +243,9 @@ class CaseTaskWorkflowService
             abort_unless($submission->case_task_id === $task->id
                 && $submission->case_document_id === $task->case_document_id, 404);
             if ($submission->source_type === 'auto_generated' || $submission->case_generated_document_id !== null) {
+                // A case task delegation is not legal/generated approval authority.
+                abort_unless($request->user()->hasPermission('task.review')
+                    && (! CaseOperationalAccess::enforced() || $request->user()->hasAnyRole(['lawyer', 'admin'])), 403);
                 LegalFinalizationGate::enforce($request->user());
             }
             $latest = CaseTaskSubmission::query()->where('case_task_id', $task->id)->orderByDesc('version')->lockForUpdate()->first();
@@ -414,11 +411,6 @@ class CaseTaskWorkflowService
         abort_unless($user?->employee_id !== null
             && (int) $user->employee_id === (int) $task->assigned_employee_id
             && $user->hasPermission('task.update'), 403, $message);
-    }
-
-    private function assertPermission(?User $user, string $permission): void
-    {
-        abort_unless($user?->hasPermission($permission), 403, 'このタスクを管理する権限がありません。');
     }
 
     private function assertNotFinal(CaseTask $task): void

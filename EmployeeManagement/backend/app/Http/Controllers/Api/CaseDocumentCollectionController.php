@@ -19,6 +19,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -115,6 +116,9 @@ class CaseDocumentCollectionController extends Controller
     public function update(Request $request, CaseFile $caseFile, CaseDocument $caseDocument, CaseWorkspaceAuditService $audit, DocumentCollectionTaskService $documentCollectionTasks): JsonResponse
     {
         abort_unless($caseDocument->case_file_id === $caseFile->id, 404);
+        if ($request->hasAny(['necessity_status', 'necessity_reason'])) {
+            Gate::authorize('decideDocumentNecessity', $caseFile);
+        }
 
         return $caseFile->getConnection()->transaction(function () use ($request, $caseFile, $caseDocument, $audit, $documentCollectionTasks) {
             // Same lock order as checklist generation; validate against the latest stored state.
@@ -131,9 +135,11 @@ class CaseDocumentCollectionController extends Controller
             }
             $data = $this->validatedPatch($request, $document);
             abort_unless(
-                ! array_key_exists('review_status', $data) || (\App\Services\Administration\MainRoles::assigned($request->user())
+                ! array_key_exists('review_status', $data) || (\App\Services\CaseOperationalAccess::enforced()
+                    ? $request->user()->hasAnyRole(['admin', 'lawyer']) && $request->user()->hasPermission('task.review')
+                    : (\App\Services\Administration\MainRoles::assigned($request->user())
                     ? $request->user()?->hasPermission('task.review')
-                    : $request->user()?->hasAnyRole(['level_4', 'level_5'])),
+                    : $request->user()?->hasAnyRole(['level_4', 'level_5']))),
                 403,
                 '資料の確認状態を変更する権限がありません。'
             );
@@ -160,6 +166,9 @@ class CaseDocumentCollectionController extends Controller
                 $document->save();
                 $task = null;
                 if ($document->requested_at && $document->assigned_employee_id && (! $wasPreparationConfirmed || $assigneeChanged)) {
+                    if (\App\Services\CaseOperationalAccess::enforced()) {
+                        \App\Services\CaseOperationalAccess::authorize($request->user(), $case->id, 'manage_tasks');
+                    }
                     $task = $documentCollectionTasks->synchronize($document, $request);
                 } elseif ($assigneeChanged && ! $document->assigned_employee_id) {
                     $documentCollectionTasks->cancelOpenTask($document);
@@ -177,6 +186,8 @@ class CaseDocumentCollectionController extends Controller
 
     public function bulkUpdateNecessity(Request $request, CaseFile $caseFile, CaseWorkspaceAuditService $audit): JsonResponse
     {
+        Gate::authorize('decideDocumentNecessity', $caseFile);
+
         $rules = [
             'case_document_ids' => ['required', 'array', 'min:1', 'max:100'],
             'case_document_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
@@ -350,6 +361,7 @@ class CaseDocumentCollectionController extends Controller
     public function reviewFile(Request $request, CaseFile $caseFile, CaseDocument $caseDocument, RequiredDocumentFileReview $review): JsonResponse
     {
         abort_unless($caseDocument->case_file_id === $caseFile->id, 404);
+        \App\Services\CaseOperationalAccess::authorize($request->user(), $caseFile->id, 'review_tasks');
         $data = $request->validate([
             'source' => ['required', Rule::in(['received', 'task_submission'])],
             'file_id' => ['required', 'integer', 'min:1'],

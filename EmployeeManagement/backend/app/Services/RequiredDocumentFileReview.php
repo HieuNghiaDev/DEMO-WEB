@@ -78,7 +78,8 @@ class RequiredDocumentFileReview
             CaseAccessService::rehearsal()?->authorizeWrite($request->user(), $case->id);
             CaseFile::whereKey($case->id)->lockForUpdate()->firstOrFail();
             $document = CaseDocument::whereKey($document->id)->where('case_file_id', $case->id)->lockForUpdate()->firstOrFail();
-            abort_unless($case->isVisibleTo($request->user()) && $request->user()->hasPermission('task.review'), 403);
+            // A standalone document review is distinct from a submitted task.
+            abort_unless(CaseOperationalAccess::canReviewFile($request->user()->fresh(), $case->id, $data['source']), 403);
             $current = $this->current($document);
             if (! $current || $current['source'] !== $data['source'] || $current['id'] !== $data['file_id']
                 || ! $current['reviewable']) {

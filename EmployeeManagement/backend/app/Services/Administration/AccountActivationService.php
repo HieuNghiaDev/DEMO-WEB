@@ -2,6 +2,8 @@
 
 namespace App\Services\Administration;
 
+use App\Contracts\AdministrativeAuthentication;
+use App\Models\Employee;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -12,20 +14,47 @@ use SensitiveParameter;
 
 final class AccountActivationService
 {
-    public function __construct(private readonly AdminContinuityGuard $guard) {}
+    public const ISSUE_ACTION = 'employee.issue_activation_invite';
+
+    public function __construct(
+        private readonly AdminContinuityGuard $guard,
+        private readonly AdministrativeAuthentication $authentication,
+    ) {}
 
     public static function identityHash(User $user): string
     {
         return hash('sha256', json_encode([$user->id, $user->email, $user->login_id, $user->employee_id], JSON_THROW_ON_ERROR));
     }
 
-    /** Internal issuance only. No HTTP/CLI delivery route until handover is approved. */
     public function issue(User $actor, User $target): ActivationInvitation
     {
-        return $this->guard->run(function () use ($actor, $target): ActivationInvitation {
+        return $this->issueInvitation($actor, $target);
+    }
+
+    public function issueForAdmin(User $actor, Employee $employee): ActivationInvitation
+    {
+        Gate::forUser($actor)->authorize('issueInviteAsAdmin', $employee);
+
+        return $this->issueInvitation($actor, $employee->user, $employee->id);
+    }
+
+    private function issueInvitation(User $actor, User $target, ?int $employeeId = null): ActivationInvitation
+    {
+        return $this->guard->run(function () use ($actor, $target, $employeeId): ActivationInvitation {
             $account = User::whereKey($target->id)->lockForUpdate()->firstOrFail();
             $this->requirePending($account);
-            Gate::forUser($actor->fresh())->authorize('issueInvite', $account->employee);
+            $currentActor = User::whereKey($actor->id)->firstOrFail();
+            $gate = Gate::forUser($currentActor);
+            if ($employeeId === null) {
+                $gate->authorize('issueInvite', $account->employee);
+            } else {
+                abort_unless($account->employee_id === $employeeId, 403);
+                $gate->authorize('issueInviteAsAdmin', $account->employee);
+                $this->authentication->consumeMutation($currentActor, self::ISSUE_ACTION, [
+                    'user_id' => $account->id,
+                    'employee_id' => $employeeId,
+                ]);
+            }
             $this->revokeUnused($account);
             $raw = bin2hex(random_bytes(32));
             $expires = now()->addHours(24);

@@ -96,6 +96,7 @@ class CaseWorkspaceItemController extends Controller
 
     public function storeTask(Request $request, CaseFile $caseFile): JsonResponse
     {
+        \App\Services\CaseOperationalAccess::authorize($request->user(), $caseFile->id, 'create_tasks');
         $data = $this->taskData($request);
         $task = app(CaseTaskService::class)->createStandalone($caseFile, $request, $data);
 
@@ -152,6 +153,7 @@ class CaseWorkspaceItemController extends Controller
 
     public function taskOptions(Request $request, CaseFile $caseFile): JsonResponse
     {
+        \App\Services\CaseOperationalAccess::authorize($request->user(), $caseFile->id, 'create_tasks');
         $documents = CaseDocument::query()
             ->where('case_file_id', $caseFile->id)
             ->where('necessity_status', 'required')
@@ -265,6 +267,7 @@ class CaseWorkspaceItemController extends Controller
         CaseTaskWorkflowService $workflow,
     ): JsonResponse {
         $this->ensureBelongsToCase($caseFile, $task);
+        \App\Services\CaseOperationalAccess::authorize($request->user(), $caseFile->id, 'review_tasks');
         $data = $request->validate(['reason' => ['required', 'string', 'max:5000']]);
 
         $task = $workflow->reject($caseFile, $task, $submission, $request, $data['reason']);

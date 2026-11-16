@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -7,7 +7,7 @@ import { useAuth } from "../contexts/AuthContext";
 import OfficeSwitcher from "../components/employee-room/OfficeSwitcher";
 import NotificationBell from "../components/employee-room/NotificationBell";
 import { getEmployeeAvatarImageUrl } from "../utils/employeeAvatar";
-import { UserAvatar } from "../components/ui";
+import { Button, ModalShell, UserAvatar } from "../components/ui";
 import { ButtonSpinner } from "../components/loading";
 import InternalChatPanel from "../features/internal-chat/InternalChatPanel";
 import {
@@ -26,17 +26,42 @@ import {
   Timer,
   Download,
   FileSpreadsheet,
-  History,
   X,
   Sun,
-  Users,
+  ChevronUp,
   Maximize2,
 } from "lucide-react";
 
 type WorkStatus = "working" | "break" | "outside" | "offline";
+const attendanceStatusActions = [
+  { status: "working", icon: Briefcase, tone: "var(--tm-success)" },
+  { status: "break", icon: Coffee, tone: "var(--tm-warning)" },
+  { status: "outside", icon: MapPin, tone: "var(--tm-info)" },
+  { status: "offline", icon: Power, tone: "var(--tm-danger)" },
+] as const;
+
 type OfficeId = "themis" | "law";
 type TaskModalMode = "start" | "change";
 type TaskDurationPreset = 30 | 60 | 120 | "custom";
+
+function AttendanceDialog({ titleId, busy, onClose, children, bottomSheet = false, className = "" }: {
+  titleId: string;
+  busy: boolean;
+  onClose: () => void;
+  children: ReactNode;
+  bottomSheet?: boolean;
+  className?: string;
+}) {
+  return (
+    <ModalShell isOpen customContent title={null} onClose={onClose} dismissible={!busy}
+      overlayClassName={`workspace-modal-backdrop flex justify-center bg-slate-950/50 backdrop-blur-[2px] ${bottomSheet ? "items-end sm:items-center sm:p-4" : "items-center p-4"}`}>
+      <div role="dialog" aria-modal="true" aria-labelledby={titleId} aria-busy={busy}
+        className={`themis-app workspace-modal-panel max-h-[calc(100dvh-2rem)] w-full overflow-y-auto overscroll-contain border border-[var(--tm-border)] bg-[var(--tm-surface)] shadow-[var(--tm-shadow-lg)] ${className}`}>
+        {children}
+      </div>
+    </ModalShell>
+  );
+}
 
 type Office = {
   id: OfficeId;
@@ -143,29 +168,6 @@ type AssignedTasksResponse = {
 type AssignedTaskResponse = {
   message: string;
   task: AssignedTask;
-};
-
-type TimelineAttendance = {
-  id: number;
-  work_date: string;
-  clock_in: string;
-  clock_out: string | null;
-  status: WorkStatus;
-};
-
-type TimelineSummary = {
-  break_count: number;
-  break_seconds: number;
-  outside_count: number;
-  outside_seconds: number;
-  work_seconds: number;
-};
-
-type TimelineResponse = {
-  attendance: TimelineAttendance | null;
-  summary: TimelineSummary;
-  activities: AttendancePeriod[];
-  work_sessions?: WorkSession[];
 };
 
 type NotificationKind = "success" | "info" | "warning" | "error";
@@ -278,22 +280,6 @@ const formatExpectedTime = (value: string) =>
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-    timeZone: "Asia/Tokyo",
-  }).format(new Date(value));
-
-const formatSeconds = (seconds: number) => {
-  const totalMinutes = Math.floor(seconds / 60);
-  const hours = Math.floor(totalMinutes / 60);
-  const rest = totalMinutes % 60;
-
-  return hours > 0 ? `${hours}時間${rest ? `${rest}分` : ""}` : `${rest}分`;
-};
-
-const formatWorkDate = (value: string) =>
-  new Intl.DateTimeFormat("ja-JP", {
-    month: "numeric",
-    day: "numeric",
-    weekday: "short",
     timeZone: "Asia/Tokyo",
   }).format(new Date(value));
 
@@ -626,8 +612,6 @@ export default function EmployeeRoom() {
   const [workStatus, setWorkStatus] = useState<WorkStatus>("working");
   const [isStartConfirmationOpen, setIsStartConfirmationOpen] =
     useState(false);
-  const [isStartConfirmationClosing, setIsStartConfirmationClosing] =
-    useState(false);
   const [isAttendanceReportPromptOpen, setIsAttendanceReportPromptOpen] =
     useState(false);
   const [isDownloadingAttendanceReport, setIsDownloadingAttendanceReport] =
@@ -658,7 +642,7 @@ export default function EmployeeRoom() {
   }));
   const [osakaWeather, setOsakaWeather] =
     useState<OsakaWeather>(defaultOsakaWeather);
-  const [memberActivityTab, setMemberActivityTab] = useState<"all" | WorkStatus>("all");
+  const [isAttendanceCollapsed, setIsAttendanceCollapsed] = useState(false);
   const [activeAttendances, setActiveAttendances] = useState<Attendance[]>([]);
   const [selectedAttendanceId, setSelectedAttendanceId] = useState<
     number | null
@@ -669,12 +653,9 @@ export default function EmployeeRoom() {
   const [, setNotifications] = useState<UserNotification[]>(() =>
     loadStoredNotifications(notificationStorageKey),
   );
-  const [isStatusModalClosing, setIsStatusModalClosing] = useState(false);
   const [toastNotification, setToastNotification] =
     useState<UserNotification | null>(null);
   const [assignedTasks, setAssignedTasks] = useState<AssignedTask[]>([]);
-  const [timeline, setTimeline] = useState<TimelineResponse | null>(null);
-  const [timelineError, setTimelineError] = useState("");
   const [taskClock, setTaskClock] = useState(() => Date.now());
   const [updatingAssignedTaskId, setUpdatingAssignedTaskId] = useState<
     number | null
@@ -699,71 +680,6 @@ export default function EmployeeRoom() {
   const pendingAssignedTaskCount = assignedTasks.filter(
     (task) => task.status === "pending",
   ).length;
-  const timelineEvents = timeline?.attendance
-    ? [
-        {
-          id: `shift-start-${timeline.attendance.id}`,
-          at: timeline.attendance.clock_in,
-          title: "勤務開始",
-          detail: "出勤",
-          kind: "working" as const,
-        },
-        ...timeline.activities.flatMap((activity) => {
-          const startEvent = {
-            id: `activity-start-${activity.id}`,
-            at: activity.started_at,
-            title: activity.type === "break" ? "休憩開始" : "外出",
-            detail:
-              activity.type === "outside"
-                ? [
-                    activity.destination || "外出先未登録",
-                    activity.expected_end_at
-                      ? `帰社予定 ${formatWorkTime(activity.expected_end_at)}`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join("・")
-                : "休憩に入りました",
-            kind: activity.type,
-          };
-
-          if (!activity.ended_at) return [startEvent];
-
-          const durationSeconds = Math.max(
-            0,
-            Math.floor(
-              (new Date(activity.ended_at).getTime() -
-                new Date(activity.started_at).getTime()) /
-                1000,
-            ),
-          );
-
-          return [
-            startEvent,
-            {
-              id: `activity-end-${activity.id}`,
-              at: activity.ended_at,
-              title: activity.type === "break" ? "勤務再開" : "帰社",
-              detail: formatSeconds(durationSeconds),
-              kind: "working" as const,
-            },
-          ];
-        }),
-        ...(timeline.attendance.clock_out
-          ? [
-              {
-                id: `shift-end-${timeline.attendance.id}`,
-                at: timeline.attendance.clock_out,
-                title: "勤務終了",
-                detail: "退勤",
-                kind: "offline" as const,
-              },
-            ]
-          : []),
-      ].sort((left, right) => new Date(left.at).getTime() - new Date(right.at).getTime())
-    : [];
-  const recentTimelineEvents = timelineEvents.slice(-4);
-
   const saveNotifications = useCallback(
     (nextNotifications: UserNotification[]) => {
       if (!notificationStorageKey) return;
@@ -904,18 +820,6 @@ export default function EmployeeRoom() {
     }
   }, []);
 
-  const loadTimeline = useCallback(async () => {
-    try {
-      const response = await api.get<TimelineResponse>(
-        "/attendances/my-timeline",
-      );
-      setTimeline(response.data);
-      setTimelineError("");
-    } catch {
-      setTimelineError("本日の勤務履歴を読み込めませんでした。");
-    }
-  }, []);
-
   useEffect(() => {
     if (!user || !notificationStorageKey) return;
 
@@ -985,21 +889,6 @@ export default function EmployeeRoom() {
       window.clearInterval(intervalId);
     };
   }, [loadAssignedTasks]);
-
-  useEffect(() => {
-    const initialLoadId = window.setTimeout(() => {
-      void loadTimeline();
-    }, 0);
-
-    const intervalId = window.setInterval(() => {
-      void loadTimeline();
-    }, 10000);
-
-    return () => {
-      window.clearTimeout(initialLoadId);
-      window.clearInterval(intervalId);
-    };
-  }, [loadTimeline]);
 
   useEffect(() => {
     const pendingTasks = assignedTasks.filter((task) => task.status === "pending");
@@ -1283,7 +1172,6 @@ export default function EmployeeRoom() {
         );
       }
 
-      void loadTimeline();
 
       pushNotification({
         sourceKey: `assigned-task-${status}-${updatedTask.id}`,
@@ -1309,6 +1197,7 @@ export default function EmployeeRoom() {
   const openTaskModal = (mode: TaskModalMode) => {
     const startTime = getJapanTimeInput();
 
+    setErrorMessage("");
     setTaskDescription("");
     setTaskStartTime(startTime);
     setTaskExpectedEndTime(getJapanTimeInput(60));
@@ -1328,26 +1217,7 @@ export default function EmployeeRoom() {
     if (!employeeName || isWorkStarted || isSubmitting) return;
 
     setErrorMessage("");
-    setIsStartConfirmationClosing(false);
     setIsStartConfirmationOpen(true);
-  };
-
-  const closeStartConfirmation = (force = false) => {
-    if ((!force && isSubmitting) || isStartConfirmationClosing) return;
-    setIsStartConfirmationClosing(true);
-    window.setTimeout(() => {
-      setIsStartConfirmationOpen(false);
-      setIsStartConfirmationClosing(false);
-    }, 360);
-  };
-
-  const closeStatusModal = (force = false) => {
-    if ((!force && isSubmitting) || isStatusModalClosing) return;
-    setIsStatusModalClosing(true);
-    window.setTimeout(() => {
-      setPendingStatus(null);
-      setIsStatusModalClosing(false);
-    }, 360);
   };
 
   const handleConfirmStartWork = async () => {
@@ -1367,13 +1237,12 @@ export default function EmployeeRoom() {
       setWorkStatus(newAttendance.status);
       setIsWorkStarted(true);
       setActiveWorkSession(newAttendance.active_work_session ?? null);
-      closeStartConfirmation(true);
+      setIsStartConfirmationOpen(false);
       setSelectedOffice("themis");
       setActiveAttendances((current) => [
         ...current.filter((item) => item.id !== newAttendance.id),
         newAttendance,
       ]);
-      void loadTimeline();
       pushNotification({
         sourceKey: `attendance-start-${newAttendance.id}`,
         title: "勤務を開始しました",
@@ -1469,7 +1338,6 @@ export default function EmployeeRoom() {
         ),
       );
       setTaskModalMode(null);
-      void loadTimeline();
       pushNotification({
         sourceKey: `work-session-${workSession.id}`,
         title: "作業を開始しました",
@@ -1511,7 +1379,6 @@ export default function EmployeeRoom() {
             : attendance,
         ),
       );
-      void loadTimeline();
       void loadAssignedTasks();
       pushNotification({
         sourceKey: `work-session-completed-${completedSession.id}`,
@@ -1563,7 +1430,7 @@ export default function EmployeeRoom() {
       setOutsideExpectedEndTime(getJapanTimeInput(60));
     }
 
-    setIsStatusModalClosing(false);
+    setErrorMessage("");
     setPendingStatus(status);
   };
 
@@ -1609,8 +1476,7 @@ export default function EmployeeRoom() {
 
       setWorkStatus(updatedAttendance.status);
       setActiveWorkSession(updatedAttendance.active_work_session ?? null);
-      closeStatusModal(true);
-      void loadTimeline();
+      setPendingStatus(null);
 
       setActiveAttendances((current) => {
         if (updatedAttendance.status === "offline") {
@@ -1690,23 +1556,11 @@ export default function EmployeeRoom() {
     }
   };
 
-  const handleCancelStatus = () => {
-    closeStatusModal();
+  const closeAttendanceReport = () => {
+    setIsAttendanceReportPromptOpen(false);
+    setAttendanceReportError("");
   };
 
-  const memberStatusLabel = (status: WorkStatus) => statusLabels[status];
-
-  const filteredMembers = memberActivityTab === "all"
-    ? activeAttendances
-    : activeAttendances.filter((a) => a.status === memberActivityTab);
-
-  const memberCounts = {
-    all: activeAttendances.length,
-    working: activeAttendances.filter((a) => a.status === "working").length,
-    break: activeAttendances.filter((a) => a.status === "break").length,
-    outside: activeAttendances.filter((a) => a.status === "outside").length,
-    offline: activeAttendances.filter((a) => a.status === "offline").length,
-  };
   const officeMapPositionByAttendanceId = getOfficeMapPositions(visibleAttendances);
 
   const openOfficeMapLandscape = async () => {
@@ -1735,11 +1589,11 @@ export default function EmployeeRoom() {
   };
 
   return (
-    <div className="min-h-screen overflow-x-clip bg-slate-50 pb-16 dark:bg-[#090B0E]">
+    <div className="overflow-x-clip bg-slate-50 pb-3 dark:bg-[#090B0E]">
       {/* ── Page header ── */}
       <header className="border-b border-slate-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <div className="mx-auto max-w-[1600px] px-3 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:gap-4 sm:py-5">
+        <div className="mx-auto max-w-[1680px] px-3 sm:px-4 lg:px-5">
+          <div className="flex flex-col gap-2.5 py-3 sm:flex-row sm:items-center sm:gap-4 sm:py-3.5">
             {/* Title */}
             <div className="min-w-0 flex-1">
               <h1 className="text-xl font-bold leading-tight text-gray-800 dark:text-slate-100 sm:text-2xl">
@@ -1775,7 +1629,7 @@ export default function EmployeeRoom() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1600px] px-3 pt-5 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-[1680px] px-3 pt-3 sm:px-4 lg:px-5">
       {/* 2. Office selector — selection/data handling remains in this page. */}
       <OfficeSwitcher
         offices={Object.values(offices)}
@@ -1785,11 +1639,9 @@ export default function EmployeeRoom() {
       />
 
 
-      {/* 4. Main Grid Section */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Left Column */}
-        <div key={`office-scene-${selectedOffice}`} className="workspace-office-scene rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/[0.03] dark:border-slate-800 dark:bg-slate-900 sm:p-5 lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
+      <div className="grid grid-cols-1 gap-3 sm:gap-3.5 lg:grid-cols-[minmax(0,1.62fr)_minmax(360px,1fr)]">
+        <div key={`office-scene-${selectedOffice}`} className="workspace-office-scene min-w-0 self-start rounded-tm-panel border border-[var(--tm-border)] bg-[var(--tm-surface)] p-3.5 sm:p-4 lg:col-start-1 lg:row-start-1">
+          <div className="mb-3 flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500">
                 {selectedOfficeInfo.shortName}
@@ -1920,233 +1772,276 @@ export default function EmployeeRoom() {
               />
             )}
           </div>
-
-          {/* Work Attendance Section */}
-          <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50/70 p-4 sm:p-5">
-            {/* Section Header */}
-            <div className="mb-4">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500">
-                WORK ATTENDANCE
-              </span>
-
-              <h3 className="mt-1 text-base font-bold text-gray-800">
-                勤務登録
-              </h3>
-
-              <p className="mt-1 text-xs text-gray-400">
-                ログイン中の社員情報で勤務を登録します
-              </p>
-            </div>
-
-            {/* Logged-in Employee */}
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <div className="flex-1">
-                <span className="mb-1.5 block text-xs font-semibold text-gray-600">
-                  氏名
-                </span>
-
-                <div className="flex h-11 w-full items-center rounded-xl border border-indigo-100 bg-indigo-50/70 px-4 text-sm font-bold text-gray-800">
-                  {employeeName || "社員情報を取得できません"}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleStartRequest}
-                disabled={!employeeName || isWorkStarted || isSubmitting}
-                className="flex h-11 items-center justify-center gap-2 self-end rounded-xl bg-[#635BFF] px-5 text-sm font-bold text-white shadow-md shadow-indigo-500/20 transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none"
-              >
-                {isSubmitting ? <ButtonSpinner size={17} /> : <Play size={17} />}
-                {isSubmitting ? "処理中…" : "勤務開始"}
-              </button>
-            </div>
-
-            {/* Error Message */}
-            {errorMessage && (
-              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-                {errorMessage}
-              </div>
-            )}
-
-            {/* Status Selection */}
-            {isWorkStarted && (
-              <div className="mt-5 border-t border-gray-200 pt-5">
-                {/* Employee Information */}
-                <div className="mb-4 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-                  <div>
-                    <span className="text-xs text-gray-400">勤務者</span>
-
-                    <p className="font-bold text-gray-800">
-                      {employeeName}さん
-                    </p>
-                  </div>
-
-                  <span
-                    className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${
-                      workStatus === "break"
-                        ? "bg-amber-50 text-amber-600"
-                        : workStatus === "outside"
-                          ? "bg-blue-50 text-blue-600"
-                          : "bg-emerald-50 text-emerald-600"
-                    }`}
-                  >
-                    {statusLabels[workStatus]}
-                  </span>
-                </div>
-
-                <div className="mb-5 rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/70 p-4 shadow-sm dark:border-indigo-400/25 dark:from-slate-900 dark:to-indigo-950/80 dark:shadow-indigo-950/30">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-indigo-500">
-                        <ListTodo size={14} />
-                        CURRENT TASK
-                      </div>
-
-                      {activeWorkSession ? (
-                        <>
-                          <p className="mt-2 break-words text-sm font-bold text-gray-800">
-                            {activeWorkSession.task_description}
-                          </p>
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
-                            <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 shadow-sm ring-1 ring-indigo-100">
-                              <Clock3 size={13} className="text-indigo-500" />
-                              {formatWorkTime(activeWorkSession.started_at)}
-                              <span className="text-gray-300">→</span>
-                              {formatWorkTime(
-                                activeWorkSession.expected_end_at,
-                              )}
-                            </span>
-                            <span className="rounded-full bg-indigo-100 px-2.5 py-1 font-bold text-indigo-600">
-                              進行中
-                            </span>
-                          </div>
-                        </>
-                      ) : (
-                        <p className="mt-2 text-sm font-medium text-gray-400">
-                          現在登録されている作業はありません
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex shrink-0 gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          openTaskModal(
-                            activeWorkSession ? "change" : "start",
-                          )
-                        }
-                        disabled={isSubmitting}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-600 transition hover:bg-indigo-50 disabled:opacity-60"
-                      >
-                        <PencilLine size={14} />
-                        {activeWorkSession ? "作業を変更" : "作業を登録"}
-                      </button>
-
-                      {activeWorkSession && (
-                        <button
-                          type="button"
-                          onClick={handleCompleteTask}
-                          disabled={isSubmitting}
-                          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm shadow-emerald-500/20 transition hover:bg-emerald-700 disabled:opacity-60"
-                        >
-                          <CheckCircle2 size={14} />
-                          完了
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <p className="mb-3 text-xs font-semibold text-gray-600">
-                  勤務ステータス
-                </p>
-
-                {workStatus === "outside" && (
-                    <div className="mb-3 flex flex-col gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-3.5 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-xs font-bold text-orange-800">外出・出張を終了しますか？</p>
-                        <p className="mt-1 text-[11px] text-orange-700">帰社した今の時刻を実際の終了時刻として記録します。予定より早くても遅くても記録できます。</p>
-                        {ownActiveAttendance?.outside_expected_end && <p className="mt-1.5 text-[11px] font-semibold text-orange-700">帰社予定: {formatWorkTime(ownActiveAttendance.outside_expected_end)}</p>}
-                      </div>
-                      <button type="button" onClick={() => handleStatusRequest("working")} disabled={isSubmitting} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-orange-500/25 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"><CheckCircle2 size={15} />外出を終了・帰社</button>
-                    </div>
-                )}
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  {/* Working */}
-                  <button
-                    type="button"
-                    onClick={() => handleStatusRequest("working")}
-                    disabled={isSubmitting}
-                    className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                      workStatus === "working"
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-600 ring-2 ring-emerald-100"
-                        : "border-gray-200 bg-white text-gray-500 hover:border-emerald-300 hover:bg-emerald-50"
-                    }`}
-                  >
-                    <Briefcase size={17} />
-                    勤務中
-                  </button>
-
-                  {/* Break */}
-                  <button
-                    type="button"
-                    onClick={() => handleStatusRequest("break")}
-                    disabled={isSubmitting}
-                    className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                      workStatus === "break"
-                        ? "border-amber-500 bg-amber-50 text-amber-600 ring-2 ring-amber-100"
-                        : "border-gray-200 bg-white text-gray-500 hover:border-amber-300 hover:bg-amber-50"
-                    }`}
-                  >
-                    <Coffee size={17} />
-                    休憩中
-                  </button>
-
-                  {/* Outside */}
-                  <button
-                    type="button"
-                    onClick={() => handleStatusRequest("outside")}
-                    disabled={isSubmitting}
-                    className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                      workStatus === "outside"
-                        ? "border-blue-500 bg-blue-50 text-blue-600 ring-2 ring-blue-100"
-                        : "border-gray-200 bg-white text-gray-500 hover:border-blue-300 hover:bg-blue-50"
-                    }`}
-                  >
-                    <MapPin size={17} />
-                    外出中
-                  </button>
-
-                  {/* Offline */}
-                  <button
-                    type="button"
-                    onClick={() => handleStatusRequest("offline")}
-                    disabled={isSubmitting}
-                    className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                      workStatus === "offline"
-                        ? "border-red-500 bg-red-50 text-red-600 ring-2 ring-red-100"
-                        : "border-red-200 bg-white text-red-500 hover:border-red-400 hover:bg-red-50"
-                    }`}
-                  >
-                    <Power size={17} />
-                    オフライン
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
 
+          <section aria-labelledby="work-attendance-title" className="@container min-w-0 self-start overflow-hidden rounded-tm-panel border border-[var(--tm-border)] bg-[var(--tm-surface)] shadow-xs lg:col-span-2 lg:row-start-2">
+            <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-[var(--tm-surface-elevated)]/65 px-3.5 py-2.5 sm:px-4">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <UserAvatar
+                    name={employeeName || "社員"}
+                    stableKey={user?.employee?.id ?? employeeName}
+                    imageSrc={getEmployeeAvatarImageUrl(user?.employee?.avatar_path)}
+                    imageAlt={`${employeeName || "社員"}のプロフィール画像`}
+                    size="md"
+                    status={isWorkStarted ? workStatus : "offline"}
+                  />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-[var(--tm-primary)]">
+                        <Briefcase size={12} aria-hidden="true" />
+                        ATTENDANCE
+                      </span>
+                      <span className="text-[var(--tm-border)]" aria-hidden="true">·</span>
+                      <h3 id="work-attendance-title" className="text-sm font-bold text-[var(--tm-text-primary)]">勤務登録</h3>
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
+                          !isWorkStarted
+                            ? "border-[var(--tm-border)] bg-[var(--tm-surface)] text-[var(--tm-text-secondary)]"
+                            : workStatus === "working"
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                            : workStatus === "break"
+                            ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                            : workStatus === "outside"
+                            ? "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                            : "border-[var(--tm-border)] bg-[var(--tm-surface)] text-[var(--tm-text-secondary)]"
+                        }`}
+                      >
+                        <span
+                          className={`size-1.5 rounded-full ${
+                            !isWorkStarted
+                              ? "bg-slate-400"
+                              : workStatus === "working"
+                              ? "bg-emerald-500"
+                              : workStatus === "break"
+                              ? "bg-amber-500"
+                              : workStatus === "outside"
+                              ? "bg-sky-500"
+                              : "bg-slate-400"
+                          }`}
+                          aria-hidden="true"
+                        />
+                        {isWorkStarted ? statusLabels[workStatus] : "未出勤"}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--tm-text-secondary)]">
+                      <span className="font-semibold text-[var(--tm-text-primary)]">
+                        {employeeName || "社員情報を取得できません"}
+                      </span>
+                      {user?.employee?.employee_code && (
+                        <span className="font-mono text-[11px] text-[var(--tm-text-muted)]">
+                          {user.employee.employee_code}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {isWorkStarted && (
+                  <div className="flex flex-wrap items-center gap-2 border-l border-[var(--tm-border)] pl-4 max-md:hidden">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] px-2.5 py-1 text-xs text-[var(--tm-text-secondary)]">
+                      <Clock3 size={13} className="text-[var(--tm-primary)]" aria-hidden="true" />
+                      <span>出勤</span>
+                      <strong className="font-mono font-semibold text-[var(--tm-text-primary)]">
+                        {ownActiveAttendance?.clock_in ? formatWorkTime(ownActiveAttendance.clock_in) : "--:--"}
+                      </strong>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] px-2.5 py-1 text-xs text-[var(--tm-text-secondary)]">
+                      <MapPin size={13} className="text-[var(--tm-primary)]" aria-hidden="true" />
+                      <span className="font-medium text-[var(--tm-text-primary)]">{selectedOfficeInfo.name}</span>
+                    </span>
+                    <span
+                      className={`inline-flex max-w-xs items-center gap-1.5 rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] px-2.5 py-1 text-xs text-[var(--tm-text-secondary)] transition-all duration-250 ease-out motion-reduce:transition-none ${
+                        isAttendanceCollapsed ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-1 opacity-0 hidden"
+                      }`}
+                    >
+                      <ListTodo size={13} className="shrink-0 text-[var(--tm-primary)]" aria-hidden="true" />
+                      <span className="truncate font-medium text-[var(--tm-text-primary)]">
+                        {activeWorkSession?.task_description ?? "作業未登録"}
+                      </span>
+                      {activeWorkSession && (
+                        <span className="shrink-0 font-mono text-[11px] text-[var(--tm-text-muted)]">
+                          {formatWorkTime(activeWorkSession.started_at)}～{formatWorkTime(activeWorkSession.expected_end_at)}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {!isWorkStarted && (
+                  <Button type="button" variant="primary" onClick={handleStartRequest} disabled={!employeeName || isSubmitting}
+                    icon={<Play size={15} aria-hidden="true" />} className="min-h-9">
+                    勤務開始
+                  </Button>
+                )}
+                {isWorkStarted && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-expanded={!isAttendanceCollapsed}
+                    aria-controls="work-attendance-panel-body"
+                    onClick={() => setIsAttendanceCollapsed((prev) => !prev)}
+                    icon={
+                      <ChevronUp
+                        size={15}
+                        aria-hidden="true"
+                        className={`transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+                          isAttendanceCollapsed ? "rotate-180" : "rotate-0"
+                        }`}
+                      />
+                    }
+                    className="min-h-9 bg-[var(--tm-surface)]"
+                  >
+                    {isAttendanceCollapsed ? "展開" : "折りたたむ"}
+                  </Button>
+                )}
+              </div>
+            </header>
+
+            {errorMessage && (
+              <div className="px-4 pt-3 sm:px-5">
+                <p role="alert" className="rounded-lg border border-[var(--tm-danger)] px-3 py-2 text-sm text-[var(--tm-danger)]">
+                  {errorMessage}
+                </p>
+              </div>
+            )}
+
+            {isWorkStarted && (
+              <div
+                id="work-attendance-panel-body"
+                aria-hidden={isAttendanceCollapsed}
+                className={`grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+                  isAttendanceCollapsed ? "pointer-events-none grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
+                }`}
+              >
+                <div className="min-h-0 overflow-hidden">
+                  <div className="grid grid-cols-1 gap-3 border-t border-[var(--tm-border)] p-3 sm:px-4 sm:py-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] xl:items-stretch">
+                    <div className="flex min-w-0 flex-col justify-between rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)]/45 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-semibold tracking-wide text-[var(--tm-text-secondary)]">
+                          勤務ステータス切替
+                        </span>
+                        <span className="text-[11px] text-[var(--tm-text-muted)]">
+                          現在: <strong className="font-semibold text-[var(--tm-text-primary)]">{statusLabels[workStatus]}</strong>
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 @min-[460px]:grid-cols-4" role="group" aria-label="勤務ステータス">
+                        {attendanceStatusActions.map(({ status, icon: Icon, tone }) => (
+                          <Button key={status} type="button" variant="outline" aria-pressed={workStatus === status}
+                            style={{ "--attendance-tone": tone } as CSSProperties}
+                            className={`min-h-10 min-w-0 bg-[var(--tm-surface)] aria-pressed:border-[var(--attendance-tone)] aria-pressed:bg-[color-mix(in_srgb,var(--attendance-tone)_12%,var(--tm-surface))] aria-pressed:font-semibold aria-pressed:shadow-2xs ${status === "offline" ? "text-red-700! dark:text-red-300!" : ""}`}
+                            icon={<Icon size={15} aria-hidden="true" />} disabled={isSubmitting} onClick={() => handleStatusRequest(status)}>
+                            {statusLabels[status]}
+                          </Button>
+                        ))}
+                      </div>
+
+                      {workStatus === "outside" && (
+                        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sky-500/25 bg-sky-500/5 px-3 py-2">
+                          <p className="min-w-0 text-xs leading-5 text-[var(--tm-text-secondary)]">
+                            現在時刻を帰社時刻として記録します。
+                            {ownActiveAttendance?.outside_expected_end && (
+                              <span className="ml-2 font-semibold text-[var(--tm-text-primary)]">帰社予定 {formatWorkTime(ownActiveAttendance.outside_expected_end)}</span>
+                            )}
+                          </p>
+                          <Button type="button" variant="outline" size="sm" onClick={() => handleStatusRequest("working")} disabled={isSubmitting}
+                            icon={<CheckCircle2 size={15} aria-hidden="true" />} className="min-h-8 bg-[var(--tm-surface)]">
+                            外出を終了・帰社
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex min-w-0 flex-col justify-between rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)]/45 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-[var(--tm-text-secondary)]">
+                          <ListTodo size={13} className="text-[var(--tm-primary)]" aria-hidden="true" />
+                          {activeWorkSession ? "進行中の作業" : "現在の作業"}
+                        </span>
+                        {activeWorkSession ? (
+                          <span className="inline-flex items-center gap-1 rounded-md border border-[var(--tm-primary)]/25 bg-[var(--tm-primary-muted)] px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-[var(--tm-primary)]">
+                            <Timer size={11} aria-hidden="true" />
+                            {formatWorkTime(activeWorkSession.started_at)} ～ {formatWorkTime(activeWorkSession.expected_end_at)}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--tm-text-muted)]">
+                            <span className="size-1.5 rounded-full bg-slate-400" aria-hidden="true" />
+                            状態: <strong className="font-semibold text-[var(--tm-text-secondary)]">未登録</strong>
+                          </span>
+                        )}
+                      </div>
+
+                      <div
+                        className={`flex min-h-10 flex-wrap items-center justify-between gap-2.5 rounded-lg border px-3 py-1 transition-colors ${
+                          activeWorkSession
+                            ? "border-[var(--tm-primary)]/30 bg-[color-mix(in_srgb,var(--tm-primary)_8%,var(--tm-surface))]"
+                            : "border-dashed border-[var(--tm-border)] bg-[var(--tm-surface)]"
+                        }`}
+                      >
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <span
+                            className={`size-2 shrink-0 rounded-full ${
+                              activeWorkSession ? "bg-[var(--tm-primary)]" : "bg-slate-300 dark:bg-slate-600"
+                            }`}
+                            aria-hidden="true"
+                          />
+                          <p
+                            className={`truncate text-xs sm:text-sm ${
+                              activeWorkSession
+                                ? "font-semibold text-[var(--tm-text-primary)]"
+                                : "text-[var(--tm-text-secondary)]"
+                            }`}
+                          >
+                            {activeWorkSession?.task_description ?? "現在登録されている作業はありません"}
+                          </p>
+                        </div>
+
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={activeWorkSession ? "outline" : "primary"}
+                            onClick={() => openTaskModal(activeWorkSession ? "change" : "start")}
+                            disabled={isSubmitting}
+                            icon={<PencilLine size={14} aria-hidden="true" />}
+                            className={`min-h-8 ${activeWorkSession ? "bg-[var(--tm-surface)]" : ""}`}
+                          >
+                            {activeWorkSession ? "作業を変更" : "作業を登録"}
+                          </Button>
+                          {activeWorkSession && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="primary"
+                              onClick={handleCompleteTask}
+                              disabled={isSubmitting}
+                              icon={<CheckCircle2 size={14} aria-hidden="true" />}
+                              className="min-h-8"
+                            >
+                              完了
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
+
         {/* Right Column */}
-        <div className="flex flex-col gap-6">
-          <div className="order-1">
+        <div className="flex min-w-0 flex-col gap-4 sm:gap-5 lg:contents">
+          <div className="min-w-0 lg:relative lg:col-start-2 lg:row-start-1 lg:min-h-[410px] lg:[&>.internal-chat-panel]:absolute lg:[&>.internal-chat-panel]:inset-0 lg:[&>.internal-chat-panel]:h-full!">
             <InternalChatPanel variant="embedded" />
           </div>
 
           {/* Retained for future notification entry; hidden only in Employee Room. */}
-          <div hidden className="hidden order-3 relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div hidden className="hidden relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <div className={`absolute left-0 right-0 top-0 h-1 ${myQuestTasks.length ? "bg-indigo-500" : "bg-slate-300 dark:bg-slate-700"}`} />
 
             <div className="mb-4">
@@ -2259,195 +2154,6 @@ export default function EmployeeRoom() {
             )}
 
           </div>
-
-          {/* Live attendance timeline: shown only while the employee is clocked in. */}
-          {timeline?.attendance && (
-          <div className="order-3 relative overflow-hidden rounded-2xl border border-sky-100 bg-white p-5 shadow-sm dark:border-sky-500/20 dark:bg-slate-900">
-            <div className="absolute left-0 right-0 top-0 h-1 bg-gradient-to-r from-sky-500 to-indigo-500" />
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-600 dark:text-sky-300">
-                  <History size={13} /> TODAY ACTIVITY
-                </span>
-                <h3 className="mt-1 text-sm font-bold text-slate-800 dark:text-white">本日の勤務履歴</h3>
-                <p className="mt-0.5 text-[10px] text-slate-400">{formatWorkDate(timeline.attendance.work_date)}</p>
-              </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[9px] font-bold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> LIVE
-              </span>
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-2">
-                {[
-                  ["出勤", formatWorkTime(timeline.attendance.clock_in), "text-indigo-600 dark:text-indigo-300"],
-                  ["休憩", `${timeline.summary.break_count}回・${formatSeconds(timeline.summary.break_seconds)}`, "text-amber-600 dark:text-amber-300"],
-                  ["外出", `${timeline.summary.outside_count}回・${formatSeconds(timeline.summary.outside_seconds)}`, "text-sky-600 dark:text-sky-300"],
-                  ["実働", formatSeconds(timeline.summary.work_seconds), "text-emerald-600 dark:text-emerald-300"],
-                ].map(([label, value, color]) => (
-                  <div key={label} className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800/70">
-                    <p className="text-[9px] font-medium text-slate-400">{label}</p>
-                    <p className={`mt-0.5 text-xs font-bold ${color}`}>{value}</p>
-                  </div>
-                ))}
-            </div>
-
-            {timelineError && (
-              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-[10px] font-semibold text-red-600 dark:bg-red-500/10 dark:text-red-300">{timelineError}</p>
-            )}
-
-            {recentTimelineEvents.length > 0 && (
-              <div className="mt-5 border-t border-slate-100 pt-4 dark:border-slate-700">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">RECENT ACTIVITY</p>
-                  {timelineEvents.length > recentTimelineEvents.length && (
-                    <p className="text-[9px] text-slate-400">最新{recentTimelineEvents.length}件を表示</p>
-                  )}
-                </div>
-                <div className="overflow-x-auto pb-1">
-                  <div className="flex min-w-max px-1">
-                    {recentTimelineEvents.map((event, index) => (
-                      <div key={event.id} className="w-28 shrink-0 text-center">
-                        <time className="font-mono text-[10px] font-semibold text-slate-400">
-                          {formatWorkTime(event.at)}
-                        </time>
-                        <div className="mt-1.5 flex items-center">
-                          <span className={`h-px flex-1 ${index === 0 ? "bg-transparent" : "bg-slate-200 dark:bg-slate-700"}`} />
-                          <span className={`relative z-10 h-2.5 w-2.5 shrink-0 rounded-full ring-[3px] ring-white dark:ring-slate-900 ${event.kind === "break" ? "bg-amber-400" : event.kind === "outside" ? "bg-sky-500" : event.kind === "offline" ? "bg-slate-400" : "bg-emerald-500"}`} />
-                          <span className={`h-px flex-1 ${index === recentTimelineEvents.length - 1 ? "bg-transparent" : "bg-slate-200 dark:bg-slate-700"}`} />
-                        </div>
-                        <p className="mt-2 truncate px-1 text-[11px] font-bold text-slate-700 dark:text-slate-200">
-                          {event.title}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          )}
-
-          {/* Member Activity Card — replaces AI card */}
-          <div className="order-2 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-            {/* Card header */}
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <Users size={16} className="text-indigo-500" />
-                <div>
-                  <span className="block text-[10px] font-bold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
-                    MEMBER STATUS
-                  </span>
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-white">
-                    メンバーの稼働状況
-                  </h3>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="text-[11px] font-semibold text-indigo-600 hover:underline dark:text-indigo-300"
-              >
-                全メンバーを見る →
-              </button>
-            </div>
-
-            {/* Filter tabs */}
-            <div className="flex gap-1 overflow-x-auto border-b border-slate-100 px-4 pb-0 pt-3 dark:border-slate-800">
-              {([
-                { key: "all", label: "全体" },
-                { key: "working", label: "出社" },
-                { key: "outside", label: "外出" },
-                { key: "break", label: "休憩" },
-              ] as const).map(({ key, label }) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setMemberActivityTab(key)}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-t-lg px-3 pb-2.5 pt-1 text-[11px] font-semibold transition ${
-                    memberActivityTab === key
-                      ? "border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-300"
-                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                  }`}
-                >
-                  {label}
-                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
-                    memberActivityTab === key
-                      ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300"
-                      : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                  }`}>
-                    {key === "all"
-                      ? memberCounts.all
-                      : key === "working"
-                      ? memberCounts.working
-                      : key === "outside"
-                      ? memberCounts.outside
-                      : memberCounts.break}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            {/* Member list */}
-            <div className="max-h-[260px] overflow-y-auto">
-              {filteredMembers.length === 0 ? (
-                <div className="px-5 py-6 text-center">
-                  <p className="text-xs text-slate-400 dark:text-slate-500">
-                    該当するメンバーはいません
-                  </p>
-                </div>
-              ) : (
-                filteredMembers.slice(0, 8).map((attendance) => {
-                  const name =
-                    attendance.employee?.full_name?.trim() ||
-                    attendance.employee_name;
-                  const position =
-                    attendance.employee?.position_title || "社員";
-                  const task =
-                    attendance.active_work_session?.task_description || null;
-                  const clockInTime = formatWorkTime(attendance.clock_in);
-
-                  return (
-                    <div
-                      key={attendance.id}
-                      className="flex items-center gap-3 border-b border-slate-50 px-5 py-3 last:border-b-0 hover:bg-slate-50/70 dark:border-slate-800 dark:hover:bg-slate-800/50"
-                    >
-                      <UserAvatar
-                        name={name}
-                        stableKey={attendance.employee?.id ?? name}
-                        imageSrc={getEmployeeAvatarImageUrl(attendance.employee?.avatar_path)}
-                        imageAlt={`${name}のプロフィール画像`}
-                        size="md"
-                        status={attendance.status}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-xs font-bold text-slate-800 dark:text-white">
-                            {name}
-                          </p>
-                          <span className="shrink-0 font-mono text-[10px] text-slate-400">
-                            {clockInTime}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 truncate text-[10px] text-slate-400 dark:text-slate-500">
-                          <span className={`mr-1.5 inline-flex items-center gap-0.5 font-semibold ${
-                            attendance.status === "working"
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : attendance.status === "break"
-                              ? "text-amber-600 dark:text-amber-400"
-                              : attendance.status === "outside"
-                              ? "text-blue-600 dark:text-blue-400"
-                              : "text-slate-500"
-                          }`}>
-                            ● {memberStatusLabel(attendance.status)}
-                          </span>
-                          {task || position}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
         </div>
       </div>
 
@@ -2531,20 +2237,9 @@ export default function EmployeeRoom() {
       )}
 
       {/* Attendance Start Confirmation Modal */}
-      {(isStartConfirmationOpen || isStartConfirmationClosing) && (
-        <div
-          className={`workspace-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isStartConfirmationClosing ? "is-closing" : ""}`}
-          onClick={() => {
-            closeStartConfirmation();
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="attendance-start-confirmation-title"
-            onClick={(event) => event.stopPropagation()}
-            className={`workspace-modal-panel w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl ${isStartConfirmationClosing ? "is-closing" : ""}`}
-          >
+      {isStartConfirmationOpen && (
+        <AttendanceDialog titleId="attendance-start-confirmation-title" busy={isSubmitting}
+          onClose={() => setIsStartConfirmationOpen(false)} className="max-w-sm rounded-xl p-6">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600">
               <Play size={27} />
             </div>
@@ -2569,10 +2264,11 @@ export default function EmployeeRoom() {
               </div>
             </div>
 
+            {errorMessage && <p role="alert" className="mt-3 text-sm text-[var(--tm-danger)]">{errorMessage}</p>}
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
-                onClick={() => closeStartConfirmation()}
+                onClick={() => setIsStartConfirmationOpen(false)}
                 disabled={isSubmitting}
                 className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -2588,28 +2284,13 @@ export default function EmployeeRoom() {
                 {isSubmitting ? "処理中…" : "勤務を開始"}
               </button>
             </div>
-          </div>
-        </div>
+        </AttendanceDialog>
       )}
 
       {/* Personal Attendance Report Prompt */}
       {isAttendanceReportPromptOpen && (
-        <div
-          className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
-          onClick={() => {
-            if (!isDownloadingAttendanceReport) {
-              setIsAttendanceReportPromptOpen(false);
-              setAttendanceReportError("");
-            }
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="attendance-report-prompt-title"
-            onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-md overflow-hidden rounded-t-[2rem] border border-white/70 bg-white shadow-2xl shadow-slate-950/30 dark:border-slate-700/80 dark:bg-slate-900 sm:rounded-3xl"
-          >
+        <AttendanceDialog titleId="attendance-report-prompt-title" busy={isDownloadingAttendanceReport}
+          onClose={closeAttendanceReport} bottomSheet className="max-w-md rounded-t-xl pb-[env(safe-area-inset-bottom)] sm:rounded-xl">
             <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-200 dark:bg-slate-700 sm:hidden" />
 
             <div className="p-5 sm:p-6">
@@ -2645,7 +2326,7 @@ export default function EmployeeRoom() {
               </div>
 
               {attendanceReportError && (
-                <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-600">
+                <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-semibold text-[var(--tm-danger)]">
                   {attendanceReportError}
                 </p>
               )}
@@ -2653,10 +2334,7 @@ export default function EmployeeRoom() {
               <div className="mt-5 grid grid-cols-[0.85fr_1.15fr] gap-3">
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsAttendanceReportPromptOpen(false);
-                    setAttendanceReportError("");
-                  }}
+                  onClick={closeAttendanceReport}
                   disabled={isDownloadingAttendanceReport}
                   className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                 >
@@ -2675,23 +2353,13 @@ export default function EmployeeRoom() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+        </AttendanceDialog>
       )}
 
       {/* Work Session Modal */}
       {taskModalMode && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
-          onClick={() => setTaskModalMode(null)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="work-session-modal-title"
-            onClick={(event) => event.stopPropagation()}
-            className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl sm:p-6"
-          >
+        <AttendanceDialog titleId="work-session-modal-title" busy={isSubmitting}
+          onClose={() => setTaskModalMode(null)} className="max-w-md rounded-xl p-5 sm:p-6">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600">
               {taskModalMode === "start" ? (
                 <Play size={25} />
@@ -2792,6 +2460,7 @@ export default function EmployeeRoom() {
               </div>
             </div>
 
+            {errorMessage && <p role="alert" className="mt-3 text-sm text-[var(--tm-danger)]">{errorMessage}</p>}
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
@@ -2820,26 +2489,13 @@ export default function EmployeeRoom() {
                     : "次の作業を開始"}
               </button>
             </div>
-          </div>
-        </div>
+        </AttendanceDialog>
       )}
 
       {/* Status Confirmation Modal */}
-      {(pendingStatus || isStatusModalClosing) &&
-        createPortal(
-          <div
-          className={`workspace-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isStatusModalClosing ? "is-closing" : ""}`}
-          onClick={handleCancelStatus}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="status-confirmation-title"
-            onClick={(event) => event.stopPropagation()}
-            className={`workspace-modal-panel max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ${isStatusModalClosing ? "is-closing" : ""} ${
-              pendingStatus === "outside" ? "max-w-md" : "max-w-sm"
-            }`}
-          >
+      {pendingStatus && (
+        <AttendanceDialog titleId="status-confirmation-title" busy={isSubmitting}
+          onClose={() => setPendingStatus(null)} className={`rounded-xl p-6 ${pendingStatus === "outside" ? "max-w-md" : "max-w-sm"}`}>
             <div
               className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ${
                 pendingStatus === "offline"
@@ -2930,10 +2586,11 @@ export default function EmployeeRoom() {
               </div>
             )}
 
+            {errorMessage && <p role="alert" className="mt-3 text-sm text-[var(--tm-danger)]">{errorMessage}</p>}
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
-                onClick={handleCancelStatus}
+                onClick={() => setPendingStatus(null)}
                 disabled={isSubmitting}
                 className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -2950,7 +2607,7 @@ export default function EmployeeRoom() {
                       !outsideStartTime ||
                       !outsideExpectedEndTime))
                 }
-                className={`flex-1 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition ${
+                className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition ${
                   pendingStatus === "offline"
                     ? "bg-red-500 shadow-red-500/20 hover:bg-red-600"
                     : pendingStatus === "outside"
@@ -2962,10 +2619,8 @@ export default function EmployeeRoom() {
                 {isSubmitting ? "処理中…" : "変更する"}
               </button>
             </div>
-          </div>
-          </div>,
-          document.body,
-        )}
+        </AttendanceDialog>
+      )}
       </main>
     </div>
   );

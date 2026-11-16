@@ -35,8 +35,8 @@ import { requiredWorkflowPresentation, type RequiredWorkflowPresentation } from 
 
 type InspectorTab = 'overview' | 'files' | 'history'
 
-export default function RequiredDocumentInspector({ caseId, itemId, refreshKey, canUpdate: pageCanUpdate, canManageTasks: pageCanManageTasks, activities, tasks, onHistory, onClose, onSaved, onReviewed, onOpenTask: openTask }: {
-  caseId: number; itemId: number; canUpdate: boolean; canManageTasks: boolean; canReviewDocuments: boolean; activities: CaseActivity[]
+export default function RequiredDocumentInspector({ caseId, itemId, refreshKey, canUpdate: pageCanUpdate, canDecideNecessity, canManageTasks: pageCanManageTasks, activities, tasks, onHistory, onClose, onSaved, onReviewed, onOpenTask: openTask }: {
+  caseId: number; itemId: number; canUpdate: boolean; canDecideNecessity: boolean; canManageTasks: boolean; canReviewDocuments: boolean; activities: CaseActivity[]
   onCandidates: () => void; onHistory: () => void; onClose: () => void; onSaved: () => void; onCreateTask: () => void; onManageTask: () => void
   onReviewed?: () => Promise<void>
   refreshKey?: string
@@ -65,12 +65,13 @@ export default function RequiredDocumentInspector({ caseId, itemId, refreshKey, 
     return () => controller.abort()
   }, [caseId, itemId, revision, refreshKey])
 
+  const changeNecessity = canUpdate && canDecideNecessity ? () => setAction('necessity') : undefined
   const onCandidates = () => setAction('acquisition')
   const onCreateTask = () => { if (canManageTasks) setAction('task') }
   const onManageTask = onCreateTask
   const linkedTask = tasks?.find(task => task.id === detail?.active_task?.id && task.case_document_id === itemId)
   const onOpenTask = linkedTask && openTask ? () => openTask(linkedTask.id) : undefined
-  const secondary = action && detail && <RequiredDocumentActionDrawer key={action} action={action} detail={detail} caseId={caseId} canUpdate={action === 'task' ? canManageTasks : canUpdate} onClose={() => setAction(null)} onSaved={(updated, message) => { setDetail(updated); setNotice(message); onSaved() }}/>
+  const secondary = action && detail && (action !== 'necessity' || changeNecessity) && <RequiredDocumentActionDrawer key={action} action={action} detail={detail} caseId={caseId} canUpdate={action === 'task' ? canManageTasks : canUpdate} onClose={() => setAction(null)} onSaved={(updated, message) => { setDetail(updated); setNotice(message); onSaved() }}/>
   const fileReviewed = async (updated: CollectionDetail) => {
     setDetail(updated)
     setNotice(updated.file_review?.status === 'approved' ? '資料を確認済みに変更しました。' : '資料を差し戻しました。')
@@ -79,7 +80,7 @@ export default function RequiredDocumentInspector({ caseId, itemId, refreshKey, 
   }
 
   if (detail?.c001 && !detail.file_review && ['pending_approval', 'complete', 'rejected'].includes(detail.c001.status)) {
-    return <><C001DocumentReviewDrawer caseId={caseId} documentId={itemId} canUpdate={canUpdate} detail={detail} linkedTask={linkedTask} activities={activities} onCandidates={onCandidates} onChangeNecessity={() => setAction('necessity')} onCreateTask={canManageTasks ? onCreateTask : undefined} onManageTask={canManageTasks ? onManageTask : undefined} onOpenTask={onOpenTask} onClose={onClose} notice={notice} onChanged={updated => { if (updated) setDetail(updated); else setRevision(value => value + 1); onSaved() }}/>{secondary}</>
+    return <><C001DocumentReviewDrawer caseId={caseId} documentId={itemId} canUpdate={canUpdate} detail={detail} linkedTask={linkedTask} activities={activities} onCandidates={onCandidates} onChangeNecessity={changeNecessity} onCreateTask={canManageTasks ? onCreateTask : undefined} onManageTask={canManageTasks ? onManageTask : undefined} onOpenTask={onOpenTask} onClose={onClose} notice={notice} onChanged={updated => { if (updated) setDetail(updated); else setRevision(value => value + 1); onSaved() }}/>{secondary}</>
   }
 
   const status = requiredWorkflowPresentation(detail?.workflow_state.code ?? 'selected')
@@ -117,7 +118,7 @@ export default function RequiredDocumentInspector({ caseId, itemId, refreshKey, 
         onEditAcquisition={canUpdate ? onCandidates : undefined}
         onChangeCollection={() => setAction('collection')}
         onChangeFulfillment={() => setAction('fulfillment')}
-        onChangeNecessity={() => setAction('necessity')}
+        onChangeNecessity={changeNecessity}
         onRegistered={updated => { setDetail(updated); setNotice(updated.file_review?.status === 'approved' ? '資料を確認済みに変更しました。' : updated.file_review?.status === 'rejected' ? '資料を差し戻しました。' : t('documentCollection.receivedDocuments.registered')); onSaved() }}
         onReviewed={fileReviewed}
         onPreview={setPreviewTarget}
@@ -144,7 +145,7 @@ export default function RequiredDocumentInspector({ caseId, itemId, refreshKey, 
 
 function OverviewTab({ detail, status, fileVersions, canUpdate, canManageTasks, caseId, itemId, linkedTask, onEditAcquisition, onChangeCollection, onChangeFulfillment, onChangeNecessity, onRegistered, onReviewed, onPreview, onShowAllFiles, onCreateTask, onManageTask, onAutoGenerate, onOpenTask }: {
   detail: CollectionDetail; status: RequiredWorkflowPresentation; fileVersions: PreviewDocumentVersion[]; canUpdate: boolean; canManageTasks: boolean
-  caseId: number; itemId: number; onEditAcquisition?: () => void; onChangeCollection: () => void; onChangeFulfillment: () => void; onChangeNecessity: () => void; onRegistered: (detail: CollectionDetail) => void; onPreview: (target: DocumentPreviewTarget) => void; onShowAllFiles: () => void; onCreateTask: () => void; onManageTask: () => void; onAutoGenerate: () => void
+  caseId: number; itemId: number; onEditAcquisition?: () => void; onChangeCollection: () => void; onChangeFulfillment: () => void; onChangeNecessity?: () => void; onRegistered: (detail: CollectionDetail) => void; onPreview: (target: DocumentPreviewTarget) => void; onShowAllFiles: () => void; onCreateTask: () => void; onManageTask: () => void; onAutoGenerate: () => void
   linkedTask?: CaseTask
   onOpenTask?: () => void
   onReviewed: (detail: CollectionDetail) => Promise<void>

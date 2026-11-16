@@ -7,7 +7,7 @@ import {
   AlertTriangle, ArrowLeft, ArrowRight, Building2, CheckCircle2,
   Clock3, Mail, MoreHorizontal, Phone,
   Plus, RefreshCw, Shield, ShieldCheck, Trash2, UserRound, Users, X,
-  CalendarDays, Folder, ChevronRight, Languages,
+  Folder, ChevronRight, Languages,
   LayoutGrid, ClipboardList, SquareCheckBig, History
 } from 'lucide-react'
 
@@ -17,6 +17,7 @@ import { reviewActionError } from '../document-creation/legalApproval'
 import i18n from '../../i18n'
 import { ButtonSpinner } from '../../components/loading'
 import type { CaseViewer } from '../case-management/types'
+import CaseTaskDelegationDialog from '../case-management/CaseTaskDelegationDialog'
 import { caseWorkspaceApi } from './api'
 import './caseWorkspace.css'
 import RelatedEntityDrawer from './RelatedEntityDrawer'
@@ -91,14 +92,17 @@ export default function CaseWorkspacePage(props: Props) {
   const [editingEntity, setEditingEntity] = useState<RelatedEntity | null>(null)
   const [isIncidentDrawerOpen, setIsIncidentDrawerOpen] = useState(false)
   const [isClientEditDrawerOpen, setIsClientEditDrawerOpen] = useState(false)
+  const [delegationScope, setDelegationScope] = useState<string | null>(null)
   const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false)
   const [taskDrawerDocumentIds, setTaskDrawerDocumentIds] = useState<number[]>([])
   const [taskToOpen, setTaskToOpen] = useState<number | null>(initialTaskId ?? null)
   const canUpdate = user?.permission_names.includes('case.update') ?? false
-  const canManageTasks = user?.permission_names.includes('task.manage') ?? false
-  const canReviewTasks = user?.permission_names.includes('task.review') ?? false
-  const canReviewDocuments = canUpdate && (user?.permission_names.includes('task.review') ?? false)
+  const canCreateTasks = data?.operations?.create_tasks === true
+  const canManageTasks = data?.operations?.manage_tasks === true
+  const canReviewTasks = data?.operations?.review_tasks === true
+  const canReviewDocuments = canReviewTasks
   const openTaskDrawer = (documentIds: number[] = []) => {
+    if (!canCreateTasks) return
     setTaskDrawerDocumentIds(documentIds)
     setIsTaskDrawerOpen(true)
   }
@@ -179,6 +183,7 @@ export default function CaseWorkspacePage(props: Props) {
   if (!data) return <WorkspaceFailure error={error} onBack={onBack} onRetry={() => void reload()}/>
 
   const caseFile = data.case_file
+  const canDecideNecessity = data.can_decide_document_necessity === true
   const openRelatedTask = (taskId: number) => {
     if (!caseFile.case_tasks.some(task => task.id === taskId)) return
     setTaskToOpen(taskId)
@@ -190,14 +195,9 @@ export default function CaseWorkspacePage(props: Props) {
   }
 
   return <main className="dc-preview cm-page cm-case-detail">
-    <div className="cm-ws-backbar">
-      <button type="button" onClick={onBack} className="cm-ws-backlink" aria-label="戻る">
-        <ArrowLeft size={17} className="cm-ws-backlink-icon" />
-        <span>戻る</span>
-      </button>
-      <span className="cm-ws-breadcrumb-sep">&gt;</span>
-      <span className="cm-ws-breadcrumb-current">案件詳細</span>
-    </div>
+    <nav className="cm-ws-backbar" aria-label="案件ナビゲーション">
+      <Button type="button" size="sm" variant="secondary" onClick={onBack} className="cm-ws-backlink" icon={<ArrowLeft size={16} aria-hidden/>}>戻る</Button>
+    </nav>
 
     {error && <div className="cm-alert-banner is-error">{error}</div>}
     {notice && <SuccessToast key={notice} message={notice} onDismiss={clearNotice} />}
@@ -206,8 +206,10 @@ export default function CaseWorkspacePage(props: Props) {
       <WorkspaceHeader
         caseFile={caseFile}
         canUpdate={canUpdate}
-        onEdit={canUpdate ? () => setIsClientEditDrawerOpen(true) : undefined}
+        onEdit={data.operations?.edit_client ? () => setIsClientEditDrawerOpen(true) : undefined}
         onSelectEntity={openEntityDrawer}
+        onOpenDeadlines={() => setTab('deadlines')}
+        onManageDelegation={data.operations?.delegate ? () => setDelegationScope(workspaceScope) : undefined}
       />
 
       <section className="cm-ws-section cm-ws-navigation" aria-label="案件ナビゲーション">
@@ -238,8 +240,8 @@ export default function CaseWorkspacePage(props: Props) {
         </div>
       </section>
 
-      <div className={`cm-tab-content cm-ws-section cm-ws-content-surface ${tab === 'documents' ? 'cm-ws-required-content' : ''}`}>
-        {tab === 'collection' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingCollection')}</p>}><DocumentCollectionPanel key={caseId} caseId={caseId} initialSelectedId={initialCollectionItemId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onHistory={() => setTab('timeline')} onBack={onBack} onChanged={() => void reload(true)} /></Suspense>}
+      <div className={`cm-tab-content cm-ws-section cm-ws-content-surface ${tab === 'documents' ? 'cm-ws-required-content' : tab === 'overview' ? 'cm-ws-overview-content' : ''}`}>
+        {tab === 'collection' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingCollection')}</p>}><DocumentCollectionPanel key={caseId} caseId={caseId} initialSelectedId={initialCollectionItemId} canUpdate={canUpdate} canDecideNecessity={canDecideNecessity} canReviewDocuments={canReviewDocuments} canReadEmployees={user?.permission_names.includes('employee.view') ?? false} activities={caseFile.activities} onHistory={() => setTab('timeline')} onBack={onBack} onChanged={() => void reload(true)} /></Suspense>}
         {tab === 'overview' && (
           <OverviewPanel
             caseFile={caseFile}
@@ -248,10 +250,10 @@ export default function CaseWorkspacePage(props: Props) {
             onOpenTab={setTab}
             onSelectEntity={openEntityDrawer}
             onOpenAddEntity={() => { setEditingEntity(null); setIsAddEntityDrawerOpen(true) }}
-            onEditIncident={() => setIsIncidentDrawerOpen(true)}
+            onEditIncident={data.operations?.edit_overview ? () => setIsIncidentDrawerOpen(true) : undefined}
           />
         )}
-        {tab === 'documents' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingDocuments')}</p>}><RequiredDocumentsPanel key={caseId} caseId={caseId} initialSelectedId={documentToOpen} onDocumentClose={() => setDocumentToOpen(undefined)} canUpdate={canUpdate} canManageTasks={canManageTasks} canReviewDocuments={canReviewDocuments} currentEmployeeId={user?.employee?.id} activities={caseFile.activities ?? []} tasks={caseFile.case_tasks} onCandidates={() => setTab('collection')} onHistory={() => setTab('timeline')} onChanged={() => reload(true)} onCreateTasks={openTaskDrawer} onManageTasks={() => setTab('tasks')} onOpenTask={openRelatedTask}/></Suspense>}
+        {tab === 'documents' && <Suspense fallback={<p role="status" className="py-8 text-center text-sm text-slate-500">{t('cases.workspace.loadingDocuments')}</p>}><RequiredDocumentsPanel key={caseId} caseId={caseId} initialSelectedId={documentToOpen} onDocumentClose={() => setDocumentToOpen(undefined)} canUpdate={canUpdate} canDecideNecessity={canDecideNecessity} canManageTasks={canCreateTasks} canReviewDocuments={canReviewDocuments} currentEmployeeId={user?.employee?.id} activities={caseFile.activities ?? []} tasks={caseFile.case_tasks} onCandidates={() => setTab('collection')} onHistory={() => setTab('timeline')} onChanged={() => reload(true)} onCreateTasks={openTaskDrawer} onManageTasks={() => setTab('tasks')} onOpenTask={openRelatedTask}/></Suspense>}
         {tab === 'tasks' && <TasksPanel
           key={workspaceScope}
           caseId={caseId}
@@ -260,6 +262,7 @@ export default function CaseWorkspacePage(props: Props) {
           onInitialTaskHandled={() => setTaskToOpen(null)}
           activities={caseFile.activities ?? []}
           canManage={canManageTasks}
+          canCreate={canCreateTasks}
           canReview={canReviewTasks}
           working={working}
           error={error}
@@ -284,9 +287,19 @@ export default function CaseWorkspacePage(props: Props) {
       <CreateItemForm kind={dialog} working={working} onSubmit={(payload) => void run(() => createItem(dialog, caseId, payload), '保存しました。')}/>
     </WorkspaceDialog>}
 
+    {data.operations?.delegate && delegationScope === workspaceScope && <CaseTaskDelegationDialog
+      caseId={caseId}
+      onClose={() => setDelegationScope(null)}
+      onSaved={() => {
+        setDelegationScope(null)
+        void reload(true)
+        setNotice('案件の委任権限を更新しました。')
+      }}
+    />}
+
     <CreateCaseTasksDrawer
       caseId={caseId}
-      isOpen={isTaskDrawerOpen}
+      isOpen={canCreateTasks && isTaskDrawerOpen}
       initialSelectedIds={taskDrawerDocumentIds}
       onClose={() => { setIsTaskDrawerOpen(false); setTaskDrawerDocumentIds([]) }}
       onCreated={async count => {
@@ -350,7 +363,7 @@ export default function CaseWorkspacePage(props: Props) {
     />
 
     <IncidentSummaryEditDrawer
-      isOpen={isIncidentDrawerOpen}
+      isOpen={data.operations?.edit_overview === true && isIncidentDrawerOpen}
       onClose={() => setIsIncidentDrawerOpen(false)}
       caseFile={caseFile}
       onSave={async (values) => {
@@ -368,13 +381,11 @@ export default function CaseWorkspacePage(props: Props) {
     />
 
     <ClientEditDrawer
-      isOpen={isClientEditDrawerOpen}
+      isOpen={data.operations?.edit_client === true && isClientEditDrawerOpen}
       onClose={() => setIsClientEditDrawerOpen(false)}
       caseFile={caseFile}
       onSave={async (values) => {
-        const clientId = caseFile.client?.id
-        if (!clientId) throw new Error('依頼者情報が見つかりません。')
-        await caseWorkspaceApi.updateClient(clientId, {
+        await caseWorkspaceApi.updateClient(caseId, {
           name: values.name || null,
           name_kana: values.name_kana || null,
           birth_date: values.birth_date || null,
@@ -431,13 +442,12 @@ function OverviewPanel({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end"><Button size="sm" variant="outline" icon={<CalendarDays size={15}/>} onClick={() => onOpenTab('deadlines')}>期限管理を開く</Button></div>
       {/* Desktop 2-Column Command Layout */}
       <div className="cm-ws-overview-layout">
         <div className="cm-ws-left-col">
           <IncidentSummaryCard
             caseFile={caseFile}
-            onEdit={canUpdate ? onEditIncident : undefined}
+            onEdit={onEditIncident}
           />
           <RelatedEntitiesSection
             entities={relatedEntities}
@@ -473,7 +483,7 @@ function OverviewPanel({
         >
           <IncidentSummaryCard
             caseFile={caseFile}
-            onEdit={canUpdate ? onEditIncident : undefined}
+            onEdit={onEditIncident}
             hideTitle
           />
         </MobileAccordionSection>

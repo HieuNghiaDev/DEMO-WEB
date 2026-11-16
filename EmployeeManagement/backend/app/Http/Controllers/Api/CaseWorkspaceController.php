@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateCaseIncidentRequest;
 use App\Models\CaseFile;
 use App\Services\CaseDocumentChecklistService;
+use App\Services\CaseOperationalAccess;
 use App\Services\CaseWorkspaceAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -43,6 +44,11 @@ class CaseWorkspaceController extends Controller
 
         return response()->json([
             'case_file' => $caseFile,
+            'can_decide_document_necessity' => $request->user()->can('decideDocumentNecessity', $caseFile),
+            'operations' => [
+                ...CaseOperationalAccess::capabilities($request->user(), $caseFile->id, true),
+                'edit_client' => CaseOperationalAccess::canEditClient($request->user(), $caseFile->client, true),
+            ],
             'summary' => [
                 'progress_percent' => $required->count() === 0 ? 0 : (int) round(($completedRequired / $required->count()) * 100),
                 'missing_documents' => $required->whereNotIn('status', $completeStatuses)->count(),
@@ -55,6 +61,9 @@ class CaseWorkspaceController extends Controller
 
     public function applyTemplate(Request $request, CaseFile $caseFile, CaseDocumentChecklistService $service): JsonResponse
     {
+        if (CaseOperationalAccess::enforced()) {
+            \Illuminate\Support\Facades\Gate::authorize('decideDocumentNecessity', $caseFile);
+        }
         $created = $service->applyDefaultTemplate($caseFile);
 
         return response()->json([
@@ -66,6 +75,8 @@ class CaseWorkspaceController extends Controller
     public function updateIncident(UpdateCaseIncidentRequest $request, CaseFile $caseFile, CaseWorkspaceAuditService $audit): JsonResponse
     {
         DB::transaction(function () use ($request, $caseFile, $audit): void {
+            $caseFile = CaseFile::whereKey($caseFile->id)->lockForUpdate()->firstOrFail();
+            CaseOperationalAccess::authorize($request->user(), $caseFile->id, 'edit_overview');
             $data = $request->validated();
             if (! empty($data['occurred_at'])) {
                 // Eloquent stores timestamps in the app timezone; preserve the instant sent by the browser.

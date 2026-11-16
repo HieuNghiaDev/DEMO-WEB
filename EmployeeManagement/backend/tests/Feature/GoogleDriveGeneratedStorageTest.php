@@ -102,6 +102,70 @@ class GoogleDriveGeneratedStorageTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_history_attachment_streams_resumable_upload_and_rejects_public_folders(): void
+    {
+        config([
+            'services.google_drive.enabled' => true,
+            'services.google_drive.write_enabled' => true,
+            'services.google_drive.auth_mode' => 'oauth_user',
+            'services.google_drive.local_root_folder_id' => 'synthetic_root',
+            'services.google_drive.oauth_scope' => 'https://www.googleapis.com/auth/drive',
+            'services.google_drive.oauth_client_json' => json_encode(['web' => ['client_id' => 'synthetic', 'client_secret' => 'synthetic']]),
+            'services.google_drive.oauth_token_json' => json_encode([
+                'access_token' => 'fake-token', 'refresh_token' => 'fake-refresh', 'expires_at' => now()->addHour()->timestamp,
+            ]),
+        ]);
+        $url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=synthetic';
+        $contents = 'synthetic video bytes';
+        Http::fake(function ($request) use ($url, $contents) {
+            if ($request->method() === 'PUT' && $request->url() === $url) {
+                $this->assertSame($contents, $request->body());
+                $this->assertSame([(string) strlen($contents)], $request->header('Content-Length'));
+
+                return Http::response(['id' => 'synthetic_file']);
+            }
+            if (str_contains($request->url(), 'uploadType=resumable')) {
+                $this->assertSame(['history_folder'], $request['parents']);
+                $this->assertSame('synthetic_file', $request['id']);
+
+                return Http::response([], 200, ['Location' => $url]);
+            }
+            if (str_contains($request->url(), '/files/generateIds')) {
+                return Http::response(['ids' => ['synthetic_file']]);
+            }
+            if (str_contains($request->url(), '/files/public_folder/permissions')) {
+                return Http::response(['permissions' => [['type' => 'anyone']]]);
+            }
+            if (str_contains($request->url(), '/files/history_folder/permissions')) {
+                return Http::response(['permissions' => [['type' => 'user']]]);
+            }
+            if (preg_match('~/files/(history_folder|public_folder)\?~', $request->url())) {
+                return Http::response(['mimeType' => 'application/vnd.google-apps.folder', 'capabilities' => ['canAddChildren' => true]]);
+            }
+            if (str_contains($request->url(), '/files/synthetic_file?')) {
+                return Http::response($contents, 200);
+            }
+
+            $this->fail('Unexpected fake provider request.');
+        });
+        $drive = app(GoogleDriveService::class);
+        $drive->assertHistoryAttachmentFolder('history_folder');
+        $stream = fopen('php://temp', 'w+b');
+        fwrite($stream, $contents);
+        rewind($stream);
+        try {
+            $this->assertSame('synthetic_file', $drive->storeHistoryAttachment($stream, 'test.mp4', 'video/mp4', strlen($contents), 'history_folder'));
+        } finally {
+            if (is_resource($stream)) fclose($stream);
+        }
+        $download = $drive->historyAttachmentStream('synthetic_file');
+        $this->assertSame($contents, $download->getContents());
+        $download->close();
+
+        $this->expectException(GeneratedDocumentDriveException::class);
+        $drive->assertHistoryAttachmentFolder('public_folder');
+    }
+
     public function test_c001_reuses_one_working_copy_and_never_updates_the_master_template(): void
     {
         $opensslConfig = tempnam(sys_get_temp_dir(), 'themis-openssl-');

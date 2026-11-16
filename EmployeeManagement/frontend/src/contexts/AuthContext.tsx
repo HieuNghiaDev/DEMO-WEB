@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import axios from "axios";
+import { matchPath, useLocation } from "react-router-dom";
 
 import api, {
   clearAuthToken,
@@ -18,6 +19,7 @@ import api, {
 } from "../services/api";
 import { AuthFlow, type AuthSnapshot, type AuthSession } from '../features/authentication/authFlow';
 import { authTransport } from '../features/authentication/authApi';
+import { MFA_BACKUP_CODES_PATH } from '../utils/authNavigation';
 
 export type AuthOffice = {
   id: number;
@@ -82,7 +84,7 @@ type AuthContextValue = {
   authFlow: AuthFlow;
   authState: AuthSnapshot;
   requiresMfa: boolean;
-  completeMfaAction: (kind: 'codes' | 'device' | 'opt-in', data: unknown) => void;
+  completeMfaAction: (kind: 'codes' | 'device', data: unknown) => void;
   changePassword: (input: ChangePasswordInput) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -105,6 +107,9 @@ const normalizeAuthUser = (user: AuthUser): AuthUser => ({
 });
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const { pathname } = useLocation();
+  const authScreen = matchPath('/login', pathname) ? 'login' : matchPath(MFA_BACKUP_CODES_PATH, pathname) ? 'codes' : null;
+  const previousAuthScreen = useRef(authScreen);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sessionRestoreError, setSessionRestoreError] = useState(false);
@@ -119,6 +124,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(false);
   }));
   const authState = useSyncExternalStore(authFlow.subscribe, authFlow.getSnapshot);
+
+  useEffect(() => {
+    // Preserve the one-time codes on the handoff from Login to their save screen.
+    // Leaving either screen for anything else clears the in-memory data.
+    const previous = previousAuthScreen.current;
+    if ((previous === 'login' && authScreen === null) || (previous === 'codes' && authScreen !== 'codes')) authFlow.reset();
+    previousAuthScreen.current = authScreen;
+  }, [authFlow, authScreen]);
 
   const refreshUser = useCallback(async () => {
     const revision = authRevisionRef.current;
@@ -266,15 +279,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const completeMfaAction = (kind: 'codes' | 'device' | 'opt-in', data: unknown) => {
+  const completeMfaAction = (kind: 'codes' | 'device', data: unknown) => {
     if (kind === 'codes') authFlow.receiveRecoveryCodes(data);
-    else if (kind === 'device') authFlow.receiveDeviceChallenge(data);
-    else authFlow.receiveOptInChallenge(data);
+    else authFlow.receiveDeviceChallenge(data);
     ++authRevisionRef.current;
-    // Enrollment returns a limited pre-auth challenge. Retire this browser's
-    // old PAT before the clean enrollment request; other sessions are revoked
-    // by the backend when enrollment is confirmed.
-    if (kind !== 'codes') void logoutCurrentSession().catch(() => undefined);
+    // Device replacement uses a pre-auth challenge. Recovery codes are issued
+    // only after the server has already revoked the affected sessions.
+    if (kind === 'device') void logoutCurrentSession().catch(() => undefined);
     else clearAuthToken();
     setUser(null); setRequiresMfa(false); setSessionRestoreError(false);
   };

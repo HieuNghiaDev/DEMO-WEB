@@ -227,12 +227,20 @@ class AdministrativeMfaTest extends B21TestCase
         $this->flushHeaders();
         $this->app['auth']->forgetGuards();
         $secret = $this->postJson('/api/mfa/enrollment/start', ['challenge' => $challenge])->assertOk()->json('secret');
+        $this->app['auth']->forgetGuards();
+        $this->withToken($token)->getJson('/api/mfa/settings')->assertExactJson(['enabled' => false, 'required' => false]);
+        $this->assertSame(1, $user->tokens()->count());
+        $this->flushHeaders();
+        $this->app['auth']->forgetGuards();
         // Stopping after the setup key is shown must never force enrollment at the next login.
         $this->postJson('/api/login', $credentials)->assertOk()->assertJsonPath('authentication.requires_mfa', false);
         $this->postJson('/api/mfa/enrollment/confirm', ['challenge' => $challenge,
             'otp' => app(Totp::class)->code($secret, now()->timestamp)])->assertOk()
             ->assertJsonCount(10, 'recovery_codes')->assertJsonMissingPath('token');
         $this->assertSame(0, $user->tokens()->count());
+        $this->app['auth']->forgetGuards();
+        $this->withToken($token)->getJson('/api/mfa/settings')->assertUnauthorized();
+        $this->flushHeaders();
 
         $mfaToken = $this->loginMfa($user, $secret);
         $this->app['auth']->forgetGuards();

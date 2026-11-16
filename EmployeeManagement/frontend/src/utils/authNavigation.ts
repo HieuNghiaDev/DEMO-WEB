@@ -1,4 +1,6 @@
-/** Password forms are actions, never destinations to resume after signing in. */
+export const MFA_BACKUP_CODES_PATH = '/system/mfa/backup-codes'
+
+/** These auth screens are transient and cannot be resumed after signing in. */
 export function getLoginDestination(requested: unknown, mustChangePassword = false): string {
   if (mustChangePassword) return '/change-password'
 
@@ -7,7 +9,7 @@ export function getLoginDestination(requested: unknown, mustChangePassword = fal
   }
 
   const pathname = requested.split(/[?#]/, 1)[0].replace(/\/+$/, '').toLowerCase() || '/'
-  if (['/login', '/activate-account', '/change-password', '/system/password'].includes(pathname)) {
+  if (['/login', '/activate-account', '/change-password', '/system/password', MFA_BACKUP_CODES_PATH].includes(pathname)) {
     return '/'
   }
 

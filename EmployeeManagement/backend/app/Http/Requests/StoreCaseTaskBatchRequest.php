@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\CaseTask;
+use App\Services\CaseOperationalAccess;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -10,7 +11,7 @@ class StoreCaseTaskBatchRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('task.manage') ?? false;
+        return CaseOperationalAccess::capabilities($this->user(), $this->route('caseFile')->id)['create_tasks'];
     }
 
     public function rules(): array

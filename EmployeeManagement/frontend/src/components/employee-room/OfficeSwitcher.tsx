@@ -20,8 +20,8 @@ export default function OfficeSwitcher<Id extends string>({
   const labelId = useId()
 
   return (
-    <div className="@container mb-4 sm:mb-5">
-      <section aria-labelledby={labelId} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-slate-200 bg-white p-2.5 dark:border-slate-800 dark:bg-slate-900 sm:px-3">
+    <div className="@container mb-3">
+      <section aria-labelledby={labelId} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-900 sm:px-3">
         <h2 id={labelId} className="order-1 w-16 shrink-0 text-[12px] font-semibold text-slate-600 dark:text-slate-300">オフィス</h2>
 
         <div className="order-3 flex min-w-0 basis-full flex-wrap gap-2 @min-[850px]:order-2 @min-[850px]:flex-1 @min-[850px]:basis-auto" role="group" aria-labelledby={labelId}>

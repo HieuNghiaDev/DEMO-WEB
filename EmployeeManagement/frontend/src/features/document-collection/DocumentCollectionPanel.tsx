@@ -15,14 +15,15 @@ import { InlineLoader, SectionSkeleton } from '../../components/loading'
 import './documentCollection.css'
 import './collectionBrowse.css'
 
-export default function DocumentCollectionPanel({ caseId, initialSelectedId, canUpdate, canReviewDocuments, canReadEmployees, activities, onHistory, onBack, onChanged }: {
-  caseId: number; initialSelectedId?: number; canUpdate: boolean; canReviewDocuments: boolean; canReadEmployees: boolean; activities: CaseActivity[]
+export default function DocumentCollectionPanel({ caseId, initialSelectedId, canUpdate, canDecideNecessity, canReviewDocuments, canReadEmployees, activities, onHistory, onBack, onChanged }: {
+  caseId: number; initialSelectedId?: number; canUpdate: boolean; canDecideNecessity: boolean; canReviewDocuments: boolean; canReadEmployees: boolean; activities: CaseActivity[]
   onHistory: () => void; onBack: () => void; onChanged: () => void
 }) {
   const { t } = useTranslation()
   const state = useDocumentCollection(caseId, canReadEmployees)
   const [selectedId, setSelectedId] = useState<number | null>(initialSelectedId ?? null)
-  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectionRequested, setSelectionMode] = useState(false)
+  const selectionMode = canDecideNecessity && selectionRequested
   const [bulkSelectedIds, setBulkSelectedIds] = useState<number[]>([])
   const [bulkAction, setBulkAction] = useState<BulkNecessityAction | null>(null)
   const [bulkError, setBulkError] = useState<string | null>(null)
@@ -46,15 +47,15 @@ export default function DocumentCollectionPanel({ caseId, initialSelectedId, can
     state.setSearch(value)
   }
   const toggleBulkSelection = (id: number) => {
-    if (!selectionMode || !canUpdate || state.bulkUpdating) return
+    if (!selectionMode || state.bulkUpdating) return
     setBulkSelectedIds(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id])
   }
   const setVisibleSelection = (ids: number[], selected: boolean) => {
-    if (!selectionMode || !canUpdate || state.bulkUpdating) return
+    if (!selectionMode || state.bulkUpdating) return
     setBulkSelectedIds(current => selected ? [...new Set([...current, ...ids])] : current.filter(id => !ids.includes(id)))
   }
   const changeSelectionMode = (enabled: boolean) => {
-    if (enabled === selectionMode || state.bulkUpdating || (enabled && !canUpdate)) return
+    if (enabled === selectionMode || state.bulkUpdating || (enabled && !canDecideNecessity)) return
 
     if (enabled) {
       if (editState.current.saving) return
@@ -70,7 +71,7 @@ export default function DocumentCollectionPanel({ caseId, initialSelectedId, can
     clearBulkState()
   }
   const applyBulkAction = async (reason?: string) => {
-    if (!selectionMode || !canUpdate || state.bulkUpdating || !bulkAction || bulkSelectedIds.length === 0) return
+    if (!selectionMode || state.bulkUpdating || !bulkAction || bulkSelectedIds.length === 0) return
     setBulkError(null)
     try {
       const result = await state.bulkUpdateNecessity({
@@ -155,7 +156,7 @@ export default function DocumentCollectionPanel({ caseId, initialSelectedId, can
         <div className={`dc-workspace ${selectedId !== null ? 'has-inspector' : ''}`}>
           <div className="dc-master">
             <DocumentCollectionToolbar query={state.query} search={state.search} onSearch={changeCollectionSearch} onChange={changeCollectionFilter} purposes={purposes} employees={state.employees} employeeError={state.employeeError} />
-            {selectionMode && canUpdate && bulkSelectedIds.length > 0 && (
+            {selectionMode && bulkSelectedIds.length > 0 && (
               <div className="dc-bulk-action-bar" aria-label="選択した資料の一括操作">
                 <div className="dc-bulk-count-box">
                   <span className="dc-bulk-indicator" aria-hidden="true"><Check size={11} strokeWidth={3} /></span>
@@ -177,13 +178,13 @@ export default function DocumentCollectionPanel({ caseId, initialSelectedId, can
                 </div>
               </div>
             )}
-            {state.listError ? <CollectionFeedback error={state.listError} onRetry={state.refresh} onBack={onBack} /> : state.listLoading ? <SectionSkeleton className="border-0" label={t('documentCollection.loadingList')} rows={6} showHeader={false} /> : data && <CollectionListView items={data.documents.map(item => itemToRow(item))} totalCount={data.summary.total} filteredCount={data.summary.filtered_count} selectedId={selectedId === null ? null : String(selectedId)} canSelect={canUpdate} selectionMode={selectionMode} selectionBusy={state.bulkUpdating} bulkSelectedIds={bulkSelectedIds} onSelectionModeChange={changeSelectionMode} onToggleBulkSelection={toggleBulkSelection} onSetVisibleSelection={setVisibleSelection} onSelect={id => { if (selectionMode || Number(id) === selectedId || editState.current.saving) return; if (!editState.current.dirty || window.confirm(t('documentCollection.editor.discardAndClose'))) setSelectedId(Number(id)) }} />}
+            {state.listError ? <CollectionFeedback error={state.listError} onRetry={state.refresh} onBack={onBack} /> : state.listLoading ? <SectionSkeleton className="border-0" label={t('documentCollection.loadingList')} rows={6} showHeader={false} /> : data && <CollectionListView items={data.documents.map(item => itemToRow(item))} totalCount={data.summary.total} filteredCount={data.summary.filtered_count} selectedId={selectedId === null ? null : String(selectedId)} canSelect={canDecideNecessity} selectionMode={selectionMode} selectionBusy={state.bulkUpdating} bulkSelectedIds={bulkSelectedIds} onSelectionModeChange={changeSelectionMode} onToggleBulkSelection={toggleBulkSelection} onSetVisibleSelection={setVisibleSelection} onSelect={id => { if (selectionMode || Number(id) === selectedId || editState.current.saving) return; if (!editState.current.dirty || window.confirm(t('documentCollection.editor.discardAndClose'))) setSelectedId(Number(id)) }} />}
           </div>
-          {selectedId !== null && <DocumentCollectionInspector key={selectedId} caseId={caseId} itemId={selectedId} canUpdate={canUpdate} canReviewDocuments={canReviewDocuments} employees={state.employees} employeeError={state.employeeError} activities={activities} onHistory={onHistory} onClose={() => { editState.current = { dirty: false, saving: false }; setSelectedId(null) }} onSaved={saved} onEditState={value => { editState.current = value }} />}
+          {selectedId !== null && <DocumentCollectionInspector key={selectedId} caseId={caseId} itemId={selectedId} canUpdate={canUpdate} canDecideNecessity={canDecideNecessity} canReviewDocuments={canReviewDocuments} employees={state.employees} employeeError={state.employeeError} activities={activities} onHistory={onHistory} onClose={() => { editState.current = { dirty: false, saving: false }; setSelectedId(null) }} onSaved={saved} onEditState={value => { editState.current = value }} />}
         </div>
       </>}
     </>}
     {state.confirming && preview && <InitializationDialog preview={preview} busy={state.initializing} error={state.initializationError} onClose={() => state.setConfirming(false)} onConfirm={() => { if (canUpdate) void state.initialize().then(changed => { if (changed) onChanged() }) }} />}
-    {bulkAction && <BulkNecessityDialog key={bulkAction} action={bulkAction} count={bulkSelectedIds.length} busy={state.bulkUpdating} error={bulkError} onClose={() => { if (!state.bulkUpdating) { setBulkAction(null); setBulkError(null) } }} onConfirm={reason => void applyBulkAction(reason)} />}
+    {selectionMode && bulkAction && <BulkNecessityDialog key={bulkAction} action={bulkAction} count={bulkSelectedIds.length} busy={state.bulkUpdating} error={bulkError} onClose={() => { if (!state.bulkUpdating) { setBulkAction(null); setBulkError(null) } }} onConfirm={reason => void applyBulkAction(reason)} />}
   </div>
 }

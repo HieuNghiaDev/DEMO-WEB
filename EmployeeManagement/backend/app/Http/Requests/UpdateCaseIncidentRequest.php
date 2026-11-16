@@ -2,13 +2,14 @@
 
 namespace App\Http\Requests;
 
+use App\Services\CaseOperationalAccess;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateCaseIncidentRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('case.update') ?? false;
+        return CaseOperationalAccess::capabilities($this->user(), $this->route('caseFile')->id)['edit_overview'];
     }
 
     public function rules(): array

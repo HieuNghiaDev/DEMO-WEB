@@ -1,0 +1,15 @@
+{
+  "id": "./",
+  "name": "THEMIS HQ",
+  "short_name": "THEMIS",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "images/logoTHEMIS.png",
+      "sizes": "440x373",
+      "type": "image/png"
+    }
+  ]
+}

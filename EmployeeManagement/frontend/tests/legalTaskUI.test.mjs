@@ -17,6 +17,7 @@ function taskView(pending) {
   const module = { exports: {} }
   compileFunction(code, ['require', 'exports', 'module'])(specifier => {
     if (specifier === 'react') return { useState: initial => [initial, () => {}], useRef: initial => ({ current: initial }), useEffect() {} }
+    if (specifier === 'react-i18next') return { useTranslation: () => ({ t: key => key }) }
     if (specifier.endsWith('/legalApproval')) return legalApproval
     if (specifier.endsWith('/taskPresentation')) return { currentPendingTaskSubmission: task => task.latest_submission, taskHistory: () => [], taskDocumentName: task => task.title, canGenerateTaskDocument: () => false }
     if (specifier.endsWith('/useDrawerDismiss')) return { useDrawerDismiss: onClose => ({ close: onClose, closing: false }) }

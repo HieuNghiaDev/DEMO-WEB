@@ -94,11 +94,13 @@ test('new-case review code contains no checklist side effect and keeps mutations
 test('final confirmation submits one atomic nested client/case payload and rejects duplicate clicks', async () => {
   const source = readFileSync(new URL('../src/features/case-management/NewCaseDialog.tsx', import.meta.url), 'utf8')
   const bindings = { classification: 'normal', selectedClient: null, clientDraft: { name: ' Synthetic Client ', phone: '' }, dob: '',
-    normalizeBirthDate: value => value, title: 'Synthetic case', draft: { case_type_id: '5', summary: ' ', assigned_employee_id: '8' }, canAssign: false }
+    normalizeBirthDate: value => value, title: 'Synthetic case', draft: { case_type_id: '5', summary: ' ', assigned_employee_id: '8' }, canAssign: false, canLoadDelegations: false }
   const payload = productionArrow(source, 'createPayload', bindings)
   assert.deepEqual(payload(), { classification: 'normal', client: { name: 'Synthetic Client', phone: null, birth_date: null }, title: 'Synthetic case', case_type_id: 5, summary: null })
   assert.deepEqual(productionArrow(source, 'createPayload', { ...bindings, selectedClient: { id: 7 } })(),
     { classification: 'normal', client_id: 7, title: 'Synthetic case', case_type_id: 5, summary: null })
+  const activeDelegations = [{ user_id: 12, create_tasks: true, review_tasks: false, edit_overview: true }]
+  assert.deepEqual(productionArrow(source, 'createPayload', { ...bindings, canLoadDelegations: true, activeDelegations })().task_delegations, activeDelegations)
   let release
   const pending = new Promise(resolve => { release = resolve })
   const calls = [], created = [], saving = []

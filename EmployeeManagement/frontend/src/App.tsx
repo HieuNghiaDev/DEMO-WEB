@@ -14,6 +14,8 @@ import { AppReleaseProvider } from "./contexts/AppReleaseContext";
 import Login from "./pages/Login";
 import ActivationPage from './features/authentication/ActivationPage';
 import MfaSecurityPage from './features/authentication/MfaSecurityPage';
+import MfaBackupCodesPage from './features/authentication/MfaBackupCodesPage';
+import { MFA_BACKUP_CODES_PATH } from './utils/authNavigation';
 import EmployeeRoom from "./pages/EmployeeRoom";
 import OrganizationDesign from "./pages/OrganizationDesign";
 import BusinessQuest from "./pages/BusinessQuest";
@@ -36,6 +38,7 @@ function App() {
           <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/activate-account" element={<ActivationPage />} />
+          <Route path={MFA_BACKUP_CODES_PATH} element={<MfaBackupCodesPage />} />
 
           <Route element={<ProtectedRoute />}>
             <Route path="/change-password" element={<ChangePassword />} />

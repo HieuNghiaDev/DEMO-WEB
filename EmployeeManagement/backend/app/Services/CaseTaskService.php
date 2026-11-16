@@ -22,16 +22,9 @@ class CaseTaskService
     /** Existing standalone task creation, shared by manual and communication next-action flows. */
     public function createStandalone(CaseFile $caseFile, Request $request, array $data): CaseTask
     {
-        CaseAccessService::rehearsal()?->authorizeWrite($request->user(), $caseFile->id);
-        $actor = $request->user();
-        if (\App\Services\Administration\MainRoles::assigned($actor)) {
-            abort_unless($actor->hasPermission('task.create'), 403);
-            abort_if(! empty($data['assigned_employee_id']) && ! $actor->hasPermission('task.assign'), 403);
-        } else {
-            abort_unless($actor?->hasPermission('task.manage'), 403);
-        }
-
         return DB::transaction(function () use ($caseFile, $request, $data) {
+            CaseFile::whereKey($caseFile->id)->lockForUpdate()->firstOrFail();
+            CaseOperationalAccess::authorize($request->user(), $caseFile->id, 'create_tasks');
             if (! empty($data['due_at'])) {
                 $data['due_at'] = Carbon::parse($data['due_at'])->setTimezone(config('app.timezone'))->format('Y-m-d H:i:s');
             }
@@ -55,11 +48,11 @@ class CaseTaskService
     /** @return Collection<int, CaseTask> */
     public function createBatch(CaseFile $caseFile, StoreCaseTaskBatchRequest $request): Collection
     {
-        CaseAccessService::rehearsal()?->authorizeWrite($request->user(), $caseFile->id);
         $items = collect($request->validated('tasks'));
 
         return DB::transaction(function () use ($caseFile, $request, $items): Collection {
             CaseFile::query()->whereKey($caseFile->id)->lockForUpdate()->firstOrFail();
+            CaseOperationalAccess::authorize($request->user(), $caseFile->id, 'create_tasks');
 
             $documentIds = $items->pluck('case_document_id')->map(fn ($id) => (int) $id)->all();
             $documents = CaseDocument::query()

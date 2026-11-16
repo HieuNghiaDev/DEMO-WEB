@@ -29,9 +29,8 @@ class CaseDocumentCollectionResource extends JsonResource
         $submission = $this->latestTaskSubmission;
         $fileReview = app(RequiredDocumentFileReview::class)->current($this->resource);
         $capabilities = app(RequiredDocumentAccess::class)->capabilities($this->resource, $request->user(), $grants);
-        $caseWrite = \App\Services\CaseAccessService::rehearsal()?->presentationAllows($request->user(), $this->case_file_id) ?? true;
-        $capabilities['can_review'] = $capabilities['can_return'] = $grants['case.view'] && $grants['task.review']
-            && $caseWrite && ($fileReview['reviewable'] ?? false);
+        $capabilities['can_review'] = $capabilities['can_return'] = ($fileReview['reviewable'] ?? false)
+            && \App\Services\CaseOperationalAccess::canReviewFile($request->user(), $this->case_file_id, $fileReview['source'], true);
         if ($authority = \App\Services\RehearsalDocumentAuthority::current()) {
             $capabilities['can_review'] = $capabilities['can_return'] = $capabilities['can_review']
                 && $authority->canInternal($request->user(), $this->case_file_id, $this->id, $fileReview['source'], $fileReview['id']);

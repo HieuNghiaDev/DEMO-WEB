@@ -2195,7 +2195,7 @@
 .cm-new-case-state { padding: 42px 26px; margin: 0; text-align: center; color: var(--dc-muted); }.cm-new-case-state.cm-message { text-align: left; }.cm-new-case-error { padding: 10px 26px; margin: 0; color: var(--dc-danger); background: var(--dc-subtle); border-bottom: 1px solid var(--dc-line); font-size: 13px; }
 .cm-new-case-section { padding: 22px 26px; border-bottom: 1px solid var(--dc-line); }.cm-section-heading { display: flex; gap: 11px; align-items: flex-start; margin-bottom: 16px; }.cm-section-heading > span { width: 27px; height: 22px; display: grid; place-items: center; color: var(--dc-blue); background: var(--dc-selected); border-radius: 4px; font-size: 11px; font-weight: 700; }.cm-section-heading h3 { margin: 0; font-size: 16px; font-weight: 650; }.cm-section-heading p { margin: 3px 0 0; color: var(--dc-muted); font-size: 12px; }
 .cm-new-case-fields { margin-top: 0; }.cm-new-case-fields label, .cm-client-kind { position: relative; }.cm-new-case-fields label > span, .cm-client-kind legend { display: block; margin-bottom: 6px; color: var(--dc-ink); font-size: 12px; font-weight: 600; }.cm-new-case-fields label > span small { color: var(--dc-muted); font-weight: 400; }.cm-new-case-fields textarea { resize: vertical; }.cm-new-case-fields .cm-search-control input { padding-left: 36px; }
-.cm-new-case-dialog :is(input, select, textarea) { display: block; width: 100%; min-width: 0; height: 40px; border: 1px solid var(--dc-line); border-radius: 6px; background: var(--dc-bg); color: var(--dc-ink); padding: 8px 10px; font: inherit; font-weight: 400; }.cm-new-case-dialog textarea { height: auto; }.cm-new-case-dialog :is(input, select, textarea)::placeholder { color: var(--dc-muted); }.cm-new-case-dialog :is(button, input, select, textarea):focus-visible, .cm-review-dialog button:focus-visible { outline: 2px solid var(--dc-blue); outline-offset: 2px; }.cm-new-case-dialog button, .cm-review-dialog button { cursor: pointer; transition: background-color 150ms, border-color 150ms; }.cm-new-case-dialog button:disabled, .cm-review-dialog button:disabled { cursor: default; opacity: .55; }
+.cm-new-case-dialog :is(input:not([type=checkbox]), select, textarea) { display: block; width: 100%; min-width: 0; height: 40px; border: 1px solid var(--dc-line); border-radius: 6px; background: var(--dc-bg); color: var(--dc-ink); padding: 8px 10px; font: inherit; font-weight: 400; }.cm-new-case-dialog textarea { height: auto; }.cm-new-case-dialog :is(input, select, textarea)::placeholder { color: var(--dc-muted); }.cm-new-case-dialog :is(button, input, select, textarea):focus-visible, .cm-review-dialog button:focus-visible { outline: 2px solid var(--dc-blue); outline-offset: 2px; }.cm-new-case-dialog button, .cm-review-dialog button { cursor: pointer; transition: background-color 150ms, border-color 150ms; }.cm-new-case-dialog button:disabled, .cm-review-dialog button:disabled { cursor: default; opacity: .55; }
 .cm-new-client-suggestions { position: absolute; z-index: 4; top: calc(100% - 1px); left: 0; right: 0; max-height: 210px; overflow: auto; background: var(--dc-bg); border: 1px solid var(--dc-line); box-shadow: 0 10px 22px #00000016; }.cm-new-client-suggestions button { display: flex; flex-direction: column; width: 100%; gap: 2px; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--dc-line); }.cm-new-client-suggestions button:hover { background: var(--dc-hover); }.cm-new-client-suggestions span { color: var(--dc-muted); font-size: 11px; overflow-wrap: anywhere; }.cm-new-client-hint { margin: 7px 0 0; }
 .cm-client-kind { border: 0; min-width: 0; padding: 0; margin: 0; }.cm-client-kind > div { display: inline-flex; border: 1px solid var(--dc-line); border-radius: 6px; overflow: hidden; }.cm-client-kind button { min-width: 76px; min-height: 40px; padding: 7px 12px; font-size: 13px; }.cm-client-kind button + button { border-left: 1px solid var(--dc-line); }.cm-client-kind button[aria-pressed=true] { color: var(--dc-blue); background: var(--dc-selected); font-weight: 600; }
 .cm-chosen-client { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--dc-line); background: var(--dc-subtle); }.cm-chosen-client > svg { color: var(--dc-blue); }.cm-chosen-client > div { min-width: 0; flex: 1; }.cm-chosen-client strong, .cm-chosen-client span { display: block; overflow-wrap: anywhere; }.cm-chosen-client span { margin-top: 2px; color: var(--dc-muted); font-size: 11px; }
@@ -2454,8 +2454,14 @@
 }
 .cm-ncf-required { color: var(--ncf-accent); font-style: normal; font-weight: 700; margin-left: 2px; }
 
+label.cm-delegation-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* ── Inputs ── */
-.cm-ncf-dialog input,
+.cm-ncf-dialog input:not([type=checkbox]),
 .cm-ncf-dialog select,
 .cm-ncf-dialog textarea {
   display: block;
@@ -2475,12 +2481,12 @@
 .cm-ncf-dialog input::placeholder,
 .cm-ncf-dialog textarea::placeholder { color: var(--ncf-dim); }
 .cm-ncf-dialog textarea { height: auto; padding: 11px 13px; }
-.cm-ncf-dialog input:hover:not(:focus):not(:disabled),
+.cm-ncf-dialog input:not([type=checkbox]):hover:not(:focus):not(:disabled),
 .cm-ncf-dialog select:hover:not(:focus):not(:disabled),
 .cm-ncf-dialog textarea:hover:not(:focus):not(:disabled) {
   border-color: color-mix(in srgb, var(--ncf-dim) 70%, var(--ncf-border));
 }
-.cm-ncf-dialog input:focus,
+.cm-ncf-dialog input:not([type=checkbox]):focus,
 .cm-ncf-dialog select:focus,
 .cm-ncf-dialog textarea:focus {
   outline: none;
@@ -2911,7 +2917,7 @@
 .cm-ncf-fields { gap: 14px 16px; }
 .cm-ncf-field { gap: 7px; }
 .cm-ncf-label { font-size: 13px; line-height: 1.2; }
-.cm-ncf-dialog input,
+.cm-ncf-dialog input:not([type=checkbox]),
 .cm-ncf-dialog select,
 .cm-ncf-dialog textarea { border-color: #d8e0ec; padding-inline: 15px; font-size: 14px; }
 .cm-ncf-input-icon--left { left: 14px; }
@@ -2951,7 +2957,7 @@
 .dark .cm-ncf-section:last-of-type { border-bottom-color: var(--ncf-border); }
 .dark .cm-ncf-num-badge { background: var(--ncf-accent-soft); color: var(--ncf-accent); }
 .dark .cm-ncf-section-icon { background: var(--ncf-accent-soft); color: var(--ncf-accent); }
-.dark .cm-ncf-dialog input,
+.dark .cm-ncf-dialog input:not([type=checkbox]),
 .dark .cm-ncf-dialog select,
 .dark .cm-ncf-dialog textarea,
 .dark .cm-ncf-assignee-btn { border-color: var(--ncf-border); }

@@ -12,11 +12,14 @@ use App\Models\User;
 use App\Services\EmployeeCodeGenerator;
 use App\Services\SecurityAuditLogger;
 use App\Services\TaskVisibility;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use App\Services\Administration\AccountActivationService;
 use App\Services\Administration\AdminCapabilities;
 use App\Services\Administration\AdminContinuityGuard;
 use App\Services\Administration\AdministrativeRoleService;
@@ -26,6 +29,16 @@ use Illuminate\Support\Facades\Schema;
 
 class OrganizationController extends Controller
 {
+    public function issueActivationInvite(Request $request, Employee $employee, AccountActivationService $activation): JsonResponse
+    {
+        $invitation = $activation->issueForAdmin($request->user(), $employee);
+
+        return response()->json([
+            'activation_code' => $invitation->tokenForDelivery(),
+            'expires_at' => $invitation->expiresAt->toIso8601String(),
+        ], 201)->header('Cache-Control', 'no-store, private');
+    }
+
     public function resetPassword(Request $request, Employee $employee): JsonResponse
     {
         $handover = app(\App\Services\Administration\EmployeePasswordReset::class)->reset($request->user(), $employee);
@@ -99,10 +112,18 @@ class OrganizationController extends Controller
 
     public function destroy(Request $request, Employee $employee, SecurityAuditLogger $auditLogger): JsonResponse
     {
-        return app(AdminContinuityGuard::class)->run(
-            fn () => $this->destroyEmployee($request, $employee, $auditLogger),
-            $employee, 'administration.employee_deleted', $request->user(), true,
-        );
+        try {
+            return app(AdminContinuityGuard::class)->run(
+                fn () => $this->destroyEmployee($request, $employee, $auditLogger),
+                $employee, 'administration.employee_deleted', $request->user(), true,
+            );
+        } catch (QueryException $error) {
+            Log::error('Employee removal database operation failed.', [
+                'employee_id' => $employee->id, 'sqlstate' => $error->getCode(),
+            ]);
+
+            return response()->json(['message' => '社員を削除できませんでした。時間をおいて再試行してください。'], 500);
+        }
     }
 
     private function destroyEmployee(Request $request, Employee $employee, SecurityAuditLogger $auditLogger): JsonResponse
@@ -110,7 +131,9 @@ class OrganizationController extends Controller
         $actor = $request->user();
         $isAdmin = AdminCapabilities::isCanonicalAdmin($actor);
         abort_unless($isAdmin || $actor->hasAnyRole(['level_4', 'level_5']), 403);
-        $targetUser = $employee->user;
+        $employee = Employee::query()->lockForUpdate()->findOrFail($employee->id);
+        $targetUser = $employee->user()->lockForUpdate()->first();
+        $employee->setRelation('user', $targetUser);
         if ($isAdmin) {
             \Illuminate\Support\Facades\Gate::forUser($actor)->authorize('disable', $employee);
             abort_if($targetUser && AdminCapabilities::isProtectedLegalSubject($targetUser), 403);
@@ -126,27 +149,26 @@ class OrganizationController extends Controller
 
             if ($targetUser->hasRole('level_5')) {
                 $levelFiveRole = Role::query()->where('name', 'level_5')->firstOrFail();
-                abort_if($levelFiveRole->users()->count() <= 1, 422, '最後のLevel 5は削除できません。');
+                $hasRemaining = $levelFiveRole->users()->where('users.id', '!=', $targetUser->id)
+                    ->where('users.is_active', true)->where('users.activation_required', false)
+                    ->where(fn ($users) => $users->whereNull('users.employee_id')
+                        ->orWhereHas('employee', fn ($employees) => $employees->where('status', 'active')))
+                    ->exists();
+                abort_unless($hasRemaining, 422, '最後のLevel 5は削除できません。');
             }
         }
 
-        $targetUserId = $targetUser?->id;
         $targetLoginId = $targetUser?->login_id ?? $employee->employee_code;
         $targetEmployeeId = $employee->id;
 
-        DB::transaction(function () use ($employee, $targetUser, $targetUserId): void {
-            if ($targetUser !== null) {
-                $targetUser->tokens()->delete();
-                DB::table('sessions')->where('user_id', $targetUserId)->delete();
-                $targetUser->delete();
-            }
-
-            $employee->update([
-                'status' => 'resigned',
-                'termination_date' => $employee->termination_date ?? today(),
-            ]);
-            $employee->delete();
-        });
+        // Preserve the account identity referenced by chat and other business records.
+        // Lifecycle hooks revoke sessions and outstanding activation invitations.
+        $targetUser?->forceFill(['is_active' => false, 'remember_token' => null])->save();
+        $employee->update([
+            'status' => 'resigned',
+            'termination_date' => $employee->termination_date ?? today(),
+        ]);
+        $employee->delete();
 
         $auditLogger->record(
             $request,
@@ -155,7 +177,7 @@ class OrganizationController extends Controller
             $actor,
             $actor->employee,
             $targetLoginId,
-            ['target_employee_id' => $targetEmployeeId]
+            ['target_employee_id' => $targetEmployeeId, 'account_disabled' => $targetUser !== null]
         );
 
         return response()->json(['message' => '社員を削除しました。']);
@@ -172,6 +194,7 @@ class OrganizationController extends Controller
         // once, then apply the shared subject boundary to every row (default: self only).
         $privateGate = Gate::forUser($user);
         $canViewPrivate = $privateGate->allows('viewPrivateDirectory', Employee::class);
+        $canIssueActivationInvites = AdminCapabilities::isCanonicalAdmin($user);
         $onlineUserIds = \App\Services\EmployeeOnlinePresence::userIds();
 
         $employees = Employee::query()
@@ -243,7 +266,7 @@ class OrganizationController extends Controller
         $visibleSessionTasks = $sessionTaskIds->isEmpty() ? collect() : EmployeeTask::query()
             ->visibleTo($user)->whereKey($sessionTaskIds)->pluck('id')->flip();
 
-        $employees = $employees->map(function (Employee $employee) use ($canViewPrivate, $privateGate, $onlineUserIds, $visibleAssignees, $visibleSessionTasks) {
+        $employees = $employees->map(function (Employee $employee) use ($canViewPrivate, $canIssueActivationInvites, $privateGate, $onlineUserIds, $visibleAssignees, $visibleSessionTasks) {
                 $canViewEmployeePrivate = $canViewPrivate && $privateGate->allows('viewPrivateSubject', $employee);
                 $attendance = $employee->attendances->first();
                 $quest = $employee->tasks->first();
@@ -281,6 +304,8 @@ class OrganizationController extends Controller
                     'hire_date' => $employee->hire_date?->toDateString(),
 
                     'user_id' => $employee->user?->id,
+                    'can_issue_activation_invite' => $canIssueActivationInvites && $employee->user?->activation_required
+                        && $privateGate->allows('issueInviteAsAdmin', $employee),
 
                     'roles' => $employee->user?->roles
                         ->map(fn (Role $role) => [

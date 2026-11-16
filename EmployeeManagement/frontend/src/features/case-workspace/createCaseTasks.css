@@ -1,0 +1,10 @@
+@media (prefers-reduced-motion: no-preference) {
+  .case-task-create {
+    animation: case-task-create-enter var(--tm-transition-normal) both;
+  }
+}
+
+@keyframes case-task-create-enter {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}

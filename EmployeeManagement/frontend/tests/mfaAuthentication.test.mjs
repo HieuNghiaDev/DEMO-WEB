@@ -261,17 +261,29 @@ test('auth transport discards error config/body and reports only sanitized statu
   } finally { globalThis.window = original }
 })
 test('UI integration keeps secrets volatile, provides labels/paste/autocomplete, and never fabricates roles/proof/secret URLs', () => {
-  for (const file of ['authFlow.ts', 'AuthChallengePage.tsx', 'StepUpDialog.tsx', 'RecoveryCodes.tsx', 'ActivationPage.tsx', 'authApi.ts']) {
+  for (const file of ['authFlow.ts', 'AuthChallengePage.tsx', 'MfaEnrollmentForm.tsx', 'MfaSecurityPage.tsx', 'StepUpDialog.tsx', 'VerificationCodeInput.tsx', 'RecoveryCodes.tsx', 'ActivationPage.tsx', 'authApi.ts']) {
     const source = readFileSync(resolve('src/features/authentication', file), 'utf8')
-    assert.doesNotMatch(source, /localStorage|sessionStorage|console\.|navigator\.clipboard|onPaste|window\.open|https:\/\/.*qr/i)
+    // Enrollment keys may be copied by the explicit setup button only.
+    const explicitCopy = { 'MfaEnrollmentForm.tsx': 'enrollment.secret', 'RecoveryCodes.tsx': 'codesText' }[file]
+    const withoutExplicitCopy = explicitCopy ? source.replace(`await navigator.clipboard.writeText(${explicitCopy})`, '') : source
+    assert.doesNotMatch(withoutExplicitCopy, /localStorage|sessionStorage|console\.|navigator\.clipboard|onPaste|window\.open|https:\/\/.*qr/i)
     assert.doesNotMatch(source, /mfa_verified|is_admin\s*:|role\s*:\s*['"]admin/)
   }
   const context = readFileSync('src/contexts/AuthContext.tsx', 'utf8')
   assert.match(context, /authFlow\.reset\(\)/)
   assert.match(context, /useSyncExternalStore/)
   const panel = readFileSync('src/features/authentication/AuthChallengePage.tsx', 'utf8')
-  assert.match(panel, /autoComplete=.*one-time-code/)
+  const stepUp = readFileSync('src/features/authentication/StepUpDialog.tsx', 'utf8')
+  const verificationCode = readFileSync('src/features/authentication/VerificationCodeInput.tsx', 'utf8')
+  assert.match(panel, /<VerificationCodeInput\b[^>]*name="factor"/)
+  assert.match(stepUp, /<VerificationCodeInput\b[^>]*name="otp"/)
+  assert.match(verificationCode, /autoComplete="one-time-code"/)
+  assert.match(verificationCode, /pattern="\[0-9\]\{6\}"/)
+  assert.match(verificationCode, /const codeLength = 6/)
   assert.match(panel, /form\.reset\(\)/)
+  const enrollmentForm = readFileSync('src/features/authentication/MfaEnrollmentForm.tsx', 'utf8')
+  assert.match(enrollmentForm, /await navigator\.clipboard\.writeText\(enrollment\.secret\)/)
+  assert.match(enrollmentForm, /onClick=\{\(\) => void copySetupKey\(\)\}/)
   const role = readFileSync('src/pages/OrganizationDesign.tsx', 'utf8')
   assert.match(role, /action: 'role.assign', scope: \{ user_id: roleStepUp.userId, role_id: roleStepUp.roleId \}/)
   assert.match(role, /role_ids: \[roleStepUp.roleId\]/)

@@ -21,6 +21,7 @@ function environment(stableGutter = false) {
   const root = new Element()
   const opener = new Element(root)
   const body = new Element()
+  body.style.overflow = ''
   const html = new Element(); html.clientWidth = 1265
   body.children = [root]
   document.body = body; document.documentElement = html; document.activeElement = opener
@@ -36,18 +37,18 @@ function environment(stableGutter = false) {
   return { document, body, html, root, opener, layer, control, mount, key, observers, listeners }
 }
 
-test('lock body and page scrolling, compensate scrollbar, and restore exact inline styles and inert state', () => {
+test('lock viewport scrolling without making the body a scroll container for sticky navigation', () => {
   const h = environment()
   const alreadyInert = h.layer(); alreadyInert.inert = true
   const layer = h.layer(); h.control(layer)
   const modal = h.mount(layer)
   assert.equal(h.root.inert, true)
   assert.equal(layer.inert, false)
-  assert.equal(h.body.style.overflow, 'hidden')
+  assert.equal(h.body.style.overflow, '')
   assert.equal(h.html.style.overflow, 'hidden')
   assert.equal(h.body.style.paddingRight, '22px')
   modal.cleanup()
-  assert.equal(h.body.style.overflow, 'auto')
+  assert.equal(h.body.style.overflow, '')
   assert.equal(h.body.style.paddingRight, '7px')
   assert.equal(h.html.style.overflow, 'auto')
   assert.equal(h.html.style.overscrollBehavior, 'contain')
@@ -94,8 +95,28 @@ test('nested modal closes independently and never restores scrolling before the 
   assert.equal(parentLayer.inert, true)
   h.key('Escape'); assert.equal(child.closeCount(), 1); assert.equal(parent.closeCount(), 0)
   child.cleanup(); assert.equal(parentLayer.inert, false); assert.equal(h.document.activeElement, opener)
-  assert.equal(h.body.style.overflow, 'hidden')
-  parent.cleanup(); assert.equal(h.body.style.overflow, 'auto')
+  assert.equal(h.html.style.overflow, 'hidden')
+  parent.cleanup(); assert.equal(h.html.style.overflow, 'auto')
+})
+
+test('employee role confirmation shares the detail dialog scroll lock even if the parent closes first', () => {
+  const organization = readFileSync('src/pages/OrganizationDesign.tsx', 'utf8')
+  const detail = organization.slice(organization.indexOf('function EmployeeDetailModal('), organization.indexOf('function TabButton('))
+  const stepUp = readFileSync('src/features/authentication/StepUpDialog.tsx', 'utf8')
+  assert.match(detail, /<ModalShell\s+isOpen\s+onClose=\{closeEmployeeDialog\}/)
+  assert.match(detail, /roleStepUp && <StepUpDialog/)
+  assert.doesNotMatch(detail, /useOrganizationDialog\(/)
+  assert.match(stepUp, /<ModalShell isOpen/)
+
+  const h = environment()
+  const parent = h.mount(h.layer())
+  const child = h.mount(h.layer())
+  parent.cleanup()
+  assert.equal(h.html.style.overflow, 'hidden')
+  assert.equal(h.root.inert, true)
+  child.cleanup()
+  assert.equal(h.html.style.overflow, 'auto')
+  assert.equal(h.root.inert, false)
 })
 
 test('new floating/portal roots are inert while open and restored after cleanup', () => {
@@ -103,6 +124,21 @@ test('new floating/portal roots are inert while open and restored after cleanup'
   const widget = h.layer(); h.observers[0].callback()
   assert.equal(widget.inert, true)
   modal.cleanup(); assert.equal(widget.inert, false)
+})
+
+test('attendance dialogs and application loading escape the animated page column', () => {
+  const room = readFileSync('src/pages/EmployeeRoom.tsx', 'utf8')
+  const loader = readFileSync('src/components/loading/AppLoadingScreen.tsx', 'utf8')
+  const css = readFileSync('src/index.css', 'utf8')
+  assert.match(room, /<ModalShell isOpen customContent title=\{null\} onClose=\{onClose\} dismissible=\{!busy\}/)
+  assert.match(room, /role="dialog" aria-modal="true" aria-labelledby=\{titleId\} aria-busy=\{busy\}/)
+  for (const id of ['attendance-start-confirmation-title', 'attendance-report-prompt-title', 'work-session-modal-title', 'status-confirmation-title']) {
+    assert.ok(room.includes(`<AttendanceDialog titleId="${id}" busy={`), id)
+  }
+  assert.match(loader, /return createPortal\([\s\S]*themis-app-loader fixed inset-0[\s\S]*document\.body,/)
+  assert.doesNotMatch(css.match(/@keyframes themisPageEnter \{[\s\S]*?^\}/m)[0], /transform|filter/)
+  assert.doesNotMatch(css.match(/\.themis-page-transition \{[^}]+\}/)[0], /will-change|forwards/)
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^]*?\.themis-route-progress \{ display: none; \}/)
 })
 
 test('bulk dialog reuses global portal, preserves validation, uses one viewport overlay and safe mobile bounds', () => {

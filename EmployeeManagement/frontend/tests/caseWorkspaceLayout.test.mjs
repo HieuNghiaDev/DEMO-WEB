@@ -80,12 +80,13 @@ test('seven primary tabs and retained deadline path share one stable content sur
   assert.equal((page.match(/cm-ws-content-surface/g) ?? []).length, 1)
 })
 
-test('interpretation replaces deadline tab while old deadline controls remain reachable', () => {
+test('interpretation remains a primary tab and deadline controls are reachable from the header menu', () => {
   const tabs = find(tree, node => ts.isVariableDeclaration(node) && node.name.getText(tree) === 'tabs')
   const ids = tabs.initializer.elements.map(element => element.properties.find(item => item.name.getText(tree) === 'id').initializer.text)
   assert.deepEqual(ids, ['overview', 'collection', 'documents', 'tasks', 'interpretation', 'parties', 'timeline'])
-  assert.match(page, /onClick=\{\(\) => onOpenTab\('deadlines'\)\}/)
-  assert.match(page, /期限管理を開く/)
+  assert.doesNotMatch(page, /期限管理を開く/)
+  assert.match(page, /onOpenDeadlines=\{\(\) => setTab\('deadlines'\)\}/)
+  assert.match(header, /cm-ws-overflow-dropdown[^]*?onOpenDeadlines\(\)[^]*?<span>期限管理<\/span>/)
   for (const action of ['createDeadline', 'updateDeadline', 'deleteDeadline']) assert.ok(page.includes(action), action)
   assert.match(page, /onClick=\{\(\) => setTab\(id\)\}/)
   assert.match(page, /<RequiredDocumentsPanel key=\{caseId\}/)
@@ -106,7 +107,7 @@ test('interpretation replaces deadline tab while old deadline controls remain re
 
 test('required documents retain six columns, five real KPIs and existing controls', () => {
   const head = documents.match(/<div className="dc-required-head">([^]*?)<\/div>/)[1]
-  assert.deepEqual([...head.matchAll(/<span>([^<]+)<\/span>/g)].map(match => match[1]), ['資料', '状態', '担当者', '期限', 'ファイル', '更新日時'])
+  assert.deepEqual([...head.matchAll(/<span>([^<]+)<\/span>/g)].map(match => match[1]), ['資料', "{t('cases.workspace.statusLabel')}", '担当者', '期限', 'ファイル', '更新日時'])
   assert.equal((documents.match(/<SummaryCard /g) ?? []).length, 5)
   for (const expression of ['required.length', 'counts.unaccepted', 'counts.in_progress + counts.pending_review + counts.changes_requested', 'counts.completed', 'counts.overdue']) assert.ok(documents.includes(`value={${expression}}`))
   for (const control of ['setQuery(event.target.value)', 'setMethodFilter(event.target.value)', "changeView('list')", "changeView('card')", 'setFilter(item.value)']) assert.ok(documents.includes(control))
@@ -120,6 +121,15 @@ const rule = selector => {
   return matches[0]
 }
 const value = (rule, property) => rule.nodes.find(node => node.prop === property)?.value
+
+test('case Back is the only control in the sticky navigation', () => {
+  const backbar = find(tree, node => ts.isJsxElement(node) && className(node) === 'cm-ws-backbar')
+  const controls = backbar.children.filter(node => ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node))
+  assert.equal(controls.length, 1)
+  assert.match(controls[0].getText(tree), /onClick=\{onBack\}.*戻る/)
+  assert.doesNotMatch(backbar.getText(tree), /案件詳細/)
+  assert.equal(value(rule('.cm-ws-backbar'), 'position'), 'sticky')
+})
 
 test('shared section geometry uses theme surfaces; no continuous shell border remains', () => {
   const shell = rule('.cm-case-detail .cm-workspace-shell')

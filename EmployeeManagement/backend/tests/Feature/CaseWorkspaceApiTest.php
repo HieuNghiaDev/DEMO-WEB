@@ -6,6 +6,7 @@ use App\Models\CaseDocument;
 use App\Models\CaseType;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\Administration\MainRoles;
 use Database\Seeders\CaseTypeSeeder;
 use Database\Seeders\CaseWorkspaceTemplateSeeder;
 use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
@@ -51,6 +52,11 @@ class CaseWorkspaceApiTest extends TestCase
             ->getJson("/api/case-files/{$case['id']}/workspace")
             ->json('summary');
 
+        $this->actingAs($user, 'sanctum')
+            ->patchJson("/api/case-files/{$case['id']}/documents/{$applicationDocumentId}", ['status' => 'not_required'])
+            ->assertForbidden();
+        MainRoles::install();
+        $user->roles()->attach(Role::where('name', 'lawyer')->sole()->id);
         $this->actingAs($user, 'sanctum')
             ->patchJson("/api/case-files/{$case['id']}/documents/{$applicationDocumentId}", ['status' => 'not_required'])
             ->assertOk()

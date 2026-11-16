@@ -1,0 +1,70 @@
+{
+  "purpose": "THEMIS_G6_SYNTHETIC_ONLY",
+  "accounts": {
+    "STG_MANAGER": [
+      "case.view",
+      "case.create",
+      "case.update",
+      "case.assign",
+      "task.view_all",
+      "task.create",
+      "task.assign",
+      "task.manage",
+      "task.review",
+      "document.view"
+    ],
+    "STG_ASSIGNED_STAFF": [
+      "case.view",
+      "task.view_own",
+      "task.update",
+      "document.view"
+    ],
+    "STG_UNASSIGNED_STAFF": [
+      "case.view",
+      "task.view_own",
+      "task.update",
+      "document.view"
+    ],
+    "STG_ORDINARY_REVIEWER": [
+      "case.view",
+      "task.view_all",
+      "task.review",
+      "document.view"
+    ],
+    "STG_INACTIVE_USER": [
+      "case.view",
+      "task.view_own",
+      "task.update",
+      "document.view"
+    ]
+  },
+  "initial_counts": {
+    "offices": 1,
+    "employees": 5,
+    "users": 5,
+    "roles": 5,
+    "clients": 1,
+    "case_files": 1,
+    "document_types": 2,
+    "case_documents": 2,
+    "case_tasks": 2,
+    "case_memberships": 0,
+    "account_mfa": 0,
+    "c001_legal_decisions": 0,
+    "case_types": 1,
+    "permissions": 12,
+    "user_roles": 5,
+    "role_permissions": 26,
+    "account_action_tokens": 0,
+    "authentication_challenges": 0,
+    "mfa_recovery_codes": 0,
+    "c001_legal_proofs": 0,
+    "c001_version_provenance": 0
+  },
+  "documents": [
+    "G6-ORDINARY-A",
+    "G6-ORDINARY-B"
+  ],
+  "credential_policy": "unique random_bytes(32) per account, hash only in database; private per-run CLI handover, never printed",
+  "writer_sha256": "251d16a7271303810cf6b9a8d2511904a85243c593012dadfb243cd8091831c3"
+}

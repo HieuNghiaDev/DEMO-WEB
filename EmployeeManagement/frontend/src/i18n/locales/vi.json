@@ -151,6 +151,12 @@
           "reviewStatus": "Trạng thái xác nhận"
         }
       },
+      "statusLabel": "Trạng thái",
+      "taskAcceptance": {
+        "title": "Nhận công việc",
+        "action": "Nhận",
+        "help": "Khi bạn nhận, công việc chuyển sang Đang xử lý và thời điểm nhận được ghi vào lịch sử."
+      },
       "loadingCollection": "Đang tải thu thập tài liệu…",
       "loadingDocuments": "Đang tải tài liệu cần thiết…",
       "loadFailed": "Không thể tải vụ việc",

@@ -7,6 +7,7 @@ use App\Models\CaseFile;
 use App\Models\CaseType;
 use App\Models\Client;
 use App\Models\ClientEmployment;
+use App\Services\CaseOperationalAccess;
 use App\Services\CaseWorkspaceAuditService;
 use App\Services\GoogleDriveProvisioningService;
 use Illuminate\Http\JsonResponse;
@@ -37,6 +38,8 @@ class CaseFileController extends Controller
         }
 
         $classification = Arr::pull($data, 'classification');
+        $delegations = Arr::pull($data, 'task_delegations', []);
+        if ($request->exists('task_delegations')) abort_unless(CaseOperationalAccess::canDelegate($request->user()), 403);
         // Operational membership admission has not been approved. Reject before any write/provider call.
         if ($classification === 'confidential') {
             return response()->json([
@@ -51,7 +54,7 @@ class CaseFileController extends Controller
 
         $this->resolveCaseType($data);
 
-        $caseFile = DB::transaction(function () use ($data, $request, $classification): CaseFile {
+        $caseFile = DB::transaction(function () use ($data, $request, $classification, $delegations): CaseFile {
             $clientData = Arr::pull($data, 'client');
             $employments = Arr::pull($data, 'employments', []);
 
@@ -85,6 +88,7 @@ class CaseFileController extends Controller
             app(CaseWorkspaceAuditService::class)->record($caseFile, $request, '案件を作成', $caseFile->title, [
                 'event' => 'case.created', 'classification' => $classification,
             ]);
+            if ($delegations !== []) CaseOperationalAccess::replace($caseFile, $request, $delegations);
 
             return $caseFile;
         });
@@ -140,6 +144,47 @@ class CaseFileController extends Controller
         ]);
     }
 
+    public function delegationCandidates(Request $request): JsonResponse
+    {
+        abort_unless(CaseOperationalAccess::canDelegate($request->user()), 403);
+        return response()->json(['candidates' => $this->delegationCandidateRows($request)]);
+    }
+
+    public function taskDelegations(Request $request, CaseFile $caseFile): JsonResponse
+    {
+        CaseOperationalAccess::authorize($request->user(), $caseFile->id, 'delegate');
+        $grants = CaseOperationalAccess::grants($caseFile);
+        return response()->json([
+            'task_delegations' => $grants,
+            'revision' => hash('sha256', json_encode($grants, JSON_THROW_ON_ERROR)),
+            'candidates' => $this->delegationCandidateRows($request, $caseFile),
+        ]);
+    }
+
+    public function replaceTaskDelegations(Request $request, CaseFile $caseFile): JsonResponse
+    {
+        CaseOperationalAccess::authorize($request->user(), $caseFile->id, 'delegate');
+        $data = $request->validate([
+            ...CaseOperationalAccess::rules(), 'task_delegations' => ['present', 'array', 'max:100'],
+            'revision' => ['required', 'string', 'size:64'],
+        ]);
+        DB::transaction(function () use ($request, $caseFile, $data): void {
+            CaseFile::whereKey($caseFile->id)->lockForUpdate()->firstOrFail();
+            CaseOperationalAccess::authorize($request->user(), $caseFile->id, 'delegate');
+            abort_unless(hash('sha256', json_encode(CaseOperationalAccess::grants($caseFile), JSON_THROW_ON_ERROR)) === $data['revision'],
+                409, '委任権限が変更されています。画面を開き直して確認してください。');
+            CaseOperationalAccess::replace($caseFile, $request, $data['task_delegations']);
+        });
+        return response()->json(['task_delegations' => CaseOperationalAccess::grants($caseFile)]);
+    }
+
+    private function delegationCandidateRows(Request $request, ?CaseFile $caseFile = null): array
+    {
+        return CaseOperationalAccess::candidates($request->user())
+            ->filter(fn ($target) => ! $caseFile || \App\Services\CaseAccessService::contentAllows($target, $caseFile->id, 'write'))
+            ->map(fn ($target) => ['user_id' => $target->id, 'name' => $target->employee->full_name])->values()->all();
+    }
+
     private function updateWithHistory(CaseFile $caseFile, Request $request, array $data, string $title): CaseFile
     {
         return DB::transaction(function () use ($caseFile, $request, $data, $title) {
@@ -172,6 +217,7 @@ class CaseFileController extends Controller
     private function validated(Request $request, bool $partial = false): array
     {
         return $request->validate([
+            ...($partial ? ['task_delegations' => ['prohibited']] : CaseOperationalAccess::rules()),
             'classification' => [$partial ? 'prohibited' : 'required', 'string', Rule::in(['normal', 'confidential'])],
             'is_confidential' => ['prohibited'],
             'title' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
@@ -231,6 +277,10 @@ class CaseFileController extends Controller
 
     private function ensureCanAssignCase(Request $request): void
     {
+        if (CaseOperationalAccess::enforced()) {
+            abort_unless($request->user()?->hasAnyRole(['lawyer', 'admin']) && $request->user()->hasPermission('case.assign'), 403);
+            return;
+        }
         abort_unless(
             $request->user()?->hasPermission('case.assign') && (\App\Services\Administration\MainRoles::assigned($request->user())
                 || $request->user()?->hasAnyRole(['level_4', 'level_5'])),

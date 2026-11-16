@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Button, ModalShell } from '../../components/ui'
+import { Eye, EyeOff } from 'lucide-react'
+import { Button, IconButton, ModalShell } from '../../components/ui'
+import { VerificationCodeInput } from './VerificationCodeInput'
 import { AuthFailure, MutationUncertain, japaneseAuthError, type StepUpOperation } from './authFlow'
 import { withStepUp } from './authApi'
 import './authentication.css'
@@ -9,6 +11,8 @@ const copy = {
     title: 'Xác minh thao tác đặc quyền',
     instructions: 'Nhập mật khẩu và mã Authenticator mới. Xác minh chỉ dùng một lần cho đúng thao tác đã chọn.',
     password: 'Mật khẩu hiện tại',
+    showPassword: 'Hiện mật khẩu',
+    hidePassword: 'Ẩn mật khẩu',
     otp: 'Mã Authenticator',
     submit: 'Xác minh và thực hiện',
     cancel: 'Hủy',
@@ -18,6 +22,8 @@ const copy = {
     title: '操作の追加認証',
     instructions: '現在のパスワードと認証アプリの6桁のコードを入力してください。認証は選択した操作に対して1回のみ有効です。',
     password: '現在のパスワード',
+    showPassword: 'パスワードを表示する',
+    hidePassword: 'パスワードを隠す',
     otp: '認証コード',
     submit: '認証して実行',
     cancel: 'キャンセル',
@@ -30,6 +36,8 @@ export default function StepUpDialog({ operation, description, language = 'vi', 
   onComplete: (result: unknown) => void; onCancel: () => void; onMutationError: (message: string) => void
 }) {
   const labels = copy[language]
+  const [showPassword, setShowPassword] = useState(false)
+  const [otp, setOtp] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const locked = useRef(false)
@@ -69,13 +77,30 @@ export default function StepUpDialog({ operation, description, language = 'vi', 
     } finally { locked.current = false; if (active.current) setBusy(false) }
   }
   return <ModalShell isOpen onClose={onCancel} dismissible={!busy} title={<span lang={language}>{labels.title}</span>} titleId="step-up-title" description={<span lang={language}>{description}</span>} size="sm">
-    <form className="auth-security-form" lang={language} onSubmit={submit} aria-busy={busy}>
-      <p>{labels.instructions}</p>
-      <label htmlFor="step-up-password">{labels.password}<input id="step-up-password" name="password" type="password" autoComplete="current-password" required disabled={busy} autoFocus /></label>
-      <label htmlFor="step-up-otp">{labels.otp}<input id="step-up-otp" name="otp" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required disabled={busy} /></label>
+    <form className="auth-security-form" lang={language} onSubmit={submit} onReset={() => {
+      setOtp('')
+      setShowPassword(false)
+    }} aria-busy={busy}>
+      <p id="step-up-instructions">{labels.instructions}</p>
+      <div className="grid gap-1.5">
+        <label htmlFor="step-up-password">{labels.password}</label>
+        <div className="auth-step-up-password relative">
+          <input id="step-up-password" name="password" type={showPassword ? 'text' : 'password'}
+            autoComplete="current-password" required disabled={busy} autoFocus />
+          <IconButton type="button" className="absolute end-1 top-1/2 -translate-y-1/2"
+            aria-label={showPassword ? labels.hidePassword : labels.showPassword} aria-controls="step-up-password"
+            disabled={busy} onClick={() => setShowPassword(value => !value)}>
+            {showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+          </IconButton>
+        </div>
+      </div>
+      <label htmlFor="step-up-otp">{labels.otp}
+        <VerificationCodeInput id="step-up-otp" name="otp" value={otp} onChange={setOtp}
+          disabled={busy} describedBy="step-up-instructions" />
+      </label>
       {error && <div className="auth-security-error" role="alert" tabIndex={-1} ref={errorRef}>{error}</div>}
       <Button type="submit" variant="primary" loading={busy}>{labels.submit}</Button>
-      <Button disabled={busy} onClick={onCancel}>{labels.cancel}</Button>
+      <Button type="button" disabled={busy} onClick={onCancel}>{labels.cancel}</Button>
     </form>
   </ModalShell>
 }

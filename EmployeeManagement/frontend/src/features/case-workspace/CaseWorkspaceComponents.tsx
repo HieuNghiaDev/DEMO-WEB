@@ -341,12 +341,16 @@ export function WorkspaceHeader({
   onEdit,
   onOpenEmployment: _onOpenEmployment,
   onSelectEntity,
+  onOpenDeadlines,
+  onManageDelegation,
 }: {
   caseFile: CaseWorkspace
   canUpdate?: boolean
   onEdit?: () => void
   onOpenEmployment?: () => void
   onSelectEntity: (entity: RelatedEntity) => void
+  onOpenDeadlines: () => void
+  onManageDelegation?: () => void
 }) {
   const code = caseFile?.reference_number || `CASE-${String(caseFile?.id ?? 0).padStart(6, '0')}`
   const caseTypeName = caseFile?.case_type_option?.name || caseFile?.case_type || '未登録'
@@ -454,6 +458,17 @@ export function WorkspaceHeader({
                 <div className="cm-ws-overflow-dropdown">
                   <button
                     type="button"
+                    className="cm-ws-dropdown-item"
+                    onClick={() => {
+                      setIsMenuOpen(false)
+                      onOpenDeadlines()
+                    }}
+                  >
+                    <Calendar size={13} aria-hidden="true" />
+                    <span>期限管理</span>
+                  </button>
+                  <button
+                    type="button"
                     className="cm-ws-dropdown-item sm:hidden"
                     onClick={() => {
                       setIsMenuOpen(false)
@@ -550,13 +565,15 @@ export function WorkspaceHeader({
         </div>
 
         {/* Card 3: 担当者 */}
-        <div className="cm-ws-summary-card">
+        <button type="button" disabled={!onManageDelegation} onClick={onManageDelegation} aria-label="担当者の委任設定"
+          className={`cm-ws-summary-card text-left ${onManageDelegation ? 'is-clickable' : ''}`}>
           <UserAvatar
             name={caseFile.assigned_employee?.full_name}
             stableKey={caseFile.assigned_employee?.id}
             imageSrc={getEmployeeAvatarImageUrl(caseFile.assigned_employee?.avatar_path)}
             imageAlt={caseFile.assigned_employee ? `${assigneeName}のプロフィール画像` : ''}
             size="md"
+            className="cm-ws-summary-avatar"
           />
           <div className="cm-ws-summary-content">
             <div className="cm-ws-summary-label">担当者</div>
@@ -564,8 +581,8 @@ export function WorkspaceHeader({
               {assigneeName}
             </div>
           </div>
-          <ChevronRight size={16} className="cm-ws-summary-chevron" />
-        </div>
+          {onManageDelegation && <ChevronRight size={16} className="cm-ws-summary-chevron" />}
+        </button>
 
         {/* Card 4: canonical client employment summary */}
         <div
@@ -1040,7 +1057,7 @@ export function RecentHistoryCard({
               <div className="cm-ws-history-action truncate" title={act.title}>
                 {act.title}
               </div>
-              <div className="text-slate-500 text-xs truncate">
+              <div className="cm-ws-history-detail text-slate-500 text-xs truncate">
                 {act.content ? act.content : '—'}
               </div>
               <div className="cm-ws-history-actor truncate">
@@ -1082,7 +1099,7 @@ export function QuickInfoSidebar({
         </div>
       </div>
 
-      <div className="space-y-2.5">
+      <div className="cm-ws-quick-items space-y-2.5">
         {/* Metric 1: 未完了タスク */}
         <div className="cm-ws-quick-item">
           <div className="cm-ws-quick-iconbox cm-ws-quick-iconbox--blue">

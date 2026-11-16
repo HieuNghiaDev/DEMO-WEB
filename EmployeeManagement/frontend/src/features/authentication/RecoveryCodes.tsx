@@ -1,14 +1,46 @@
 import { useState } from 'react'
+import { Copy, Download } from 'lucide-react'
 import { Button } from '../../components/ui'
 
 export function RecoveryCodes({ codes, onDone }: { codes: string[]; onDone: () => void }) {
   const [saved, setSaved] = useState(false)
-  return <section className="auth-security-form" aria-labelledby="recovery-codes-title">
-    <h2 id="recovery-codes-title" className="text-base font-semibold">バックアップコードを安全に保存</h2>
-    <p>10個のコードは一度だけ表示され、各コードは1回使用できます。メールやチャットで共有せず、安全な場所に保存してください。</p>
-    <ul className="auth-security-codes">{codes.map(code => <li key={code}><code>{code}</code></li>)}</ul>
-    <p>ページを閉じたり再読み込みしたりすると、このコードは再表示できません。</p>
+  const [feedback, setFeedback] = useState('')
+  const codesText = codes.join('\n')
+
+  const copyCodes = async () => {
+    try {
+      await navigator.clipboard.writeText(codesText)
+      setFeedback('すべてのコードをコピーしました。')
+    } catch {
+      setFeedback('コピーできませんでした。ファイルをダウンロードしてください。')
+    }
+  }
+
+  const downloadCodes = () => {
+    const file = new Blob([`${codesText}\n`], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(file)
+    const link = document.createElement('a')
+    try {
+      link.href = url
+      link.download = 'themis-backup-codes.txt'
+      document.body.append(link)
+      link.click()
+    } finally {
+      link.remove()
+      // Leave the browser time to consume the Blob.
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    }
+  }
+
+  return <div className="auth-security-form">
+    <p>コードは一度だけ表示されます。各コードは1回使用でき、再読み込みすると表示できなくなります。</p>
+    <div className="flex flex-wrap gap-2">
+      <Button type="button" variant="outline" icon={<Copy size={16} aria-hidden="true" />} onClick={() => void copyCodes()}>すべてコピー</Button>
+      <Button type="button" variant="outline" icon={<Download size={16} aria-hidden="true" />} onClick={downloadCodes}>ダウンロード</Button>
+    </div>
+    <p className={feedback ? '' : 'sr-only'} role="status">{feedback}</p>
+    <ul className="auth-security-codes sm:grid-cols-2" aria-label="バックアップコード">{codes.map(code => <li className="min-w-0" key={code}><code>{code}</code></li>)}</ul>
     <label className="auth-security-ack"><input type="checkbox" checked={saved} onChange={e => setSaved(e.target.checked)} />コードを安全な場所に保存しました。</label>
-    <Button variant="primary" fullWidth disabled={!saved} onClick={onDone}>保存してログインに戻る</Button>
-  </section>
+    <Button type="button" variant="primary" fullWidth disabled={!saved} onClick={onDone}>ログインに戻る</Button>
+  </div>
 }

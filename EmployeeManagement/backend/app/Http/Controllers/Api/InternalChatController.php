@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreChatMessageRequest;
+use App\Models\ChatMessage;
 use App\Services\InternalChatService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class InternalChatController extends Controller
@@ -16,7 +18,7 @@ class InternalChatController extends Controller
     public function index(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'after_id' => ['nullable', 'integer', 'min:1'],
+            'after_id' => ['nullable', 'integer', 'min:0'],
             'before_id' => ['nullable', 'integer', 'min:1'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
             'receipt_ids' => ['sometimes', 'array', 'max:50'],
@@ -60,6 +62,16 @@ class InternalChatController extends Controller
         return response()->json(['message' => $this->chat->findMessage($request->user(), $message)]);
     }
 
+    public function translate(Request $request, int $message): JsonResponse
+    {
+        $data = $request->validate([
+            'pair' => ['required', 'string', Rule::in(ChatMessage::TRANSLATION_PAIRS)],
+            'text' => ['prohibited'],
+        ]);
+
+        return response()->json(['translations' => $this->chat->requestTranslation($request->user(), $message, $data['pair'])]);
+    }
+
     public function downloadAttachment(Request $request, int $message, int $attachment): StreamedResponse
     {
         return $this->chat->downloadAttachment($request->user(), $message, $attachment);
@@ -78,7 +90,7 @@ class InternalChatController extends Controller
 
     public function unread(Request $request): JsonResponse
     {
-        return response()->json(['unread_count' => $this->chat->unreadCount($request->user())]);
+        return response()->json($this->chat->unreadSummary($request->user()));
     }
 
     public function markRead(Request $request): JsonResponse
@@ -90,7 +102,7 @@ class InternalChatController extends Controller
         ]);
         $read = $this->chat->markRead($request->user(), (int) $validated['message_id'], $validated['visible_ids'] ?? []);
 
-        return response()->json(['unread_count' => $this->chat->unreadCount($request->user()), ...$read]);
+        return response()->json([...$this->chat->unreadSummary($request->user()), ...$read]);
     }
 
     public function markDelivered(Request $request): JsonResponse

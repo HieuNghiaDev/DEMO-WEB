@@ -14,7 +14,7 @@ const documentOption = (id, tasks = [], flag = tasks.length > 0) => ({ id, title
 const initialOptions = () => ({ required_documents: [documentOption(1), documentOption(2, [existing('in_progress')]), documentOption(3, [existing('completed')]), documentOption(4, [existing('cancelled')]), documentOption(5, [], true)], employees: [{ id: 7, full_name: '既存担当者', avatar_path: null, office_id: 1 }] })
 const nodes = tree => !React.isValidElement(tree) ? [] : [tree, ...React.Children.toArray(tree.props.children).flatMap(nodes)]
 
-function wizardHarness({ options = initialOptions(), initialSelectedIds = [], getOptions, post } = {}) {
+function drawerHarness({ options = initialOptions(), initialSelectedIds = [], getOptions, post } = {}) {
   const slots = []; let cursor = 0; let effects = []
   const cleanups = []
   const hooks = {
@@ -55,16 +55,17 @@ function wizardHarness({ options = initialOptions(), initialSelectedIds = [], ge
   const all = () => nodes(render())
   const find = predicate => all().find(predicate)
   const button = label => find(node => node.props.children === label && node.props.onClick)
-  const cards = () => all().filter(node => node.type.name === 'RequirementCard')
+  const selectVisible = () => find(node => node.props['aria-label'] === '表示中をすべて選択').props.onChange()
+  const rows = () => all().filter(node => node.type.name === 'RequirementRow')
   const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); render() }
   const initialize = async () => { render(); await flush() }
-  const completeAssignments = () => {
-    find(node => node.type.name === 'EmployeePicker' && node.props.optional === true).props.onChange('7')
-    find(node => node.type.name === 'DateField' && node.props.label === '期限').props.onChange('2026-10-10')
-    button('選択した項目に適用').props.onClick()
+  const setSharedAssignment = () => {
+    find(node => node.type.name === 'AssignmentFields').props.onChange({
+      assigned_employee_id: '7', due_date: '2026-10-10',
+    })
   }
   const finish = () => inDocument(() => cleanups.forEach(cleanup => cleanup()))
-  return { render, all, find, button, cards, initialize, flush, completeAssignments, finish, calls, created, closeCount: () => closed }
+  return { render, all, find, button, selectVisible, rows, initialize, flush, setSharedAssignment, finish, calls, created, closeCount: () => closed }
 }
 
 test('eligibility blocks every existing status and privacy-hidden tasks, and deduplicates selected IDs', () => {
@@ -76,14 +77,16 @@ test('eligibility blocks every existing status and privacy-hidden tasks, and ded
   assert.deepEqual(selectedEligibleTaskDocuments(options.required_documents, [1, 1, 2, 3, 4, 5, 999]).map(document => document.id), [1])
 })
 
-test('Step 1 locks already-tasked rows with real assignee/deadline/status; no private metadata is fabricated', async () => {
-  const h = wizardHarness(); await h.initialize()
+test('already-tasked rows stay locked and only display task details supplied by the server', async () => {
+  const h = drawerHarness(); await h.initialize()
   try {
-    for (const row of h.cards()) {
-      const html = renderToStaticMarkup(row.type(row.props))
+    for (const row of h.rows()) {
+      const html = renderToStaticMarkup(row)
       if (row.props.document.id === 1) { assert.doesNotMatch(html, /disabled|タスク作成済み/); row.props.onToggle() }
       else {
-        assert.match(html, /disabled=""/); assert.match(html, /タスク作成済み/)
+        assert.equal(row.props.disabled, true)
+        assert.doesNotMatch(html, /type="checkbox"/)
+        assert.match(html, /タスク作成済み/)
         if (row.props.document.case_tasks.length) {
           assert.match(html, /既存担当者/); assert.match(html, /2026\/10\/10/)
           for (const value of [{ in_progress: '対応中', completed: '完了', cancelled: 'キャンセル' }[row.props.document.case_tasks[0].status]]) assert.ok(html.includes(value))
@@ -91,55 +94,64 @@ test('Step 1 locks already-tasked rows with real assignee/deadline/status; no pr
         row.props.onToggle() // even a forced handler cannot select a locked row
       }
     }
-    assert.deepEqual(h.cards().filter(row => row.props.isSelected).map(row => row.props.document.id), [1])
+    assert.deepEqual(h.rows().filter(row => row.props.isSelected).map(row => row.props.document.id), [1])
   } finally { h.finish() }
 })
 
-test('select-all and initial selection include only eligible documents; only these enter Step 2 and POST', async () => {
-  const h = wizardHarness({ initialSelectedIds: [2, 3, 4, 5] }); await h.initialize()
+test('filtered select-all preserves earlier selections and shared values are submitted in one request with field-level overrides', async () => {
+  const options = initialOptions()
+  options.required_documents.push(documentOption(6), documentOption(7))
+  const h = drawerHarness({ options, initialSelectedIds: [1, 1, 2, 3, 4, 5] })
+  await h.initialize()
   try {
-    assert.equal(h.button('次へ').props.disabled, true)
-    h.button('すべて選択').props.onClick()
-    assert.equal(h.button('次へ').props.disabled, false)
-    assert.deepEqual(h.cards().filter(row => row.props.isSelected).map(row => row.props.document.id), [1])
-    h.button('次へ').props.onClick()
-    h.completeAssignments(); h.button('確認へ').props.onClick()
-    const submit = h.button('1件のタスクを作成')
+    assert.equal(h.button('1件のタスクを作成').props.disabled, true)
+    const search = query => h.find(node => node.props.type === 'search').props.onChange({ target: { value: query } })
+    search('Ｃ－００６')
+    h.selectVisible()
+    search('')
+    assert.deepEqual(h.rows().filter(row => row.props.isSelected).map(row => row.props.document.id), [1, 6])
+    h.setSharedAssignment()
+    h.rows().find(row => row.props.document.id === 6).props.onChange({ priority: 'high' })
+    h.find(node => node.type.name === 'AssignmentFields').props.onChange({ due_date: '2026-10-11' })
+    const submit = h.button('2件のタスクを作成')
     assert.ok(submit); submit.props.onClick(); submit.props.onClick()
     await h.flush()
     const posts = h.calls.filter(call => call[0] === 'post')
-    assert.deepEqual(posts, [['post', 49, [{ case_document_id: 1, assigned_employee_id: 7, due_date: '2026-10-10', priority: 'normal' }]]])
-    assert.deepEqual(h.created, [1]); assert.equal(h.closeCount(), 1)
+    assert.deepEqual(posts, [['post', 49, [
+      { case_document_id: 1, assigned_employee_id: 7, due_date: '2026-10-11', priority: 'normal' },
+      { case_document_id: 6, assigned_employee_id: 7, due_date: '2026-10-11', priority: 'high' },
+    ]]])
+    assert.deepEqual(h.created, [2]); assert.equal(h.closeCount(), 1)
   } finally { h.finish() }
 })
 
-test('stale 409 reloads options, returns to Step 1, clears locked selection and never retries POST', async () => {
+test('stale 409 reloads options, clears locked selection and never retries POST', async () => {
   let reads = 0
   const fresh = initialOptions(); fresh.required_documents[0] = documentOption(1, [existing('unaccepted')])
-  const h = wizardHarness({ getOptions: () => ++reads === 1 ? initialOptions() : fresh, post: async () => { throw { isAxiosError: true, response: { status: 409, data: { message: 'この資料にはすでにタスクが作成されています。', code: 'case_document_task_exists' } } } } })
+  const h = drawerHarness({ getOptions: () => ++reads === 1 ? initialOptions() : fresh, post: async () => { throw { isAxiosError: true, response: { status: 409, data: { message: 'この資料にはすでにタスクが作成されています。', code: 'case_document_task_exists' } } } } })
   await h.initialize()
   try {
-    h.button('すべて選択').props.onClick(); h.button('次へ').props.onClick(); h.completeAssignments(); h.button('確認へ').props.onClick()
+    h.selectVisible(); h.setSharedAssignment()
     h.button('1件のタスクを作成').props.onClick(); await h.flush()
     assert.equal(reads, 2); assert.equal(h.calls.filter(call => call[0] === 'post').length, 1)
-    assert.equal(h.button('次へ').props.disabled, true)
-    assert.equal(h.cards().filter(row => row.props.isSelected).length, 0)
-    assert.equal(h.cards()[0].props.document.has_existing_task, true)
+    assert.equal(h.button('タスクを作成').props.disabled, true)
+    assert.equal(h.rows().filter(row => row.props.isSelected).length, 0)
+    assert.equal(h.rows()[0].props.document.has_existing_task, true)
     assert.ok(h.find(node => node.props.role === 'alert' && node.props.children === 'この資料にはすでにタスクが作成されています。'))
     assert.deepEqual(h.created, []); assert.equal(h.closeCount(), 0)
   } finally { h.finish() }
 })
 
-test('opening the wizard again fetches existing-task metadata without a browser reload', async () => {
+test('opening the drawer again fetches existing-task metadata without a browser reload', async () => {
   let server = initialOptions()
-  const first = wizardHarness({ getOptions: () => server, post: async () => { server = initialOptions(); server.required_documents[0] = documentOption(1, [existing('unaccepted')]); return { tasks: [] } } })
+  const first = drawerHarness({ getOptions: () => server, post: async () => { server = initialOptions(); server.required_documents[0] = documentOption(1, [existing('unaccepted')]); return { tasks: [] } } })
   await first.initialize()
   try {
-    first.button('すべて選択').props.onClick(); first.button('次へ').props.onClick(); first.completeAssignments(); first.button('確認へ').props.onClick()
+    first.selectVisible(); first.setSharedAssignment()
     first.button('1件のタスクを作成').props.onClick(); await first.flush()
     assert.equal(first.closeCount(), 1)
-    const reopened = wizardHarness({ getOptions: () => server }); await reopened.initialize()
-    try { assert.equal(reopened.button('次へ').props.disabled, true); assert.equal(reopened.cards()[0].props.document.has_existing_task, true) }
+    const reopened = drawerHarness({ getOptions: () => server }); await reopened.initialize()
+    try { assert.equal(reopened.button('タスクを作成').props.disabled, true); assert.equal(reopened.rows()[0].props.document.has_existing_task, true) }
     finally { reopened.finish() }
   } finally { first.finish() }
 })

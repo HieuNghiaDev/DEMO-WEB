@@ -3,11 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\Employee;
+use App\Models\ChatMessage;
+use App\Models\ChatRoom;
 use App\Models\Office;
 use App\Models\Role;
 use App\Models\User;
 use Tests\Support\LegacyRbacFixtureSeeder as RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -32,7 +36,7 @@ class EmployeeDeletionApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('message', '社員を削除しました。');
 
-        $this->assertDatabaseMissing('users', ['id' => $target->id]);
+        $this->assertDatabaseHas('users', ['id' => $target->id, 'is_active' => false]);
         $this->assertDatabaseMissing('personal_access_tokens', [
             'tokenable_type' => User::class,
             'tokenable_id' => $target->id,
@@ -59,6 +63,57 @@ class EmployeeDeletionApiTest extends TestCase
 
         $this->assertDatabaseHas('users', ['id' => $target->id]);
         $this->assertNotSoftDeleted('employees', ['id' => $target->employee_id]);
+    }
+
+    public function test_employee_with_chat_history_can_be_removed_and_old_token_is_rejected(): void
+    {
+        $manager = $this->makeUser('DEL-012', 'level_4');
+        $target = $this->makeUser('DEL-013', 'level_2');
+        $token = $target->createToken('deletion-test')->plainTextToken;
+        DB::table('sessions')->insert([
+            'id' => 'employee-removal-session', 'user_id' => $target->id, 'payload' => 'synthetic', 'last_activity' => now()->timestamp,
+        ]);
+        $room = ChatRoom::create([
+            'office_id' => $target->employee->office_id, 'kind' => 'general',
+            'name' => 'THEMIS_GENERAL', 'singleton_slot' => 1,
+        ]);
+        $message = ChatMessage::create([
+            'chat_room_id' => $room->id, 'user_id' => $target->id, 'employee_id' => $target->employee_id,
+            'client_message_id' => (string) Str::uuid(), 'source_language' => 'ja',
+            'original_text' => 'Synthetic retained message',
+        ]);
+
+        Sanctum::actingAs($manager);
+        $this->deleteJson("/api/employees/{$target->employee_id}")
+            ->assertOk()->assertJsonPath('message', '社員を削除しました。');
+        $this->assertDatabaseHas('users', ['id' => $target->id, 'is_active' => false]);
+        $this->assertDatabaseMissing('sessions', ['id' => 'employee-removal-session']);
+        $this->assertSoftDeleted('employees', ['id' => $target->employee_id]);
+        $this->getJson('/api/organization')->assertOk()->assertJsonMissing(['employee_code' => 'DEL-013']);
+        $this->getJson("/api/internal-chat/messages/{$message->id}")->assertOk()
+            ->assertJsonPath('message.original_text', 'Synthetic retained message')
+            ->assertJsonPath('message.sender.name', 'DEL-013');
+        $this->assertDatabaseHas('chat_messages', ['id' => $message->id, 'user_id' => $target->id]);
+        $this->app['auth']->forgetGuards();
+        $this->withToken($token)->getJson('/api/me')->assertUnauthorized();
+    }
+
+    public function test_database_failure_rolls_back_removal_and_returns_a_safe_message(): void
+    {
+        $manager = $this->makeUser('DEL-014', 'level_4');
+        $target = $this->makeUser('DEL-015', 'level_2');
+        $token = $target->createToken('deletion-test')->accessToken;
+        Employee::deleting(fn () => DB::table('synthetic_missing_table')->count());
+
+        Sanctum::actingAs($manager);
+        $this->deleteJson("/api/employees/{$target->employee_id}")->assertStatus(500)->assertExactJson([
+            'message' => '社員を削除できませんでした。時間をおいて再試行してください。',
+        ]);
+        $this->assertDatabaseHas('users', ['id' => $target->id, 'is_active' => true]);
+        $this->assertDatabaseHas('employees', ['id' => $target->employee_id, 'status' => 'active']);
+        $this->assertNotSoftDeleted('employees', ['id' => $target->employee_id]);
+        $this->assertDatabaseHas('personal_access_tokens', ['id' => $token->id]);
+        $this->assertDatabaseMissing('security_audit_logs', ['event' => 'administration.employee_deleted', 'outcome' => 'success']);
     }
 
     public function test_level_four_can_delete_a_legacy_employee_without_a_login_account(): void
@@ -115,8 +170,8 @@ class EmployeeDeletionApiTest extends TestCase
         Sanctum::actingAs($actor);
         $this->deleteJson("/api/employees/{$target->employee_id}")->assertOk();
 
-        $this->assertDatabaseMissing('users', ['id' => $target->id]);
-        $this->assertDatabaseHas('users', ['id' => $actor->id]);
+        $this->assertDatabaseHas('users', ['id' => $target->id, 'is_active' => false]);
+        $this->assertDatabaseHas('users', ['id' => $actor->id, 'is_active' => true]);
     }
 
     private function makeUser(string $employeeCode, string $roleName): User

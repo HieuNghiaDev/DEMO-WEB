@@ -13,12 +13,12 @@ import './taskUI.css'
 import '../document-collection/documentCollection.css'
 
 type Props = TaskActionHandlers & {
-  caseId: number; tasks: CaseTask[]; activities: CaseActivity[]; canManage: boolean; canReview: boolean
+  caseId: number; tasks: CaseTask[]; activities: CaseActivity[]; canManage: boolean; canCreate?: boolean; canReview: boolean
   working: boolean; error?: string | null; onAdd: () => void; onRetry: () => void
   initialTaskId?: number | null; onInitialTaskHandled?: () => void
 }
 
-export default function TasksPanel({ caseId, tasks, activities, canManage, canReview, working, error, onAdd, onRetry, initialTaskId, onInitialTaskHandled, ...handlers }: Props) {
+export default function TasksPanel({ caseId, tasks, activities, canManage, canCreate = canManage, canReview, working, error, onAdd, onRetry, initialTaskId, onInitialTaskHandled, ...handlers }: Props) {
   const initialIndex = visibleTaskRows(tasks, '', 'all', '', 'updated_desc').findIndex(task => task.id === initialTaskId)
   const [query, setQuery] = useState<{ search: string; filter: TaskFilter; assignee: string; sort: TaskSort; page: number; perPage: number }>({ search: '', filter: 'all', assignee: '', sort: 'updated_desc', page: initialIndex < 0 ? 1 : Math.floor(initialIndex / 10) + 1, perPage: 10 })
   const [selectedId, setSelectedId] = useState<number | null>(initialIndex < 0 ? null : initialTaskId ?? null)
@@ -41,7 +41,7 @@ export default function TasksPanel({ caseId, tasks, activities, canManage, canRe
           {canManage && <label>担当者<select value={query.assignee} onChange={event => changeQuery({ assignee: event.target.value })}><option value="">すべて</option>{assignees.map(employee => <option key={employee.id} value={employee.id}>{employee.full_name}</option>)}</select></label>}
           <Button size="sm" variant="ghost" onClick={() => changeQuery({ search: '', filter: 'all', assignee: '', sort: 'updated_desc' })}>条件をクリア</Button>
         </div></details>
-        {canManage && <Button variant="primary" icon={<Plus size={15}/>} disabled={working} onClick={onAdd}>タスクを追加</Button>}
+        {canCreate && <Button variant="primary" icon={<Plus size={15}/>} disabled={working} onClick={onAdd}>タスクを追加</Button>}
       </div>
     </header>
     <nav className="cm-task-filters" aria-label="タスクのステータス絞り込み">{taskFilters.map(({ value, label }) => <button key={value} type="button" className={query.filter === value ? 'is-active' : ''} aria-pressed={query.filter === value} onClick={() => changeQuery({ filter: value })}>{label}<span>{counts[value]}</span></button>)}</nav>

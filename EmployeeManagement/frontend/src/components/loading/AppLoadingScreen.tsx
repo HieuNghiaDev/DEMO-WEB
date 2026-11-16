@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { ThemisLoadingMark } from './ThemisLoadingMark'
 
 export interface AppLoadingScreenProps {
@@ -5,9 +6,11 @@ export interface AppLoadingScreenProps {
 }
 
 export function AppLoadingScreen({ label = 'ワークスペースを準備しています' }: AppLoadingScreenProps) {
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <main
-      className="themis-app-loader fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-[var(--tm-bg)] px-6 text-[var(--tm-text-primary)]"
+      className="themis-app-loader fixed inset-0 z-[var(--tm-layer-modal)] flex items-center justify-center overflow-hidden bg-[var(--tm-bg)] px-6 text-[var(--tm-text-primary)]"
       role="status"
       aria-live="polite"
       aria-label={label}
@@ -24,6 +27,7 @@ export function AppLoadingScreen({ label = 'ワークスペースを準備して
         </div>
         <p className="mt-4 text-xs font-medium text-[var(--tm-text-secondary)]">{label}</p>
       </div>
-    </main>
+    </main>,
+    document.body,
   )
 }

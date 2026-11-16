@@ -11,7 +11,11 @@ import ts from 'typescript'
 import postcss from 'postcss'
 
 const external = createRequire(import.meta.url)
-await external('i18next').use(external('react-i18next').initReactI18next).init({ lng: 'ja', initImmediate: false, resources: { ja: { translation: {} } } })
+const i18next = external('i18next')
+await i18next.use(external('react-i18next').initReactI18next).init({
+  lng: 'ja', initImmediate: false,
+  resources: { ja: { translation: JSON.parse(readFileSync(new URL('../src/i18n/locales/ja.json', import.meta.url), 'utf8')) } },
+})
 function loader(overrides = {}) {
   const modules = new Map()
   function load(path) {
@@ -99,6 +103,7 @@ function panelHarness(all, props = {}) {
   }
   const Panel = loader({
     react,
+    'react-i18next': { useTranslation: () => ({ t: i18next.t.bind(i18next) }) },
     '../hooks/useWorkflowCaseDocuments': { useWorkflowCaseDocuments: () => collection },
     './RequiredDocumentInspector': { __esModule: true, default: function Inspector() { return null } },
     '../../../components/loading': { SectionSkeleton: () => React.createElement('div', null, 'Loading') },
@@ -159,6 +164,7 @@ test('real list navigation, page sizes and drawer identity remain independent', 
   const h = panelHarness(items(48))
   let html = h.render()
   assert.match(html, /資料一覧/)
+  assert.match(html, />ステータス<\/span>/)
   assert.equal((html.match(/48件中1–10件を表示/g) ?? []).length, 2)
   assert.equal(h.rows().length, 10)
   assert.equal(h.control('前のページ').props.disabled, true)
