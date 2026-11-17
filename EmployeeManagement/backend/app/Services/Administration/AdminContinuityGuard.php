@@ -33,31 +33,75 @@ final class AdminContinuityGuard
             throw new LogicException('The main role installation requires the approved local primary database.');
         }
 
-        $target = User::findOrFail($userId);
-        DB::transaction(function () use ($target, $employeeId): void {
-            $state = DB::table('security_administration_state')->where('id', 1)->lockForUpdate()->first();
-            $manager = User::whereKey($target->id)->lockForUpdate()->firstOrFail();
-            $legacy = $manager->role_names;
-            if (! $state || $state->phase !== 'preparation' || $state->admin_seen || $state->bootstrap_user_id
-                || $state->bootstrap_completed_at || $this->canonicalSnapshot() !== []
-                || $manager->role !== 'manager' || $manager->employee_id !== $employeeId
-                || ! AdminCapabilities::active($manager) || $manager->must_change_password
-                || ! in_array('level_4', $legacy, true) || array_diff($legacy, ['level_4', 'level_5'])) {
-                throw ValidationException::withMessages(['admin' => 'The selected account is not the eligible local Manager.']);
+        DB::transaction(function () use ($userId, $employeeId): void {
+            $manager = $this->eligibleManager($userId, $employeeId, lock: true);
+            $this->installForManager($manager);
+        });
+    }
+
+    /** The Railway command pins both the runtime instance and the writable database before doing any work. */
+    public function bootstrapRailwayManager(int $userId, int $employeeId, array $expected, bool $apply): void
+    {
+        $connection = DB::connection();
+        foreach (['project-id' => 'RAILWAY_PROJECT_ID', 'environment-id' => 'RAILWAY_ENVIRONMENT_ID',
+            'service-id' => 'RAILWAY_SERVICE_ID'] as $option => $variable) {
+            if (getenv($variable) !== $expected[$option]) {
+                throw new LogicException('Railway runtime identity does not match the approved target.');
+            }
+        }
+        if (! app()->runningInConsole() || $connection->getName() !== 'mysql' || $connection->getDriverName() !== 'mysql'
+            || ! preg_match('/\A[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.railway\.internal\z/D', $expected['db-host'])
+            || $connection->getConfig('host') !== $expected['db-host'] || $connection->getDatabaseName() !== $expected['db-name']
+            || (string) $connection->getConfig('port') !== $expected['db-port']
+            || $connection->getConfig('url') || $connection->getConfig('unix_socket')
+            || $connection->getConfig('read') || $connection->getConfig('write')
+            || (config('session.connection') && config('session.connection') !== $connection->getName())) {
+            throw new LogicException('The resolved primary connection does not match the approved private MySQL target.');
+        }
+
+        $connection->transaction(function () use ($connection, $userId, $employeeId, $expected, $apply): void {
+            $identity = $connection->selectOne('SELECT DATABASE() AS schema_name, @@server_uuid AS server_uuid', [], false);
+            if ($identity->schema_name !== $expected['db-name'] || $identity->server_uuid !== $expected['mysql-server-id']) {
+                throw new LogicException('The connected MySQL server or schema does not match the approved target.');
             }
 
-            $this->bootstrapAdmission = $manager->id;
-            try {
-                $this->run(function () use ($manager): void {
-                    $admin = MainRoles::install();
-                    $manager->roles()->sync([$admin->id]);
-                    $manager->revokeSessions();
-                    DB::table('security_administration_state')->where('id', 1)->update(['bootstrap_completed_at' => now()]);
-                }, $manager, 'administration.main_roles_manager_bootstrapped', null, true);
-            } finally {
-                $this->bootstrapAdmission = null;
+            $manager = $this->eligibleManager($userId, $employeeId, $apply, $expected['installation-id']);
+            if ($apply) {
+                $this->installForManager($manager);
             }
         });
+    }
+
+    private function eligibleManager(int $userId, int $employeeId, bool $lock, ?string $installation = null): User
+    {
+        $state = DB::table('security_administration_state')->where('id', 1)->when($lock, fn ($query) => $query->lockForUpdate())->first();
+        $manager = User::whereKey($userId)->when($lock, fn ($query) => $query->lockForUpdate())->first();
+        $legacy = $manager?->role_names ?? [];
+        if (! $state || $state->phase !== 'preparation' || $state->admin_seen || $state->bootstrap_user_id
+            || $state->bootstrap_completed_at || $this->canonicalSnapshot() !== []
+            || ($installation !== null && ($state->installation_id !== $installation || Role::whereIn('name', MainRoles::NAMES)->exists()))
+            || ! $manager || $manager->role !== 'manager' || $manager->employee_id !== $employeeId
+            || ! AdminCapabilities::active($manager) || $manager->must_change_password
+            || ! in_array('level_4', $legacy, true) || array_diff($legacy, ['level_4', 'level_5'])) {
+            throw ValidationException::withMessages(['admin' => 'The installation or the selected legacy Manager is not eligible for bootstrap.']);
+        }
+
+        return $manager;
+    }
+
+    private function installForManager(User $manager): void
+    {
+        $this->bootstrapAdmission = $manager->id;
+        try {
+            $this->run(function () use ($manager): void {
+                $admin = MainRoles::install();
+                $manager->roles()->sync([$admin->id]);
+                $manager->revokeSessions();
+                DB::table('security_administration_state')->where('id', 1)->update(['bootstrap_completed_at' => now()]);
+            }, $manager, 'administration.main_roles_manager_bootstrapped', null, true);
+        } finally {
+            $this->bootstrapAdmission = null;
+        }
     }
 
     public function run(callable $write, Model $target, string $action = 'administration.model_mutation', ?User $actor = null, bool $requiredAudit = false): mixed
