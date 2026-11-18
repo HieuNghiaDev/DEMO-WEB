@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\HostingG5;
 
+use App\Console\Commands\MigrateDeploy;
 use PHPUnit\Framework\TestCase;
 
 class DeploymentConfigTest extends TestCase
@@ -11,9 +12,9 @@ class DeploymentConfigTest extends TestCase
         $config = json_decode(file_get_contents(dirname(__DIR__, 5).'/railway.json'), true, flags: JSON_THROW_ON_ERROR);
         $preDeploy = $config['deploy']['preDeployCommand'];
 
-        // Pre-deploy runs idempotent schema migrations with DB-ready retries, never database seeders.
+        // Pre-deploy runs idempotent deployable migrations with DB-ready retries, never database seeders.
         $this->assertSame(
-            'attempt=1; until php artisan migrate --force; do if [ "$attempt" -ge 12 ]; then exit 1; fi; attempt=$((attempt + 1)); sleep 5; done',
+            'attempt=1; until php artisan themis:migrate-deploy; do if [ "$attempt" -ge 12 ]; then exit 1; fi; attempt=$((attempt + 1)); sleep 5; done',
             $preDeploy,
         );
         $this->assertStringNotContainsString('db:seed', $preDeploy);
@@ -23,5 +24,18 @@ class DeploymentConfigTest extends TestCase
             $config['deploy']['startCommand'],
             'Start the Railpack entrypoint with pre-deploy handling migrations exclusively.',
         );
+    }
+
+    public function test_migrate_deploy_excludes_sandbox_only_rehearsal_migrations(): void
+    {
+        $migrationsDir = dirname(__DIR__, 3).'/database/migrations';
+        $paths = MigrateDeploy::deployableMigrationPaths($migrationsDir);
+
+        foreach (MigrateDeploy::REHEARSAL_ONLY_MIGRATIONS as $excluded) {
+            $this->assertNotContains('database/migrations/'.$excluded, $paths);
+        }
+
+        $this->assertContains('database/migrations/2026_11_11_120000_grant_employee_creation_to_staff.php', $paths);
+        $this->assertContains('database/migrations/2026_11_15_120000_create_case_operational_grants.php', $paths);
     }
 }
