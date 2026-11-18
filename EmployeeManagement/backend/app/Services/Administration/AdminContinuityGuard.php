@@ -77,12 +77,15 @@ final class AdminContinuityGuard
         $state = DB::table('security_administration_state')->where('id', 1)->when($lock, fn ($query) => $query->lockForUpdate())->first();
         $manager = User::whereKey($userId)->when($lock, fn ($query) => $query->lockForUpdate())->first();
         $legacy = $manager?->role_names ?? [];
+        // Existing Railway Managers may have only level_5 before the main roles are installed.
+        $hasApprovedLegacyRole = in_array('level_4', $legacy, true)
+            || ($installation !== null && $legacy === ['level_5']);
         if (! $state || $state->phase !== 'preparation' || $state->admin_seen || $state->bootstrap_user_id
             || $state->bootstrap_completed_at || $this->canonicalSnapshot() !== []
             || ($installation !== null && ($state->installation_id !== $installation || Role::whereIn('name', MainRoles::NAMES)->exists()))
             || ! $manager || $manager->role !== 'manager' || $manager->employee_id !== $employeeId
             || ! AdminCapabilities::active($manager) || $manager->must_change_password
-            || ! in_array('level_4', $legacy, true) || array_diff($legacy, ['level_4', 'level_5'])) {
+            || ! $hasApprovedLegacyRole || array_diff($legacy, ['level_4', 'level_5'])) {
             throw ValidationException::withMessages(['admin' => 'The installation or the selected legacy Manager is not eligible for bootstrap.']);
         }
 
