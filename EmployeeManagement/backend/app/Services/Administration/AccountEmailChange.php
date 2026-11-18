@@ -29,7 +29,7 @@ final class AccountEmailChange
     {
         $transport = config('mail.mailers.'.config('mail.default').'.transport');
         return Schema::hasTable('email_change_requests') && (app()->environment('testing') || $this->usesLocalLog()
-            || in_array($transport, ['smtp', 'sendmail', 'mailgun', 'ses', 'ses-v2', 'postmark', 'resend'], true));
+            || in_array($transport, ['smtp', 'sendmail', 'mailgun', 'ses', 'ses-v2', 'postmark', 'resend', 'brevo'], true));
     }
 
     public function usesLocalLog(): bool

@@ -83,5 +83,8 @@ class AppServiceProvider extends ServiceProvider
         \Illuminate\Support\Facades\Gate::policy(\App\Models\Role::class, \App\Policies\RolePolicy::class);
         \Illuminate\Support\Facades\Gate::policy(\App\Models\CaseFile::class, \App\Policies\CaseFilePolicy::class);
         \Illuminate\Support\Facades\Gate::policy(\App\Models\InterpretationRequest::class, \App\Policies\InterpretationRequestPolicy::class);
+        \Illuminate\Support\Facades\Mail::extend('brevo', fn (array $config = []) => new \App\Services\BrevoMailTransport(
+            trim((string) ($config['key'] ?? config('services.brevo.key')))
+        ));
     }
 }
