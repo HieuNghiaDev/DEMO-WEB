@@ -20,9 +20,9 @@ class DeploymentConfigTest extends TestCase
         $this->assertStringNotContainsString('db:seed', $preDeploy);
         $this->assertArrayNotHasKey('environments', $config, 'Environment overrides need their own safety review.');
         $this->assertSame(
-            'exec env RAILPACK_SKIP_MIGRATIONS=true /start-container.sh',
+            "sh -c '(while true; do php artisan queue:work database --queue=chat-translations --timeout=25 --sleep=3 --max-time=3600 --no-interaction; sleep 2; done) & exec env RAILPACK_SKIP_MIGRATIONS=true /start-container.sh'",
             $config['deploy']['startCommand'],
-            'Start the Railpack entrypoint with pre-deploy handling migrations exclusively.',
+            'Start the chat translation queue worker alongside the Railpack entrypoint with migrations opted out.',
         );
     }
 

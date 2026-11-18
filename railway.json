@@ -2,6 +2,6 @@
   "$schema": "https://railway.com/railway.schema.json",
   "deploy": {
     "preDeployCommand": "attempt=1; until php artisan themis:migrate-deploy; do if [ \"$attempt\" -ge 12 ]; then exit 1; fi; attempt=$((attempt + 1)); sleep 5; done",
-    "startCommand": "exec env RAILPACK_SKIP_MIGRATIONS=true /start-container.sh"
+    "startCommand": "sh -c '(while true; do php artisan queue:work database --queue=chat-translations --timeout=25 --sleep=3 --max-time=3600 --no-interaction; sleep 2; done) & exec env RAILPACK_SKIP_MIGRATIONS=true /start-container.sh'"
   }
 }
