@@ -35,6 +35,7 @@ export type InternalChatContextValue = {
   hasOlder: boolean
   error: string
   isReconnecting: boolean
+  hasEmbeddedChat: boolean
   drawerOpen: boolean
   setDrawerOpen: (open: boolean) => void
   loadOlder: (throughId?: number) => Promise<boolean>

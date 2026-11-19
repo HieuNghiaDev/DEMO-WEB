@@ -2,16 +2,15 @@ import axios from 'axios'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { getVisaProgress } from '../features/visa-progress/api'
-import VisaProgressFilters from '../features/visa-progress/VisaProgressFilters'
+import VisaProgressFilters, { type VisaQuickCounts } from '../features/visa-progress/VisaProgressFilters'
 import VisaProgressHeader from '../features/visa-progress/VisaProgressHeader'
 import VisaProgressInsights from '../features/visa-progress/VisaProgressInsights'
 import VisaProgressPagination from '../features/visa-progress/VisaProgressPagination'
-import VisaScrollReveal from '../features/visa-progress/VisaScrollReveal'
 import VisaProgressSummary from '../features/visa-progress/VisaProgressSummary'
 import VisaProgressTable from '../features/visa-progress/VisaProgressTable'
 import type { VisaDeadlineLevel, VisaProgressApplication, VisaProgressDashboard } from '../features/visa-progress/types'
 import { isAttentionDeadline } from '../features/visa-progress/visaProgressUi'
-import { SectionSkeleton, Skeleton } from '../components/loading'
+import { MobileCardSkeleton, Skeleton, TableSkeleton } from '../components/loading'
 
 const deadlineOrder: Record<VisaDeadlineLevel, number> = {
   overdue: 0,
@@ -77,6 +76,16 @@ export default function VisaProgress() {
   const applications = useMemo(() => dashboard?.applications ?? [], [dashboard])
   const statuses = useMemo(() => uniqueValues(applications, 'status'), [applications])
   const responsiblePeople = useMemo(() => uniqueValues(applications, 'responsible_person'), [applications])
+  const quickCounts = useMemo<VisaQuickCounts>(
+    () => ({
+      all: applications.length,
+      attention: applications.filter((item) => isAttentionDeadline(item.deadline_level)).length,
+      overdue: applications.filter((item) => item.deadline_level === 'overdue').length,
+      has_deadline: applications.filter((item) => item.deadline_level !== 'none').length,
+      none: applications.filter((item) => item.deadline_level === 'none').length,
+    }),
+    [applications],
+  )
   const filteredApplications = useMemo(
     () => filterApplications(applications, keyword, statusesFilter, responsiblePerson, deadlineLevel),
     [applications, keyword, statusesFilter, responsiblePerson, deadlineLevel],
@@ -115,36 +124,64 @@ export default function VisaProgress() {
     setCurrentPage(1)
   }
 
-  const showAttentionApplications = () => {
-    setDeadlineLevel('attention')
-    setCurrentPage(1)
+  const scrollToWorkspace = () => {
     window.requestAnimationFrame(() => {
       document.getElementById('visa-progress-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
   }
 
+  const showAttentionApplications = () => {
+    setDeadlineLevel('attention')
+    setCurrentPage(1)
+    scrollToWorkspace()
+  }
+
+  const selectStatusFromInsights = (status: string) => {
+    setStatusesFilter([status])
+    setDeadlineLevel('all')
+    setCurrentPage(1)
+    scrollToWorkspace()
+  }
+
+  const selectDeadlineLevelFromInsights = (level: string) => {
+    setDeadlineLevel(level)
+    setStatusesFilter([])
+    setCurrentPage(1)
+    scrollToWorkspace()
+  }
+
   return (
-    <div className="w-full min-w-0 max-w-full px-4 pb-10 pt-5 sm:px-5 lg:px-6 xl:px-8">
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900" aria-label="在留申請運用概要">
+    <div className="cm-case-list-page">
+      <div className="cm-case-list-shell">
         <VisaProgressHeader
           source={dashboard?.source ?? null}
           refreshing={isRefreshing}
           onRefresh={() => void loadDashboard(true)}
         />
-        {isLoading ? <VisaProgressSummary loading /> : !error && dashboard && <VisaProgressSummary summary={dashboard.summary} />}
-      </section>
+        {isLoading ? (
+          <VisaProgressSummary loading />
+        ) : (
+          !error && dashboard && <VisaProgressSummary summary={dashboard.summary} />
+        )}
+      </div>
 
-      {isLoading && <LoadingState />}
+      <main className="cm-case-list-shell cm-case-list-workspace">
+        {isLoading && <LoadingState />}
 
-      {!isLoading && error && <ErrorState message={error} onRetry={() => void loadDashboard(true)} />}
+        {!isLoading && error && <ErrorState message={error} onRetry={() => void loadDashboard(true)} />}
 
-      {!isLoading && !error && dashboard && (
-        <>
-          {refreshError && <RefreshError message={refreshError} onRetry={() => void loadDashboard(true)} />}
-          <VisaProgressInsights applications={applications} onShowAttention={showAttentionApplications} />
+        {!isLoading && !error && dashboard && (
+          <>
+            {refreshError && <RefreshError message={refreshError} onRetry={() => void loadDashboard(true)} />}
 
-          <VisaScrollReveal id="visa-progress-workspace" className="mt-6 scroll-mt-5">
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white transition-[border-color,box-shadow] hover:border-indigo-200 hover:shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:hover:border-indigo-400/40">
+            <VisaProgressInsights
+              applications={applications}
+              onShowAttention={showAttentionApplications}
+              onSelectStatus={selectStatusFromInsights}
+              onSelectDeadlineLevel={selectDeadlineLevelFromInsights}
+            />
+
+            <div id="visa-progress-workspace" className="grid min-w-0 gap-3.5 scroll-mt-5">
               <VisaProgressFilters
                 keyword={keyword}
                 selectedStatuses={statusesFilter}
@@ -154,41 +191,49 @@ export default function VisaProgress() {
                 responsiblePeople={responsiblePeople}
                 totalCount={applications.length}
                 filteredCount={filteredApplications.length}
-                visibleStart={filteredApplications.length > 0 ? pageStartIndex + 1 : 0}
-                visibleEnd={Math.min(pageStartIndex + pageSize, filteredApplications.length)}
+                quickCounts={quickCounts}
                 onKeywordChange={updateKeyword}
                 onStatusesChange={updateStatuses}
                 onResponsiblePersonChange={updateResponsiblePerson}
                 onDeadlineLevelChange={updateDeadlineLevel}
                 onReset={resetFilters}
               />
-              <VisaProgressTable
-                applications={visibleApplications}
-                hasActiveFilters={hasActiveFilters}
-                onResetFilters={resetFilters}
-              />
-              {filteredApplications.length > 0 && (
-                <VisaProgressPagination
-                  currentPage={validCurrentPage}
-                  pageSize={pageSize}
-                  totalItems={filteredApplications.length}
-                  totalSourceItems={applications.length}
-                  onPageChange={setCurrentPage}
-                  onPageSizeChange={(size) => {
-                    setPageSize(size)
-                    setCurrentPage(1)
-                  }}
+
+              <section className="cm-case-table">
+                <VisaProgressTable
+                  applications={visibleApplications}
+                  hasActiveFilters={hasActiveFilters}
+                  onResetFilters={resetFilters}
                 />
-              )}
-            </section>
-          </VisaScrollReveal>
-        </>
-      )}
+                {filteredApplications.length > 0 && (
+                  <VisaProgressPagination
+                    currentPage={validCurrentPage}
+                    pageSize={pageSize}
+                    totalItems={filteredApplications.length}
+                    totalSourceItems={applications.length}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={(size) => {
+                      setPageSize(size)
+                      setCurrentPage(1)
+                    }}
+                  />
+                )}
+              </section>
+            </div>
+          </>
+        )}
+      </main>
     </div>
   )
 }
 
-function filterApplications(applications: VisaProgressApplication[], keyword: string, selectedStatuses: string[], responsiblePerson: string, deadlineLevel: string): VisaProgressApplication[] {
+function filterApplications(
+  applications: VisaProgressApplication[],
+  keyword: string,
+  selectedStatuses: string[],
+  responsiblePerson: string,
+  deadlineLevel: string,
+): VisaProgressApplication[] {
   const normalizedKeyword = keyword.trim().toLocaleLowerCase()
 
   return applications
@@ -229,31 +274,33 @@ function getErrorMessage(error: unknown): string {
 
 function LoadingState() {
   return (
-    <div className="mt-6 space-y-6" role="status" aria-label="在留申請データを読み込み中…" aria-busy="true">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-24 rounded-xl border border-[var(--tm-border)]" />)}
+    <div className="grid min-w-0 gap-3.5" role="status" aria-label="在留申請データを読み込み中…" aria-busy="true">
+      <div className="grid gap-3.5 lg:grid-cols-2">
+        <Skeleton className="h-44 rounded-[var(--tm-radius-panel)] border border-[var(--tm-border)]" />
+        <Skeleton className="h-44 rounded-[var(--tm-radius-panel)] border border-[var(--tm-border)]" />
       </div>
-      <SectionSkeleton rows={6} showHeader />
+      <section className="cm-case-table p-4">
+        <div className="cm-clv-desktop-only">
+          <TableSkeleton rows={8} columns={7} className="border-0 shadow-none dark:bg-transparent" />
+        </div>
+        <MobileCardSkeleton className="cm-clv-mobile-only" rows={5} label="在留申請カードを読み込み中…" />
+      </section>
     </div>
   )
 }
 
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div className="mt-6 flex flex-col gap-4 rounded-xl border border-amber-200 bg-amber-50/60 p-5 dark:border-amber-400/20 dark:bg-amber-500/[0.06] sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-4 rounded-[var(--tm-radius-panel)] border border-amber-200 bg-amber-50/60 p-5 dark:border-amber-400/20 dark:bg-amber-500/[0.06] sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-start gap-3">
         <AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-300" aria-hidden="true" />
         <div>
-          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">データを表示できません</p>
-          <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">{message}</p>
+          <p className="text-sm font-semibold text-[var(--tm-text-primary)]">データを表示できません</p>
+          <p className="mt-1 text-sm leading-6 text-[var(--tm-text-secondary)]">{message}</p>
         </div>
       </div>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="inline-flex h-10 shrink-0 items-center justify-center gap-2 self-start rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-      >
-        <RefreshCw size={15} aria-hidden="true" />
+      <button type="button" onClick={onRetry} className="dc-button shrink-0 self-start">
+        <RefreshCw size={14} aria-hidden="true" />
         再試行
       </button>
     </div>
@@ -262,9 +309,11 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 
 function RefreshError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-400/20 dark:bg-amber-500/[0.06]">
+    <div className="flex items-center justify-between gap-3 rounded-[var(--tm-radius-panel)] border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-400/20 dark:bg-amber-500/[0.06]">
       <p className="min-w-0 text-amber-800 dark:text-amber-200">最新データを取得できませんでした。{message}</p>
-      <button type="button" onClick={onRetry} className="shrink-0 font-medium text-amber-800 underline-offset-4 hover:underline dark:text-amber-200">再試行</button>
+      <button type="button" onClick={onRetry} className="shrink-0 font-medium text-amber-800 underline-offset-4 hover:underline dark:text-amber-200">
+        再試行
+      </button>
     </div>
   )
 }

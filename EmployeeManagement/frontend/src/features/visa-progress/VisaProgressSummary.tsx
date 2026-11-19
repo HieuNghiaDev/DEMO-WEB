@@ -1,6 +1,6 @@
 import { AlertTriangle, CheckCircle2, ClipboardList, FileWarning, Search } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { Skeleton } from '../../components/loading'
+import { KpiSkeletonValue } from '../../components/loading'
 import type { VisaProgressSummary as Summary } from './types'
 
 type Props = {
@@ -8,38 +8,74 @@ type Props = {
   loading?: boolean
 }
 
-const metrics: Array<{ key: keyof Summary; label: string; dot: string; iconTone: string; icon: ReactNode }> = [
-  { key: 'total',               label: '全案件',      dot: 'bg-slate-400',   iconTone: 'bg-slate-100 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300', icon: <ClipboardList size={17} /> },
-  { key: 'in_review',           label: '審査中',      dot: 'bg-sky-500',     iconTone: 'bg-sky-50 text-sky-600 dark:bg-sky-400/10 dark:text-sky-300',           icon: <Search size={17} /> },
-  { key: 'additional_documents',label: '追加資料対応', dot: 'bg-amber-500',  iconTone: 'bg-amber-50 text-amber-600 dark:bg-amber-400/10 dark:text-amber-300',   icon: <FileWarning size={17} /> },
-  { key: 'attention_required',  label: '期限注意',    dot: 'bg-rose-500',    iconTone: 'bg-rose-50 text-rose-600 dark:bg-rose-400/10 dark:text-rose-300',       icon: <AlertTriangle size={17} /> },
-  { key: 'approved',            label: '許可',        dot: 'bg-emerald-500', iconTone: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-300', icon: <CheckCircle2 size={17} /> },
+const metrics: Array<{
+  key: keyof Summary
+  label: string
+  cardClass: string
+  iconClass?: string
+  icon: ReactNode
+}> = [
+  {
+    key: 'total',
+    label: '全案件',
+    cardClass: 'cm-clv-kpi-indigo',
+    icon: <ClipboardList size={14} aria-hidden="true" />,
+  },
+  {
+    key: 'in_review',
+    label: '審査中',
+    cardClass: 'cm-clv-kpi-blue',
+    icon: <Search size={14} aria-hidden="true" />,
+  },
+  {
+    key: 'additional_documents',
+    label: '追加資料対応',
+    cardClass: 'cm-clv-kpi-amber',
+    icon: <FileWarning size={14} aria-hidden="true" />,
+  },
+  {
+    key: 'attention_required',
+    label: '期限注意',
+    cardClass: '!border-l-rose-500',
+    iconClass: '!border-rose-500/20 !bg-rose-500/10 !text-rose-500 dark:!text-rose-400',
+    icon: <AlertTriangle size={14} aria-hidden="true" />,
+  },
+  {
+    key: 'approved',
+    label: '許可',
+    cardClass: 'cm-clv-kpi-teal',
+    icon: <CheckCircle2 size={14} aria-hidden="true" />,
+  },
 ]
 
 export default function VisaProgressSummary({ summary, loading = false }: Props) {
   return (
-    <section className="border-t border-slate-200 bg-slate-50/55 dark:border-slate-700 dark:bg-slate-950/25" aria-labelledby="visa-summary-heading">
-      <h2 id="visa-summary-heading" className="sr-only">運用サマリー</h2>
-      <div className="grid grid-cols-2 divide-y divide-slate-100 dark:divide-slate-800 sm:grid-cols-5 sm:divide-x sm:divide-y-0">
-        {metrics.map((metric, index) => (
-          <div
-            key={metric.key}
-            className={`relative flex items-center gap-3 px-4 py-3.5 sm:px-5 ${index === metrics.length - 1 ? 'col-span-2 sm:col-span-1' : ''}`}
-          >
-            {/* Top accent line */}
-            <span className={`absolute inset-x-0 top-0 h-0.5 ${metric.dot}`} aria-hidden="true" />
-            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${metric.iconTone}`} aria-hidden="true">
-              {metric.icon}
-            </span>
-            <div className="min-w-0">
-              <p className="text-2xl font-semibold tracking-tight tabular-nums text-slate-950 dark:text-slate-100">
-                {loading ? <Skeleton className="h-7 w-12 rounded-sm" /> : summary?.[metric.key]}
-              </p>
-              <p className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">{metric.label}</p>
+    <div
+      className="mt-[10px] grid grid-cols-2 gap-[10px] sm:grid-cols-3 lg:grid-cols-5"
+      role="region"
+      aria-label="在留申請サマリー"
+    >
+      {metrics.map((metric, index) => (
+        <div
+          key={metric.key}
+          className={`cm-clv-kpi-card ${metric.cardClass} ${index === metrics.length - 1 ? 'col-span-2 sm:col-span-1' : ''}`}
+        >
+          <div className={`cm-clv-kpi-icon ${metric.iconClass ?? ''}`}>{metric.icon}</div>
+          <div className="cm-clv-kpi-body">
+            <span className="cm-clv-kpi-label">{metric.label}</span>
+            <div className="cm-clv-kpi-value-row">
+              {loading ? (
+                <KpiSkeletonValue />
+              ) : (
+                <>
+                  <span className="cm-clv-kpi-num">{summary?.[metric.key] ?? 0}</span>
+                  <span className="cm-clv-kpi-unit">件</span>
+                </>
+              )}
             </div>
           </div>
-        ))}
-      </div>
-    </section>
+        </div>
+      ))}
+    </div>
   )
 }

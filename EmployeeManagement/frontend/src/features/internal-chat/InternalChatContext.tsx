@@ -9,9 +9,17 @@ import { applyMessageActions, applyTranslationUpdates, chatErrorMessage, mergeCh
 import { InternalChatContext, type InternalChatContextValue } from './useInternalChat'
 import { listenForChatAudioGesture, notifyIncomingChat } from './chatNotifications'
 
+const EMBEDDED_CHAT_MEDIA = '(min-width: 1024px)'
+
 function InternalChatSession({ children, userId }: { children: ReactNode; userId: number }) {
   const { pathname } = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [isDesktopViewport, setIsDesktopViewport] = useState(() => (
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia(EMBEDDED_CHAT_MEDIA).matches
+      : true
+  ))
+  const hasEmbeddedChat = pathname === '/' && isDesktopViewport
   const [messages, setMessages] = useState<InternalChatMessage[]>([])
   const [translationPair, setTranslationPair] = useState<ChatTranslationPair>('ja-vi')
   const [unread, setUnread] = useState<ChatUnread>({ unread_count: 0 })
@@ -39,12 +47,25 @@ function InternalChatSession({ children, userId }: { children: ReactNode; userId
   const [hasOlder, setHasOlder] = useState(false)
   const [error, setError] = useState('')
   const [isReconnecting, setIsReconnecting] = useState(false)
-  const [drawerOpen, setDrawerOpen] = useState(() => pathname !== '/' && focusedMessageId !== null)
+  const [drawerOpen, setDrawerOpen] = useState(() => !hasEmbeddedChat && focusedMessageId !== null)
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+    const query = window.matchMedia(EMBEDDED_CHAT_MEDIA)
+    const onViewportChange = (event: MediaQueryListEvent) => {
+      setIsDesktopViewport(event.matches)
+      if (event.matches && pathname === '/') {
+        setDrawerOpen(false)
+      }
+    }
+    query.addEventListener('change', onViewportChange)
+    return () => query.removeEventListener('change', onViewportChange)
+  }, [pathname])
   const openMessage = useCallback((id: number) => {
     setFocusedMessageId(id)
-    if (pathname !== '/') setDrawerOpen(true)
-  }, [pathname])
-  const chatOpen = pathname === '/' || drawerOpen
+    if (!hasEmbeddedChat) setDrawerOpen(true)
+  }, [hasEmbeddedChat])
+  const effectiveDrawerOpen = !hasEmbeddedChat && drawerOpen
+  const chatOpen = hasEmbeddedChat || effectiveDrawerOpen
   useEffect(() => {
     if (!searchParams.has('chatMessage')) return
     const next = new URLSearchParams(searchParams)
@@ -353,10 +374,10 @@ function InternalChatSession({ children, userId }: { children: ReactNode; userId
     loadPins: fetchChatPins, loadMessage: fetchChatMessage,
     translationPair, setTranslationPair, translateMessage,
     isInitialLoading, isLoadingOlder, isSending, hasOlder,
-    error, isReconnecting, drawerOpen, setDrawerOpen, loadOlder, send,
+    error, isReconnecting, hasEmbeddedChat, drawerOpen: effectiveDrawerOpen, setDrawerOpen, loadOlder, send,
     retry: async () => { await poller.current?.retry() }, markVisibleRead,
   }), [messages, unread, memberSummary, receipts, draft, setDraft, draftMentions, setMentionDraft, focusedMessageId, clearMessageFocus, openMessage, files, sendError, reply, actionsEnabled, hideEnabled, canPin, actionRevision, messageAction,
-    isInitialLoading, isLoadingOlder, isSending, hasOlder, error, isReconnecting, drawerOpen, loadOlder, send, markVisibleRead, translationPair, translateMessage])
+    isInitialLoading, isLoadingOlder, isSending, hasOlder, error, isReconnecting, hasEmbeddedChat, effectiveDrawerOpen, loadOlder, send, markVisibleRead, translationPair, translateMessage])
 
   return <InternalChatContext.Provider value={value}>{children}</InternalChatContext.Provider>
 }

@@ -25,31 +25,34 @@ export default function VisaProgressPagination({
   const pages = buildPageItems(currentPage, totalPages)
 
   return (
-    <footer className="border-t border-slate-200 bg-slate-50/60 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70 sm:px-5">
+    <footer className="rounded-b-[var(--tm-radius-panel)] border-t border-[var(--tm-border-subtle)] bg-[var(--tm-surface)] px-4 py-3 sm:px-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center justify-between gap-3 lg:justify-start">
-          <p className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
-            <span className="font-medium text-slate-700 dark:text-slate-200">{totalItems}件中 {firstItem}–{lastItem}件</span>を表示
-            {totalItems !== totalSourceItems && <span className="ml-1.5">（全{totalSourceItems}件）</span>}
+          <p className="text-xs tabular-nums text-[var(--tm-text-secondary)]">
+            <span className="font-semibold text-[var(--tm-text-primary)]">{firstItem}–{lastItem}</span> / {totalItems}件
+            {totalItems !== totalSourceItems && (
+              <span className="ml-1.5 text-[var(--tm-text-muted)]">（全{totalSourceItems}件）</span>
+            )}
           </p>
 
-          <label className="relative inline-flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <label className="relative inline-flex items-center gap-2 text-xs text-[var(--tm-text-muted)]">
             <span className="hidden sm:inline">表示件数</span>
             <select
               value={pageSize}
               onChange={(event) => onPageSizeChange(Number(event.target.value))}
               aria-label="1ページあたりの表示件数"
-              className="h-9 appearance-none rounded-md border border-slate-300 bg-white py-0 pl-3 pr-8 text-xs font-medium text-slate-700 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              className="h-8 appearance-none rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] py-0 pl-2.5 pr-7 text-xs font-medium text-[var(--tm-text-primary)] outline-none transition-colors focus:border-[var(--tm-primary)]"
             >
-              {PAGE_SIZES.map((size) => <option key={size} value={size}>{size}件/ページ</option>)}
+              {PAGE_SIZES.map((size) => (
+                <option key={size} value={size}>{size}件/ページ</option>
+              ))}
             </select>
-            <ChevronDown size={14} className="pointer-events-none absolute right-2.5 text-slate-400" aria-hidden="true" />
+            <ChevronDown size={13} className="pointer-events-none absolute right-2 text-[var(--tm-text-muted)]" aria-hidden="true" />
           </label>
         </div>
 
-        <nav className="flex items-center justify-between gap-2 sm:justify-end" aria-label="申請一覧のページ移動">
+        <nav className="flex items-center justify-between gap-1.5 sm:justify-end" aria-label="申請一覧のページ移動">
           <PageButton
-            label="前へ"
             ariaLabel="前のページ"
             disabled={currentPage === 1}
             onClick={() => onPageChange(currentPage - 1)}
@@ -57,30 +60,33 @@ export default function VisaProgressPagination({
           />
 
           <div className="hidden items-center gap-1 sm:flex">
-            {pages.map((page, index) => page === 'ellipsis' ? (
-              <span key={`ellipsis-${index}`} className="flex h-8 w-7 items-center justify-center text-xs text-slate-400" aria-hidden="true">…</span>
-            ) : (
-              <button
-                key={page}
-                type="button"
-                onClick={() => onPageChange(page)}
-                aria-label={`${page}ページ目`}
-                aria-current={page === currentPage ? 'page' : undefined}
-                className={`h-8 min-w-8 rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${page === currentPage
-                  ? 'bg-indigo-600 text-white dark:bg-indigo-500'
-                  : 'text-slate-600 hover:bg-slate-200/80 dark:text-slate-300 dark:hover:bg-slate-800'}`}
-              >
-                {page}
-              </button>
+            {pages.map((page, index) => (
+              page === 'ellipsis' ? (
+                <span key={`ellipsis-${index}`} className="flex h-8 w-7 items-center justify-center text-xs text-[var(--tm-text-muted)]" aria-hidden="true">…</span>
+              ) : (
+                <button
+                  key={page}
+                  type="button"
+                  onClick={() => onPageChange(page)}
+                  aria-label={`${page}ページ目`}
+                  aria-current={page === currentPage ? 'page' : undefined}
+                  className={`h-8 min-w-8 rounded-lg px-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tm-primary)] ${
+                    page === currentPage
+                      ? 'bg-[var(--tm-primary)] text-white'
+                      : 'text-[var(--tm-text-secondary)] hover:bg-[var(--tm-surface-hover)] hover:text-[var(--tm-text-primary)]'
+                  }`}
+                >
+                  {page}
+                </button>
+              )
             ))}
           </div>
 
-          <span className="min-w-16 text-center text-xs font-medium tabular-nums text-slate-600 dark:text-slate-300 sm:hidden">
+          <span className="min-w-16 text-center text-xs font-medium tabular-nums text-[var(--tm-text-secondary)] sm:hidden">
             {currentPage} / {totalPages}
           </span>
 
           <PageButton
-            label="次へ"
             ariaLabel="次のページ"
             disabled={currentPage === totalPages}
             onClick={() => onPageChange(currentPage + 1)}
@@ -92,8 +98,12 @@ export default function VisaProgressPagination({
   )
 }
 
-function PageButton({ label, ariaLabel, disabled, onClick, icon }: {
-  label: string
+function PageButton({
+  ariaLabel,
+  disabled,
+  onClick,
+  icon,
+}: {
   ariaLabel: string
   disabled: boolean
   onClick: () => void
@@ -105,11 +115,9 @@ function PageButton({ label, ariaLabel, disabled, onClick, icon }: {
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className="inline-flex h-9 items-center justify-center gap-1 rounded-md border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] text-[var(--tm-text-secondary)] transition-colors hover:bg-[var(--tm-surface-hover)] hover:text-[var(--tm-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tm-primary)] disabled:cursor-not-allowed disabled:opacity-40"
     >
-      {icon === 'previous' && <ChevronLeft size={15} aria-hidden="true" />}
-      {label}
-      {icon === 'next' && <ChevronRight size={15} aria-hidden="true" />}
+      {icon === 'previous' ? <ChevronLeft size={15} aria-hidden="true" /> : <ChevronRight size={15} aria-hidden="true" />}
     </button>
   )
 }

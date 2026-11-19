@@ -221,8 +221,14 @@ input:focus-visible + .settings-switch {
     margin-block-end: 16px;
   }
   .settings-layout {
-    grid-template-columns: 264px minmax(0, 1fr);
-    gap: 18px;
+    grid-template-columns: 272px minmax(0, 1fr);
+    align-items: stretch;
+    gap: 16px;
+  }
+  .settings-rail {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
   }
   .settings-nav {
     grid-template-columns: minmax(0, 1fr);

@@ -163,7 +163,7 @@ export default function SystemSettings() {
   }
 
   return (
-    <div className="settings-page mx-auto min-w-0 max-w-[1360px] px-3 pb-6 pt-3 sm:px-5 sm:pb-8 sm:pt-4 lg:px-6">
+    <div className="settings-page mx-auto w-full min-w-0 max-w-[1440px] px-3 pb-6 pt-3 sm:px-5 sm:pb-8 sm:pt-4 lg:px-6">
       <PageHeader
         title={
           <>
@@ -196,7 +196,7 @@ export default function SystemSettings() {
       <div className="settings-layout">
         <aside className="settings-rail">
           {/* Compact Account Summary on Desktop Rail */}
-          <div className="hidden items-center gap-3 border-b border-[var(--tm-border-subtle)] bg-[var(--tm-surface-elevated)]/55 px-3.5 py-3.5 lg:flex">
+          <div className="hidden items-center gap-3 border-b border-[var(--tm-border-subtle)] bg-[var(--tm-surface-elevated)] px-3.5 py-3.5 lg:flex">
             <UserAvatar
               name={employeeName}
               stableKey={user?.employee?.id ?? user?.id}
@@ -243,12 +243,48 @@ export default function SystemSettings() {
             })}
           </nav>
 
+          {/* Session & Environment Summary pinned above logout on Desktop */}
+          <div className="mt-auto hidden border-t border-[var(--tm-border-subtle)] bg-[var(--tm-surface-elevated)] px-3.5 py-3 lg:block">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--tm-text-muted)]">
+              現在のセッション
+            </p>
+            <dl className="mt-2 space-y-1.5 text-[11px]">
+              <div className="flex items-center justify-between gap-2">
+                <dt className="flex items-center gap-1.5 text-[var(--tm-text-muted)]">
+                  <Laptop size={12} aria-hidden="true" />
+                  環境
+                </dt>
+                <dd className="truncate font-medium text-[var(--tm-text-secondary)]" title={getBrowserSummary()}>
+                  {getBrowserSummary()}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <dt className="flex items-center gap-1.5 text-[var(--tm-text-muted)]">
+                  <ShieldCheck size={12} aria-hidden="true" />
+                  2段階認証
+                </dt>
+                <dd className={`font-semibold ${requiresMfa ? 'text-emerald-600 dark:text-emerald-400' : 'text-[var(--tm-text-secondary)]'}`}>
+                  {requiresMfa ? '有効' : '標準'}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <dt className="flex items-center gap-1.5 text-[var(--tm-text-muted)]">
+                  <Globe size={12} aria-hidden="true" />
+                  表示
+                </dt>
+                <dd className="font-medium text-[var(--tm-text-secondary)]">
+                  {theme === 'dark' ? 'ダーク' : 'ライト'} · {language === 'vi' ? 'Tiếng Việt' : '日本語'}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
           <div className="hidden border-t border-[var(--tm-border-subtle)] p-2.5 lg:block">
             <SettingsLogoutAction onClick={() => setIsLogoutConfirmationOpen(true)} disabled={isLoggingOut} />
           </div>
         </aside>
 
-        <div className="min-w-0">
+        <div className="flex min-w-0 flex-col">
           {section === 'account' && (
             <AccountPanel
               user={user}
@@ -256,6 +292,9 @@ export default function SystemSettings() {
               employeeCode={employeeCode}
               officeName={officeName}
               roles={roles}
+              requiresMfa={requiresMfa}
+              theme={theme}
+              language={language}
               isUploadingAvatar={isUploadingAvatar}
               avatarUploadError={avatarUploadError}
               avatarInputRef={avatarInputRef}
@@ -348,6 +387,9 @@ type AccountPanelProps = {
   employeeCode?: string
   officeName?: string
   roles: string[]
+  requiresMfa: boolean
+  theme: ThemeMode
+  language: SupportedLocale
   isUploadingAvatar: boolean
   avatarUploadError: string
   avatarInputRef: React.RefObject<HTMLInputElement | null>
@@ -360,6 +402,9 @@ function AccountPanel({
   employeeCode,
   officeName,
   roles,
+  requiresMfa,
+  theme,
+  language,
   isUploadingAvatar,
   avatarUploadError,
   avatarInputRef,
@@ -370,6 +415,7 @@ function AccountPanel({
   const navigate = useNavigate()
   const officeCode = user?.employee?.office?.office_code
   const permissionCount = user?.permission_names?.length ?? 0
+  const loginIdentifier = user?.login_id || employeeCode || ''
 
   return (
     <SettingsSection
@@ -438,11 +484,11 @@ function AccountPanel({
         />
       </div>
 
-      <div className="p-4 sm:p-5">
+      <div className="flex flex-1 flex-col gap-4 p-4 sm:p-5">
         {avatarUploadError && (
           <p
             role="alert"
-            className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200"
+            className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200"
           >
             {avatarUploadError}
           </p>
@@ -450,8 +496,8 @@ function AccountPanel({
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           {/* Left Sub-card: Basic & Contact Information */}
-          <div className="rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)]/40 p-4">
-            <div className="mb-3 flex items-center justify-between border-b border-[var(--tm-border-subtle)] pb-2.5">
+          <div className="flex flex-col rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] p-4">
+            <div className="mb-2 flex items-center justify-between border-b border-[var(--tm-border-subtle)] pb-2.5">
               <div>
                 <span className="block text-[10px] font-bold uppercase tracking-wider text-[var(--tm-primary)]">
                   BASIC PROFILE
@@ -461,17 +507,19 @@ function AccountPanel({
               <Mail size={16} className="text-[var(--tm-text-muted)]" aria-hidden="true" />
             </div>
 
-            <dl className="divide-y divide-[var(--tm-border-subtle)]">
+            <dl className="flex-1 divide-y divide-[var(--tm-border-subtle)]">
+              <AccountInfoRow icon={UserRound} label="氏名">
+                <span className="text-[13px] font-semibold text-[var(--tm-text-primary)]">{employeeName}</span>
+              </AccountInfoRow>
+
               {user?.email && (
                 <AccountInfoRow icon={Mail} label="メールアドレス">
-                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-                    <div className="min-w-0 flex-1 basis-36">
-                      <SensitiveValue value={user.email} label="メールアドレス" mask={maskEmail} />
-                    </div>
+                  <div className="flex min-w-0 items-center justify-between gap-2">
+                    <SensitiveValue value={user.email} label="メールアドレス" mask={maskEmail} />
                     <Button
                       variant="outline"
                       size="sm"
-                      className="min-h-8 shrink-0 bg-[var(--tm-surface)]"
+                      className="h-7 shrink-0 bg-[var(--tm-surface)] px-2.5 text-xs"
                       aria-label="メールアドレスを変更"
                       onClick={() => setChangingEmail(true)}
                     >
@@ -481,30 +529,25 @@ function AccountPanel({
                 </AccountInfoRow>
               )}
 
-              <AccountInfoRow icon={UserRound} label="ログインID">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-xs font-semibold text-[var(--tm-text-primary)]">
-                    {user?.login_id || employeeCode || '未設定'}
-                  </span>
-                  {(user?.login_id || employeeCode) && (
-                    <CopyableChip value={user?.login_id || employeeCode || ''} label="ログインID" />
-                  )}
-                </div>
+              <AccountInfoRow icon={KeyRound} label="ログインID">
+                {loginIdentifier ? (
+                  <CopyableChip value={loginIdentifier} label="ログインID" />
+                ) : (
+                  <span className="text-xs text-[var(--tm-text-muted)]">未設定</span>
+                )}
               </AccountInfoRow>
 
               <AccountInfoRow icon={Check} label="アカウント状態">
-                <div className="flex items-center gap-2">
-                  <StatusBadge variant="success" dot>
-                    有効（通常稼働）
-                  </StatusBadge>
-                </div>
+                <StatusBadge variant="success" dot>
+                  有効（通常稼働）
+                </StatusBadge>
               </AccountInfoRow>
             </dl>
           </div>
 
           {/* Right Sub-card: Organization & Access Scope */}
-          <div className="rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)]/40 p-4">
-            <div className="mb-3 flex items-center justify-between border-b border-[var(--tm-border-subtle)] pb-2.5">
+          <div className="flex flex-col rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] p-4">
+            <div className="mb-2 flex items-center justify-between border-b border-[var(--tm-border-subtle)] pb-2.5">
               <div>
                 <span className="block text-[10px] font-bold uppercase tracking-wider text-[var(--tm-primary)]">
                   ORGANIZATION & ACCESS
@@ -514,13 +557,13 @@ function AccountPanel({
               <Building2 size={16} className="text-[var(--tm-text-muted)]" aria-hidden="true" />
             </div>
 
-            <dl className="divide-y divide-[var(--tm-border-subtle)]">
+            <dl className="flex-1 divide-y divide-[var(--tm-border-subtle)]">
               {officeName && (
                 <AccountInfoRow icon={Building2} label="所属オフィス">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-[var(--tm-text-primary)]">{officeName}</span>
+                    <span className="text-[13px] font-semibold text-[var(--tm-text-primary)]">{officeName}</span>
                     {officeCode && (
-                      <span className="rounded border border-[var(--tm-border)] bg-[var(--tm-surface)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--tm-text-muted)]">
+                      <span className="rounded border border-[var(--tm-border)] bg-[var(--tm-surface)] px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[var(--tm-text-muted)]">
                         {officeCode}
                       </span>
                     )}
@@ -534,7 +577,7 @@ function AccountPanel({
                     {roles.map((role) => (
                       <li
                         key={role}
-                        className="rounded-md border border-[var(--tm-border)] bg-[var(--tm-surface)] px-2.5 py-1 text-xs font-semibold leading-4 text-[var(--tm-text-primary)]"
+                        className="rounded-md border border-[var(--tm-border)] bg-[var(--tm-surface)] px-2.5 py-0.5 text-xs font-semibold leading-5 text-[var(--tm-text-primary)]"
                       >
                         {role}
                       </li>
@@ -543,12 +586,27 @@ function AccountPanel({
                 </AccountInfoRow>
               )}
 
+              <AccountInfoRow icon={Lock} label="二段階認証">
+                <div className="flex items-center justify-between gap-2">
+                  <StatusBadge variant={requiresMfa ? 'success' : 'neutral'} dot={requiresMfa}>
+                    {requiresMfa ? '有効' : '標準（未設定）'}
+                  </StatusBadge>
+                  <Link
+                    to="/system?section=security"
+                    className="inline-flex shrink-0 items-center gap-0.5 text-xs font-semibold text-[var(--tm-primary)] transition hover:underline"
+                  >
+                    設定へ
+                    <ChevronRight size={13} aria-hidden="true" />
+                  </Link>
+                </div>
+              </AccountInfoRow>
+
               <AccountInfoRow icon={Sparkles} label="利用可能機能">
                 <div className="flex flex-wrap gap-1.5">
-                  {['社員ルーム', '業務クエスト', '社内チャット', 'AI社員'].map((moduleName) => (
+                  {['社員ルーム', '業務クエスト', '在留申請進捗管理', '社内チャット', 'AI社員'].map((moduleName) => (
                     <span
                       key={moduleName}
-                      className="rounded-md border border-[var(--tm-border-subtle)] bg-[var(--tm-surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--tm-text-secondary)]"
+                      className="rounded-md border border-[var(--tm-border)] bg-[var(--tm-surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--tm-text-secondary)]"
                     >
                       {moduleName}
                     </span>
@@ -562,6 +620,57 @@ function AccountPanel({
               </AccountInfoRow>
             </dl>
           </div>
+        </div>
+
+        {/* Bottom Quick Settings Strip — fills lower workspace purposefully */}
+        <div className="mt-auto grid grid-cols-1 gap-3 border-t border-[var(--tm-border-subtle)] pt-4 sm:grid-cols-3">
+          <Link
+            to="/system?section=security"
+            className="group flex items-center gap-3 rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] px-3.5 py-3 transition-colors hover:border-[var(--tm-primary)]/35 hover:bg-[var(--tm-surface-hover)]"
+          >
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] text-[var(--tm-primary)]">
+              <ShieldCheck size={16} aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs font-bold text-[var(--tm-text-primary)]">セキュリティ管理</span>
+              <span className="mt-0.5 block truncate text-[11px] text-[var(--tm-text-muted)]">
+                パスワード変更・2段階認証
+              </span>
+            </span>
+            <ChevronRight size={15} className="shrink-0 text-[var(--tm-text-dim)] transition-colors group-hover:text-[var(--tm-primary)]" aria-hidden="true" />
+          </Link>
+
+          <Link
+            to="/system?section=appearance"
+            className="group flex items-center gap-3 rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] px-3.5 py-3 transition-colors hover:border-[var(--tm-primary)]/35 hover:bg-[var(--tm-surface-hover)]"
+          >
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] text-[var(--tm-primary)]">
+              <Palette size={16} aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs font-bold text-[var(--tm-text-primary)]">外観・言語設定</span>
+              <span className="mt-0.5 block truncate text-[11px] text-[var(--tm-text-muted)]">
+                現在: {theme === 'dark' ? 'ダーク' : 'ライト'} · {language === 'vi' ? 'Tiếng Việt' : '日本語'}
+              </span>
+            </span>
+            <ChevronRight size={15} className="shrink-0 text-[var(--tm-text-dim)] transition-colors group-hover:text-[var(--tm-primary)]" aria-hidden="true" />
+          </Link>
+
+          <Link
+            to="/system?section=notifications"
+            className="group flex items-center gap-3 rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] px-3.5 py-3 transition-colors hover:border-[var(--tm-primary)]/35 hover:bg-[var(--tm-surface-hover)]"
+          >
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] text-[var(--tm-primary)]">
+              <Bell size={16} aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs font-bold text-[var(--tm-text-primary)]">通知設定</span>
+              <span className="mt-0.5 block truncate text-[11px] text-[var(--tm-text-muted)]">
+                サウンド・デスクトップ通知
+              </span>
+            </span>
+            <ChevronRight size={15} className="shrink-0 text-[var(--tm-text-dim)] transition-colors group-hover:text-[var(--tm-primary)]" aria-hidden="true" />
+          </Link>
         </div>
       </div>
 
@@ -1233,12 +1342,12 @@ type AccountInfoRowProps = { icon: typeof UserRound; label: string; children: Re
 
 function AccountInfoRow({ icon: Icon, label, children }: AccountInfoRowProps) {
   return (
-    <div className="grid min-h-[52px] gap-1.5 py-2.5 sm:grid-cols-[minmax(116px,136px)_minmax(0,1fr)] sm:items-center sm:gap-3">
+    <div className="grid min-h-[46px] gap-1.5 py-2.5 sm:grid-cols-[110px_minmax(0,1fr)] sm:items-center sm:gap-3">
       <dt className="flex items-center gap-2 text-xs font-semibold text-[var(--tm-text-secondary)]">
-        <Icon size={15} className="shrink-0 text-[var(--tm-text-muted)]" aria-hidden="true" />
-        {label}
+        <Icon size={14} className="shrink-0 text-[var(--tm-text-muted)]" aria-hidden="true" />
+        <span className="truncate">{label}</span>
       </dt>
-      <dd className="min-w-0 text-sm font-medium text-[var(--tm-text-primary)] [overflow-wrap:anywhere]">{children}</dd>
+      <dd className="min-w-0 text-sm font-medium text-[var(--tm-text-primary)]">{children}</dd>
     </div>
   )
 }

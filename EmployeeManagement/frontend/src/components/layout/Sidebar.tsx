@@ -1,7 +1,7 @@
 import NotificationBell from '../employee-room/NotificationBell'
 import { useEffect, useRef, useState } from 'react'
 import {
-  BadgeCheck, BotMessageSquare, Code2, FileSpreadsheet, FolderKanban, Home, LogOut,
+  BotMessageSquare, Code2, FileSpreadsheet, FolderKanban, Home, LogOut,
   Menu, Settings, UsersRound, X, type LucideIcon,
 } from 'lucide-react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
@@ -83,7 +83,6 @@ export default function Sidebar() {
     { path: '/quests', name: t('navigation.businessQuest'), icon: FolderKanban },
     { path: '/visa-progress', name: t('navigation.visaProgress'), icon: FileSpreadsheet },
     { path: '/ai', name: t('navigation.aiEmployee'), icon: BotMessageSquare },
-    { path: '/approvals', name: t('navigation.approvals'), icon: BadgeCheck },
   ]
 
   useEffect(() => {

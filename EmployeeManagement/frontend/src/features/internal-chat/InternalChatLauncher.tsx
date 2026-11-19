@@ -39,9 +39,10 @@ export default function InternalChatLauncher({ launcherHost }: { launcherHost: H
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [drawerOpen, closeDrawer])
 
-  // Hide floating launcher on Employee Room (embedded chat is displayed directly there)
+  // Hide floating launcher on desktop Employee Room (embedded chat is displayed directly there).
+  // On mobile/tablet (< 1024px), Employee Room omits embedded chat and exposes this floating bubble instead.
   // Also hidden on login/mfa pages as they are outside MainLayout.
-  if (location.pathname === '/') return null
+  if (location.pathname === '/' && chat.hasEmbeddedChat) return null
 
   return (
     <>

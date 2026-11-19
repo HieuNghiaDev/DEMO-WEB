@@ -1,8 +1,8 @@
-import { FileSpreadsheet, RotateCcw } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { CalendarClock, FileSpreadsheet, MessageCircle, RotateCcw } from 'lucide-react'
+import { UserAvatar } from '../../components/ui'
 import VisaStatusBadge from './VisaStatusBadge'
 import type { VisaDeadlineLevel, VisaProgressApplication } from './types'
-import { deadlineText, formatDate } from './visaProgressUi'
+import { deadlineText, formatDate, getVisaStatusTone } from './visaProgressUi'
 
 type Props = {
   applications: VisaProgressApplication[]
@@ -13,21 +13,21 @@ type Props = {
 export default function VisaProgressTable({ applications, hasActiveFilters, onResetFilters }: Props) {
   if (applications.length === 0) {
     return (
-      <div className="flex min-h-64 flex-col items-center justify-center px-5 py-10 text-center">
-        <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300">
-          <FileSpreadsheet size={21} aria-hidden="true" />
+      <div className="flex min-h-60 flex-col items-center justify-center px-6 py-14 text-center">
+        <span className="flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] text-[var(--tm-text-muted)]">
+          <FileSpreadsheet size={20} aria-hidden="true" />
         </span>
-        <p className="mt-4 text-sm font-semibold text-slate-800 dark:text-slate-100">
+        <p className="mt-4 text-sm font-semibold text-[var(--tm-text-primary)]">
           {hasActiveFilters ? '条件に一致する在留申請がありません。' : '表示できる在留申請データがありません。'}
         </p>
-        <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+        <p className="mt-1 text-xs leading-5 text-[var(--tm-text-muted)]">
           {hasActiveFilters ? '検索条件またはフィルターを変更してください。' : 'Excelファイルの内容を確認してください。'}
         </p>
         {hasActiveFilters && (
           <button
             type="button"
             onClick={onResetFilters}
-            className="mt-4 inline-flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            className="dc-button mt-4"
           >
             <RotateCcw size={14} aria-hidden="true" />
             条件をクリア
@@ -39,170 +39,281 @@ export default function VisaProgressTable({ applications, hasActiveFilters, onRe
 
   return (
     <>
-      <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[1080px] border-collapse text-left">
-          <thead className="border-b border-slate-200 bg-slate-50/80 text-xs font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-400">
-            <tr>
-              <th className="px-4 py-3">案件ID</th>
-              <th className="px-3 py-3">申請者氏名</th>
-              <th className="px-3 py-3">申請種別</th>
-              <th className="px-3 py-3">全体ステータス</th>
-              <th className="px-3 py-3">担当者</th>
-              <th className="px-3 py-3">申請日</th>
-              <th className="px-3 py-3">期限</th>
-              <th className="px-3 py-3">残り日数</th>
-            </tr>
-          </thead>
-          <tbody>
-            {applications.map((application, index) => <ApplicationTableRow key={application.id} application={application} index={index} />)}
-          </tbody>
-        </table>
+      {/* Desktop card-row list — mirrors CaseListView (.cm-cc-*) */}
+      <div className="cm-clv-desktop-only cm-cc-scroll">
+        <div className="cm-cc-grid cm-cc-header">
+          <div>申請者</div>
+          <div>全体ステータス</div>
+          <div>担当者</div>
+          <div>申請日</div>
+          <div>期限</div>
+          <div>残り日数</div>
+          <div />
+        </div>
+
+        <div className="cm-cc-list" role="list" aria-label="在留申請一覧">
+          {applications.map((application) => (
+            <ApplicationCardRow key={application.id} application={application} />
+          ))}
+        </div>
       </div>
 
-      <div className="divide-y divide-slate-200 dark:divide-slate-800 md:hidden">
-        {applications.map((application, index) => <ApplicationMobileRow key={application.id} application={application} index={index} />)}
+      {/* Mobile card stack — mirrors CaseListView (.cm-mobile-*) */}
+      <div className="cm-clv-mobile-only cm-mobile-list" role="list" aria-label="在留申請一覧">
+        {applications.map((application) => (
+          <ApplicationMobileCard key={application.id} application={application} />
+        ))}
       </div>
     </>
   )
 }
 
-function ApplicationTableRow({ application, index }: { application: VisaProgressApplication; index: number }) {
-  return (
-    <RevealTableRow index={index} className="group border-t border-slate-100 transition-colors duration-150 first:border-t-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/45">
-      <td className={`border-l-2 px-4 py-3 ${priorityBorder(application.deadline_level)}`}>
-        <span className="text-xs font-medium tabular-nums text-slate-600 dark:text-slate-300">{application.case_id ?? `Excel 行 ${application.source_row}`}</span>
-      </td>
-      <td className="max-w-48 px-3 py-3">
-        <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100" title={application.applicant_name ?? undefined}>
-          {application.applicant_name ?? '申請者名未登録'}
-        </p>
-      </td>
-      <td className="max-w-48 px-3 py-3 text-xs text-slate-600 dark:text-slate-300">
-        <span className="line-clamp-2">{application.case_type ?? '—'}</span>
-      </td>
-      <td className="px-3 py-3"><VisaStatusBadge status={application.status} /></td>
-      <td className={`max-w-40 truncate px-3 py-3 text-xs ${application.responsible_person ? 'text-slate-600 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500'}`} title={application.responsible_person ?? undefined}>
-        {application.responsible_person ?? '未設定'}
-      </td>
-      <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-slate-500 dark:text-slate-400">{formatDate(application.application_date)}</td>
-      <td className="px-3 py-3">
-        <p className="whitespace-nowrap text-xs font-medium tabular-nums text-slate-700 dark:text-slate-200">{formatDate(application.deadline)}</p>
-        {application.deadline_label && <p className="mt-0.5 max-w-36 truncate text-[11px] text-slate-500 dark:text-slate-400" title={application.deadline_label}>{application.deadline_label}</p>}
-      </td>
-      <td className="whitespace-nowrap px-3 py-3">
-        <DeadlineRisk application={application} />
-      </td>
-    </RevealTableRow>
-  )
-}
+function ApplicationCardRow({ application }: { application: VisaProgressApplication }) {
+  const applicantName = application.applicant_name ?? '申請者名未登録'
+  const caseCode = application.case_id ?? `ROW-${application.source_row}`
 
-function ApplicationMobileRow({ application, index }: { application: VisaProgressApplication; index: number }) {
   return (
-    <RevealMobileRow index={index} className={`border-l-2 px-4 py-4 ${priorityBorder(application.deadline_level)}`}>
-      <div className="flex min-w-0 items-start justify-between gap-3">
+    <div role="listitem" className="cm-cc-card group !cursor-default">
+      <div className={`cm-cc-accent ${accentBarClass(application)}`} aria-hidden="true" />
+      <div className="cm-cc-body cm-cc-grid">
+        {/* 1. Applicant identity + case code + case type */}
+        <div className="cm-cc-client">
+          <UserAvatar
+            name={applicantName}
+            stableKey={application.case_id ?? application.id}
+            size="md"
+          />
+          <div className="min-w-0 flex-1">
+            <span className="cm-cc-client-name" title={applicantName}>
+              {applicantName}
+            </span>
+            <div className="cm-cc-client-sub">
+              <span className="cm-cc-client-code">{caseCode}</span>
+              {application.source_sheet && (
+                <span className="cm-cc-client-kana">· {application.source_sheet}</span>
+              )}
+            </div>
+            {application.case_type ? (
+              <span className="cm-cc-client-title is-real" title={application.case_type}>
+                {application.case_type}
+              </span>
+            ) : (
+              <span className="cm-cc-client-title">申請種別未設定</span>
+            )}
+          </div>
+        </div>
+
+        {/* 2. Overall status */}
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{application.applicant_name ?? '申請者名未登録'}</p>
-          <p className="mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">{application.case_id ?? `Excel 行 ${application.source_row}`}</p>
+          <VisaStatusBadge status={application.status} />
         </div>
-        <VisaStatusBadge status={application.status} />
+
+        {/* 3. Responsible person */}
+        <div className="min-w-0">
+          <span
+            className={`block truncate text-xs font-bold ${
+              application.responsible_person
+                ? 'text-[var(--tm-text-primary)]'
+                : 'text-[var(--tm-text-muted)]'
+            }`}
+            title={application.responsible_person ?? undefined}
+          >
+            {application.responsible_person ?? '未設定'}
+          </span>
+          <span className="block text-[11px] text-[var(--tm-text-muted)]">担当者</span>
+        </div>
+
+        {/* 4. Application date */}
+        <div className="min-w-0">
+          {application.application_date ? (
+            <time
+              className="cm-cc-date font-medium text-[var(--tm-text-secondary)]"
+              dateTime={application.application_date}
+            >
+              {formatDate(application.application_date)}
+            </time>
+          ) : (
+            <span className="text-[11px] text-[var(--tm-text-dim)]">未申請</span>
+          )}
+        </div>
+
+        {/* 5. Deadline date + label */}
+        <div className="min-w-0">
+          {application.deadline ? (
+            <>
+              <time
+                className="block whitespace-nowrap text-xs font-bold tabular-nums text-[var(--tm-text-primary)]"
+                dateTime={application.deadline}
+              >
+                {formatDate(application.deadline)}
+              </time>
+              <span
+                className="mt-0.5 block truncate text-[11px] text-[var(--tm-text-muted)]"
+                title={application.deadline_label ?? undefined}
+              >
+                {application.deadline_label ?? '期限'}
+              </span>
+            </>
+          ) : (
+            <span className="text-[11px] text-[var(--tm-text-dim)]">期限なし</span>
+          )}
+        </div>
+
+        {/* 6. Remaining days / risk pill */}
+        <div className="min-w-0">
+          <DeadlineRiskBadge application={application} />
+        </div>
+
+        {/* 7. Quick action (message link) */}
+        <div className="flex justify-end">
+          {application.message_link && (
+            <a
+              href={application.message_link}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`${applicantName}のメッセージを開く`}
+              title="メッセージを開く"
+              className="cm-clv-row-action-btn"
+            >
+              <MessageCircle size={15} aria-hidden="true" />
+            </a>
+          )}
+        </div>
       </div>
-
-      <p className="mt-3 text-sm text-slate-700 dark:text-slate-200">{application.case_type ?? '申請種別未登録'}</p>
-
-      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
-        <Info label="担当者" value={application.responsible_person ?? '未設定'} />
-        <Info label="申請日" value={formatDate(application.application_date)} />
-        <Info label={application.deadline_label ?? '期限'} value={formatDate(application.deadline)} />
-        <div>
-          <dt className="text-[11px] text-slate-400 dark:text-slate-500">期限状況</dt>
-          <dd className="mt-1"><DeadlineRisk application={application} /></dd>
-        </div>
-      </dl>
-    </RevealMobileRow>
-  )
-}
-
-function RevealTableRow({ children, className, index }: { children: ReactNode; className: string; index: number }) {
-  const rowRef = useRef<HTMLTableRowElement>(null)
-  const isVisible = useRevealOnScroll(rowRef)
-
-  return (
-    <tr
-      ref={rowRef}
-      style={{ transitionDelay: `${Math.min(index, 6) * 55}ms` }}
-      className={`${className} transition-[opacity,transform,background-color] duration-500 ease-out motion-reduce:transition-none ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
-    >
-      {children}
-    </tr>
-  )
-}
-
-function RevealMobileRow({ children, className, index }: { children: ReactNode; className: string; index: number }) {
-  const rowRef = useRef<HTMLElement>(null)
-  const isVisible = useRevealOnScroll(rowRef)
-
-  return (
-    <article
-      ref={rowRef}
-      style={{ transitionDelay: `${Math.min(index, 6) * 55}ms` }}
-      className={`${className} transition-[opacity,transform,background-color] duration-500 ease-out motion-reduce:transition-none ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
-    >
-      {children}
-    </article>
-  )
-}
-
-function useRevealOnScroll<T extends Element>(elementRef: RefObject<T | null>): boolean {
-  const [isVisible, setIsVisible] = useState(false)
-
-  useEffect(() => {
-    const element = elementRef.current
-
-    if (!element || !('IntersectionObserver' in window)) {
-      setIsVisible(true)
-      return undefined
-    }
-
-    const observer = new IntersectionObserver(([entry]) => {
-      setIsVisible(entry.isIntersecting)
-    }, { threshold: 0.08, rootMargin: '0px 0px -4% 0px' })
-
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [elementRef])
-
-  return isVisible
-}
-
-function DeadlineRisk({ application }: { application: VisaProgressApplication }) {
-  return (
-    <span className={`text-xs font-semibold ${deadlineTone(application.deadline_level)}`}>
-      {deadlineText(application.days_remaining, application.deadline_level)}
-    </span>
-  )
-}
-
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[11px] text-slate-400 dark:text-slate-500">{label}</dt>
-      <dd className="mt-1 truncate font-medium text-slate-700 dark:text-slate-200">{value}</dd>
     </div>
   )
 }
 
-function priorityBorder(level: VisaDeadlineLevel) {
-  if (level === 'overdue') return 'border-l-rose-500'
-  if (level === 'critical') return 'border-l-rose-300 dark:border-l-rose-400/70'
-  if (level === 'warning' || level === 'notice') return 'border-l-amber-400'
-  if (level === 'upcoming') return 'border-l-sky-400'
-  return 'border-l-transparent'
+function ApplicationMobileCard({ application }: { application: VisaProgressApplication }) {
+  const applicantName = application.applicant_name ?? '申請者名未登録'
+  const caseCode = application.case_id ?? `ROW-${application.source_row}`
+
+  return (
+    <article
+      role="listitem"
+      className={`cm-mobile-card !cursor-default border-l-4 ${mobileAccentClass(application)}`}
+    >
+      <div className="cm-mobile-card-top">
+        <div className="cm-mobile-card-identity">
+          <UserAvatar
+            name={applicantName}
+            stableKey={application.case_id ?? application.id}
+            size="md"
+          />
+          <div className="cm-mobile-card-name-block">
+            <p className="cm-mobile-client-name">{applicantName}</p>
+            <p className="cm-mobile-case-code">{caseCode}</p>
+          </div>
+        </div>
+        {application.message_link && (
+          <a
+            href={application.message_link}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`${applicantName}のメッセージを開く`}
+            title="メッセージを開く"
+            className="cm-mobile-action-btn"
+          >
+            <MessageCircle size={15} aria-hidden="true" />
+          </a>
+        )}
+      </div>
+
+      <div className="cm-mobile-card-meta">
+        <VisaStatusBadge status={application.status} />
+        <DeadlineRiskBadge application={application} />
+      </div>
+
+      {application.case_type && (
+        <p className="mt-2 truncate text-xs text-[var(--tm-text-secondary)]">
+          {application.case_type}
+        </p>
+      )}
+
+      <dl className="mt-2.5 grid grid-cols-3 gap-2 border-t border-[var(--tm-border-subtle)] pt-2.5 text-[11px]">
+        <div className="min-w-0">
+          <dt className="text-[var(--tm-text-muted)]">担当者</dt>
+          <dd className="mt-0.5 truncate font-semibold text-[var(--tm-text-primary)]">
+            {application.responsible_person ?? '未設定'}
+          </dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-[var(--tm-text-muted)]">申請日</dt>
+          <dd className="mt-0.5 truncate font-medium tabular-nums text-[var(--tm-text-secondary)]">
+            {application.application_date ? formatDate(application.application_date) : '未申請'}
+          </dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="truncate text-[var(--tm-text-muted)]">
+            {application.deadline_label ?? '期限'}
+          </dt>
+          <dd className="mt-0.5 truncate font-semibold tabular-nums text-[var(--tm-text-primary)]">
+            {application.deadline ? formatDate(application.deadline) : '期限なし'}
+          </dd>
+        </div>
+      </dl>
+    </article>
+  )
 }
 
-function deadlineTone(level: VisaDeadlineLevel) {
-  if (level === 'overdue' || level === 'critical') return 'text-rose-600 dark:text-rose-300'
-  if (level === 'warning' || level === 'notice') return 'text-amber-600 dark:text-amber-300'
-  if (level === 'upcoming') return 'text-sky-600 dark:text-sky-300'
-  if (level === 'normal') return 'text-slate-700 dark:text-slate-200'
-  return 'font-normal text-slate-400 dark:text-slate-500'
+function DeadlineRiskBadge({ application }: { application: VisaProgressApplication }) {
+  const label = deadlineText(application.days_remaining, application.deadline_level)
+
+  if (application.deadline_level === 'none') {
+    return <span className="text-[11px] text-[var(--tm-text-dim)]">{label}</span>
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-semibold tabular-nums ${deadlineBadgeClass(application.deadline_level)}`}
+    >
+      {(application.deadline_level === 'overdue' || application.deadline_level === 'critical') && (
+        <CalendarClock size={12} aria-hidden="true" className="shrink-0" />
+      )}
+      {label}
+    </span>
+  )
+}
+
+function accentBarClass(application: VisaProgressApplication) {
+  if (application.deadline_level === 'overdue') return 'bg-rose-500'
+  if (application.deadline_level === 'critical') return 'bg-rose-400'
+  if (application.deadline_level === 'warning' || application.deadline_level === 'notice') return 'bg-amber-500'
+  if (application.deadline_level === 'upcoming') return 'bg-sky-500'
+  if (application.deadline_level === 'normal') return 'bg-emerald-500'
+
+  const statusTone = getVisaStatusTone(application.status)
+  if (statusTone === 'success') return 'bg-emerald-500'
+  if (statusTone === 'info') return 'bg-sky-500'
+  if (statusTone === 'warning') return 'bg-amber-500'
+  if (statusTone === 'danger') return 'bg-rose-500'
+  return 'bg-slate-300 dark:bg-slate-600'
+}
+
+function mobileAccentClass(application: VisaProgressApplication) {
+  if (application.deadline_level === 'overdue') return 'border-l-rose-500'
+  if (application.deadline_level === 'critical') return 'border-l-rose-400'
+  if (application.deadline_level === 'warning' || application.deadline_level === 'notice') return 'border-l-amber-500'
+  if (application.deadline_level === 'upcoming') return 'border-l-sky-500'
+  if (application.deadline_level === 'normal') return 'border-l-emerald-500'
+
+  const statusTone = getVisaStatusTone(application.status)
+  if (statusTone === 'success') return 'border-l-emerald-500'
+  if (statusTone === 'info') return 'border-l-sky-500'
+  if (statusTone === 'warning') return 'border-l-amber-500'
+  if (statusTone === 'danger') return 'border-l-rose-500'
+  return 'border-l-slate-300 dark:border-l-slate-600'
+}
+
+function deadlineBadgeClass(level: VisaDeadlineLevel) {
+  if (level === 'overdue' || level === 'critical') {
+    return 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/25 dark:bg-rose-500/12 dark:text-rose-300'
+  }
+  if (level === 'warning' || level === 'notice') {
+    return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/25 dark:bg-amber-500/12 dark:text-amber-300'
+  }
+  if (level === 'upcoming') {
+    return 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/25 dark:bg-sky-500/12 dark:text-sky-300'
+  }
+  return 'border-[var(--tm-border)] bg-[var(--tm-surface-hover)] text-[var(--tm-text-secondary)]'
 }

@@ -10,6 +10,7 @@ import { getEmployeeAvatarImageUrl } from "../utils/employeeAvatar";
 import { Button, ModalShell, UserAvatar } from "../components/ui";
 import { ButtonSpinner } from "../components/loading";
 import InternalChatPanel from "../features/internal-chat/InternalChatPanel";
+import { useInternalChat } from "../features/internal-chat/useInternalChat";
 import {
   Play,
   Briefcase,
@@ -597,6 +598,7 @@ const defaultOsakaWeather: OsakaWeather = {
 
 export default function EmployeeRoom() {
   const { user } = useAuth();
+  const { hasEmbeddedChat } = useInternalChat();
   const navigate = useNavigate();
 
   const employeeName =
@@ -1589,41 +1591,47 @@ export default function EmployeeRoom() {
   };
 
   return (
-    <div className="overflow-x-clip bg-slate-50 pb-3 dark:bg-[#090B0E]">
+    <div className="overflow-x-clip bg-[var(--tm-bg)] pb-24 lg:pb-4">
       {/* ── Page header ── */}
-      <header className="border-b border-slate-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <header className="border-b border-[var(--tm-border)] bg-[var(--tm-surface)] shadow-xs">
         <div className="mx-auto max-w-[1680px] px-3 sm:px-4 lg:px-5">
-          <div className="flex flex-col gap-2.5 py-3 sm:flex-row sm:items-center sm:gap-4 sm:py-3.5">
-            {/* Title */}
-            <div className="min-w-0 flex-1">
-              <h1 className="text-xl font-bold leading-tight text-gray-800 dark:text-slate-100 sm:text-2xl">
-                合同事務所・社員ルーム
-              </h1>
-              <p className="mt-0.5 hidden text-xs text-slate-400 sm:block">
-                メンバーの勤務・業務状況を確認し、スマートなチーム運営を実現します。
-              </p>
+          <div className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:gap-4 sm:py-3.5">
+            {/* Row 1 on mobile: Title + NotificationBell inline */}
+            <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h1 className="truncate text-lg font-bold leading-tight text-[var(--tm-text-primary)] sm:text-2xl">
+                  合同事務所・社員ルーム
+                </h1>
+                <p className="mt-0.5 hidden text-xs text-[var(--tm-text-muted)] sm:block">
+                  メンバーの勤務・業務状況を確認し、スマートなチーム運営を実現します。
+                </p>
+              </div>
+              <div className="shrink-0 sm:hidden">
+                <NotificationBell />
+              </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
-              <div className="flex min-w-0 items-center gap-2 whitespace-nowrap text-[10px] text-slate-500 dark:text-slate-400 sm:text-[11px]">
-                <span>
+            {/* Meta info + desktop NotificationBell */}
+            <div className="flex min-w-0 items-center justify-between gap-2 border-t border-[var(--tm-border-subtle)] pt-2 sm:w-auto sm:justify-end sm:border-t-0 sm:pt-0">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--tm-text-secondary)]">
+                <span className="whitespace-nowrap">
                   {dateTimeDisplay.date}
-                  <span className="ml-1 font-mono font-semibold text-slate-700 dark:text-slate-200">
+                  <span className="ml-1 font-mono font-semibold text-[var(--tm-text-primary)]">
                     {dateTimeDisplay.time}
                   </span>
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300">
-                  <Sun size={12} className="shrink-0" />
-                  <span className="font-semibold">
+                <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 dark:bg-amber-500/12 dark:text-amber-300">
+                  <Sun size={12} className="shrink-0" aria-hidden="true" />
+                  <span className="shrink-0 font-semibold">
                     大阪 {osakaWeather.temperature === null ? "--" : Math.round(osakaWeather.temperature)}°C
                   </span>
-                  <span className="text-amber-500/70">{osakaWeather.label}</span>
+                  <span className="truncate text-amber-600/80 dark:text-amber-200/80">{osakaWeather.label}</span>
                 </span>
               </div>
 
-              <NotificationBell />
-
+              <div className="hidden shrink-0 sm:block">
+                <NotificationBell />
+              </div>
             </div>
           </div>
         </div>
@@ -1640,24 +1648,24 @@ export default function EmployeeRoom() {
 
 
       <div className="grid grid-cols-1 gap-3 sm:gap-3.5 lg:grid-cols-[minmax(0,1.62fr)_minmax(360px,1fr)]">
-        <div key={`office-scene-${selectedOffice}`} className="workspace-office-scene min-w-0 self-start rounded-tm-panel border border-[var(--tm-border)] bg-[var(--tm-surface)] p-3.5 sm:p-4 lg:col-start-1 lg:row-start-1">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500">
+        <div key={`office-scene-${selectedOffice}`} className="workspace-office-scene order-2 min-w-0 self-start rounded-tm-panel border border-[var(--tm-border)] bg-[var(--tm-surface)] p-3 sm:p-4 lg:order-none lg:col-start-1 lg:row-start-1">
+          <div className="mb-2.5 flex items-start justify-between gap-2 sm:mb-3 sm:items-center">
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--tm-primary)]">
                 {selectedOfficeInfo.shortName}
               </span>
 
-              <h2 className="text-lg font-bold text-gray-800">
+              <h2 className="truncate text-base font-bold text-[var(--tm-text-primary)] sm:text-lg">
                 {selectedOfficeInfo.name}の現在
               </h2>
 
-              <p className="mt-0.5 text-[11px] text-gray-400">
+              <p className="mt-0.5 truncate text-[11px] text-[var(--tm-text-muted)]">
                 {selectedOfficeInfo.address}
               </p>
             </div>
 
-            <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] px-2.5 py-1 text-xs font-semibold text-[var(--tm-text-secondary)]">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
               {visibleAttendances.length}名が活動中
             </div>
           </div>
@@ -1772,10 +1780,51 @@ export default function EmployeeRoom() {
               />
             )}
           </div>
+
+          {/* Mobile/tablet tap-friendly active members strip */}
+          {visibleAttendances.length > 0 && (
+            <div className="mt-3 border-t border-[var(--tm-border-subtle)] pt-2.5 lg:hidden">
+              <p className="mb-2 text-[11px] font-semibold text-[var(--tm-text-muted)]">
+                活動中メンバー（タップして詳細表示）
+              </p>
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {visibleAttendances.map((attendance) => {
+                  const memberName = attendance.employee?.full_name?.trim() || attendance.employee_name;
+                  const isSelected = selectedAttendanceId === attendance.id;
+                  return (
+                    <button
+                      key={`member-chip-${attendance.id}`}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => setSelectedAttendanceId(isSelected ? null : attendance.id)}
+                      className={`inline-flex min-h-9 shrink-0 items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                        isSelected
+                          ? "border-[var(--tm-primary)] bg-[var(--tm-primary-muted)] text-[var(--tm-primary)]"
+                          : "border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] text-[var(--tm-text-primary)] hover:bg-[var(--tm-surface-hover)]"
+                      }`}
+                    >
+                      <UserAvatar
+                        name={memberName}
+                        stableKey={attendance.employee?.id ?? memberName}
+                        imageSrc={getEmployeeAvatarImageUrl(attendance.employee?.avatar_path)}
+                        imageAlt={`${memberName}のプロフィール画像`}
+                        size="xs"
+                        status={attendance.status}
+                      />
+                      <span className="max-w-28 truncate">{memberName}</span>
+                      <span className="text-[10px] text-[var(--tm-text-muted)]">
+                        {statusLabels[attendance.status]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
-          <section aria-labelledby="work-attendance-title" className="@container min-w-0 self-start overflow-hidden rounded-tm-panel border border-[var(--tm-border)] bg-[var(--tm-surface)] shadow-xs lg:col-span-2 lg:row-start-2">
-            <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-[var(--tm-surface-elevated)]/65 px-3.5 py-2.5 sm:px-4">
+          <section aria-labelledby="work-attendance-title" className="@container order-1 min-w-0 self-start overflow-hidden rounded-tm-panel border border-[var(--tm-border)] bg-[var(--tm-surface)] shadow-xs lg:order-none lg:col-span-2 lg:row-start-2">
+            <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5 bg-[var(--tm-surface-elevated)] px-3.5 py-3 sm:px-4">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2">
                 <div className="flex min-w-0 items-center gap-3">
                   <UserAvatar
@@ -1787,7 +1836,7 @@ export default function EmployeeRoom() {
                     status={isWorkStarted ? workStatus : "offline"}
                   />
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                       <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-[var(--tm-primary)]">
                         <Briefcase size={12} aria-hidden="true" />
                         ATTENDANCE
@@ -1833,6 +1882,11 @@ export default function EmployeeRoom() {
                           {user.employee.employee_code}
                         </span>
                       )}
+                      {isWorkStarted && ownActiveAttendance?.clock_in && (
+                        <span className="inline-flex items-center gap-1 font-mono text-[11px] text-[var(--tm-text-muted)] md:hidden">
+                          · 出勤 {formatWorkTime(ownActiveAttendance.clock_in)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1869,10 +1923,10 @@ export default function EmployeeRoom() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
                 {!isWorkStarted && (
                   <Button type="button" variant="primary" onClick={handleStartRequest} disabled={!employeeName || isSubmitting}
-                    icon={<Play size={15} aria-hidden="true" />} className="min-h-9">
+                    icon={<Play size={15} aria-hidden="true" />} className="min-h-10 max-sm:w-full sm:min-h-9">
                     勤務開始
                   </Button>
                 )}
@@ -1893,7 +1947,7 @@ export default function EmployeeRoom() {
                         }`}
                       />
                     }
-                    className="min-h-9 bg-[var(--tm-surface)]"
+                    className="min-h-9 bg-[var(--tm-surface)] max-sm:w-full"
                   >
                     {isAttendanceCollapsed ? "展開" : "折りたたむ"}
                   </Button>
@@ -1919,7 +1973,7 @@ export default function EmployeeRoom() {
               >
                 <div className="min-h-0 overflow-hidden">
                   <div className="grid grid-cols-1 gap-3 border-t border-[var(--tm-border)] p-3 sm:px-4 sm:py-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] xl:items-stretch">
-                    <div className="flex min-w-0 flex-col justify-between rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)]/45 p-3">
+                    <div className="flex min-w-0 flex-col justify-between rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] p-3">
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <span className="text-[11px] font-semibold tracking-wide text-[var(--tm-text-secondary)]">
                           勤務ステータス切替
@@ -1933,7 +1987,7 @@ export default function EmployeeRoom() {
                         {attendanceStatusActions.map(({ status, icon: Icon, tone }) => (
                           <Button key={status} type="button" variant="outline" aria-pressed={workStatus === status}
                             style={{ "--attendance-tone": tone } as CSSProperties}
-                            className={`min-h-10 min-w-0 bg-[var(--tm-surface)] aria-pressed:border-[var(--attendance-tone)] aria-pressed:bg-[color-mix(in_srgb,var(--attendance-tone)_12%,var(--tm-surface))] aria-pressed:font-semibold aria-pressed:shadow-2xs ${status === "offline" ? "text-red-700! dark:text-red-300!" : ""}`}
+                            className={`min-h-11 min-w-0 bg-[var(--tm-surface)] sm:min-h-10 aria-pressed:border-[var(--attendance-tone)] aria-pressed:bg-[color-mix(in_srgb,var(--attendance-tone)_12%,var(--tm-surface))] aria-pressed:font-semibold aria-pressed:shadow-2xs ${status === "offline" ? "text-red-700! dark:text-red-300!" : ""}`}
                             icon={<Icon size={15} aria-hidden="true" />} disabled={isSubmitting} onClick={() => handleStatusRequest(status)}>
                             {statusLabels[status]}
                           </Button>
@@ -1949,14 +2003,14 @@ export default function EmployeeRoom() {
                             )}
                           </p>
                           <Button type="button" variant="outline" size="sm" onClick={() => handleStatusRequest("working")} disabled={isSubmitting}
-                            icon={<CheckCircle2 size={15} aria-hidden="true" />} className="min-h-8 bg-[var(--tm-surface)]">
+                            icon={<CheckCircle2 size={15} aria-hidden="true" />} className="min-h-9 bg-[var(--tm-surface)] max-sm:w-full">
                             外出を終了・帰社
                           </Button>
                         </div>
                       )}
                     </div>
 
-                    <div className="flex min-w-0 flex-col justify-between rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)]/45 p-3">
+                    <div className="flex min-w-0 flex-col justify-between rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] p-3">
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-[var(--tm-text-secondary)]">
                           <ListTodo size={13} className="text-[var(--tm-primary)]" aria-hidden="true" />
@@ -1976,7 +2030,7 @@ export default function EmployeeRoom() {
                       </div>
 
                       <div
-                        className={`flex min-h-10 flex-wrap items-center justify-between gap-2.5 rounded-lg border px-3 py-1 transition-colors ${
+                        className={`flex min-h-10 flex-col gap-2.5 rounded-lg border px-3 py-2 transition-colors sm:flex-row sm:items-center sm:justify-between sm:py-1.5 ${
                           activeWorkSession
                             ? "border-[var(--tm-primary)]/30 bg-[color-mix(in_srgb,var(--tm-primary)_8%,var(--tm-surface))]"
                             : "border-dashed border-[var(--tm-border)] bg-[var(--tm-surface)]"
@@ -1990,7 +2044,7 @@ export default function EmployeeRoom() {
                             aria-hidden="true"
                           />
                           <p
-                            className={`truncate text-xs sm:text-sm ${
+                            className={`min-w-0 flex-1 text-xs leading-5 sm:truncate sm:text-sm ${
                               activeWorkSession
                                 ? "font-semibold text-[var(--tm-text-primary)]"
                                 : "text-[var(--tm-text-secondary)]"
@@ -2000,7 +2054,7 @@ export default function EmployeeRoom() {
                           </p>
                         </div>
 
-                        <div className="flex shrink-0 items-center gap-1.5">
+                        <div className="flex shrink-0 items-center gap-1.5 max-sm:w-full">
                           <Button
                             type="button"
                             size="sm"
@@ -2008,7 +2062,7 @@ export default function EmployeeRoom() {
                             onClick={() => openTaskModal(activeWorkSession ? "change" : "start")}
                             disabled={isSubmitting}
                             icon={<PencilLine size={14} aria-hidden="true" />}
-                            className={`min-h-8 ${activeWorkSession ? "bg-[var(--tm-surface)]" : ""}`}
+                            className={`min-h-9 max-sm:flex-1 sm:min-h-8 ${activeWorkSession ? "bg-[var(--tm-surface)]" : ""}`}
                           >
                             {activeWorkSession ? "作業を変更" : "作業を登録"}
                           </Button>
@@ -2020,7 +2074,7 @@ export default function EmployeeRoom() {
                               onClick={handleCompleteTask}
                               disabled={isSubmitting}
                               icon={<CheckCircle2 size={14} aria-hidden="true" />}
-                              className="min-h-8"
+                              className="min-h-9 max-sm:flex-1 sm:min-h-8"
                             >
                               完了
                             </Button>
@@ -2034,11 +2088,13 @@ export default function EmployeeRoom() {
             )}
           </section>
 
-        {/* Right Column */}
-        <div className="flex min-w-0 flex-col gap-4 sm:gap-5 lg:contents">
-          <div className="min-w-0 lg:relative lg:col-start-2 lg:row-start-1 lg:min-h-[410px] lg:[&>.internal-chat-panel]:absolute lg:[&>.internal-chat-panel]:inset-0 lg:[&>.internal-chat-panel]:h-full!">
-            <InternalChatPanel variant="embedded" />
-          </div>
+        {/* Right Column: Desktop (>= 1024px) displays embedded chat; mobile uses floating chat bubble */}
+        <div className="hidden min-w-0 flex-col gap-4 sm:gap-5 lg:contents">
+          {hasEmbeddedChat && (
+            <div className="min-w-0 lg:relative lg:col-start-2 lg:row-start-1 lg:min-h-[410px] lg:[&>.internal-chat-panel]:absolute lg:[&>.internal-chat-panel]:inset-0 lg:[&>.internal-chat-panel]:h-full!">
+              <InternalChatPanel variant="embedded" />
+            </div>
+          )}
 
           {/* Retained for future notification entry; hidden only in Employee Room. */}
           <div hidden className="hidden relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">

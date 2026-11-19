@@ -14,7 +14,7 @@ export default function NotificationCenter({ children }: { children: ReactNode }
 
 function NotificationSession({ children }: { children: ReactNode }) {
   const { user } = useAuth()
-  const { unreadCount: chatUnread, setDrawerOpen, openMessage } = useInternalChat()
+  const { unreadCount: chatUnread, hasEmbeddedChat, setDrawerOpen, openMessage } = useInternalChat()
   const navigate = useNavigate()
   const location = useLocation()
   const [opening, setOpening] = useState<{ anchor: HTMLButtonElement; route: string } | null>(null)
@@ -147,7 +147,7 @@ function NotificationSession({ children }: { children: ReactNode }) {
 
   const openChat = () => {
     close()
-    if (location.pathname === '/') document.querySelector('.internal-chat-panel--embedded')?.scrollIntoView({ block: 'center' })
+    if (hasEmbeddedChat) document.querySelector?.('.internal-chat-panel--embedded')?.scrollIntoView({ block: 'center' })
     else setDrawerOpen(true)
   }
 

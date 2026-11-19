@@ -78,6 +78,29 @@ body.themis-drawer-open .workspace-tools-dock {
   box-shadow: none;
 }
 
+@media (max-width: 639px) {
+  .workspace-tools-dock {
+    inset-inline-end: calc(12px + env(safe-area-inset-right));
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    gap: 6px;
+    padding: 5px;
+    border-radius: 999px;
+    box-shadow: 0 8px 24px rgb(2 6 23 / 0.18);
+  }
+
+  .workspace-tools-dock .workspace-tools-dock-action {
+    min-width: 44px;
+    height: 44px !important;
+    padding: 0 12px;
+    border-radius: 999px;
+  }
+
+  .workspace-tools-dock .internal-chat-launcher {
+    background: var(--tm-primary-muted);
+    color: var(--tm-primary);
+  }
+}
+
 @media (min-width: 768px) {
   .workspace-tools-dock {
     inset-inline-end: calc(24px + env(safe-area-inset-right));
