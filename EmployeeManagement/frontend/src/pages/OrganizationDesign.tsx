@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import axios from 'axios'
 import {
+  AlertTriangle,
   BadgeCheck,
   BriefcaseBusiness,
   Building2,
@@ -12,8 +13,13 @@ import {
   Clock3,
   Coffee,
   Copy,
+  Eye,
+  EyeOff,
+  KeyRound,
   LayoutGrid,
   LayoutList,
+  Lock,
+  Mail,
   MapPin,
   Play,
   Plus,
@@ -1512,6 +1518,9 @@ function EmployeeDetailModal({
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>(initialTab)
   const [showEmail, setShowEmail] = useState(false)
+  const [copiedCode, setCopiedCode] = useState(false)
+  const [copiedEmail, setCopiedEmail] = useState(false)
+  const [copiedTempPassword, setCopiedTempPassword] = useState(false)
   const canIssueActivationInvite = employee.can_issue_activation_invite === true
   const hasAccountActions = canIssueActivationInvite || canResetPassword || canDeleteEmployee
 
@@ -1659,11 +1668,23 @@ function EmployeeDetailModal({
     setResettingPassword(true); setResetStepUp(true)
   }
 
+  const copyTextWithFeedback = async (value: string, setCopied: (state: boolean) => void) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {
+      // Clipboard may be unavailable in restricted contexts
+    }
+  }
+
   const copyTemporaryPassword = async () => {
     if (!temporaryPassword) return
     try {
       await navigator.clipboard.writeText(temporaryPassword)
+      setCopiedTempPassword(true)
       setResetSuccess('仮パスワードをクリップボードにコピーしました。')
+      window.setTimeout(() => setCopiedTempPassword(false), 1800)
     } catch {
       setResetError('コピーに失敗しました。文字列を選択してコピーしてください。')
     }
@@ -1691,23 +1712,30 @@ function EmployeeDetailModal({
     }
   }
 
+  const employmentLabel = employmentTypeLabels[employee.employment_type ?? ''] ?? '未登録'
+  const orgSummaryParts = [
+    employee.office?.name ?? '所属未登録',
+    employee.department?.name,
+    employee.position_title ?? '役職未登録',
+  ].filter(Boolean)
+
   return <>
     <ModalShell
       isOpen
       onClose={closeEmployeeDialog}
       title={employee.full_name}
       customContent
-      overlayClassName="organization-modal-backdrop flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"
+      overlayClassName="organization-modal-backdrop flex items-center justify-center bg-slate-950/55 p-3 backdrop-blur-[2px] sm:p-6"
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="organization-employee-dialog-title"
-        className="organization-modal-panel flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900 sm:max-h-[calc(100dvh-3rem)]"
+        className="organization-modal-panel flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[640px] flex-col overflow-hidden rounded-xl border border-[var(--tm-border-strong)] bg-[var(--tm-surface)] text-[var(--tm-text-primary)] shadow-[0_20px_48px_rgba(15,23,42,0.22)] sm:max-h-[calc(100dvh-3rem)]"
       >
-        {/* Header */}
-        <header className="organization-dialog-header flex items-start justify-between border-b border-slate-100 p-4 dark:border-slate-800 sm:p-5">
-          <div className="flex items-center gap-3.5">
+        {/* Executive Identity Header */}
+        <header className="organization-dialog-header flex items-start justify-between gap-3 border-b border-[var(--tm-border)] bg-[var(--tm-surface)] px-4 py-4 sm:px-5">
+          <div className="flex min-w-0 items-start gap-3.5">
             <UserAvatar
               name={employee.full_name}
               stableKey={employee.id}
@@ -1716,14 +1744,42 @@ function EmployeeDetailModal({
               size="lg"
               status={employee.work_status}
             />
-            <div className="min-w-0">
-              <div className="organization-dialog-title-line flex items-center gap-2">
-                <h2 id="organization-employee-dialog-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">{employee.full_name}</h2>
-                <span className="font-mono text-xs text-slate-400">({employee.employee_code})</span>
+            <div className="min-w-0 flex-1">
+              <div className="organization-dialog-title-line flex flex-wrap items-center gap-2">
+                <h2
+                  id="organization-employee-dialog-title"
+                  className="truncate text-[16px] font-bold tracking-[-0.015em] text-[var(--tm-text-primary)]"
+                >
+                  {employee.full_name}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => void copyTextWithFeedback(employee.employee_code, setCopiedCode)}
+                  title="社員コードをコピー"
+                  aria-label={`社員コード ${employee.employee_code} をコピー`}
+                  className="inline-flex items-center gap-1 rounded-md border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--tm-text-secondary)] transition hover:border-[var(--tm-primary)] hover:text-[var(--tm-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tm-border-focus)]"
+                >
+                  <span>{employee.employee_code}</span>
+                  {copiedCode ? <Check size={11} className="text-[var(--tm-success)]" /> : <Copy size={11} className="opacity-70" />}
+                </button>
               </div>
-              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                {employee.office?.name ?? '所属未登録'} ・ {employee.position_title ?? '役職未登録'}
+
+              <p className="mt-1 truncate text-xs text-[var(--tm-text-secondary)]">
+                {orgSummaryParts.join(' · ')}
               </p>
+
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${status.badge}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
+                  <span>{status.label}</span>
+                  {employee.attendance?.clock_in && (
+                    <span className="font-mono text-[10px] font-medium opacity-80">
+                      · {formatTime(employee.attendance.clock_in)}入室
+                    </span>
+                  )}
+                </span>
+                <EmployeeRoleBadge employee={employee} mainRolesEnabled={mainRolesEnabled} />
+              </div>
             </div>
           </div>
 
@@ -1732,26 +1788,33 @@ function EmployeeDetailModal({
             onClick={onClose}
             aria-label="閉じる"
             data-modal-autofocus="true"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--tm-text-muted)] transition hover:bg-[var(--tm-surface-hover)] hover:text-[var(--tm-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tm-border-focus)]"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </header>
 
         {/* Tab Navigation */}
-        <nav role="tablist" aria-label="社員詳細" className="organization-dialog-tabs flex shrink-0 overflow-x-auto border-b border-slate-100 bg-slate-50/70 px-4 dark:border-slate-800 dark:bg-slate-950/20 sm:px-5">
+        <nav
+          role="tablist"
+          aria-label="社員詳細"
+          className="organization-dialog-tabs flex shrink-0 gap-1 overflow-x-auto border-b border-[var(--tm-border)] bg-[var(--tm-surface-elevated)]/65 px-4 sm:px-5"
+        >
           <TabButton
+            icon={<UserRound size={13} />}
             label="基本情報"
             isActive={activeTab === 'profile'}
             onClick={() => setActiveTab('profile')}
           />
           <TabButton
+            icon={<ShieldCheck size={13} />}
             label={mainRolesEnabled ? 'ロール設定' : '権限設定'}
             isActive={activeTab === 'roles'}
             onClick={() => setActiveTab('roles')}
           />
           {canAssignTasks && (
             <TabButton
+              icon={<BriefcaseBusiness size={13} />}
               label="業務依頼"
               isActive={activeTab === 'task'}
               onClick={() => setActiveTab('task')}
@@ -1759,6 +1822,7 @@ function EmployeeDetailModal({
           )}
           {hasAccountActions && (
             <TabButton
+              icon={<KeyRound size={13} />}
               label="アカウント管理"
               isActive={activeTab === 'account'}
               onClick={() => setActiveTab('account')}
@@ -1767,236 +1831,383 @@ function EmployeeDetailModal({
         </nav>
 
         {/* Body Content */}
-        <div className="organization-modal-scroll flex-1 overflow-y-auto p-4 sm:p-5">
+        <div className="organization-modal-scroll flex-1 overflow-y-auto bg-[var(--tm-bg)]/55 p-4 sm:p-5">
           {/* TAB 1: Profile & Employment */}
           {activeTab === 'profile' && (
-            <div className="space-y-4">
-              {/* Live Attendance Banner */}
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-800/40">
-                <div>
-                  <span className="text-[10px] font-medium text-slate-400">本日の勤務状況</span>
-                  <div className="mt-0.5 flex items-center gap-2">
-                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${status.badge}`}>
-                      <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
-                      <span>{status.label}</span>
+            <div className="space-y-3.5">
+              {/* Compact Live Attendance Context Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] px-3.5 py-2.5">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className="text-[11px] font-semibold text-[var(--tm-text-muted)]">本日の勤務状況</span>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${status.badge}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
+                    <span>{status.label}</span>
+                  </span>
+                  {employee.attendance?.clock_in && (
+                    <span className="font-mono text-[11px] text-[var(--tm-text-secondary)]">
+                      {formatTime(employee.attendance.clock_in)} 入室
                     </span>
-                    {employee.attendance?.clock_in && (
-                      <span className="text-xs text-slate-600 dark:text-slate-300">
-                        {formatTime(employee.attendance.clock_in)} 入室
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </div>
 
-                {employee.attendance?.outside_destination && (
-                  <div className="text-right">
-                    <span className="text-[10px] text-slate-400">外出先</span>
-                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                {employee.attendance?.outside_destination ? (
+                  <div className="flex items-center gap-1.5 text-xs text-[var(--tm-text-secondary)]">
+                    <MapPin size={12} className="shrink-0 text-[var(--tm-info)]" />
+                    <span className="text-[11px] text-[var(--tm-text-muted)]">外出先:</span>
+                    <span className="font-semibold text-[var(--tm-text-primary)]">
                       {employee.attendance.outside_destination}
-                    </p>
+                    </span>
                   </div>
-                )}
+                ) : employee.attendance?.current_task ? (
+                  <div className="flex min-w-0 items-center gap-1.5 text-xs text-[var(--tm-text-secondary)]">
+                    <span className="text-[11px] text-[var(--tm-text-muted)]">現在の業務:</span>
+                    <span className="max-w-[220px] truncate font-medium text-[var(--tm-text-primary)]">
+                      {employee.attendance.current_task.task_description}
+                    </span>
+                  </div>
+                ) : null}
               </div>
 
-              {/* Profile Details Grid */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <DetailItem label="社員氏名（カナ）" value={employee.full_name_kana || '未登録'} />
-                <DetailItem label="社員コード" value={employee.employee_code} />
-                <DetailItem label="所属事務所" value={employee.office?.name || '未登録'} />
-                <DetailItem label="所属部署" value={employee.department?.name || '未登録'} />
-                <DetailItem label="役職" value={employee.position_title || '未登録'} />
-                <DetailItem label="入社日" value={formatDate(employee.hire_date)} />
-              </div>
+              {/* Unified Hairline Dossier Grid */}
+              <div className="overflow-hidden rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] divide-y divide-[var(--tm-border)]">
+                <div className="grid divide-y divide-[var(--tm-border)] sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                  <DetailItem label="社員氏名（カナ）" value={employee.full_name_kana || '未登録'} />
+                  <DetailItem label="社員コード" value={employee.employee_code} mono />
+                </div>
 
-              {/* Contact Information */}
-              <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-                <span className="text-[10px] font-medium text-slate-400">業務用メールアドレス</span>
-                <div className="mt-1 flex items-center justify-between">
-                  <p className="font-mono text-xs text-slate-700 dark:text-slate-300">
-                    {employee.work_email
-                      ? showEmail
-                        ? employee.work_email
-                        : maskEmail(employee.work_email)
-                      : '未登録'}
-                  </p>
-                  {employee.work_email && (
-                    <button
-                      type="button"
-                      onClick={() => setShowEmail((c) => !c)}
-                      className="text-xs font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
-                    >
-                      {showEmail ? '隠す' : '表示'}
-                    </button>
+                <div className="grid divide-y divide-[var(--tm-border)] sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                  <DetailItem label="所属事務所" value={employee.office?.name || '未登録'} />
+                  <DetailItem label="所属部署" value={employee.department?.name || '未登録'} />
+                </div>
+
+                <div className="grid divide-y divide-[var(--tm-border)] sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                  <DetailItem label="役職" value={employee.position_title || '未登録'} />
+                  <DetailItem label="入社日" value={formatDate(employee.hire_date)} mono />
+                </div>
+
+                {/* Email & (Optional Readonly Employment Type) */}
+                <div className={!canUpdateEmployment ? 'grid divide-y divide-[var(--tm-border)] sm:grid-cols-2 sm:divide-x sm:divide-y-0' : ''}>
+                  <div className="px-3.5 py-2.5">
+                    <span className="flex items-center gap-1 text-[10.5px] font-medium text-[var(--tm-text-muted)]">
+                      <Mail size={11} className="opacity-75" />
+                      <span>業務用メールアドレス</span>
+                    </span>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <p className={`min-w-0 truncate font-mono text-xs ${employee.work_email ? 'font-medium text-[var(--tm-text-primary)]' : 'text-[var(--tm-text-dim)]'}`}>
+                        {employee.work_email
+                          ? showEmail
+                            ? employee.work_email
+                            : maskEmail(employee.work_email)
+                          : '未登録'}
+                      </p>
+                      {employee.work_email && (
+                        <div className="flex shrink-0 items-center gap-1">
+                          {showEmail && (
+                            <button
+                              type="button"
+                              onClick={() => void copyTextWithFeedback(employee.work_email ?? '', setCopiedEmail)}
+                              title="メールアドレスをコピー"
+                              aria-label="メールアドレスをコピー"
+                              className="inline-flex h-6 items-center gap-1 rounded-md border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] px-1.5 text-[10.5px] font-medium text-[var(--tm-text-secondary)] transition hover:border-[var(--tm-border-strong)] hover:text-[var(--tm-text-primary)]"
+                            >
+                              {copiedEmail ? <Check size={11} className="text-[var(--tm-success)]" /> : <Copy size={11} />}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setShowEmail((c) => !c)}
+                            className="inline-flex h-6 items-center gap-1 rounded-md px-2 text-[11px] font-semibold text-[var(--tm-primary)] transition hover:bg-[var(--tm-primary-muted)]"
+                          >
+                            {showEmail ? <EyeOff size={12} /> : <Eye size={12} />}
+                            <span>{showEmail ? '隠す' : '表示'}</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {!canUpdateEmployment && (
+                    <DetailItem label="雇用区分" value={employmentLabel} />
                   )}
                 </div>
               </div>
 
               {/* Employment Type Editor (if permitted) */}
-              {canUpdateEmployment ? (
-                <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-                  <div className="flex items-center justify-between">
+              {canUpdateEmployment && (
+                <section className="rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] p-3.5">
+                  <div className="flex items-center justify-between gap-2">
                     <div>
-                      <h4 className="text-xs font-semibold text-slate-800 dark:text-slate-200">雇用区分の設定</h4>
-                      <p className="text-[10px] text-slate-400">契約形態・勤務体系の区分を更新します</p>
+                      <h4 className="text-xs font-semibold text-[var(--tm-text-primary)]">雇用区分の設定</h4>
+                      <p className="mt-0.5 text-[11px] text-[var(--tm-text-muted)]">契約形態・勤務体系の区分を更新します</p>
                     </div>
-                    <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
-                      {employmentTypeLabels[employee.employment_type ?? ''] ?? '未登録'}
+                    <span className="rounded-full border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--tm-text-primary)]">
+                      {employmentLabel}
                     </span>
                   </div>
 
-                  <div className="mt-2.5 flex flex-wrap gap-2">
-                    {employmentTypeOptions.map(([key, label]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setEmploymentType(key)}
-                        className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
-                          employmentType === key
-                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500/20 dark:bg-indigo-950/30 dark:text-indigo-300'
-                            : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                  <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] p-1 sm:grid-cols-4">
+                    {employmentTypeOptions.map(([key, label]) => {
+                      const active = employmentType === key
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setEmploymentType(key)}
+                          className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition ${
+                            active
+                              ? 'bg-[var(--tm-surface)] font-semibold text-[var(--tm-primary)] shadow-xs ring-1 ring-[var(--tm-primary)]/35'
+                              : 'text-[var(--tm-text-secondary)] hover:bg-[var(--tm-surface-hover)] hover:text-[var(--tm-text-primary)]'
+                          }`}
+                        >
+                          {active && <Check size={12} strokeWidth={2.5} />}
+                          <span>{label}</span>
+                        </button>
+                      )
+                    })}
                   </div>
 
-                  {employmentError && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{employmentError}</p>}
-                  {employmentSuccess && <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">{employmentSuccess}</p>}
+                  {employmentError && (
+                    <p role="alert" className="mt-2.5 rounded-md border border-rose-500/25 bg-rose-500/10 px-3 py-1.5 text-xs text-[var(--tm-danger)]">
+                      {employmentError}
+                    </p>
+                  )}
+                  {employmentSuccess && (
+                    <p role="status" className="mt-2.5 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-700 dark:text-emerald-300">
+                      {employmentSuccess}
+                    </p>
+                  )}
 
                   {employmentType !== employee.employment_type && (
-                    <div className="mt-3 flex justify-end">
+                    <div className="mt-3 flex items-center justify-between border-t border-[var(--tm-border)] pt-3">
+                      <span className="text-[11px] text-[var(--tm-text-muted)]">
+                        未保存の変更：{employmentLabel} → <strong className="text-[var(--tm-text-primary)]">{employmentTypeLabels[employmentType] ?? employmentType}</strong>
+                      </span>
                       <button
                         type="button"
                         disabled={savingEmployment}
                         onClick={() => void saveEmployment()}
-                        className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[var(--tm-primary)] px-3.5 text-xs font-semibold text-white transition hover:bg-[var(--tm-primary-hover)] disabled:opacity-50"
                       >
-                        {savingEmployment ? <ButtonSpinner size={12} /> : <Check size={12} />}
+                        {savingEmployment ? <ButtonSpinner size={12} /> : <Check size={13} />}
                         <span>雇用区分を保存</span>
                       </button>
                     </div>
                   )}
-                </div>
-              ) : (
-                <DetailItem
-                  label="雇用区分"
-                  value={employmentTypeLabels[employee.employment_type ?? ''] ?? '未登録'}
-                />
+                </section>
               )}
             </div>
           )}
 
           {/* TAB 2: Roles & Permissions */}
           {activeTab === 'roles' && (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  {mainRolesEnabled ? '主ロールの設定' : 'システムアクセス権限（ロール）'}
-                </h3>
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                  {mainRolesEnabled ? '職責に合う主ロールを1つ選択します。変更には追加認証が必要です。'
-                    : '社員に割り当てる権限レベルを選択します。職責に応じた最小限の権限を設定してください。'}
-                </p>
+            <div className="space-y-3.5">
+              {/* Current Role Summary Strip */}
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] px-3.5 py-3">
+                <div className="min-w-0">
+                  <span className="text-[10.5px] font-semibold text-[var(--tm-text-muted)]">
+                    {mainRolesEnabled ? '現在の主ロール' : '現在のシステム権限'}
+                  </span>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <EmployeeRoleBadge employee={employee} mainRolesEnabled={mainRolesEnabled} />
+                    {mainRolesEnabled && !currentMainRole && employee.roles.length > 0 && (
+                      <span className="text-[11px] text-[var(--tm-text-secondary)]">
+                        現在の権限 · {employee.roles.map(role => role.display_name).join(' / ')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {mainRolesEnabled && (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] px-2 py-1 text-[10.5px] font-medium text-[var(--tm-text-secondary)]">
+                    <Lock size={11} />
+                    <span>変更には追加認証が必要</span>
+                  </span>
+                )}
               </div>
 
               {roleTargetBlock && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300">
-                  {roleTargetBlock}
+                <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-800 dark:text-amber-200">
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                  <span>{roleTargetBlock}</span>
                 </div>
               )}
 
               {mainRolesEnabled ? (
-                <div className="space-y-3 text-xs text-[var(--tm-text-secondary)]">
-                  <div className="rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] p-3">
-                    <p className="font-semibold">現在の主ロール</p>
-                    <div className="mt-1"><EmployeeRoleBadge employee={employee} mainRolesEnabled /></div>
-                    {!currentMainRole && employee.roles.length > 0 && <p className="mt-2 break-words">
-                      現在の権限 · {employee.roles.map(role => role.display_name).join(' / ')}
-                    </p>}
-                  </div>
-                  {!canManageRoles && !roleTargetBlock && <p>このアカウントではロールを変更できません。</p>}
-                  <label className="block space-y-1.5 font-semibold">
-                    <span className="block">新しいロール</span>
-                    <select className="w-full rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] p-2.5 text-sm text-[var(--tm-text-primary)] disabled:opacity-60"
-                      value={roleIds[0] ?? ''} disabled={!canManageRoles || !canEditRoles || !!roleStepUp}
-                      onChange={event => toggleRole(Number(event.target.value))}>
-                      <option value="" disabled>ロールを選択</option>
-                      {availableRoles.map(role => <option key={role.id} value={role.id} disabled={!role.assignable}>
-                        {role.display_name}{role.name === 'admin' ? '（保護対象）' : ''}
-                      </option>)}
-                    </select>
-                  </label>
-                </div>
-              ) : <div className="space-y-2">
-                {availableRoles.map((role) => {
-                  const levelKey = role.name as keyof typeof accessLevelGuide
-                  const guide = accessLevelGuide[levelKey]
-                  const visual = rolePresentation[levelKey as keyof typeof rolePresentation]
-                  const Icon = visual?.icon ?? ShieldCheck
-                  const isChecked = roleIds.includes(role.id)
-
-                  return (
-                    <div
-                      key={role.id}
-                      onClick={() => canManageRoles && canEditRoles && toggleRole(role.id)}
-                      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition ${
-                        isChecked
-                          ? visual?.selectedClass ?? 'border-indigo-400 bg-indigo-50/70 dark:border-indigo-400/50 dark:bg-indigo-500/10'
-                          : 'border-slate-200 bg-white hover:bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/40'
-                      } ${!canManageRoles || !canEditRoles ? 'cursor-not-allowed opacity-75' : ''}`}
-                    >
-                      <div className="pt-0.5">
-                        <div
-                          className={`flex h-4 w-4 items-center justify-center rounded-full border transition ${
-                            isChecked
-                              ? visual?.checkClass ?? 'border-indigo-600 bg-indigo-600 text-white'
-                              : 'border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800'
-                          }`}
-                        >
-                          {isChecked && <Check size={10} strokeWidth={3} />}
-                        </div>
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className={`flex h-6 w-6 items-center justify-center rounded-md ${visual?.iconClass ?? 'bg-slate-100 text-slate-600'}`}>
-                            <Icon size={13} />
-                          </span>
-                          <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs">
-                            {guide?.title ?? role.display_name}
-                          </span>
-                          <span className="font-mono text-[10px] text-slate-400">({visual?.caption ?? role.name})</span>
-                        </div>
-                        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-                          {guide?.description ?? '業務権限'}
-                        </p>
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          {guide?.capabilities.map((cap) => (
-                            <span
-                              key={cap}
-                              className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                            >
-                              {cap}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xs font-semibold text-[var(--tm-text-primary)]">主ロールを選択</h3>
+                      <p className="mt-0.5 text-[11px] text-[var(--tm-text-muted)]">
+                        職責に合う主ロールを1つ選択してください。
+                      </p>
                     </div>
-                  )
-                })}
-              </div>}
+                  </div>
 
-              {rolesError && <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">{rolesError}</p>}
-              {rolesSuccess && <p role="status" className="text-xs text-emerald-600 dark:text-emerald-400">{rolesSuccess}</p>}
+                  {!canManageRoles && !roleTargetBlock && (
+                    <p className="rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] px-3.5 py-2.5 text-xs text-[var(--tm-text-secondary)]">
+                      このアカウントではロールを変更できません。
+                    </p>
+                  )}
+
+                  <div
+                    role="radiogroup"
+                    aria-label="主ロールを選択"
+                    className="overflow-hidden rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] divide-y divide-[var(--tm-border)]"
+                  >
+                    {availableRoles.map((role) => {
+                      const isSelected = roleIds[0] === role.id
+                      const isCurrent = currentMainRole?.id === role.id
+                      const isProtected = role.name === 'admin'
+                      const isDisabled = !canManageRoles || !canEditRoles || !!roleStepUp || !role.assignable
+
+                      return (
+                        <button
+                          key={role.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={isSelected}
+                          disabled={isDisabled}
+                          onClick={() => !isDisabled && toggleRole(role.id)}
+                          className={`flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition ${
+                            isSelected
+                              ? 'bg-[var(--tm-primary-muted)]/80'
+                              : 'hover:bg-[var(--tm-surface-hover)]'
+                          } disabled:cursor-not-allowed disabled:opacity-55`}
+                        >
+                          <span
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition ${
+                              isSelected
+                                ? 'border-[var(--tm-primary)] bg-[var(--tm-primary)] text-white'
+                                : 'border-[var(--tm-border-strong)] bg-[var(--tm-surface)]'
+                            }`}
+                          >
+                            {isSelected && <Check size={10} strokeWidth={3} />}
+                          </span>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs font-semibold text-[var(--tm-text-primary)]">
+                                {role.display_name}
+                              </span>
+                              <span className="font-mono text-[10px] uppercase text-[var(--tm-text-muted)]">
+                                {role.name}
+                              </span>
+                              {isCurrent && (
+                                <span className="rounded-full border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] px-1.5 py-0.5 text-[9.5px] font-semibold text-[var(--tm-text-secondary)]">
+                                  現在
+                                </span>
+                              )}
+                              {isProtected && (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[9.5px] font-semibold text-[var(--tm-danger)]">
+                                  <Lock size={9} />
+                                  <span>保護対象</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  <div>
+                    <h3 className="text-xs font-semibold text-[var(--tm-text-primary)]">システムアクセス権限（ロール）</h3>
+                    <p className="mt-0.5 text-[11px] text-[var(--tm-text-muted)]">
+                      職責に応じた最小限の権限レベルを選択してください。
+                    </p>
+                  </div>
+
+                  <div
+                    role="radiogroup"
+                    aria-label="システムアクセス権限"
+                    className="overflow-hidden rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] divide-y divide-[var(--tm-border)]"
+                  >
+                    {availableRoles.map((role) => {
+                      const levelKey = role.name as keyof typeof accessLevelGuide
+                      const guide = accessLevelGuide[levelKey]
+                      const visual = rolePresentation[levelKey as keyof typeof rolePresentation]
+                      const Icon = visual?.icon ?? ShieldCheck
+                      const isChecked = roleIds.includes(role.id)
+                      const isDisabled = !canManageRoles || !canEditRoles
+
+                      return (
+                        <button
+                          key={role.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={isChecked}
+                          disabled={isDisabled}
+                          onClick={() => !isDisabled && toggleRole(role.id)}
+                          className={`flex w-full items-start gap-3 px-3.5 py-3 text-left transition ${
+                            isChecked
+                              ? 'bg-[var(--tm-primary-muted)]/75'
+                              : 'hover:bg-[var(--tm-surface-hover)]'
+                          } disabled:cursor-not-allowed disabled:opacity-65`}
+                        >
+                          <span
+                            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition ${
+                              isChecked
+                                ? visual?.checkClass ?? 'border-[var(--tm-primary)] bg-[var(--tm-primary)] text-white'
+                                : 'border-[var(--tm-border-strong)] bg-[var(--tm-surface)]'
+                            }`}
+                          >
+                            {isChecked && <Check size={10} strokeWidth={3} />}
+                          </span>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`flex h-5 w-5 items-center justify-center rounded-md ${visual?.iconClass ?? 'bg-[var(--tm-surface-elevated)] text-[var(--tm-text-secondary)]'}`}>
+                                <Icon size={12} />
+                              </span>
+                              <span className="text-xs font-semibold text-[var(--tm-text-primary)]">
+                                {guide?.title ?? role.display_name}
+                              </span>
+                              <span className="font-mono text-[10px] text-[var(--tm-text-muted)]">
+                                {visual?.caption ?? role.name}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-xs leading-relaxed text-[var(--tm-text-secondary)]">
+                              {guide?.description ?? '業務権限'}
+                            </p>
+                            {guide?.capabilities && (
+                              <div className="mt-1.5 flex flex-wrap gap-1">
+                                {guide.capabilities.map((cap) => (
+                                  <span
+                                    key={cap}
+                                    className="rounded border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--tm-text-secondary)]"
+                                  >
+                                    {cap}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {rolesError && (
+                <p role="alert" className="rounded-md border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-[var(--tm-danger)]">
+                  {rolesError}
+                </p>
+              )}
+              {rolesSuccess && (
+                <p role="status" className="rounded-md border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+                  {rolesSuccess}
+                </p>
+              )}
 
               {canManageRoles && canEditRoles && (
-                <div className="flex justify-end pt-2">
+                <div className="flex justify-end pt-1">
                   <button
                     type="button"
                     disabled={!canSaveRoles}
                     onClick={() => void saveRoles()}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--tm-primary)] px-4 text-xs font-semibold text-white transition hover:bg-[var(--tm-primary-hover)] disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     {savingRoles ? <ButtonSpinner size={14} /> : <Check size={14} />}
                     <span>{savingRoles ? '保存中…' : mainRolesEnabled ? '認証してロールを保存' : '権限設定を保存'}</span>
@@ -2008,37 +2219,39 @@ function EmployeeDetailModal({
 
           {/* TAB 3: Assign Task */}
           {activeTab === 'task' && canAssignTasks && (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  業務（クエスト）の依頼
-                </h3>
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                  勤務中の社員に新しい業務を即座に割り当てます。
-                </p>
-              </div>
-
+            <div className="space-y-3.5">
               {!isEmployeeOnline ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300">
-                  現在オフラインのため、業務を依頼できません。社員の入室をお待ちください。
+                <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-800 dark:text-amber-200">
+                  <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-semibold">現在オフラインのため業務を依頼できません</p>
+                    <p className="mt-0.5 opacity-90">社員の入室（勤務開始）後に再度お試しください。</p>
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  <label className="block space-y-1">
-                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                      業務タイトル <span className="text-rose-500">*</span>
+                <div className="space-y-3.5 rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] p-4">
+                  <div>
+                    <h3 className="text-xs font-semibold text-[var(--tm-text-primary)]">業務（クエスト）の依頼</h3>
+                    <p className="mt-0.5 text-[11px] text-[var(--tm-text-muted)]">
+                      勤務中の社員に新しい業務を即時通知で割り当てます。
+                    </p>
+                  </div>
+
+                  <label className="block space-y-1.5">
+                    <span className="text-xs font-medium text-[var(--tm-text-secondary)]">
+                      業務タイトル <span className="text-[var(--tm-danger)]">*</span>
                     </span>
                     <input
                       type="text"
                       value={taskTitle}
                       onChange={(e) => setTaskTitle(e.target.value)}
                       placeholder="例：A社様契約書の修正案作成"
-                      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      className="h-9 w-full rounded-lg border border-[var(--tm-border)] bg-[var(--tm-control)] px-3 text-xs text-[var(--tm-text-primary)] outline-none transition placeholder:text-[var(--tm-text-dim)] focus:border-[var(--tm-primary)] focus:ring-2 focus:ring-[var(--tm-primary)]/15"
                     />
                   </label>
 
-                  <label className="block space-y-1">
-                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                  <label className="block space-y-1.5">
+                    <span className="text-xs font-medium text-[var(--tm-text-secondary)]">
                       業務詳細・指示事項
                     </span>
                     <textarea
@@ -2046,25 +2259,25 @@ function EmployeeDetailModal({
                       onChange={(e) => setTaskNote(e.target.value)}
                       rows={3}
                       placeholder="例：修正点を赤字でマークし、完了後に報告をお願いします。"
-                      className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      className="w-full rounded-lg border border-[var(--tm-border)] bg-[var(--tm-control)] px-3 py-2 text-xs text-[var(--tm-text-primary)] outline-none transition placeholder:text-[var(--tm-text-dim)] focus:border-[var(--tm-primary)] focus:ring-2 focus:ring-[var(--tm-primary)]/15"
                     />
                   </label>
 
                   {/* Task Duration Presets */}
-                  <div>
-                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                  <div className="space-y-2">
+                    <span className="block text-xs font-medium text-[var(--tm-text-secondary)]">
                       想定作業時間
                     </span>
-                    <div className="mt-1.5 grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-4 gap-1 rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface-elevated)] p-1">
                       {([30, 60, 120] as const).map((mins) => (
                         <button
                           key={mins}
                           type="button"
                           onClick={() => setTaskDuration(mins)}
-                          className={`rounded-lg border px-2 py-2 text-xs font-medium transition ${
+                          className={`h-8 rounded-md px-2 text-xs font-medium transition ${
                             taskDuration === mins
-                              ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500/20 dark:bg-indigo-950/20 dark:text-indigo-300'
-                              : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400'
+                              ? 'bg-[var(--tm-surface)] font-semibold text-[var(--tm-primary)] shadow-xs ring-1 ring-[var(--tm-primary)]/35'
+                              : 'text-[var(--tm-text-secondary)] hover:bg-[var(--tm-surface-hover)] hover:text-[var(--tm-text-primary)]'
                           }`}
                         >
                           {formatTaskDuration(mins)}
@@ -2073,10 +2286,10 @@ function EmployeeDetailModal({
                       <button
                         type="button"
                         onClick={() => setTaskDuration('custom')}
-                        className={`rounded-lg border px-2 py-2 text-xs font-medium transition ${
+                        className={`h-8 rounded-md px-2 text-xs font-medium transition ${
                           taskDuration === 'custom'
-                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500/20 dark:bg-indigo-950/20 dark:text-indigo-300'
-                            : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400'
+                            ? 'bg-[var(--tm-surface)] font-semibold text-[var(--tm-primary)] shadow-xs ring-1 ring-[var(--tm-primary)]/35'
+                            : 'text-[var(--tm-text-secondary)] hover:bg-[var(--tm-surface-hover)] hover:text-[var(--tm-text-primary)]'
                         }`}
                       >
                         時刻指定
@@ -2084,22 +2297,23 @@ function EmployeeDetailModal({
                     </div>
 
                     {taskDuration === 'custom' && (
-                      <div className="mt-2 flex items-center gap-2">
+                      <div className="flex items-center gap-2 pt-0.5">
+                        <Clock3 size={13} className="text-[var(--tm-text-muted)]" />
                         <select
                           value={taskDeadlineHour}
                           onChange={(e) => setTaskDeadlineHour(e.target.value)}
-                          className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium dark:border-slate-700 dark:bg-slate-800"
+                          className="h-8 rounded-md border border-[var(--tm-border)] bg-[var(--tm-control)] px-2 font-mono text-xs font-medium text-[var(--tm-text-primary)]"
                         >
                           <option value="">時</option>
                           {taskHours.map((h) => (
                             <option key={h} value={String(h).padStart(2, '0')}>{String(h).padStart(2, '0')}</option>
                           ))}
                         </select>
-                        <span>:</span>
+                        <span className="font-mono text-xs text-[var(--tm-text-muted)]">:</span>
                         <select
                           value={taskDeadlineMinute}
                           onChange={(e) => setTaskDeadlineMinute(e.target.value)}
-                          className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium dark:border-slate-700 dark:bg-slate-800"
+                          className="h-8 rounded-md border border-[var(--tm-border)] bg-[var(--tm-control)] px-2 font-mono text-xs font-medium text-[var(--tm-text-primary)]"
                         >
                           <option value="">分</option>
                           {taskMinutes.map((m) => (
@@ -2110,17 +2324,25 @@ function EmployeeDetailModal({
                     )}
                   </div>
 
-                  {taskError && <p className="text-xs text-rose-600 dark:text-rose-400">{taskError}</p>}
-                  {taskSuccess && <p className="text-xs text-emerald-600 dark:text-emerald-400">{taskSuccess}</p>}
+                  {taskError && (
+                    <p role="alert" className="rounded-md border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-[var(--tm-danger)]">
+                      {taskError}
+                    </p>
+                  )}
+                  {taskSuccess && (
+                    <p role="status" className="rounded-md border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+                      {taskSuccess}
+                    </p>
+                  )}
 
-                  <div className="pt-2">
+                  <div className="flex justify-end border-t border-[var(--tm-border)] pt-3">
                     <button
                       type="button"
                       disabled={submittingTask || !taskTitle.trim()}
                       onClick={() => void handleAssignTask()}
-                      className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-xs font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500"
+                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--tm-primary)] px-4 text-xs font-semibold text-white transition hover:bg-[var(--tm-primary-hover)] disabled:cursor-not-allowed disabled:opacity-45"
                     >
-                      {submittingTask ? <ButtonSpinner size={14} /> : <Play size={14} />}
+                      {submittingTask ? <ButtonSpinner size={14} /> : <Play size={13} />}
                       <span>{submittingTask ? '送信中…' : '業務を依頼する'}</span>
                     </button>
                   </div>
@@ -2131,88 +2353,108 @@ function EmployeeDetailModal({
 
           {/* TAB 4: Account & Security */}
           {activeTab === 'account' && hasAccountActions && (
-            <div className="space-y-4">
+            <div className="space-y-3.5">
               {canIssueActivationInvite && employee.user_id && (
                 <EmployeeActivationInvite employeeId={employee.id} userId={employee.user_id} />
               )}
-              {canResetPassword && employee.user_id && (
-                <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/30">
-                  <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                    ログインアカウントのパスワード再設定
-                  </h3>
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                    社員がパスワードを忘れた場合、新しい仮パスワードを発行します。
-                  </p>
-                  <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-                    仮パスワードを発行すると現在のセッションは終了し、本人は次回ログイン時に必ずパスワードを変更するよう要求されます。
-                  </p>
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      disabled={resettingPassword}
-                      onClick={() => void resetPassword()}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
-                    >
-                      {resettingPassword ? '発行中...' : '仮パスワードを生成'}
-                    </button>
-                  </div>
 
-                {temporaryPassword && (
-                  <div className="mt-3 rounded-lg border border-amber-200 bg-white p-3 dark:border-amber-500/20 dark:bg-slate-900">
-                    <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">
-                      発行された仮パスワード（再表示されません）
+              {canResetPassword && employee.user_id && (
+                <section className="rounded-lg border border-[var(--tm-border)] bg-[var(--tm-surface)] p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-300">
+                      <KeyRound size={15} aria-hidden="true" />
                     </span>
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <code className="min-w-0 flex-1 rounded bg-slate-100 px-2.5 py-1.5 font-mono text-sm font-bold text-slate-800 dark:bg-slate-800 dark:text-slate-100">
-                        {temporaryPassword}
-                      </code>
-                      <button
-                        type="button"
-                        onClick={() => void copyTemporaryPassword()}
-                        className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                      >
-                        <Copy size={13} />
-                        <span>コピー</span>
-                      </button>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-xs font-semibold text-[var(--tm-text-primary)]">
+                        ログインアカウントのパスワード再設定
+                      </h3>
+                      <p className="mt-1 text-xs leading-relaxed text-[var(--tm-text-secondary)]">
+                        仮パスワードを発行すると現在のセッションは終了し、次回ログイン時にパスワード変更が必須となります。
+                      </p>
+
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          disabled={resettingPassword}
+                          onClick={() => void resetPassword()}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 text-xs font-semibold text-amber-800 transition hover:bg-amber-500/15 disabled:opacity-50 dark:text-amber-200"
+                        >
+                          <KeyRound size={13} />
+                          <span>{resettingPassword ? '発行中...' : '仮パスワードを生成'}</span>
+                        </button>
+                      </div>
+
+                      {temporaryPassword && (
+                        <div className="mt-3 rounded-lg border border-amber-500/30 bg-[var(--tm-surface-elevated)] p-3">
+                          <span className="text-[10.5px] font-semibold text-amber-700 dark:text-amber-300">
+                            発行された仮パスワード（閉じると再表示されません）
+                          </span>
+                          <div className="mt-1.5 flex items-center gap-2">
+                            <code className="min-w-0 flex-1 rounded-md border border-[var(--tm-border)] bg-[var(--tm-surface)] px-2.5 py-1.5 font-mono text-sm font-bold text-[var(--tm-text-primary)] select-all">
+                              {temporaryPassword}
+                            </code>
+                            <button
+                              type="button"
+                              onClick={() => void copyTemporaryPassword()}
+                              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-[var(--tm-border)] bg-[var(--tm-surface)] px-2.5 text-xs font-medium text-[var(--tm-text-primary)] transition hover:bg-[var(--tm-surface-hover)]"
+                            >
+                              {copiedTempPassword ? <Check size={13} className="text-[var(--tm-success)]" /> : <Copy size={13} />}
+                              <span>{copiedTempPassword ? 'コピー済み' : 'コピー'}</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {resetError && (
+                        <p role="alert" className="mt-2.5 text-xs text-[var(--tm-danger)]">{resetError}</p>
+                      )}
+                      {resetSuccess && (
+                        <p role="status" className="mt-2.5 text-xs text-emerald-700 dark:text-emerald-300">{resetSuccess}</p>
+                      )}
                     </div>
                   </div>
-                )}
-
-                  {resetError && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{resetError}</p>}
-                  {resetSuccess && <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">{resetSuccess}</p>}
-                </div>
+                </section>
               )}
 
               {canDeleteEmployee && (
-                <div className="rounded-lg border border-rose-200 p-3.5 dark:border-rose-500/30">
-                  <h3 className="text-xs font-semibold text-rose-700 dark:text-rose-300">社員の削除</h3>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-                    {employee.user_id && 'ログインを無効化し、'}社員を一覧から削除します。過去の業務履歴は保持されます。
-                  </p>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDeleteError('')
-                      setShowDeleteConfirmation(true)
-                    }}
-                    className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:border-rose-500/40 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-500/10"
-                  >
-                    <Trash2 size={13} />
-                    <span>社員を削除</span>
-                  </button>
-                </div>
+                <section className="rounded-lg border border-rose-500/30 bg-rose-500/[0.03] p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-500/25 bg-rose-500/10 text-[var(--tm-danger)]">
+                      <Trash2 size={15} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-xs font-semibold text-[var(--tm-danger)]">社員の削除</h3>
+                      <p className="mt-1 text-xs leading-relaxed text-[var(--tm-text-secondary)]">
+                        {employee.user_id && 'ログインを無効化し、'}社員を一覧から削除します。過去の業務履歴は保持されます。
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeleteError('')
+                          setShowDeleteConfirmation(true)
+                        }}
+                        className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg border border-rose-500/35 bg-[var(--tm-surface)] px-3 text-xs font-semibold text-[var(--tm-danger)] transition hover:bg-rose-500/10"
+                      >
+                        <Trash2 size={13} />
+                        <span>社員を削除</span>
+                      </button>
+                    </div>
+                  </div>
+                </section>
               )}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <footer className="flex justify-end border-t border-slate-100 bg-slate-50/50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/20 sm:px-5">
+        <footer className="flex items-center justify-between border-t border-[var(--tm-border)] bg-[var(--tm-surface)] px-4 py-3 sm:px-5">
+          <span className="font-mono text-[11px] text-[var(--tm-text-dim)]">
+            {employee.employee_code}
+          </span>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-slate-200 bg-white px-4 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            className="h-8 rounded-lg border border-[var(--tm-border-strong)] bg-[var(--tm-surface)] px-4 text-xs font-medium text-[var(--tm-text-primary)] transition hover:bg-[var(--tm-surface-hover)]"
           >
             閉じる
           </button>
@@ -2221,7 +2463,7 @@ function EmployeeDetailModal({
 
       {showDeleteConfirmation && (
         <div
-          className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/70 p-4"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-[2px]"
           onClick={closeEmployeeDialog}
         >
           <section
@@ -2230,22 +2472,22 @@ function EmployeeDetailModal({
             aria-labelledby="delete-employee-title"
             aria-describedby="delete-employee-description"
             onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-md rounded-xl border border-rose-200 bg-white p-5 shadow-xl dark:border-rose-500/30 dark:bg-slate-900"
+            className="w-full max-w-md rounded-xl border border-rose-500/30 bg-[var(--tm-surface)] p-5 shadow-2xl"
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300">
-              <Trash2 size={19} />
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-rose-500/25 bg-rose-500/10 text-[var(--tm-danger)]">
+              <Trash2 size={18} />
             </span>
-            <h2 id="delete-employee-title" className="mt-4 text-base font-semibold text-slate-900 dark:text-slate-100">
+            <h2 id="delete-employee-title" className="mt-3.5 text-base font-semibold text-[var(--tm-text-primary)]">
               社員を削除しますか？
             </h2>
-            <p id="delete-employee-description" className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-              「{employee.full_name}」を社員一覧から削除します。
+            <p id="delete-employee-description" className="mt-1.5 text-xs leading-6 text-[var(--tm-text-secondary)]">
+              「<strong className="text-[var(--tm-text-primary)]">{employee.full_name}</strong>」を社員一覧から削除します。
               {employee.user_id && ' ログインは無効になり、現在のセッションはすべて終了します。'}
               過去の業務履歴は保持されます。
             </p>
 
             {deleteError && (
-              <p role="alert" className="mt-3 rounded-lg bg-rose-50 p-2.5 text-xs text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+              <p role="alert" className="mt-3 rounded-lg border border-rose-500/25 bg-rose-500/10 p-2.5 text-xs text-[var(--tm-danger)]">
                 {deleteError}
               </p>
             )}
@@ -2259,7 +2501,7 @@ function EmployeeDetailModal({
                   setShowDeleteConfirmation(false)
                   setDeleteError('')
                 }}
-                className="h-9 rounded-lg border border-slate-200 bg-white px-4 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                className="h-9 rounded-lg border border-[var(--tm-border-strong)] bg-[var(--tm-surface)] px-4 text-xs font-medium text-[var(--tm-text-primary)] transition hover:bg-[var(--tm-surface-hover)] disabled:opacity-50"
               >
                 キャンセル
               </button>
@@ -2267,7 +2509,7 @@ function EmployeeDetailModal({
                 type="button"
                 disabled={deletingEmployee}
                 onClick={() => void deleteEmployee()}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-rose-600 px-4 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-rose-600 px-4 text-xs font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
               >
                 {deletingEmployee ? <ButtonSpinner size={14} /> : <Trash2 size={14} />}
                 <span>{deletingEmployee ? '削除中…' : '削除を確定'}</span>
@@ -2315,10 +2557,12 @@ function EmployeeDetailModal({
 }
 
 function TabButton({
+  icon,
   label,
   isActive,
   onClick,
 }: {
+  icon?: React.ReactNode
   label: string
   isActive: boolean
   onClick: () => void
@@ -2329,22 +2573,31 @@ function TabButton({
       role="tab"
       aria-selected={isActive}
       onClick={onClick}
-      className={`min-h-10 shrink-0 border-b-2 px-3.5 py-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${
+      className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--tm-border-focus)] ${
         isActive
-          ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300'
-          : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+          ? 'border-[var(--tm-primary)] font-semibold text-[var(--tm-text-primary)]'
+          : 'border-transparent font-medium text-[var(--tm-text-muted)] hover:text-[var(--tm-text-primary)]'
       }`}
     >
-      {label}
+      {icon && <span className={isActive ? 'text-[var(--tm-primary)]' : 'opacity-75'}>{icon}</span>}
+      <span>{label}</span>
     </button>
   )
 }
 
-function DetailItem({ label, value }: { label: string; value: string }) {
+function DetailItem({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  const isEmpty = value === '未登録'
   return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-800/30">
-      <span className="text-[10px] font-medium text-slate-400">{label}</span>
-      <p className="mt-0.5 text-xs font-semibold text-slate-800 dark:text-slate-100">{value}</p>
+    <div className="px-3.5 py-2.5">
+      <span className="block text-[10.5px] font-medium text-[var(--tm-text-muted)]">{label}</span>
+      <p
+        className={`mt-0.5 truncate text-xs ${mono ? 'font-mono tabular-nums' : ''} ${
+          isEmpty ? 'font-normal text-[var(--tm-text-dim)]' : 'font-semibold text-[var(--tm-text-primary)]'
+        }`}
+        title={value}
+      >
+        {value}
+      </p>
     </div>
   )
 }

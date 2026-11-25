@@ -34,7 +34,7 @@ export default function ChatPins({ revision, loadPins, canPin, onJump, onAction 
     setOpen(next)
     if (!next) setResult(undefined)
   }}>
-    <summary className="internal-chat-icon-btn" aria-label="ピン留めしたメッセージ"><Pin size={16} aria-hidden="true" /></summary>
+    <summary className="internal-chat-icon-btn" aria-label="ピン留めしたメッセージ"><Pin size={15} aria-hidden="true" /></summary>
     {open && <div className="internal-chat-pins-list">
       <strong>ピン留めしたメッセージ</strong>
       {!current && <p role="status">読み込み中...</p>}

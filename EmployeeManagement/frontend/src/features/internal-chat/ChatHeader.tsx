@@ -18,7 +18,7 @@ export default function ChatHeader({ unreadCount, memberSummary, onRetry, onClos
     <header className="internal-chat-header">
       <div className="internal-chat-header-main">
         <div className="internal-chat-header-icon" aria-hidden="true">
-          <MessageSquareText size={20} />
+          <MessageSquareText size={16} />
         </div>
 
         <div className="internal-chat-header-text">
@@ -54,7 +54,7 @@ export default function ChatHeader({ unreadCount, memberSummary, onRetry, onClos
         <details className="internal-chat-menu" onBlur={event => {
           if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false
         }}>
-          <summary className="internal-chat-icon-btn" aria-label="チャットメニュー"><MoreVertical size={18} /></summary>
+          <summary className="internal-chat-icon-btn" aria-label="チャットメニュー"><MoreVertical size={16} /></summary>
           <button type="button" className="internal-chat-menu-action" onClick={event => {
             const menu = event.currentTarget.closest('details')
             if (menu) {
@@ -73,7 +73,7 @@ export default function ChatHeader({ unreadCount, memberSummary, onRetry, onClos
             title="閉じる"
             aria-label="社内チャットを閉じる"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         )}
       </div>

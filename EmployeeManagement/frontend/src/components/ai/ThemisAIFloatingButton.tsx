@@ -32,11 +32,10 @@ export default function ThemisAIFloatingButton({ onOpen, expression = 'idle', ac
 
   return (
     <div className={`themis-ai-launcher${docked ? ' themis-ai-launcher--docked' : ''}${preview ? ' themis-ai-launcher--preview' : ''}${forceHover ? ' themis-ai-launcher--force-hover' : ''}${notificationPop ? ' themis-ai-launcher--notification-pop' : ''}`}>
-      <button type="button" className={`themis-ai-launcher-button${docked ? ' workspace-tools-dock-action' : ''}`} aria-label="THEMIS AIを開く" aria-haspopup="dialog" onClick={onOpen}
+      <button type="button" className={`themis-ai-launcher-button${docked ? ' workspace-tools-dock-action' : ''}`} title="THEMIS AI" aria-label="THEMIS AIを開く" aria-haspopup="dialog" onClick={onOpen}
         onPointerEnter={(event) => { if (event.pointerType === 'mouse') setAttentive(true) }} onPointerLeave={() => setAttentive(false)} onFocus={() => setAttentive(true)} onBlur={() => setAttentive(false)}>
         <ThemisHead activity={currentActivity} expression={displayExpression} />
         <span className="themis-ai-launcher-online" aria-hidden="true" />
-        {docked && <span aria-hidden="true">AI</span>}
         {showNotification && <span className="themis-ai-launcher-notification" aria-label={notificationCount > 0 ? `${notificationCount}件の新しい通知` : '新しい通知'}>{notificationCount > 0 ? Math.min(notificationCount, 9) : ''}</span>}
       </button>
       {!docked && <span className="themis-ai-launcher-hint" aria-hidden="true"><strong>AI Themis</strong><span>何かお手伝いしますか？</span></span>}

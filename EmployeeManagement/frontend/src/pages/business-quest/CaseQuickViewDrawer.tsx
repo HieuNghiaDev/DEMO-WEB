@@ -2,16 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ArrowRight,
-  Briefcase,
   Check,
   ChevronRight,
-  ClipboardList,
-  Clock3,
+  Copy,
   FilePlus2,
   FileText,
-  Files,
   FolderOpen,
-  UserCheck,
   X,
 } from 'lucide-react'
 import { SectionSkeleton } from '../../components/loading'
@@ -45,6 +41,7 @@ export default function CaseQuickViewDrawer({ caseItem, onClose, onOpen, onOpenC
   const [activeCase, setActiveCase] = useState<BusinessCase | null>(caseItem)
   const [isRendered, setIsRendered] = useState<boolean>(Boolean(caseItem))
   const [isClosing, setIsClosing] = useState(false)
+  const [copiedCaseId, setCopiedCaseId] = useState<number | null>(null)
   const [response, setResponse] = useState<DrawerResponse | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const closingRef = useRef(false)
@@ -168,6 +165,25 @@ export default function CaseQuickViewDrawer({ caseItem, onClose, onOpen, onOpenC
   const completedCount = requiredDocuments.filter(isDocumentConfirmed).length
   const requiredCount = collectionData?.summary.necessity.required ?? activeCase.documentsTotal
   const progress = safeProgress(completedCount, requiredCount)
+  const defaultTitle = `${activeCase.customerName} / ${activeCase.caseType}`
+  const customTitle = activeCase.title && activeCase.title.trim() !== defaultTitle && activeCase.title.trim() !== activeCase.customerName
+    ? activeCase.title.trim()
+    : null
+
+  const copiedCode = copiedCaseId === activeCase.id
+
+  const copyCaseCode = async () => {
+    try {
+      await navigator.clipboard.writeText(activeCase.code)
+      const currentId = activeCase.id
+      setCopiedCaseId(currentId)
+      window.setTimeout(() => {
+        setCopiedCaseId((prev) => (prev === currentId ? null : prev))
+      }, 1600)
+    } catch {
+      // Clipboard unavailable
+    }
+  }
 
   const openCase = () => {
     handleClose()
@@ -188,47 +204,44 @@ export default function CaseQuickViewDrawer({ caseItem, onClose, onOpen, onOpenC
         onClick={handleClose}
       />
 
-      {/* Floating Right-Side Drawer Panel */}
+      {/* Right-Side Operational Drawer */}
       <aside
         role="dialog"
         aria-modal="true"
         aria-labelledby="case-quick-view-title"
         className={`cm-qv-drawer ${isClosing ? 'is-closing' : ''}`}
       >
-        {/* Header Block with Mockup-faithful Visual Hierarchy */}
+        {/* Compact Executive Header */}
         <header className="cm-qv-header">
           <div className="cm-qv-header-main">
-            {/* Level 1: Eyebrow alone */}
-            <div className="cm-qv-eyebrow">QUICK VIEW · 案件詳細</div>
-
-            {/* Level 2: Client Name (22-24px, 700-750) */}
-            <h2 id="case-quick-view-title" className="cm-qv-header-name">
-              {activeCase.customerName}
-            </h2>
-
-            {/* Level 3: [CASE-000048] ・ チャン・クオック・フイ */}
-            <div className="cm-qv-code-row">
-              <span className="cm-qv-code-badge">{activeCase.code}</span>
-              {activeCase.customerKana && (
-                <>
-                  <span className="cm-qv-code-separator" aria-hidden="true">・</span>
-                  <span className="cm-qv-kana">{activeCase.customerKana}</span>
-                </>
-              )}
-            </div>
-
-            {/* Level 4: Case Title (e.g. TRAN QUOC HUY / 労災) */}
-            <div className="cm-qv-case-title">
-              {activeCase.title || `${activeCase.customerName} / ${activeCase.caseType}`}
-            </div>
-
-            {/* Level 5: Status Badge & Case Type */}
-            <div className="cm-qv-header-badges">
+            <div className="cm-qv-meta-row">
+              <button
+                type="button"
+                className="cm-qv-code-badge"
+                onClick={() => void copyCaseCode()}
+                title="案件番号をコピー"
+                aria-label={`案件番号 ${activeCase.code} をコピー`}
+              >
+                <span>{activeCase.code}</span>
+                {copiedCode ? <Check size={11} className="cm-qv-copy-done" /> : <Copy size={11} className="cm-qv-copy-icon" />}
+              </button>
               <span className={`cm-qv-status-badge cm-qv-status-badge--${activeCase.status}`}>
                 <span className={`cm-qv-status-dot ${status.dot}`} />
                 {status.label}
               </span>
               <CaseTypeBadge caseType={activeCase.caseType} />
+            </div>
+
+            <div className="cm-qv-title-block">
+              <h2 id="case-quick-view-title" className="cm-qv-header-name">
+                {activeCase.customerName}
+              </h2>
+              {activeCase.customerKana && (
+                <p className="cm-qv-kana">{activeCase.customerKana}</p>
+              )}
+              {customTitle && (
+                <p className="cm-qv-case-title">{customTitle}</p>
+              )}
             </div>
           </div>
 
@@ -238,178 +251,132 @@ export default function CaseQuickViewDrawer({ caseItem, onClose, onOpen, onOpenC
             aria-label="案件詳細を閉じる"
             className="cm-qv-header-close-btn"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </header>
 
-        {/* Scrollable Body: Continuous Single Flow */}
+        {/* Scrollable Body */}
         <div ref={scrollContainerRef} className="cm-qv-body">
-          {/* Section 1: 案件の情報 */}
-          <section className="cm-qv-card" aria-labelledby="qv-sec-case-info">
-            <div className="cm-qv-card-header">
-              <div className="flex items-center gap-2.5">
-                <div className="cm-qv-card-iconbox">
-                  <ClipboardList size={16} />
-                </div>
-                <h3 id="qv-sec-case-info" className="cm-qv-card-title">案件の情報</h3>
-              </div>
+          {/* Section 1: 案件情報 (Compact 2-Column Hairline Grid) */}
+          <section className="cm-qv-section" aria-labelledby="qv-sec-case-info">
+            <div className="cm-qv-section-head">
+              <h3 id="qv-sec-case-info" className="cm-qv-section-title">案件情報</h3>
             </div>
 
-            <div className="cm-qv-card-content">
-              {/* 事件類型 */}
-              <div className="cm-qv-fact-row">
-                <div className="cm-qv-fact-left">
-                  <div className="cm-qv-row-iconbox" aria-hidden="true">
-                    <Briefcase size={14} />
-                  </div>
-                  <span className="cm-qv-fact-label">事件類型</span>
-                </div>
-                <div className="cm-qv-fact-right">
-                  <CaseTypeBadge caseType={activeCase.caseType} />
-                  {activeCase.targetCompletionAt && (
-                    <span className="cm-qv-fact-sub">目標: {activeCase.targetCompletionAt.slice(0, 10)}</span>
-                  )}
-                </div>
+            <div className="cm-qv-info-grid">
+              <div className="cm-qv-info-cell">
+                <span className="cm-qv-info-label">担当者</span>
+                <span className={`cm-qv-info-value ${!activeCase.assignedEmployeeId ? 'is-muted' : ''}`}>
+                  {activeCase.assignedEmployeeId ? activeCase.assignee : '未割当'}
+                </span>
+                <span className="cm-qv-info-sub">
+                  {activeCase.assignedEmployeeId ? activeCase.role : '担当スタッフ未登録'}
+                </span>
               </div>
 
-              {/* 担当者 */}
-              <div className="cm-qv-fact-row">
-                <div className="cm-qv-fact-left">
-                  <div className="cm-qv-row-iconbox" aria-hidden="true">
-                    <UserCheck size={14} />
-                  </div>
-                  <span className="cm-qv-fact-label">担当者</span>
-                </div>
-                <div className="cm-qv-fact-right">
-                  <span className="cm-qv-fact-value">
-                    {activeCase.assignedEmployeeId ? activeCase.assignee : '未割当'}
+              <div className="cm-qv-info-cell">
+                <span className="cm-qv-info-label">最終更新</span>
+                <span className="cm-qv-info-value cm-qv-mono">
+                  {formatDateTime(activeCase.rawUpdatedAt)}
+                </span>
+                {activeCase.targetCompletionAt && (
+                  <span className="cm-qv-info-sub cm-qv-mono">
+                    目標: {activeCase.targetCompletionAt.slice(0, 10)}
                   </span>
-                  <span className="cm-qv-fact-sub">
-                    {activeCase.assignedEmployeeId ? activeCase.role : '担当スタッフ未登録'}
-                  </span>
-                </div>
+                )}
               </div>
 
-              {/* 更新日時 */}
-              <div className="cm-qv-fact-row">
-                <div className="cm-qv-fact-left">
-                  <div className="cm-qv-row-iconbox" aria-hidden="true">
-                    <Clock3 size={14} />
-                  </div>
-                  <span className="cm-qv-fact-label">更新日時</span>
-                </div>
-                <div className="cm-qv-fact-right">
-                  <span className="cm-qv-fact-value font-mono">
-                    {formatDateTime(activeCase.rawUpdatedAt)}
-                  </span>
-                </div>
-              </div>
-
-              {/* 案件メモ if exists */}
               {activeCase.memo && (
-                <div className="cm-qv-fact-row cm-qv-fact-row--memo">
-                  <div className="cm-qv-fact-left">
-                    <div className="cm-qv-row-iconbox" aria-hidden="true">
-                      <FileText size={14} />
-                    </div>
-                    <span className="cm-qv-fact-label">案件メモ</span>
-                  </div>
-                  <div className="cm-qv-fact-right text-left">
-                    <p className="cm-qv-memo-text">{activeCase.memo}</p>
-                  </div>
+                <div className="cm-qv-info-cell cm-qv-info-cell--full">
+                  <span className="cm-qv-info-label">案件メモ</span>
+                  <p className="cm-qv-memo-text">{activeCase.memo}</p>
                 </div>
               )}
             </div>
           </section>
 
           {/* Section 2: 必要資料の進捗 */}
-          <section className="cm-qv-card" aria-labelledby="qv-sec-docs">
-            <div className="cm-qv-card-header">
-              <div className="flex items-center gap-2.5">
-                <div className="cm-qv-card-iconbox">
-                  <Files size={16} />
-                </div>
-                <h3 id="qv-sec-docs" className="cm-qv-card-title">必要資料の進捗</h3>
-              </div>
-              <span className="cm-qv-count-badge">
+          <section className="cm-qv-section" aria-labelledby="qv-sec-docs">
+            <div className="cm-qv-section-head">
+              <h3 id="qv-sec-docs" className="cm-qv-section-title">必要資料の進捗</h3>
+              <span className={`cm-qv-count-badge ${progress === 100 && requiredCount > 0 ? 'is-complete' : ''}`}>
                 {`${completedCount} / ${requiredCount} 件`}
               </span>
             </div>
 
-            {isLoading ? (
-              <SectionSkeleton className="border-x-0 px-0 my-2" label="案件資料を読み込み中…" rows={3} showHeader={false} />
-            ) : loadError ? (
-              <p role="alert" className="cm-qv-error-box">
-                {loadError}
-              </p>
-            ) : (
-              <div className="cm-qv-card-content">
-                {/* Thin Elegant Progress bar */}
-                <div className="cm-qv-progress-bar">
-                  <div
-                    className={`cm-qv-progress-fill ${
-                      progress === 100
-                        ? 'bg-emerald-500'
-                        : progress > 0
-                        ? 'bg-indigo-600'
-                        : 'bg-slate-200 dark:bg-slate-700'
-                    }`}
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-
-                {requiredCount === 0 ? (
-                  <p className="cm-qv-empty-text">必要資料はまだ設定されていません。</p>
-                ) : (
-                  <div className="cm-qv-doc-list">
-                    {requiredDocuments.map((document) => {
-                      const confirmed = isDocumentConfirmed(document)
-                      const statusTxt = documentDisplayStatus(document)
-                      return (
-                        <div key={document.id} className="cm-qv-doc-item">
-                          <div className="cm-qv-doc-title-wrap">
-                            <FileText size={15} className="cm-qv-doc-icon" />
-                            <span className="cm-qv-doc-title">{document.title}</span>
-                          </div>
-                          <div className="cm-qv-doc-status-wrap">
-                            <span
-                              className={`cm-qv-doc-pill ${
-                                confirmed
-                                  ? 'cm-qv-doc-pill--confirmed'
-                                  : statusTxt.includes('確認中')
-                                  ? 'cm-qv-doc-pill--reviewing'
-                                  : statusTxt.includes('不備') || statusTxt.includes('不足')
-                                  ? 'cm-qv-doc-pill--alert'
-                                  : 'cm-qv-doc-pill--default'
-                              }`}
-                            >
-                              {statusTxt}
-                            </span>
-                            <span
-                              className={`cm-qv-doc-check ${confirmed ? 'is-confirmed' : 'is-pending'}`}
-                              aria-label={confirmed ? '確認・充足済み' : '未完了'}
-                            >
-                              {confirmed && <Check size={11} strokeWidth={3} />}
-                            </span>
-                          </div>
-                        </div>
-                      )
-                    })}
+            <div className="cm-qv-surface">
+              {isLoading ? (
+                <SectionSkeleton className="border-0 px-3 py-2" label="案件資料を読み込み中…" rows={3} showHeader={false} />
+              ) : loadError ? (
+                <p role="alert" className="cm-qv-error-box">
+                  {loadError}
+                </p>
+              ) : (
+                <>
+                  <div className="cm-qv-progress-wrap">
+                    <div className="cm-qv-progress-bar">
+                      <div
+                        className={`cm-qv-progress-fill ${
+                          progress === 100
+                            ? 'is-complete'
+                            : progress > 0
+                            ? 'is-active'
+                            : 'is-empty'
+                        }`}
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                    <span className="cm-qv-progress-pct">{progress}%</span>
                   </div>
-                )}
-              </div>
-            )}
+
+                  {requiredCount === 0 ? (
+                    <p className="cm-qv-empty-text">必要資料はまだ設定されていません。</p>
+                  ) : (
+                    <div className="cm-qv-doc-list">
+                      {requiredDocuments.map((document) => {
+                        const confirmed = isDocumentConfirmed(document)
+                        const statusTxt = documentDisplayStatus(document)
+                        return (
+                          <div key={document.id} className="cm-qv-doc-item">
+                            <div className="cm-qv-doc-title-wrap">
+                              <FileText size={14} className="cm-qv-doc-icon" />
+                              <span className="cm-qv-doc-title" title={document.title}>{document.title}</span>
+                            </div>
+                            <div className="cm-qv-doc-status-wrap">
+                              <span
+                                className={`cm-qv-doc-pill ${
+                                  confirmed
+                                    ? 'cm-qv-doc-pill--confirmed'
+                                    : statusTxt.includes('確認中')
+                                    ? 'cm-qv-doc-pill--reviewing'
+                                    : statusTxt.includes('不備') || statusTxt.includes('不足')
+                                    ? 'cm-qv-doc-pill--alert'
+                                    : 'cm-qv-doc-pill--default'
+                                }`}
+                              >
+                                {statusTxt}
+                              </span>
+                              <span
+                                className={`cm-qv-doc-check ${confirmed ? 'is-confirmed' : 'is-pending'}`}
+                                aria-label={confirmed ? '確認・充足済み' : '未完了'}
+                              >
+                                {confirmed && <Check size={10} strokeWidth={3} />}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </section>
 
           {/* Section 3: 最近のアクティビティ */}
-          <section className="cm-qv-card" aria-labelledby="qv-sec-activity">
-            <div className="cm-qv-card-header">
-              <div className="flex items-center gap-2.5">
-                <div className="cm-qv-card-iconbox">
-                  <Clock3 size={16} />
-                </div>
-                <h3 id="qv-sec-activity" className="cm-qv-card-title">最近のアクティビティ</h3>
-              </div>
+          <section className="cm-qv-section" aria-labelledby="qv-sec-activity">
+            <div className="cm-qv-section-head">
+              <h3 id="qv-sec-activity" className="cm-qv-section-title">最近のアクティビティ</h3>
               <button
                 type="button"
                 onClick={openCase}
@@ -420,28 +387,32 @@ export default function CaseQuickViewDrawer({ caseItem, onClose, onOpen, onOpenC
               </button>
             </div>
 
-            {isLoading ? (
-              <SectionSkeleton className="border-x-0 px-0 my-2" label="アクティビティを読み込み中…" rows={3} showHeader={false} />
-            ) : recentActivities.length > 0 ? (
-              <div className="cm-qv-timeline">
-                {recentActivities.map((activity) => (
-                  <div key={activity.id} className="cm-qv-timeline-item">
-                    <span className="cm-qv-timeline-dot" aria-hidden="true" />
-                    <time className="cm-qv-timeline-time">
-                      {formatDateTime(activity.occurred_at)}
-                    </time>
-                    <p className="cm-qv-timeline-title">{activity.title}</p>
-                    {activity.created_by_employee?.full_name && (
-                      <span className="cm-qv-timeline-author">
-                        {activity.created_by_employee.full_name}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="cm-qv-empty-text">記録されたアクティビティはありません。</p>
-            )}
+            <div className="cm-qv-surface">
+              {isLoading ? (
+                <SectionSkeleton className="border-0 px-3 py-2" label="アクティビティを読み込み中…" rows={3} showHeader={false} />
+              ) : recentActivities.length > 0 ? (
+                <div className="cm-qv-timeline">
+                  {recentActivities.map((activity) => (
+                    <div key={activity.id} className="cm-qv-timeline-item">
+                      <span className="cm-qv-timeline-dot" aria-hidden="true" />
+                      <div className="cm-qv-timeline-top">
+                        <p className="cm-qv-timeline-title">{activity.title}</p>
+                        <time className="cm-qv-timeline-time">
+                          {formatDateTime(activity.occurred_at)}
+                        </time>
+                      </div>
+                      {activity.created_by_employee?.full_name && (
+                        <span className="cm-qv-timeline-author">
+                          {activity.created_by_employee.full_name}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="cm-qv-empty-text">記録されたアクティビティはありません。</p>
+              )}
+            </div>
           </section>
         </div>
 
@@ -452,7 +423,7 @@ export default function CaseQuickViewDrawer({ caseItem, onClose, onOpen, onOpenC
             onClick={openCollection}
             className="cm-qv-btn-secondary"
           >
-            <FilePlus2 size={15} />
+            <FilePlus2 size={14} />
             <span>資料収集を開く</span>
           </button>
           <button
@@ -460,9 +431,9 @@ export default function CaseQuickViewDrawer({ caseItem, onClose, onOpen, onOpenC
             onClick={openCase}
             className="cm-qv-btn-primary"
           >
-            <FolderOpen size={15} />
+            <FolderOpen size={14} />
             <span>案件を開く</span>
-            <ArrowRight size={14} className="cm-qv-btn-arrow opacity-80" />
+            <ArrowRight size={14} className="cm-qv-btn-arrow" />
           </button>
         </footer>
       </aside>

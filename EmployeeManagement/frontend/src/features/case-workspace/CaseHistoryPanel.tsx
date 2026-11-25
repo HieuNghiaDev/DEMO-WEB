@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import axios from 'axios'
-import { CalendarClock, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, FileText, FolderOpen, Mail, MapPin, MessageSquareText, Package, Paperclip, Pencil, Phone, Plus, RotateCcw, Save, Search, Upload, UserRound, Users, Video, X } from 'lucide-react'
+import { CalendarClock, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, Clock3, FileText, FolderOpen, Mail, MapPin, MessageSquareText, Package, Paperclip, Pencil, Phone, Plus, RotateCcw, Save, Search, Upload, UserRound, Users, Video, X } from 'lucide-react'
 import { Button, ModalShell } from '../../components/ui'
 import { UserAvatar } from '../../components/ui/UserAvatar'
 import { caseWorkspaceApi, type CommunicationUploadProgress } from './api'
@@ -53,23 +53,32 @@ export default function CaseHistoryPanel({ caseId, onChanged, onOpenTask }: { ca
   const permissions = result?.permissions ?? options?.permissions
   const visibleGroups = groupHistoryDays(result?.entries ?? [])
   const loadingGroups: Array<Array<HistoryEntry | null>> = visibleGroups.length ? visibleGroups.map(group => group.entries) : [Array.from({ length: 5 }, () => null)]
+  const hasActiveFilters = Boolean(filters.kind || filters.type || filters.actor_id || filters.from || filters.to || filters.search)
   return <section className="cm-history" aria-label="案件履歴">
-    <header className="cm-history-heading"><div><h2>履歴</h2><p>案件に関する操作と連絡・面談の記録を時系列で確認できます。</p></div>
+    <header className="cm-history-heading">
+      <div className="cm-history-heading-main">
+        <span className="cm-history-heading-icon" aria-hidden><Clock3 size={17}/></span>
+        <div><h2>履歴</h2><p>案件に関する操作と連絡・面談の記録を時系列で確認できます。</p></div>
+      </div>
       {permissions?.can_add_communication && options && <Button variant="primary" size="sm" icon={<Plus size={15} aria-hidden/>} onClick={() => setEditing('new')}>連絡・面談を追加</Button>}
     </header>
-    <div className="cm-history-switch" aria-label="履歴の種類">{([['', 'すべて', 'all'], ['system', '操作履歴', 'system'], ['communication', '連絡・面談履歴', 'communication']] as const).map(([value, label, count]) => <button key={value} type="button" aria-pressed={filters.kind === value} onClick={() => filter('kind', value)}>{label}<span>{result?.counts[count] ?? '—'}</span></button>)}</div>
-    <div className="cm-history-filters">
-      <label className="cm-history-filter"><span>種類</span><select value={filters.type} onChange={e => filter('type', e.target.value)}><option value="">すべて</option>{Object.entries(communicationLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-      <label className="cm-history-filter"><span>担当者</span><select value={filters.actor_id} onChange={e => filter('actor_id', e.target.value)}><option value="">すべて</option>{options?.people.filter(p => p.type === 'employee').map(p => <option key={p.id} value={String(p.id)}>{p.name}</option>)}</select></label>
-      <div className="cm-history-period" role="group" aria-label="期間"><span aria-hidden>期間</span><label><span className="sr-only">開始日</span><input type="date" value={filters.from} max={filters.to || undefined} onChange={e => filter('from', e.target.value)}/></label><span aria-hidden>～</span><label><span className="sr-only">終了日</span><input type="date" value={filters.to} min={filters.from || undefined} onChange={e => filter('to', e.target.value)}/></label></div>
-      <label className="cm-history-search"><span className="sr-only">検索</span><Search size={15} aria-hidden/><input type="search" placeholder="キーワードで検索..." maxLength={255} value={filters.search} onChange={e => filter('search', e.target.value)}/></label>
+    <div className="cm-history-toolbar">
+      <div className="cm-history-toolbar-top">
+        <div className="cm-history-switch" aria-label="履歴の種類">{([['', 'すべて', 'all'], ['system', '操作履歴', 'system'], ['communication', '連絡・面談履歴', 'communication']] as const).map(([value, label, count]) => <button key={value} type="button" aria-pressed={filters.kind === value} onClick={() => filter('kind', value)}>{label}<span>{result?.counts[count] ?? '—'}</span></button>)}</div>
+        {result && <div className="cm-history-result-summary"><span aria-live="polite">{pending ? '履歴を読み込み中…' : historyRange(result.pagination)}</span><button type="button" className={hasActiveFilters ? 'is-active' : undefined} onClick={clearFilters}>条件をクリア</button></div>}
+      </div>
+      <div className="cm-history-filters">
+        <label className="cm-history-filter"><span>種類</span><select value={filters.type} onChange={e => filter('type', e.target.value)}><option value="">すべて</option>{Object.entries(communicationLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label className="cm-history-filter"><span>担当者</span><select value={filters.actor_id} onChange={e => filter('actor_id', e.target.value)}><option value="">すべて</option>{options?.people.filter(p => p.type === 'employee').map(p => <option key={p.id} value={String(p.id)}>{p.name}</option>)}</select></label>
+        <div className="cm-history-period" role="group" aria-label="期間"><span aria-hidden>期間</span><label><span className="sr-only">開始日</span><input type="date" value={filters.from} max={filters.to || undefined} onChange={e => filter('from', e.target.value)}/></label><span aria-hidden>～</span><label><span className="sr-only">終了日</span><input type="date" value={filters.to} min={filters.from || undefined} onChange={e => filter('to', e.target.value)}/></label></div>
+        <label className="cm-history-search"><span className="sr-only">検索</span><Search size={14} aria-hidden/><input type="search" placeholder="キーワードで検索..." maxLength={255} value={filters.search} onChange={e => filter('search', e.target.value)}/></label>
+      </div>
     </div>
     {saved?.permissions.can_create_task && <div className="cm-history-next" role="status"><div><strong>タスクを作成しますか？</strong><p>{saved.communication?.next_action ?? saved.title}{saved.communication?.next_action_due_at && ` ・ ${historyDate(saved.communication.next_action_due_at)}`}</p></div><Button size="sm" onClick={() => setTaskEntry(saved)}>タスクを作成</Button><Button size="sm" variant="ghost" onClick={() => setSaved(null)}>後で</Button></div>}
     {error && <div role="alert" className="cm-history-error">{error}<Button size="sm" onClick={() => setRefresh(value => value + 1)}>再試行</Button></div>}
-    {result && <div className="cm-history-result-summary"><span aria-live="polite">{pending ? '履歴を読み込み中…' : historyRange(result.pagination)}</span><button type="button" onClick={clearFilters}>条件をクリア</button></div>}
     <div className="cm-history-results" aria-busy={pending}>
       {pending ? <div role="status" aria-label="履歴を読み込み中" className="cm-history-skeleton">{loadingGroups.map((group, groupIndex) => <section key={groupIndex} aria-hidden><div className="cm-history-skeleton-date"/>{group.map((entry, index) => <div key={entry?.id ?? index} className={`cm-history-skeleton-row${entry?.kind === 'communication' ? ' is-communication' : ''}`}><span/><span/><span/></div>)}</section>)}</div> : !error && result?.entries.length === 0 ? <div className="cm-history-empty"><p>該当する履歴はありません。</p><Button size="sm" onClick={clearFilters}>条件をクリア</Button></div> : !error &&
-        <div className="cm-history-list">{visibleGroups.map(group => <section key={group.date} aria-label={`${group.date}の履歴`}><h3 className="cm-history-date"><span>{group.date}</span><span aria-label={`このページの${group.date}の履歴 ${group.entries.length}件`}>{group.entries.length}件</span></h3>{group.entries.map(entry => <TimelineEntry key={entry.id} entry={entry} caseId={caseId} onEdit={() => setEditing(entry)} onTask={() => setTaskEntry(entry)} onOpenTask={onOpenTask}/>)}</section>)}</div>}
+        <div className="cm-history-list">{visibleGroups.map(group => <section key={group.date} className="cm-history-day-group" aria-label={`${group.date}の履歴`}><h3 className="cm-history-date"><span>{group.date}</span><span aria-label={`このページの${group.date}の履歴 ${group.entries.length}件`}>{group.entries.length}件</span></h3><div className="cm-history-day-entries">{group.entries.map(entry => <TimelineEntry key={entry.id} entry={entry} caseId={caseId} onEdit={() => setEditing(entry)} onTask={() => setTaskEntry(entry)} onOpenTask={onOpenTask}/>)}</div></section>)}</div>}
     </div>
     {result && !error && <footer className="cm-history-pagination">
       <span>{historyRange(result.pagination)}</span>
@@ -96,7 +105,7 @@ export function TimelineEntry({ entry, caseId, onEdit, onTask, onOpenTask }: { e
   return <article className={`cm-history-entry is-${entry.kind} tone-${tone}`} data-history-id={entry.id}>
     <time className="cm-history-time" dateTime={entry.occurred_at}>{historyTime(entry.occurred_at, entry.kind === 'system')}</time>
     <span className="cm-history-track" aria-hidden/>
-    <span className={`cm-history-icon is-${tone}`}><Icon size={19} aria-hidden/></span>
+    <span className={`cm-history-icon is-${tone}`}><Icon size={15} aria-hidden/></span>
     <div className="cm-history-content">
       <div className="cm-history-event-heading">{entry.kind === 'communication' ? <div className="cm-history-communication-type">{historyTypeLabel(entry)}{communication?.duration_minutes != null && <span className="cm-history-duration">{durationLabel(communication.duration_minutes)}</span>}</div> : <h4>{entry.title}</h4>}{category && <span className="cm-history-category">{category}</span>}</div>
       {entry.kind === 'communication' && <p className="cm-history-subject">{entry.title}</p>}

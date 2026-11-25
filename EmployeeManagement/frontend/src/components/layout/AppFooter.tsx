@@ -1,4 +1,4 @@
-import { CircleHelp, FileText, Shield, Sparkles, X } from 'lucide-react'
+import { ArrowUpRight, CheckCircle2, ChevronUp, FileText, History, Settings, Shield, Tag, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { appDisplayMetadata } from '../../config/app'
@@ -11,7 +11,7 @@ type AppFooterProps = {
 }
 
 export default function AppFooter({ onOpenReleaseNotes }: AppFooterProps) {
-  const { currentRelease, error } = useAppRelease()
+  const { currentRelease } = useAppRelease()
   const releaseName = formatReleaseName(currentRelease)
   const releaseDate = currentRelease.released_at ?? currentRelease.build_date
   const parsedReleaseDate = releaseDate ? new Date(releaseDate) : null
@@ -19,6 +19,7 @@ export default function AppFooter({ onOpenReleaseNotes }: AppFooterProps) {
     parsedReleaseDate && !Number.isNaN(parsedReleaseDate.getTime())
       ? new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }).format(parsedReleaseDate)
       : '—'
+  const currentYear = new Date().getFullYear()
   const [isVersionMounted, setIsVersionMounted] = useState(false)
   const [isVersionClosing, setIsVersionClosing] = useState(false)
   const versionAreaRef = useRef<HTMLDivElement>(null)
@@ -31,7 +32,7 @@ export default function AppFooter({ onOpenReleaseNotes }: AppFooterProps) {
     closeTimer.current = window.setTimeout(() => {
       setIsVersionMounted(false)
       setIsVersionClosing(false)
-    }, 160)
+    }, 150)
   }, [isVersionClosing, isVersionMounted])
 
   const toggleVersionInfo = () => {
@@ -78,63 +79,74 @@ export default function AppFooter({ onOpenReleaseNotes }: AppFooterProps) {
   }
 
   return (
-    <footer className="themis-global-footer">
-      <div className="themis-footer-inner">
-        {/* Left: Brand + Live System Status + Interactive Version Pill */}
-        <div className="themis-footer-left">
-          <div className="themis-footer-brand">
-            <span className="themis-footer-logo-box" aria-hidden="true">
+    <footer className="tm-footer" aria-label="サイトフッター">
+      <div className="tm-footer-inner">
+        {/* Left: Brand identity & operational status */}
+        <div className="tm-footer-left">
+          <div className="tm-footer-brand">
+            <span className="tm-footer-crest" aria-hidden="true">
               <img src={`${import.meta.env.BASE_URL}images/logoTHEMIS.png`} alt="" />
             </span>
-            <div className="themis-footer-brand-text">
-              <strong>THEMIS HQ</strong>
-              <span className="themis-footer-divider" aria-hidden="true">·</span>
-              <span>法で、人と組織の可能性をひらく。</span>
-            </div>
+            <strong className="tm-footer-name">THEMIS HQ</strong>
+            <span className="tm-footer-sep" aria-hidden="true">/</span>
+            <span className="tm-footer-tagline">合同法律事務所オペレーション基盤</span>
           </div>
 
-          <div className="themis-footer-system">
-            <span className="themis-footer-status" role="status">
-              <i aria-hidden="true" />
-              システム稼働中
+          <div className="tm-footer-meta">
+            <span className="tm-footer-live" role="status">
+              <span className="tm-footer-live-dot" aria-hidden="true" />
+              稼働中
             </span>
 
-            <div className="themis-footer-version-area" ref={versionAreaRef}>
+            <div className="tm-footer-version-wrap" ref={versionAreaRef}>
               <button
+                type="button"
+                className="tm-footer-version-trigger"
                 aria-controls="themis-version-popover"
                 aria-expanded={isVersionMounted && !isVersionClosing}
                 aria-haspopup="dialog"
-                aria-label="バージョン情報"
-                className="themis-footer-version-btn"
+                aria-label={`バージョン情報 ${releaseName}`}
                 onClick={toggleVersionInfo}
-                type="button"
               >
-                <span className="themis-footer-version">{releaseName}</span>
-                <CircleHelp size={13} aria-hidden="true" className="themis-footer-help-icon" />
+                <Tag size={11} aria-hidden="true" className="tm-footer-version-icon" />
+                <span>{releaseName}</span>
+                <ChevronUp
+                  size={12}
+                  aria-hidden="true"
+                  className={`tm-footer-version-chevron${isVersionMounted && !isVersionClosing ? ' is-open' : ''}`}
+                />
               </button>
 
               {isVersionMounted && (
                 <section
-                  aria-labelledby="themis-version-title"
-                  className={`themis-version-popover${isVersionClosing ? ' is-closing' : ''}`}
                   id="themis-version-popover"
                   role="dialog"
+                  aria-labelledby="themis-version-title"
+                  className={`tm-footer-popover${isVersionClosing ? ' is-closing' : ''}`}
                 >
-                  <header>
-                    <div className="flex items-center gap-2">
-                      <span className="themis-version-badge" aria-hidden="true">
-                        <Sparkles size={13} />
+                  <header className="tm-footer-popover-head">
+                    <div className="tm-footer-popover-brand">
+                      <span className="tm-footer-crest" aria-hidden="true">
+                        <img src={`${import.meta.env.BASE_URL}images/logoTHEMIS.png`} alt="" />
                       </span>
-                      <h2 id="themis-version-title">バージョン情報</h2>
+                      <div>
+                        <h2 id="themis-version-title">THEMIS HQ</h2>
+                        <span className="tm-footer-popover-ver">{releaseName}</span>
+                      </div>
                     </div>
-                    <button aria-label="閉じる" onClick={closeVersionInfo} type="button">
-                      <X size={15} />
+                    <button
+                      type="button"
+                      className="tm-footer-popover-close"
+                      aria-label="閉じる"
+                      onClick={closeVersionInfo}
+                    >
+                      <X size={14} aria-hidden="true" />
                     </button>
                   </header>
 
-                  <dl className="themis-version-details">
+                  <dl className="tm-footer-popover-grid">
                     <div>
-                      <dt>現在のバージョン</dt>
+                      <dt>バージョン</dt>
                       <dd className="font-mono">{releaseName}</dd>
                     </div>
                     <div>
@@ -142,28 +154,26 @@ export default function AppFooter({ onOpenReleaseNotes }: AppFooterProps) {
                       <dd>{dateLabel}</dd>
                     </div>
                     <div>
-                      <dt>稼働環境</dt>
-                      <dd>{currentRelease.environment}</dd>
+                      <dt>ステータス</dt>
+                      <dd className="tm-footer-popover-ok">
+                        <CheckCircle2 size={12} aria-hidden="true" />
+                        正常稼働
+                      </dd>
                     </div>
                     <div>
-                      <dt>最終更新</dt>
-                      <dd>{dateLabel}</dd>
+                      <dt>推奨環境</dt>
+                      <dd>{appDisplayMetadata.recommendedScale} · Full HD</dd>
                     </div>
                   </dl>
 
-                  {error && <p className="themis-version-error">{error}</p>}
-
-                  <div className="themis-display-guidance">
-                    <span>推奨表示環境</span>
-                    <strong>{appDisplayMetadata.recommendedResolution}</strong>
-                    <p>ブラウザ表示倍率 {appDisplayMetadata.recommendedScale}</p>
-                    <small>{appDisplayMetadata.minimumResolution}</small>
-                  </div>
-
-                  <button className="themis-release-link" onClick={openReleaseNotes} type="button">
-                    <FileText size={15} aria-hidden="true" />
-                    <span>リリースノートを見る</span>
-                    <span aria-hidden="true">→</span>
+                  <button
+                    type="button"
+                    className="tm-footer-popover-action"
+                    onClick={openReleaseNotes}
+                  >
+                    <History size={14} aria-hidden="true" />
+                    <span>更新履歴・リリースノート</span>
+                    <ArrowUpRight size={14} aria-hidden="true" />
                   </button>
                 </section>
               )}
@@ -171,23 +181,36 @@ export default function AppFooter({ onOpenReleaseNotes }: AppFooterProps) {
           </div>
         </div>
 
-        {/* Right: Utility Navigation (with safe clearance from the bottom-right floating dock) */}
-        <nav className="themis-footer-links" aria-label="フッターリンク">
-          <button type="button" onClick={openReleaseNotes} className="themis-footer-link-active">
-            <FileText size={12} aria-hidden="true" />
-            <span>更新履歴</span>
-          </button>
-          <Link to="/system?section=privacy" className="themis-footer-link-active">
-            <Shield size={12} aria-hidden="true" />
-            <span>プライバシー</span>
-          </Link>
-          <button type="button" disabled aria-disabled="true" title="準備中">
-            利用規約
-          </button>
-          <button type="button" disabled aria-disabled="true" title="準備中">
-            ヘルプ
-          </button>
-        </nav>
+        {/* Right: Clean working utility links + copyright */}
+        <div className="tm-footer-right">
+          <nav className="tm-footer-nav" aria-label="フッターメニュー">
+            <button type="button" onClick={openReleaseNotes} className="tm-footer-link">
+              <History size={12} aria-hidden="true" />
+              <span>更新履歴</span>
+            </button>
+            <Link to="/system?section=privacy" className="tm-footer-link">
+              <Shield size={12} aria-hidden="true" />
+              <span>プライバシー</span>
+            </Link>
+            <a
+              href={`${import.meta.env.BASE_URL}terms.html`}
+              target="_blank"
+              rel="noreferrer"
+              className="tm-footer-link"
+            >
+              <FileText size={12} aria-hidden="true" />
+              <span>利用規約</span>
+            </a>
+            <Link to="/system" className="tm-footer-link">
+              <Settings size={12} aria-hidden="true" />
+              <span>設定</span>
+            </Link>
+          </nav>
+
+          <span className="tm-footer-copy" aria-label={`Copyright ${currentYear} THEMIS HQ`}>
+            © {currentYear} THEMIS
+          </span>
+        </div>
       </div>
     </footer>
   )

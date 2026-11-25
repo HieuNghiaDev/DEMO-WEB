@@ -52,6 +52,7 @@ export default function InternalChatLauncher({ launcherHost }: { launcherHost: H
           type="button"
           className="workspace-tools-dock-action internal-chat-launcher"
           onClick={() => setDrawerOpen(true)}
+          title="社内チャット"
           aria-label={
             chat.unreadCount > 0
               ? `社内チャットを開く・未読${chat.unreadCount}件`
@@ -60,8 +61,7 @@ export default function InternalChatLauncher({ launcherHost }: { launcherHost: H
           aria-haspopup="dialog"
           aria-expanded={false}
         >
-          <MessageSquareText size={18} className="internal-chat-launcher-icon" aria-hidden="true" />
-          <span aria-hidden="true">チャット</span>
+          <MessageSquareText size={19} className="internal-chat-launcher-icon" aria-hidden="true" />
           {chat.unreadCount > 0 && (
             <span className="internal-chat-launcher-badge">
               {chat.unreadCount > 99 ? '99+' : chat.unreadCount}

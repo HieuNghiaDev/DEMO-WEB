@@ -20,10 +20,11 @@ const formatMessageClock = (value: string) => {
   }
 }
 
-export default function MessageBubble({ message, receipt, readerMarkers, actionsEnabled, hideEnabled, canPin, onReply, onAction, onJump, preview, translationPair = 'ja-vi', onTranslate }: {
+export default function MessageBubble({ message, receipt, readerMarkers, grouped = false, actionsEnabled, hideEnabled, canPin, onReply, onAction, onJump, preview, translationPair = 'ja-vi', onTranslate }: {
   message: InternalChatMessage
   receipt?: ChatReceipt
   readerMarkers?: ChatReceipt['readers']
+  grouped?: boolean
   actionsEnabled?: boolean
   hideEnabled?: boolean
   canPin?: boolean
@@ -61,14 +62,18 @@ export default function MessageBubble({ message, receipt, readerMarkers, actions
     && !!message.attachments?.length
 
   return (
-    <article className={`internal-chat-message internal-chat-message--${mine ? 'mine' : 'other'}`}
+    <article className={`internal-chat-message internal-chat-message--${mine ? 'mine' : 'other'}${grouped ? ' internal-chat-message--grouped' : ''}`}
       data-chat-readable-id={mine || preview ? undefined : message.id}>
       {!mine && (
-        <UserAvatar name={sender.name} stableKey={sender.id} imageSrc={getEmployeeAvatarImageUrl(sender.avatar_path)}
-          size="sm" shape="circle" />
+        grouped ? (
+          <span className="internal-chat-avatar-spacer" aria-hidden="true" />
+        ) : (
+          <UserAvatar name={sender.name} stableKey={sender.id} imageSrc={getEmployeeAvatarImageUrl(sender.avatar_path)}
+            size="sm" shape="circle" />
+        )
       )}
       <div className="internal-chat-sender-content">
-        {!mine && <div className="internal-chat-sender-header">
+        {!mine && !grouped && <div className="internal-chat-sender-header">
           <strong className="internal-chat-sender-name">{sender.name}</strong>
         </div>}
         <div className="internal-chat-bubble-row">
@@ -101,3 +106,4 @@ export default function MessageBubble({ message, receipt, readerMarkers, actions
     </article>
   )
 }
+

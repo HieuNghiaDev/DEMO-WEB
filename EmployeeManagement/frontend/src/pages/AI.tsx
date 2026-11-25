@@ -59,7 +59,7 @@ function AIEmployees() {
       (messagesByPersona[persona.name] ?? [])
         .filter((message) => message.role === 'user')
         .map((message) => ({ persona: persona.display_name, content: message.content })),
-    ).slice(-4).reverse(),
+    ).slice(-5).reverse(),
     [messagesByPersona, personas],
   )
 
@@ -68,7 +68,7 @@ function AIEmployees() {
     if (!textarea) return
 
     textarea.style.height = 'auto'
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 144)}px`
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`
   }, [messageInput])
 
   const sendMessage = async () => {
@@ -133,37 +133,49 @@ function AIEmployees() {
     window.requestAnimationFrame(() => textareaRef.current?.focus())
   }, [])
 
+  const resetConversation = useCallback(() => {
+    if (!selectedPersona || isSending) return
+    const personaName = selectedPersona.name
+    setMessagesByPersona((current) => ({ ...current, [personaName]: [] }))
+    setErrorsByPersona((current) => ({ ...current, [personaName]: undefined }))
+    setMessageInput('')
+    window.requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [isSending, selectedPersona])
+
   return (
-    <div className="ai-employee-page">
-      <div className="ai-employee-container">
-          {isLoading ? (
-            <SectionSkeleton className="min-h-72" label="AI社員の情報を読み込み中です…" rows={4} />
-          ) : error ? (
-            <div className="rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface)] p-8 text-sm text-[var(--tm-danger)]">{error}</div>
-          ) : personas.length === 0 ? (
-            <div className="rounded-xl border border-[var(--tm-border)] bg-[var(--tm-surface)] p-8 text-center text-sm text-[var(--tm-text-secondary)]">
-              有効なAI社員はまだ登録されていません。
-            </div>
-          ) : selectedPersona ? (
-            <AiEmployeeWorkspace
-              chatError={chatError}
-              chatMessages={chatMessages}
-              isSending={isSending}
-              messageInput={messageInput}
-              onMessageChange={setMessageInput}
-              onMessageKeyDown={handleMessageKeyDown}
-              onSelectPersona={setSelectedPersonaId}
-              onSelectSkill={(personaName, skill) => setSelectedSkills((current) => ({ ...current, [personaName]: skill }))}
-              onSubmit={handleSubmit}
-              onUsePrompt={usePrompt}
-              personas={personas}
-              recentConversations={recentConversations}
-              selectedPersona={selectedPersona}
-              selectedPersonaId={selectedPersonaId}
-              selectedSkill={selectedSkill}
-              textareaRef={textareaRef}
-            />
-          ) : null}
+    <div className="cm-case-list-page ai-employee-page">
+      <div className="cm-case-list-shell">
+        {isLoading ? (
+          <SectionSkeleton className="min-h-72" label="AI社員の情報を読み込み中です…" rows={4} />
+        ) : error ? (
+          <div className="rounded-[var(--tm-radius-panel)] border border-[var(--tm-border)] bg-[var(--tm-surface)] p-8 text-sm text-[var(--tm-danger)]">
+            {error}
+          </div>
+        ) : personas.length === 0 ? (
+          <div className="rounded-[var(--tm-radius-panel)] border border-[var(--tm-border)] bg-[var(--tm-surface)] p-8 text-center text-sm text-[var(--tm-text-secondary)]">
+            有効なAI社員はまだ登録されていません。
+          </div>
+        ) : selectedPersona ? (
+          <AiEmployeeWorkspace
+            chatError={chatError}
+            chatMessages={chatMessages}
+            isSending={isSending}
+            messageInput={messageInput}
+            onMessageChange={setMessageInput}
+            onMessageKeyDown={handleMessageKeyDown}
+            onResetConversation={resetConversation}
+            onSelectPersona={setSelectedPersonaId}
+            onSelectSkill={(personaName, skill) => setSelectedSkills((current) => ({ ...current, [personaName]: skill }))}
+            onSubmit={handleSubmit}
+            onUsePrompt={usePrompt}
+            personas={personas}
+            recentConversations={recentConversations}
+            selectedPersona={selectedPersona}
+            selectedPersonaId={selectedPersonaId}
+            selectedSkill={selectedSkill}
+            textareaRef={textareaRef}
+          />
+        ) : null}
       </div>
     </div>
   )

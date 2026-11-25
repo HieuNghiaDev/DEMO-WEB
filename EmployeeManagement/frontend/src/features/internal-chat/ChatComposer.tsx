@@ -1,5 +1,5 @@
 import { useEffect, useImperativeHandle, useRef, useState, type ChangeEvent, type KeyboardEvent, type Ref } from 'react'
-import { Image as ImageIcon, Languages, LoaderCircle, Paperclip, Send, X } from 'lucide-react'
+import { ChevronDown, Image as ImageIcon, Languages, LoaderCircle, Paperclip, Send, X } from 'lucide-react'
 import type { ChatDraftMention, ChatMentionMember, ChatReply, ChatTranslationPair } from './types'
 import { editMentions, mentionQuery } from './chatMentions'
 import { fetchChatMentionMembers } from './api'
@@ -193,7 +193,7 @@ export default function ChatComposer({ variant, draft, files, onFiles, sendError
               title="ファイルを添付"
               aria-label="ファイルを添付"
             >
-              <Paperclip size={16} />
+              <Paperclip size={15} />
             </button>
 
             <button
@@ -204,16 +204,17 @@ export default function ChatComposer({ variant, draft, files, onFiles, sendError
               title="画像を挿入"
               aria-label="画像を挿入"
             >
-              <ImageIcon size={16} />
+              <ImageIcon size={15} />
             </button>
 
             <label className="internal-chat-preview-pill">
-              <Languages size={12} aria-hidden="true" />
+              <Languages size={13} aria-hidden="true" />
               <select aria-label="翻訳する言語の組み合わせ" value={translationPair}
                 onChange={event => onTranslationPair?.(event.target.value as ChatTranslationPair)}>
                 <option value="ja-vi">日本語 ↔ ベトナム語</option>
                 <option value="ja-zh">日本語 ↔ 中国語</option>
               </select>
+              <ChevronDown size={12} className="internal-chat-select-chevron" aria-hidden="true" />
             </label>
           </div>
 

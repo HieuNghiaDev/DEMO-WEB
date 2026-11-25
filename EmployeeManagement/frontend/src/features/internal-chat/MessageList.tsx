@@ -1,5 +1,5 @@
 import { memo, useMemo, type RefObject, type UIEventHandler } from 'react'
-import { ArrowDown, CalendarDays, LoaderCircle, MessageSquareText } from 'lucide-react'
+import { ArrowDown, LoaderCircle, MessageSquareText } from 'lucide-react'
 import MessageBubble from './MessageBubble'
 import type { ChatActionName, ChatReceipt, ChatReply, ChatTranslationPair, InternalChatMessage } from './types'
 
@@ -53,22 +53,27 @@ function formatChatDateSeparator(dateString: string): string {
 }
 
 const ChatMessageRow = memo(function ChatMessageRow({
-  message, receipt, readerMarkers, showDate, actionsEnabled, hideEnabled, canPin, onReply, onAction, onJump, translationPair, onTranslate,
+  message, receipt, readerMarkers, showDate, grouped, actionsEnabled, hideEnabled, canPin, onReply, onAction, onJump, translationPair, onTranslate,
 }: {
   message: InternalChatMessage
   receipt?: ChatReceipt
   readerMarkers?: ChatReceipt['readers']
   showDate: boolean
+  grouped: boolean
 } & MessageActions) {
   const dateLabel = showDate ? formatChatDateSeparator(message.created_at) : ''
   return (
-    <div className="internal-chat-message-row" data-chat-row-id={message.id} tabIndex={-1}>
+    <div
+      className={`internal-chat-message-row${grouped ? ' internal-chat-message-row--grouped' : ''}`}
+      data-chat-row-id={message.id}
+      tabIndex={-1}
+    >
       {showDate && (
         <div className="internal-chat-date-separator" role="separator" aria-label={dateLabel}>
-          <span className="internal-chat-date-pill"><CalendarDays size={13} aria-hidden="true" />{dateLabel}</span>
+          <span className="internal-chat-date-pill">{dateLabel}</span>
         </div>
       )}
-      <MessageBubble message={message} receipt={receipt} readerMarkers={readerMarkers} actionsEnabled={actionsEnabled} hideEnabled={hideEnabled}
+      <MessageBubble message={message} receipt={receipt} readerMarkers={readerMarkers} grouped={grouped} actionsEnabled={actionsEnabled} hideEnabled={hideEnabled}
         canPin={canPin} onReply={onReply} onAction={onAction} onJump={onJump} translationPair={translationPair} onTranslate={onTranslate} />
     </div>
   )
@@ -106,11 +111,25 @@ export default function MessageList({
 
     const rows = []
     let previousDay: string | undefined
+    let previousMessage: InternalChatMessage | undefined
     for (const message of messages) {
       const day = calendarDay.format(new Date(message.created_at))
       const showDate = day !== previousDay
+      const timeGapMs = previousMessage
+        ? Math.abs(new Date(message.created_at).getTime() - new Date(previousMessage.created_at).getTime())
+        : Infinity
+      const grouped = Boolean(
+        !showDate
+        && previousMessage
+        && !previousMessage.recalled_at
+        && !message.recalled_at
+        && previousMessage.is_mine === message.is_mine
+        && previousMessage.sender.id === message.sender.id
+        && timeGapMs < 5 * 60 * 1000,
+      )
       previousDay = day
-      rows.push(<ChatMessageRow key={message.id} message={message} receipt={receipts?.[message.id]} readerMarkers={markersByMessage.get(message.id)} showDate={showDate}
+      previousMessage = message
+      rows.push(<ChatMessageRow key={message.id} message={message} receipt={receipts?.[message.id]} readerMarkers={markersByMessage.get(message.id)} showDate={showDate} grouped={grouped}
         actionsEnabled={actionsEnabled} hideEnabled={hideEnabled} canPin={canPin} onReply={onReply} onAction={onAction} onJump={onJump}
         translationPair={translationPair} onTranslate={onTranslate} />)
     }

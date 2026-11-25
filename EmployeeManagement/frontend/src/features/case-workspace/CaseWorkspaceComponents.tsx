@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
-  AlertTriangle, ArrowRight, Building2, Calendar, CheckCircle2,
+  AlertTriangle, ArrowRight, Building2, Calendar, Check, CheckCircle2,
   ChevronLeft, ChevronRight, Clock, Clock3, Copy, FileText, Globe, HeartPulse,
   ListChecks, Mail, MapPin, MoreHorizontal, Pencil, Phone,
   Plus, Printer, Share2, Shield, ShieldCheck, Users
@@ -367,7 +367,7 @@ export function WorkspaceHeader({
   const currentWorkplace = selectEmploymentSummaryEntity(caseFile)
 
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [, setCopied] = useState(false)
+  const [copiedCode, setCopiedCode] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -384,8 +384,6 @@ export function WorkspaceHeader({
   const handleShare = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       void navigator.clipboard.writeText(window.location.href)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
     }
   }
 
@@ -396,24 +394,79 @@ export function WorkspaceHeader({
   const handleCopyCode = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       void navigator.clipboard.writeText(code)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setCopiedCode(true)
+      setTimeout(() => setCopiedCode(false), 1800)
     }
   }
 
+  const clientName = caseFile?.client?.name || '氏名未登録'
+  const isUnregisteredResidence = residenceStatus === '未登録'
+  const isUnassigned = assigneeName === '未割当'
+
+  const assigneeCardInner = (
+    <>
+      <UserAvatar
+        name={caseFile.assigned_employee?.full_name}
+        stableKey={caseFile.assigned_employee?.id}
+        imageSrc={getEmployeeAvatarImageUrl(caseFile.assigned_employee?.avatar_path)}
+        imageAlt={caseFile.assigned_employee ? `${assigneeName}のプロフィール画像` : ''}
+        size="sm"
+        className="cm-ws-summary-avatar"
+      />
+      <div className="cm-ws-summary-content">
+        <div className="cm-ws-summary-label">担当者</div>
+        <div className={`cm-ws-summary-val${isUnassigned ? ' is-muted' : ''}`} title={assigneeName}>
+          {assigneeName}
+        </div>
+      </div>
+      {onManageDelegation && <ChevronRight size={15} className="cm-ws-summary-chevron" aria-hidden="true" />}
+    </>
+  )
+
   return (
     <header className="cm-dossier-header cm-ws-section cm-ws-case-information" aria-label="案件情報">
-      {/* Top Meta Bar */}
+      {/* Top Unified Identity & Actions Row */}
       <div className="cm-ws-top-meta">
-        <div className="cm-ws-meta-left">
-          <span className="cm-ws-case-code">{code}</span>
-          <span className={`cm-ws-badge ${getBadgeClass(caseStatusTone)}`}>
-            <span className="cm-ws-badge-dot" />
-            {caseStatus}
-          </span>
-          <span className="cm-ws-badge cm-ws-badge--slate">
-            {caseTypeName}
-          </span>
+        <div className="cm-ws-identity-block">
+          <UserAvatar
+            name={clientName}
+            stableKey={caseFile?.client?.id ?? caseFile?.id}
+            size="lg"
+            className="cm-ws-client-avatar"
+          />
+          <div className="cm-ws-client-profile">
+            <div className="cm-ws-meta-left">
+              <button
+                type="button"
+                className="cm-ws-case-code"
+                onClick={handleCopyCode}
+                title="案件コードをコピー"
+              >
+                <span>{code}</span>
+                {copiedCode ? <Check size={11} aria-hidden="true" /> : <Copy size={11} aria-hidden="true" />}
+              </button>
+              <span className={`cm-ws-badge ${getBadgeClass(caseStatusTone)}`}>
+                <span className="cm-ws-badge-dot" aria-hidden="true" />
+                {caseStatus}
+              </span>
+              <span className="cm-ws-badge cm-ws-badge--slate">
+                {caseTypeName}
+              </span>
+            </div>
+
+            <div className="cm-ws-client-title-row">
+              <h1 className="cm-ws-client-name">{clientName}</h1>
+              <div className="cm-ws-client-reading-row">
+                <span>{caseFile?.client?.name_kana || '氏名カナ未登録'}</span>
+                {caseFile?.client?.nationality && (
+                  <>
+                    <span className="cm-ws-reading-sep" aria-hidden="true">·</span>
+                    <span>{caseFile.client.nationality}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="cm-ws-meta-right">
@@ -429,19 +482,17 @@ export function WorkspaceHeader({
           </div>
 
           <div className="cm-ws-actions-group">
-            {/* 案件を編集: PRIMARY THEMIS action */}
             {onEdit && (
               <button
                 type="button"
                 className="cm-ws-primary-btn"
                 onClick={onEdit}
               >
-                <Pencil size={13} />
+                <Pencil size={13} aria-hidden="true" />
                 <span>案件を編集</span>
               </button>
             )}
 
-            {/* Overflow menu (...) */}
             <div className="relative" ref={menuRef}>
               <button
                 type="button"
@@ -451,7 +502,7 @@ export function WorkspaceHeader({
                 aria-expanded={isMenuOpen}
                 onClick={() => setIsMenuOpen((prev) => !prev)}
               >
-                <MoreHorizontal size={16} />
+                <MoreHorizontal size={16} aria-hidden="true" />
               </button>
 
               {isMenuOpen && (
@@ -475,7 +526,7 @@ export function WorkspaceHeader({
                       handleShare()
                     }}
                   >
-                    <Share2 size={13} />
+                    <Share2 size={13} aria-hidden="true" />
                     <span>共有（リンクコピー）</span>
                   </button>
                   <button
@@ -486,7 +537,7 @@ export function WorkspaceHeader({
                       handlePrint()
                     }}
                   >
-                    <Printer size={13} />
+                    <Printer size={13} aria-hidden="true" />
                     <span>画面を印刷</span>
                   </button>
                   <button
@@ -497,7 +548,7 @@ export function WorkspaceHeader({
                       handleCopyCode()
                     }}
                   >
-                    <Copy size={13} />
+                    <Copy size={13} aria-hidden="true" />
                     <span>案件コードをコピー</span>
                   </button>
                 </div>
@@ -507,84 +558,75 @@ export function WorkspaceHeader({
         </div>
       </div>
 
-      {/* Client Headline & Kana Reading */}
-      <div className="cm-ws-client-profile">
-        <h1 className="cm-ws-client-name">{caseFile?.client?.name || '氏名未登録'}</h1>
-        <div className="cm-ws-client-reading-row">
-          <span>{caseFile?.client?.name_kana || '氏名カナ未登録'}</span>
-          <span className="cm-ws-flag" title={caseFile?.client?.nationality || '未登録'}>
-            {caseFile?.client?.nationality?.toLowerCase().includes('viet') || (!caseFile?.client?.nationality && caseFile?.client?.name?.includes('MINH')) ? '🇻🇳' : '🌐'}
-          </span>
-        </div>
-      </div>
-
-      {/* Contact Rail (Real Fields) */}
+      {/* Contact Hairline Strip */}
       <div className="cm-ws-contact-rail">
         <span className="cm-ws-contact-item">
-          <Phone size={14} className="cm-ws-contact-icon" />
-          <span className="cm-ws-contact-text">{caseFile?.client?.phone || '未登録'}</span>
+          <Phone size={13} className="cm-ws-contact-icon" aria-hidden="true" />
+          <span className={`cm-ws-contact-text${!caseFile?.client?.phone ? ' is-muted' : ''}`}>
+            {caseFile?.client?.phone || '電話番号未登録'}
+          </span>
         </span>
         <span className="cm-ws-contact-item">
-          <Mail size={14} className="cm-ws-contact-icon" />
-          <span className="cm-ws-contact-text">{caseFile?.client?.email || '未登録'}</span>
+          <Mail size={13} className="cm-ws-contact-icon" aria-hidden="true" />
+          <span className={`cm-ws-contact-text${!caseFile?.client?.email ? ' is-muted' : ''}`}>
+            {caseFile?.client?.email || 'メール未登録'}
+          </span>
         </span>
         <span className="cm-ws-contact-item">
-          <Globe size={14} className="cm-ws-contact-icon" />
-          <span className="cm-ws-contact-text">{caseFile?.client?.nationality || '国籍未登録'}</span>
+          <Globe size={13} className="cm-ws-contact-icon" aria-hidden="true" />
+          <span className={`cm-ws-contact-text${!caseFile?.client?.nationality ? ' is-muted' : ''}`}>
+            {caseFile?.client?.nationality || '国籍未登録'}
+          </span>
         </span>
         <span className="cm-ws-contact-item">
-          <MapPin size={14} className="cm-ws-contact-icon" />
-          <span className="cm-ws-contact-text">{caseFile?.client?.address || '住所未登録'}</span>
+          <MapPin size={13} className="cm-ws-contact-icon" aria-hidden="true" />
+          <span className={`cm-ws-contact-text${!caseFile?.client?.address ? ' is-muted' : ''}`}>
+            {caseFile?.client?.address || '住所未登録'}
+          </span>
         </span>
       </div>
 
-      {/* 4 Summary Cards Strip */}
+      {/* 4-Column Divided Operational Summary Strip */}
       <div className="cm-ws-summary-grid">
-        {/* Card 1: 在留資格 */}
+        {/* Cell 1: 在留資格 */}
         <div className="cm-ws-summary-card">
-          <div className="cm-ws-summary-iconbox">
-            <FileText size={18} />
+          <div className="cm-ws-summary-iconbox" aria-hidden="true">
+            <FileText size={16} />
           </div>
           <div className="cm-ws-summary-content">
             <div className="cm-ws-summary-label">在留資格</div>
-            <div className="cm-ws-summary-val" title={residenceStatus}>
+            <div className={`cm-ws-summary-val${isUnregisteredResidence ? ' is-muted' : ''}`} title={residenceStatus}>
               {residenceStatus}
             </div>
           </div>
         </div>
 
-        {/* Card 2: 生年月日 */}
+        {/* Cell 2: 生年月日 */}
         <div className="cm-ws-summary-card">
-          <div className="cm-ws-summary-iconbox">
-            <Calendar size={18} />
+          <div className="cm-ws-summary-iconbox" aria-hidden="true">
+            <Calendar size={16} />
           </div>
           <div className="cm-ws-summary-content">
             <div className="cm-ws-summary-label">生年月日</div>
-            <div className="cm-ws-summary-val">{birthDisplay}</div>
+            <div className={`cm-ws-summary-val${!rawBirth ? ' is-muted' : ''}`}>{birthDisplay}</div>
           </div>
         </div>
 
-        {/* Card 3: 担当者 */}
-        <button type="button" disabled={!onManageDelegation} onClick={onManageDelegation} aria-label="担当者の委任設定"
-          className={`cm-ws-summary-card text-left ${onManageDelegation ? 'is-clickable' : ''}`}>
-          <UserAvatar
-            name={caseFile.assigned_employee?.full_name}
-            stableKey={caseFile.assigned_employee?.id}
-            imageSrc={getEmployeeAvatarImageUrl(caseFile.assigned_employee?.avatar_path)}
-            imageAlt={caseFile.assigned_employee ? `${assigneeName}のプロフィール画像` : ''}
-            size="md"
-            className="cm-ws-summary-avatar"
-          />
-          <div className="cm-ws-summary-content">
-            <div className="cm-ws-summary-label">担当者</div>
-            <div className="cm-ws-summary-val">
-              {assigneeName}
-            </div>
-          </div>
-          {onManageDelegation && <ChevronRight size={16} className="cm-ws-summary-chevron" />}
-        </button>
+        {/* Cell 3: 担当者 */}
+        {onManageDelegation ? (
+          <button
+            type="button"
+            onClick={onManageDelegation}
+            aria-label="担当者の委任設定"
+            className="cm-ws-summary-card is-clickable text-left"
+          >
+            {assigneeCardInner}
+          </button>
+        ) : (
+          <div className="cm-ws-summary-card">{assigneeCardInner}</div>
+        )}
 
-        {/* Card 4: canonical client employment summary */}
+        {/* Cell 4: 勤務先 */}
         <div
           className={`cm-ws-summary-card ${currentWorkplace ? 'is-clickable' : ''}`}
           onClick={currentWorkplace ? () => onSelectEntity(currentWorkplace) : undefined}
@@ -598,28 +640,27 @@ export function WorkspaceHeader({
             }
           } : undefined}
         >
-            <div className="cm-ws-summary-iconbox">
-              <Building2 size={18} />
+          <div className="cm-ws-summary-iconbox" aria-hidden="true">
+            <Building2 size={16} />
+          </div>
+          <div className="cm-ws-summary-content">
+            <div className="cm-ws-workplace-top">
+              <span className="cm-ws-summary-label">勤務先</span>
+              {currentWorkplace?.statusBadgeLabel && (
+                <span className={`cm-ws-badge ${getBadgeClass(currentWorkplace.statusBadgeTone)}`}>
+                  <span className="cm-ws-badge-dot" aria-hidden="true" />
+                  {currentWorkplace.statusBadgeLabel}
+                </span>
+              )}
             </div>
-            <div className="cm-ws-summary-content">
-              <div className="cm-ws-workplace-top">
-                <span className="cm-ws-summary-label">勤務先会社</span>
-                {currentWorkplace?.statusBadgeLabel && (
-                  <span className={`cm-ws-badge ${getBadgeClass(currentWorkplace.statusBadgeTone)}`}>
-                    <span className="cm-ws-badge-dot" />
-                    {currentWorkplace.statusBadgeLabel}
-                  </span>
-                )}
-              </div>
-              <div className="cm-ws-summary-val" title={currentWorkplace?.name || '未登録'}>
-                {currentWorkplace?.name || '未登録'}
-              </div>
-              <div className="cm-ws-workplace-contacts">
-                <Phone size={12} />
-                <Mail size={12} />
-              </div>
+            <div
+              className={`cm-ws-summary-val${!currentWorkplace?.name ? ' is-muted' : ''}`}
+              title={currentWorkplace?.name || '未登録'}
+            >
+              {currentWorkplace?.name || '未登録'}
             </div>
-            {currentWorkplace && <ChevronRight size={16} className="cm-ws-summary-chevron" />}
+          </div>
+          {currentWorkplace && <ChevronRight size={15} className="cm-ws-summary-chevron" aria-hidden="true" />}
         </div>
       </div>
     </header>

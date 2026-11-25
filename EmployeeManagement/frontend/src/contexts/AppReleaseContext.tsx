@@ -17,19 +17,19 @@ type AppReleaseContextValue = {
   refreshRelease: () => Promise<AppRelease | null>
 }
 
+const configuredBuildDate = appMetadata.build ? appMetadata.build.replaceAll('.', '-') : null
+
 const fallbackRelease: AppRelease = {
   id: null,
   version: appMetadata.version,
-  codename: appMetadata.codename,
+  codename: appMetadata.codename || null,
   release_type: 'minor',
   title: 'THEMIS アップデート',
   release_notes: { ui: [], new_features: [], improvements: [], bug_fixes: [] },
-  released_at: null,
-  environment: /build$/i.test(appMetadata.environmentLabel)
-    ? appMetadata.environmentLabel
-    : `${appMetadata.environmentLabel} Build`,
-  build_date: appMetadata.build.replaceAll('.', '-'),
-  status: 'fallback',
+  released_at: configuredBuildDate,
+  environment: appMetadata.environmentLabel,
+  build_date: configuredBuildDate,
+  status: 'local',
 }
 
 const AppReleaseContext = createContext<AppReleaseContextValue | undefined>(undefined)
@@ -42,12 +42,20 @@ export function AppReleaseProvider({ children }: { children: ReactNode }) {
   const refreshRelease = useCallback(async () => {
     try {
       const release = await fetchCurrentRelease()
-      setCurrentRelease(release)
+      // Keep EmployeeManagement/frontend/version.json as the single source of truth for version display.
+      const mergedRelease: AppRelease = {
+        ...release,
+        version: appMetadata.version,
+        codename: appMetadata.codename || null,
+        released_at: configuredBuildDate ?? release.released_at,
+        build_date: configuredBuildDate ?? release.build_date,
+      }
+      setCurrentRelease(mergedRelease)
       setError(null)
-      return release
+      return mergedRelease
     } catch {
-      setError('バージョン情報を取得できませんでした。')
-      return null
+      setError(null)
+      return fallbackRelease
     } finally {
       setIsLoading(false)
     }

@@ -1,11 +1,15 @@
+import versionInfo from '../../version.json'
+
 // Release metadata for THEMIS.
-// Values can be overridden at build time via Vite environment variables.
+// To bump the application version, update EmployeeManagement/frontend/version.json.
+const configuredVersion = versionInfo.version.trim() || '1.0.0'
+const configuredReleasedAt = versionInfo.releasedAt?.trim() || ''
 
 export const appMetadata = {
-  version: import.meta.env.VITE_APP_VERSION?.trim() || '0.11.0',
-  codename: import.meta.env.VITE_APP_CODENAME?.trim() || 'KAI',
-  environmentLabel: import.meta.env.VITE_APP_ENV_LABEL?.trim() || 'Preview',
-  build: import.meta.env.VITE_APP_BUILD?.trim() || '2026.09.25',
+  version: import.meta.env.VITE_APP_VERSION?.trim() || configuredVersion,
+  codename: import.meta.env.VITE_APP_CODENAME?.trim() || '',
+  environmentLabel: import.meta.env.VITE_APP_ENV_LABEL?.trim() || 'Production',
+  build: import.meta.env.VITE_APP_BUILD?.trim() || configuredReleasedAt,
 } as const
 
 export const appDisplayMetadata = {
